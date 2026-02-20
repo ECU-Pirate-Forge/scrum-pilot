@@ -1,13 +1,17 @@
-
 using ScrumPilot.API.Services;
+using Microsoft.Extensions.DependencyInjection;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddScoped<IStudentService, StudentService>();
+builder.Services.AddScoped<IStoryService, StoryService>();
+builder.Services.AddHttpClient();
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+builder.Services.AddSwaggerGen();
 
 // Add CORS policy for Blazor WebAssembly
 builder.Services.AddCors(options =>
@@ -25,6 +29,8 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
 // Use CORS policy
