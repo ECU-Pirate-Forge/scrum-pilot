@@ -1,0 +1,147 @@
+﻿@page "/storygeneration"
+@using MudBlazor
+@using Microsoft.AspNetCore.Components.Web
+@using ScrumPilot.Shared.Models
+@using System.Text.Json
+@using System.Text
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+
+<link href="~/Pages/StoryGeneration.razor.rz.scp.css" rel="stylesheet" />
+
+<MudContainer MaxWidth="MaxWidth.False" Class="sg-page">
+    <MudPaper Elevation="0" Class="sg-shell">
+
+        <MudTextField T="string"
+                      @bind-Value="_message"
+                      Placeholder="Enter Problem Statement here"
+                      Variant="Variant.Filled"
+                      Margin="Margin.Dense"
+                      Immediate="true"
+                      FullWidth="true"
+                      Class="sg-search sg-floating"
+                      OnKeyDown="HandleKeyDown"
+                      Disabled="@_isLoading" />
+
+        <MudButton Class="sg-submit"
+                   Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   EndIcon="@Icons.Material.Filled.ArrowForward"
+                   OnClick="SendMessage"
+                   Disabled="@_isLoading">
+            @if (_isLoading)
+            {
+                <MudProgressCircular Color="Color.Secondary" Size="Size.Small" Indeterminate="true" />
+                <span style="margin-left: 8px;">GENERATING...</span>
+            }
+            else
+            {
+                <span>SUBMIT</span>
+            }
+        </MudButton>
+
+    </MudPaper>
+
+    @if (_generatedStory != null)
+    {
+        <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Generated User Story</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudText Typo="Typo.h6" Class="mb-2">@_generatedStory.Title</MudText>
+                    <MudText Typo="Typo.body1" Class="mb-3">@_generatedStory.Description</MudText>
+                    <MudGrid>
+                        <MudItem xs="4">
+                            <MudText Typo="Typo.subtitle2">Priority: @_generatedStory.Priority</MudText>
+                        </MudItem>
+                        <MudItem xs="4">
+                            <MudText Typo="Typo.subtitle2">Status: @_generatedStory.Status</MudText>
+                        </MudItem>
+                        <MudItem xs="4">
+                            <MudText Typo="Typo.subtitle2">Story Points: @(_generatedStory.StoryPoints?.ToString() ?? "Not set")</MudText>
+                        </MudItem>
+                    </MudGrid>
+                </MudCardContent>
+            </MudCard>
+        </MudContainer>
+    }
+</MudContainer>
+
+@code {
+    private string _message = string.Empty;
+    private bool _isLoading = false;
+    private Story? _generatedStory = null;
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(_message))
+        {
+            Snackbar.Add("Please enter a problem statement.", Severity.Warning);
+            return;
+        }
+
+        _isLoading = true;
+        _generatedStory = null;
+        StateHasChanged();
+
+        try
+        {
+            // Create JSON content from the problem statement
+            var jsonContent = JsonSerializer.Serialize(_message);
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+            // Call the API
+            var response = await Http.PostAsync("story/generate", content);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var jsonResponse = await response.Content.ReadAsStringAsync();
+                _generatedStory = JsonSerializer.Deserialize<Story>(jsonResponse, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+                
+                Snackbar.Add("User story generated successfully!", Severity.Success);
+                _message = string.Empty; // Clear the input field
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"Failed to generate story: {errorContent}", Severity.Error);
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            Snackbar.Add($"Network error: {ex.Message}", Severity.Error);
+        }
+        catch (TaskCanceledException ex)
+        {
+            Snackbar.Add("Request timed out. Please try again.", Severity.Error);
+        }
+        catch (JsonException ex)
+        {
+            Snackbar.Add("Failed to parse response from server.", Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"An unexpected error occurred: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && (e.CtrlKey || e.MetaKey))
+        {
+            await SendMessage();
+        }
+    }
+}
