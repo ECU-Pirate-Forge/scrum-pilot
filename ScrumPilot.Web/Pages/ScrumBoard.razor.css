@@ -1,0 +1,183 @@
+/* ScrumBoard.razor.css — clean dark Kanban board with colored column tops */
+
+/* Page spacing */
+.kanban-page {
+  min-height: 100vh;
+}
+
+/* Header */
+.page-header { 
+  margin-bottom: 14px;
+  color: #fff;
+}
+.page-title { 
+  font-weight: 800;
+  color: #fff;
+}
+
+/* Kanban columns wrapper */
+.kanban-columns-wrapper {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 12px;
+  width: 100%;
+}
+
+/* Lane */
+.kanban-column {
+  flex: 1 1 0;
+  background: #2a2a2a;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 0;
+  height: calc(100vh - 190px);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Colored top border for each column */
+.column-todo { border-top: 4px solid #f97316; }
+.column-inprogress { border-top: 4px solid #eab308; }
+.column-done { border-top: 4px solid #22c55e; }
+
+/* Lane header */
+.column-header {
+  padding: 12px 12px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  color: #fff;
+  background: rgba(0,0,0,0.2);
+}
+
+.column-title-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.column-title {
+  font-weight: 700;
+  font-size: 0.875rem;
+  letter-spacing: 0.05em;
+}
+
+/* Count chip */
+.task-count-chip,
+.task-count-chip :deep(.mud-chip-content) {
+  background: rgba(99, 102, 241, 0.5) !important;
+  color: #fff !important;
+  font-weight: 700 !important;
+  border-radius: 999px !important;
+  height: 24px;
+  padding: 0 8px !important;
+  font-size: 0.75rem !important;
+}
+
+/* Dropzone: allow scrolling within lane */
+.kanban-dropzone {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Scrollbar styling */
+.kanban-dropzone::-webkit-scrollbar {
+  width: 6px;
+}
+
+.kanban-dropzone::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.kanban-dropzone::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.2);
+  border-radius: 3px;
+}
+
+.kanban-dropzone::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.3);
+}
+
+/* Card */
+.kanban-card-wrapper { 
+  margin: 10px;
+  flex-shrink: 0;
+  background-color: #172333 !important;
+  border-radius: 16px !important;
+  border: 2px solid #1f2937 !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12) !important;
+  font-size: large;
+  color: aliceblue;
+  
+}
+
+.task-type-text{
+  margin: 10px;
+}
+
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 10px;
+  color: aliceblue;
+  font-family: Tahoma, sans-serif;
+}
+
+/* Footer */
+.card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 10px;
+  color: aliceblue;
+  margin-top: 12px;
+}
+
+.priority-chip { 
+  border-radius: 6px !important; 
+  font-weight: 600;
+  font-size: 0.7rem;
+  padding: 2px 8px !important;
+}
+
+.assignee-avatar { 
+  border-radius: 999px !important;
+  width: 32px !important;
+  height: 32px !important;
+}
+
+.avatar-text { 
+  font-weight: 900;
+}
+
+/* Icons */
+.drag-handle :deep(svg) { width: 18px !important; height: 18px !important; color: #9ca3af; }
+.column-icon :deep(svg) { width: 18px !important; height: 18px !important; }
+
+.task-type-badge :deep(.mud-badge) {
+  padding: 0 !important;
+}
+
+.task-type-text {
+  font-size: 0.65rem !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .kanban-columns-wrapper {
+    flex-wrap: wrap;
+  }
+  .kanban-column { 
+    flex: 1 1 300px;
+    height: auto;
+    min-height: 400px;
+  }
+}
