@@ -25,7 +25,7 @@
                             <div class="column-title-section">
                                 <MudIcon Icon="Icons.Material.Filled.Assignment" Class="column-icon" />
                                 <MudText Typo="Typo.h5" Class="column-title">TO DO</MudText>
-                                <MudChip T="string" Size="Size.Small" Class="task-count-chip">@Items.Count(i => i.Status == "ToDo")</MudChip>
+                                <MudChip T="string" Size="Size.Small" Class="task-count-chip" Style="background-color: #a855f7 !important; color: white !important; border-radius: 50% !important; height: 32px !important; width: 32px !important; padding: 0 !important; display: flex !important; align-items: center !important; justify-content: center !important; margin-left: auto !important;">@Items.Count(i => i.Status == "ToDo")</MudChip>
                             </div>
                         </div>
                         <MudDropZone T="WorkItemDto" Identifier="ToDo" Class="kanban-dropzone" />
@@ -36,7 +36,7 @@
                             <div class="column-title-section">
                                 <MudIcon Icon="Icons.Material.Filled.Speed" Class="column-icon" />
                                 <MudText Typo="Typo.h5" Class="column-title">IN PROGRESS</MudText>
-                                <MudChip T="string" Size="Size.Small" Class="task-count-chip">@Items.Count(i => i.Status == "InProgress")</MudChip>
+                                <MudChip T="string" Size="Size.Small" Class="task-count-chip" Style="background-color: #a855f7 !important; color: white !important; border-radius: 50% !important; height: 32px !important; width: 32px !important; padding: 0 !important; display: flex !important; align-items: center !important; justify-content: center !important; margin-left: auto !important;">@Items.Count(i => i.Status == "InProgress")</MudChip>
                             </div>
                         </div>
                         <MudDropZone T="WorkItemDto" Identifier="InProgress" Class="kanban-dropzone" />
@@ -47,7 +47,7 @@
                             <div class="column-title-section">
                                 <MudIcon Icon="Icons.Material.Filled.CheckCircle" Class="column-icon" />
                                 <MudText Typo="Typo.h5" Class="column-title">DONE</MudText>
-                                <MudChip T="string" Size="Size.Small" Class="task-count-chip">@Items.Count(i => i.Status == "Done")</MudChip>
+                                <MudChip T="string" Size="Size.Small" Class="task-count-chip" Style="background-color: #a855f7 !important; color: white !important; border-radius: 50% !important; height: 32px !important; width: 32px !important; padding: 0 !important; display: flex !important; align-items: center !important; justify-content: center !important; margin-left: auto !important;">@Items.Count(i => i.Status == "Done")</MudChip>
                             </div>
                         </div>
                         <MudDropZone T="WorkItemDto" Identifier="Done" Class="kanban-dropzone" />
@@ -61,34 +61,27 @@
                         <div class="card-priority-stripe @GetPriorityClass(context)"></div>
                         <MudCardContent Class="pa-4">
                             <div class="card-header">
-                                <MudChip T="string" Variant="Variant.Filled" 
-                                        Color="@GetTaskTypeColor(context)" 
-                                        Size="Size.Small"
-                                        Class="priority-chip">
+                                <span class="task-badge @GetTaskTypeBadgeClass(context)">
                                     @context.TaskType
-                                </MudChip>
+                                </span>
                                 <MudIcon Icon="Icons.Material.Filled.DragIndicator" 
                                         Class="drag-handle" 
                                         Style="cursor: grab;" />
                             </div>
                             
-                            <MudText Typo="Typo.subtitle1" Class="card-title">@context.Title</MudText>
-                            <MudText Typo="Typo.body2" Class="card-id">ID: @context.Id</MudText>
+                            <MudText Typo="Typo.subtitle1" Class="card-title" Style="margin-left: 10px;">@context.Title</MudText>
+                            <MudText Typo="Typo.body2" Class="card-id" Style="margin-left: 10px;"">ID: @context.Id</MudText>
                             
                             <div class="card-footer">
                                 <div class="priority-section">
-                                    <MudChip T="string" Variant="Variant.Filled" 
-                                            Color="@GetPriorityColor(context)" 
-                                            Size="Size.Small"
-                                            Class="priority-chip">
-                                        <MudIcon Icon="@GetPriorityIcon(context)" Size="Size.Small" Class="me-1" />
+                                    <span class="priority-badge @GetPriorityBadgeClass(context)">
                                         @context.Priority
-                                    </MudChip>
+                                    </span>
                                 </div>
                                 <MudAvatar Size="Size.Small" 
                                           Color="Color.Primary" 
                                           Class="assignee-avatar">
-                                    <MudText Typo="Typo.caption" Class="avatar-text">@GetAssigneeInitials(context)</MudText>
+                                    <MudText Typo="Typo.caption" Class="avatar-text" Style="background-color: #a855f7 !important; color: white !important; border-radius: 50% !important; height: 32px !important; width: 32px !important; padding: 0 !important; display: flex !important; align-items: center !important; justify-content: center !important; margin-left: auto !important;"">@GetAssigneeInitials(context)</MudText>
                                 </MudAvatar>
                             </div>
                         </MudCardContent>
@@ -151,6 +144,25 @@ private static List<WorkItemDto> GetDemoItems() => new()
 
     private string GetPriorityClass(WorkItemDto item)
         => item.Priority.ToLower();
+
+    private string GetPriorityBadgeClass(WorkItemDto item)
+        => item.Priority switch
+        {
+            "High" => "priority-high",
+            "Medium" => "priority-medium",
+            "Low" => "priority-low",
+            _ => "priority-medium"
+        };
+
+    private string GetTaskTypeBadgeClass(WorkItemDto item)
+        => item.TaskType switch
+        {
+            "Feature" => "task-feature",
+            "Bug" => "task-bug",
+            "Performance" => "task-performance",
+            "Task" => "task-task",
+            _ => "task-task"
+        };
 
     private Color GetPriorityColor(WorkItemDto item)
         => item.Priority switch
