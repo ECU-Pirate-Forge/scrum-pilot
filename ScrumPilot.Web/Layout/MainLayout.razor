@@ -1,5 +1,9 @@
-﻿@inherits LayoutComponentBase
-<div class="page">
+﻿@using ScrumPilot.Web.Services
+@inject IThemeService ThemeService
+@inherits LayoutComponentBase
+@implements IDisposable
+
+<div class="page @(_isDarkMode ? "dark-theme" : "light-theme")">
     <div class="sidebar">
         <NavMenu />
     </div>
@@ -7,6 +11,16 @@
     <main>
         <div class="top-row px-4">
             <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+            <button class="btn btn-outline-secondary ms-3" @onclick="ToggleDarkMode" title="Toggle dark mode">
+                @if (_isDarkMode)
+                {
+                    <span>☀️ Light</span>
+                }
+                else
+                {
+                    <span>🌙 Dark</span>
+                }
+            </button>
         </div>
 
         <article class="content px-4">
@@ -14,3 +28,29 @@
         </article>
     </main>
 </div>
+
+@code {
+    private bool _isDarkMode = false;
+
+    protected override void OnInitialized()
+    {
+        _isDarkMode = ThemeService.IsDarkMode;
+        ThemeService.OnThemeChanged += OnThemeChanged;
+    }
+
+    void ToggleDarkMode()
+    {
+        ThemeService.ToggleDarkMode();
+    }
+
+    private void OnThemeChanged()
+    {
+        _isDarkMode = ThemeService.IsDarkMode;
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        ThemeService.OnThemeChanged -= OnThemeChanged;
+    }
+}
