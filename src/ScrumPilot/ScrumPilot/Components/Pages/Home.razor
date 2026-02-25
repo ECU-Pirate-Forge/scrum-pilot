@@ -1,0 +1,210 @@
+﻿@page "/"
+@using ScrumPilot.Services
+@using ScrumPilot.Models
+@using Markdig
+@inject OllamaService OllamaService
+@rendermode InteractiveServer
+
+<PageTitle>ScrumPilot - AI Story Generator</PageTitle>
+
+<div class="app-container">
+
+    <!-- HEADER -->
+    <header class="app-header">
+        <div class="header-content">
+            <div class="logo-area">
+                <span class="logo-icon">⚡</span>
+                <h1 class="app-title">ScrumPilot</h1>
+            </div>
+            <span class="subtitle">Powered by Ollama · Jira Integration</span>
+        </div>
+    </header>
+
+    <main class="main-layout">
+
+        <!-- INPUT PANEL -->
+        <section class="input-panel">
+            <h2 class="panel-title">
+                <span class="panel-icon">📝</span> Story Input
+            </h2>
+
+            <div class="form-group">
+                <label class="form-label">Story Title</label>
+                <input class="form-input"
+                       @bind="Request.Title"
+                       placeholder="e.g. User Login with OAuth"
+                       disabled="@IsLoading" />
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <textarea class="form-textarea"
+                          @bind="Request.Description"
+                          placeholder="Describe the feature, context, and user needs..."
+                          rows="6"
+                          disabled="@IsLoading">
+                </textarea>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Model</label>
+                <select class="form-select"
+                        @bind="SelectedModel"
+                        disabled="@IsLoading">
+                    <option value="phi3">phi3 (Recommended for M1 8GB)</option>
+                    <option value="mistral">mistral</option>
+                    <option value="llama3">llama3</option>
+                </select>
+            </div>
+
+            <button class="generate-btn"
+                    @onclick="GenerateStory"
+                    disabled="@(IsLoading || string.IsNullOrWhiteSpace(Request.Title))">
+                @if (IsLoading)
+                {
+                    <span class="spinner"></span>
+                    <span>Generating...</span>
+                }
+                else
+                {
+                    <span>✨ Generate User Story</span>
+                }
+            </button>
+
+            @if (!string.IsNullOrEmpty(ErrorMessage))
+            {
+                <div class="error-banner">
+                    <span>⚠️</span> @ErrorMessage
+                </div>
+            }
+        </section>
+
+        <!-- OUTPUT PANEL -->
+        <section class="output-panel">
+            <div class="output-header">
+                <h2 class="panel-title">
+                    <span class="panel-icon">📋</span> Generated User Story
+                </h2>
+                @if (!string.IsNullOrEmpty(GeneratedStory))
+                {
+                    <div class="output-actions">
+                        <button class="action-btn" @onclick="ClearOutput">
+                            🗑️ Clear
+                        </button>
+                    </div>
+                }
+            </div>
+
+            <!-- Empty State -->
+            @if (string.IsNullOrEmpty(GeneratedStory) && !IsLoading)
+            {
+                <div class="empty-state">
+                    <div class="empty-icon">🤖</div>
+                    <p class="empty-title">No story generated yet</p>
+                    <p class="empty-sub">
+                        Fill in the title and description,
+                        then click Generate.
+                    </p>
+                </div>
+            }
+
+            <!-- Loading State -->
+            @if (IsLoading)
+            {
+                <div class="loading-state">
+                    <div class="pulse-ring"></div>
+                    <p>AI is thinking...</p>
+                </div>
+            }
+
+            <!-- OUTPUT: Rendered User Story -->
+            @if (!string.IsNullOrEmpty(GeneratedStory) && !IsLoading)
+            {
+                <!-- Meta Badges -->
+                <div class="story-meta">
+                    <span class="meta-badge model-badge">
+                        🧠 @SelectedModel
+                    </span>
+                    <span class="meta-badge time-badge">
+                        🕐 @GeneratedAt
+                    </span>
+                    <span class="meta-badge success-badge">
+                        ✅ Generated
+                    </span>
+                </div>
+
+                <!-- Story Title Display -->
+                <div class="story-title-display">
+                    <h3>@Request.Title</h3>
+                </div>
+
+                <!-- Rendered Markdown Output -->
+                <div class="story-output-body">
+                    @((MarkupString)RenderMarkdown(GeneratedStory))
+                </div>
+
+                <!-- Raw Text Toggle -->
+                <details class="raw-toggle">
+                    <summary>View Raw Text</summary>
+                    <pre class="raw-output">@GeneratedStory</pre>
+                </details>
+            }
+        </section>
+
+    </main>
+</div>
+
+@code {
+    private StoryRequest Request { get; set; } = new();
+    private string SelectedModel { get; set; } = "phi3";
+    private string GeneratedStory { get; set; } = "";
+    private string ErrorMessage { get; set; } = "";
+    private string GeneratedAt { get; set; } = "";
+    private bool IsLoading { get; set; } = false;
+
+    private async Task GenerateStory()
+    {
+        if (string.IsNullOrWhiteSpace(Request.Title)) return;
+
+        IsLoading = true;
+        ErrorMessage = "";
+        GeneratedStory = "";
+
+        try
+        {
+            GeneratedStory = await OllamaService.GenerateUserStoryAsync(
+                Request.Title,
+                Request.Description,
+                SelectedModel
+            );
+            GeneratedAt = DateTime.Now.ToString("HH:mm:ss");
+        }
+        catch (HttpRequestException)
+        {
+            ErrorMessage = "Cannot connect to Ollama. " +
+                           "Make sure Ollama is running in your menu bar.";
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private string RenderMarkdown(string markdown)
+    {
+        var pipeline = new MarkdownPipelineBuilder()
+            .UseAdvancedExtensions()
+            .Build();
+        return Markdown.ToHtml(markdown, pipeline);
+    }
+
+    private void ClearOutput()
+    {
+        GeneratedStory = "";
+        ErrorMessage = "";
+    }
+}

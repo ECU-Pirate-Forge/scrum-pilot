@@ -1,0 +1,7 @@
+namespace ScrumPilot.Models;
+
+public class StoryRequest
+{
+    public string Title { get; set; } = "";
+    public string Description { get; set; } = "";
+}
