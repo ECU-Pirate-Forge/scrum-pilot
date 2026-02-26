@@ -1,0 +1,51 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- XUnit Framework -->
+    <PackageReference Include="xunit" Version="2.4.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.4.3">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    
+    <!-- NSubstitute for mocking -->
+    <PackageReference Include="NSubstitute" Version="5.1.0" />
+    
+    <!-- Moq for HTTP mocking -->
+    <PackageReference Include="Moq" Version="4.20.70" />
+    <PackageReference Include="Moq.Contrib.HttpClient" Version="1.4.0" />
+    
+    <!-- BUnit for Blazor component testing -->
+    <PackageReference Include="bunit" Version="1.24.10" />
+    <PackageReference Include="bunit.web" Version="1.24.10" />
+    
+    <!-- Microsoft Test SDK -->
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    
+    <!-- Coverage -->
+    <PackageReference Include="coverlet.collector" Version="6.0.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Project References -->
+    <ProjectReference Include="..\ScrumPilot.API\ScrumPilot.API.csproj" />
+    <ProjectReference Include="..\ScrumPilot.Web\ScrumPilot.Web.csproj" />
+    <ProjectReference Include="..\ScrumPilot.Shared\ScrumPilot.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Frontend\" />
+  </ItemGroup>
+
+</Project>
