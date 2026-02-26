@@ -1,0 +1,177 @@
+/* ScrumBoard.razor.css — clean dark Kanban board with colored column tops */
+
+/* Page spacing */
+.kanban-page {
+  min-height: 100vh;
+}
+
+/* Header */
+.page-header { 
+  margin-bottom: 14px;
+  color: #fff;
+}
+
+/* Kanban columns wrapper */
+.kanban-columns-wrapper {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 12px;
+  width: 100%;
+}
+
+/* Lane */
+.kanban-column {
+  flex: 1 1 0;
+  background: #2a2a2a;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 0;
+  height: calc(100vh - 190px);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Colored top border for each column */
+.column-todo { border-top: 4px solid #f97316; }
+.column-inprogress { border-top: 4px solid #eab308; }
+.column-done { border-top: 4px solid #22c55e; }
+
+/* Lane header */
+.column-header {
+  padding: 12px 12px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  color: #fff;
+  background: rgba(0,0,0,0.2);
+}
+
+.column-title-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.column-title {
+  font-weight: 700;
+  font-size: 0.875rem;
+  letter-spacing: 0.05em;
+}
+
+
+/* Card */
+.kanban-card-wrapper { 
+  margin: 10px;
+  flex-shrink: 0;
+  background-color: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12) !important;
+  font-size: large;
+  color: rgb(0, 0, 0);
+}
+
+
+
+.card-header {
+  background-color: #dbd9d9e3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: rgb(0, 0, 0);
+  font-family: Tahoma, sans-serif;
+  justify-content: left;
+  margin-left: auto;
+  margin-right: auto;
+  width: 95%;
+  border-bottom: #d2d4d6 solid 1px !important;
+  margin-top: 10px;
+  padding: 10px 5px;
+}
+
+/* Footer */
+.card-footer {
+  background-color: #dbd9d9e3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: rgb(0, 0, 0);
+  margin-left: auto;
+  margin-right: auto;
+  width: 95%;
+  border-top: #d2d4d6 solid 1px !important;
+  margin-bottom: 10px;
+  padding: 10px 5px;
+}
+
+
+/* Responsive */
+@media (max-width: 900px) {
+  .kanban-columns-wrapper {
+    flex-wrap: wrap;
+  }
+  .kanban-column { 
+    flex: 1 1 300px;
+    height: auto;
+    min-height: 400px;
+  }
+}
+
+/* Priority badge styling */
+.priority-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.priority-high {
+  background-color: #ef4444;
+  color: #ffffff;
+}
+
+.priority-medium {
+  background-color: #eab308;
+  color: #ffffff;
+}
+
+.priority-low {
+  background-color: #22c55e;
+  color: #ffffff;
+}
+
+/* Task type badge styling */
+.task-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.task-feature {
+  background-color: #a855f7;
+  color: #ffffff;
+}
+
+.task-bug {
+  background-color: #ef4444;
+  color: #ffffff;
+}
+
+.task-performance {
+  background-color: #22c55e;
+  color: #ffffff;
+}
+
+.task-task {
+  background-color: #6b7280;
+  color: #ffffff;
+}
