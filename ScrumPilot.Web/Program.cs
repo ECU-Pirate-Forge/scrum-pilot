@@ -11,6 +11,6 @@ builder.Services.AddMudServices();
 
 // Read ApiBaseUrl from appsettings.json
 var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? "https://localhost:7195/";
-builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(apiBaseUrl + "api/") });
+builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri("http://localhost:5219/") });
 
 await builder.Build().RunAsync();
