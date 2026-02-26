@@ -30,6 +30,17 @@ namespace ScrumPilot.API.Services
 
             return stories;
         }
+        public List<Story> GetDraftStories()
+        {
+                var fixture = new Fixture();
+                var stories = fixture
+                    .Build<Story>()
+                    .CreateMany(5)
+                    .Where(s => s.IsDraft)
+                    .ToList();
+                
+                return GetStories()
+        }
 
         /// <summary>
         /// Generates a new AI-based Scrum user story from a given problem statement using the configured Ollama API.
@@ -69,6 +80,7 @@ namespace ScrumPilot.API.Services
                 Status = StoryStatus.ToDo,
                 Priority = StoryPriority.Low,
                 IsAiGenerated = true,
+                IsDraft = true,
                 DateCreated = DateTime.UtcNow,
                 LastUpdated = DateTime.UtcNow
             };
@@ -198,5 +210,6 @@ namespace ScrumPilot.API.Services
             }
             return null;
         }
+
     }
 }
