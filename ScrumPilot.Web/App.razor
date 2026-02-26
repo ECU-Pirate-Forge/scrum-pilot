@@ -1,4 +1,7 @@
 ﻿@using MudBlazor
+@using ScrumPilot.Web.Services
+@inject IThemeService ThemeService
+@implements IDisposable
 
 <MudSnackbarProvider />
 
@@ -9,6 +12,27 @@
     </Found>
 </Router>
 
-<MudThemeProvider />
+<MudThemeProvider IsDarkMode="@_isDarkMode" />
 <MudDialogProvider />
 <MudSnackbarProvider />
+
+@code {
+    private bool _isDarkMode = false;
+
+    protected override void OnInitialized()
+    {
+        _isDarkMode = ThemeService.IsDarkMode;
+        ThemeService.OnThemeChanged += OnThemeChanged;
+    }
+
+    private void OnThemeChanged()
+    {
+        _isDarkMode = ThemeService.IsDarkMode;
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        ThemeService.OnThemeChanged -= OnThemeChanged;
+    }
+}
