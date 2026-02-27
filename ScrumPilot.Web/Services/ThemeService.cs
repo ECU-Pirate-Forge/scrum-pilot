@@ -4,9 +4,9 @@ namespace ScrumPilot.Web.Services;
 
 public class ThemeService : IThemeService
 {
-    private bool _isDarkMode = false;
+    private bool _isDarkMode = false; // Default to light mode
     private readonly IJSRuntime _jsRuntime;
-    
+
     public event Action? OnThemeChanged;
 
     public bool IsDarkMode => _isDarkMode;
@@ -20,13 +20,17 @@ public class ThemeService : IThemeService
     {
         try
         {
-            // Try to load saved theme preference from localStorage
-            var savedTheme = await _jsRuntime.InvokeAsync<string>("localStorage.getItem", "darkMode");
-            _isDarkMode = savedTheme == "true";
+            // Always start in light mode for now
+            // In the future, you can uncomment this to load saved preference:
+            // var savedTheme = await _jsRuntime.InvokeAsync<string>("localStorage.getItem", "darkMode");
+            // _isDarkMode = savedTheme == "true";
+
+            // For now, always start in light mode
+            _isDarkMode = false;
         }
         catch
         {
-            // If localStorage is not available (SSR), default to false
+            // If localStorage is not available (SSR), default to light mode
             _isDarkMode = false;
         }
     }
@@ -39,7 +43,7 @@ public class ThemeService : IThemeService
     public async Task SetDarkMode(bool isDark)
     {
         _isDarkMode = isDark;
-        
+
         try
         {
             // Save theme preference to localStorage
@@ -49,7 +53,7 @@ public class ThemeService : IThemeService
         {
             // Handle case where localStorage is not available
         }
-        
+
         OnThemeChanged?.Invoke();
     }
 }

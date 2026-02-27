@@ -30,13 +30,22 @@
 </div>
 
 @code {
-    private bool _isDarkMode = false;
+    private bool _isDarkMode = false; // Always start with light mode
 
     protected override async Task OnInitializedAsync()
     {
         await ThemeService.InitializeAsync();
         _isDarkMode = ThemeService.IsDarkMode;
         ThemeService.OnThemeChanged += OnThemeChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Force a state update after first render to ensure theme classes are applied
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     void ToggleDarkMode()

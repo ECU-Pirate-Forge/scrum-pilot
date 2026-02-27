@@ -62,28 +62,56 @@ html, body {
     --sidebar-bg-active: rgba(255, 255, 255, 0.2);
 }
 
-/* Apply theme variables to major layout elements */
+/* Apply theme variables to major layout elements - Explicit light theme first */
 html, body {
-    background-color: var(--bg-color);
-    color: var(--text-color);
+    background-color: #ffffff; /* Explicit light mode default */
+    color: #212529; /* Explicit dark text default */
     transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-.page {
+/* Apply CSS variables after explicit defaults */
+html.light-theme, body.light-theme,
+html:not(.dark-theme), body:not(.dark-theme) {
     background-color: var(--bg-color);
     color: var(--text-color);
+}
+
+.page {
+    background-color: #ffffff; /* Explicit light mode default */
+    color: #212529; /* Explicit dark text default */
     min-height: 100vh;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Apply CSS variables after explicit defaults */
+.page.light-theme, .page:not(.dark-theme) {
+    background-color: var(--bg-color);
+    color: var(--text-color);
 }
 
 main {
+    background-color: #ffffff; /* Explicit light mode default */
+    color: #212529; /* Explicit dark text default */
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Apply CSS variables after explicit defaults */
+main.light-theme, main:not(.dark-theme) {
     background-color: var(--content-bg);
     color: var(--text-color);
 }
 
 .content {
+    background-color: #ffffff; /* Explicit light mode default */
+    color: #212529; /* Explicit dark text default */
+    padding-top: 1.1rem;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Apply CSS variables after explicit defaults */
+.content.light-theme, .content:not(.dark-theme) {
     background-color: var(--content-bg);
     color: var(--text-color);
-    padding-top: 1.1rem;
 }
 
 /* Top row styling - Matching purple gradient from sidebar */
