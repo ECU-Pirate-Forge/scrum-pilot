@@ -1,0 +1,53 @@
+﻿@page "/sample"
+@using MudBlazor
+@using ScrumPilot.Shared.Models
+
+<PageTitle>Sample</PageTitle>
+
+<h1>This is a sample page that displays AutoFixture generated students in an ugly table.</h1>
+<h1>This is just an example</h1>
+
+
+@code {
+    private List<Student> students;
+
+    protected override async Task OnInitializedAsync()
+    {
+        students = await GetStudentsAsync();
+    }
+
+    [Inject]
+    private HttpClient Http { get; set; } = default!;
+
+    private async Task<List<Student>> GetStudentsAsync()
+    {
+        var result = await Http.GetFromJsonAsync<List<Student>>("student/GetStudents");
+        return result ?? new List<Student>();
+    }
+}
+
+@if (students == null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (students.Count == 0)
+{
+    <MudText>No students found.</MudText>
+}
+else
+{
+    <MudTable T="Student" Items="@students" Dense="true" Hover="true" Bordered="true" Striped="true">
+        <HeaderContent>
+            <MudTh>First Name</MudTh>
+            <MudTh>Last Name</MudTh>
+            <MudTh>Grade Level</MudTh>
+            <MudTh>Full Time</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="First Name">@context.FirstName</MudTd>
+            <MudTd DataLabel="Last Name">@context.LastName</MudTd>
+            <MudTd DataLabel="Grade Level">@context.GradeLevel</MudTd>
+            <MudTd DataLabel="Full Time">@((context.IsFullTime) ? "Yes" : "No")</MudTd>
+        </RowTemplate>
+    </MudTable>
+}
