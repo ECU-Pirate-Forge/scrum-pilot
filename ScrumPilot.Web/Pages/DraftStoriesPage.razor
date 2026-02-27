@@ -31,11 +31,11 @@ else
         <MudTable T="Story" Items="@draftStories" Dense="false" Hover="true" Bordered="false" Striped="true" Elevation="0">
             <HeaderContent>
                 <MudTh Style="width: 18%; font-weight: 600;">Title</MudTh>
-                <MudTh Style="width: 35%; font-weight: 600;">Description</MudTh>
-                <MudTh Style="width: 10%; font-weight: 600; text-align: center;">Priority</MudTh>
+                <MudTh Style="width: 32%; font-weight: 600;">Description</MudTh>
+                <MudTh Style="width: 15%; font-weight: 600; text-align: center;">Priority</MudTh>
                 <MudTh Style="width: 8%; font-weight: 600; text-align: center;">Points</MudTh>
                 <MudTh Style="width: 12%; font-weight: 600;">Created</MudTh>
-                <MudTh Style="width: 17%; font-weight: 600; text-align: center;">Actions</MudTh>
+                <MudTh Style="width: 25%; font-weight: 600; text-align: center;">Actions</MudTh>
             </HeaderContent>
             <RowTemplate>
                 <MudTd DataLabel="Title" Style="vertical-align: top;">
@@ -64,8 +64,17 @@ else
                                    Size="Size.Small" 
                                    Color="Color.Success"
                                    OnClick="@(() => CommitStory(context))"
-                                   StartIcon="@Icons.Material.Filled.Check">
+                                   StartIcon="@Icons.Material.Filled.Check"
+                                   Class="me-1">
                             Commit
+                        </MudButton>
+                        <MudButton Variant="Variant.Filled" 
+                                   Size="Size.Small" 
+                                   Color="Color.Warning"
+                                   OnClick="@(() => ModifyStory(context))"
+                                   StartIcon="@Icons.Material.Filled.Edit"
+                                   Class="me-1">
+                            Modify
                         </MudButton>
                         <MudButton Variant="Variant.Filled" 
                                    Size="Size.Small" 
@@ -80,6 +89,48 @@ else
         </MudTable>
     </div>
 }
+
+@* Story Modification View *@
+@if (modifyingStory != null)
+{
+    <div class="modify-overlay">
+        <div class="modify-container">
+            <div class="modify-header">
+                <MudText Typo="Typo.h5" Class="modify-title">
+                    <MudIcon Icon="@Icons.Material.Filled.Edit" Class="me-2" />
+                    Modifying Story
+                </MudText>
+                <MudButton Variant="Variant.Text" 
+                           Color="Color.Default"
+                           Size="Size.Large"
+                           OnClick="CloseModify"
+                           StartIcon="@Icons.Material.Filled.Close"
+                           Class="close-button">
+                    Close
+                </MudButton>
+            </div>
+
+            <div class="modify-content">
+                <StoryCard StoryModel="@modifyingStory" />
+            </div>
+
+            <div class="modify-actions">
+                <MudButton Variant="Variant.Filled" 
+                           Color="Color.Primary"
+                           OnClick="CloseModify"
+                           StartIcon="@Icons.Material.Filled.Save"
+                           Class="me-2">
+                    Save Changes
+                </MudButton>
+                <MudButton Variant="Variant.Outlined" 
+                           Color="Color.Default"
+                           OnClick="CloseModify">
+                    Cancel
+                </MudButton>
+            </div>
+        </div>
+    </div>
+}
 </div>
 
 @code {
@@ -87,6 +138,7 @@ else
 
     private List<Story>? allStories;
     private List<Story> draftStories = new();
+    private Story? modifyingStory = null; // Track which story is being modified
 
     [Inject]
     private HttpClient Http { get; set; } = default!;
@@ -151,12 +203,28 @@ else
         StateHasChanged();
     }
 
+    /// Opens a modification dialog or redirects to edit page
+
+    private async Task ModifyStory(Story story)
+    {
+        // Set the story to be modified, which will trigger the StoryCard to render
+        modifyingStory = story;
+        StateHasChanged();
+        await Task.CompletedTask;
+    }
+
+    /// Closes the modify view
+    private void CloseModify()
+    {
+        modifyingStory = null;
+        StateHasChanged();
+    }
 
     /// Removes from UI
-    
+
     private async Task RejectStory(Story story)
     {
-        
+
         draftStories.Remove(story);
         StateHasChanged();
     }
