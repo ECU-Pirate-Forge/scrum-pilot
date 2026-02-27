@@ -42,33 +42,48 @@
 
     </MudPaper>
 
-    @if (_generatedStory != null)
-    {
-        <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
-            <MudCard>
-                <MudCardHeader>
-                    <CardHeaderContent>
-                        <MudText Typo="Typo.h6">Generated User Story</MudText>
-                    </CardHeaderContent>
-                </MudCardHeader>
-                <MudCardContent>
-                    <MudText Typo="Typo.h6" Class="mb-2">@_generatedStory.Title</MudText>
-                    <MudText Typo="Typo.body1" Class="mb-3">@_generatedStory.Description</MudText>
-                    <MudGrid>
-                        <MudItem xs="4">
-                            <MudText Typo="Typo.subtitle2">Priority: @_generatedStory.Priority</MudText>
-                        </MudItem>
-                        <MudItem xs="4">
-                            <MudText Typo="Typo.subtitle2">Status: @_generatedStory.Status</MudText>
-                        </MudItem>
-                        <MudItem xs="4">
-                            <MudText Typo="Typo.subtitle2">Story Points: @(_generatedStory.StoryPoints?.ToString() ?? "Not set")</MudText>
-                        </MudItem>
-                    </MudGrid>
-                </MudCardContent>
-            </MudCard>
-        </MudContainer>
-    }
+    @* Story Component area - shows loading or actual story *@
+    <div class="d-flex justify-center mt-6">
+        @if (_isLoading)
+        {
+            <MudContainer MaxWidth="MaxWidth.Medium" Class="pa-4">
+                <MudPaper Class="pa-6" Elevation="4" Style="border-radius: 12px;">
+                    <div class="d-flex flex-column align-center justify-center" style="min-height: 300px;">
+                        <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+                        <MudText Typo="Typo.h6" Class="mt-4" Style="color: var(--mud-palette-text-secondary);">
+                            Generating AI Story...
+                        </MudText>
+                        <MudText Typo="Typo.body2" Class="mt-2" Style="color: var(--mud-palette-text-disabled);">
+                            This may take a few seconds
+                        </MudText>
+                    </div>
+                </MudPaper>
+            </MudContainer>
+        }
+        else
+        {
+            @if (_generatedStory != null)
+            {
+                <div style="width: 100%; animation: fadeInDown 0.5s ease-out;">
+                    <MudAlert Severity="Severity.Success" 
+                              Class="mb-4 mx-auto" 
+                              Style="text-align: center; max-width: 500px; border-radius: 12px; background: linear-gradient(45deg, #4CAF50, #81C784);">
+                        <div class="d-flex align-center justify-center">
+                            <MudIcon Icon="Icons.Material.Filled.CheckCircle" Class="me-2" />
+                            <MudText Typo="Typo.h6" Style="color: white; font-weight: 600;">
+                                Story Generated Successfully!
+                            </MudText>
+                        </div>
+                    </MudAlert>
+                    <StoryCard StoryModel="@_generatedStory" />
+                </div>
+            }
+            else
+            {
+                <StoryCard StoryModel="@_generatedStory" />
+            }
+        }
+    </div>
 </MudContainer>
 
 @code {
@@ -85,7 +100,6 @@
         }
 
         _isLoading = true;
-        _generatedStory = null;
         StateHasChanged();
 
         try
@@ -96,7 +110,7 @@
 
             // Call the API
             var response = await Http.PostAsync("story/generate", content);
-            
+
             if (response.IsSuccessStatusCode)
             {
                 var jsonResponse = await response.Content.ReadAsStringAsync();
@@ -104,8 +118,7 @@
                 {
                     PropertyNameCaseInsensitive = true
                 });
-                
-                Snackbar.Add("User story generated successfully!", Severity.Success);
+
                 _message = string.Empty; // Clear the input field
             }
             else
