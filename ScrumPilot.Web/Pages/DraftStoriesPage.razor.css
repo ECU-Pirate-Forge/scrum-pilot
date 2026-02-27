@@ -52,10 +52,22 @@
 }
 
 .table-container {
-    background: var(--mud-palette-surface);
+    background: #ffffff; /* Explicit light mode default */
     border-radius: 8px;
-    box-shadow: var(--mud-elevation-2);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     overflow: hidden;
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Apply theme variables after explicit defaults */
+.light-theme .table-container, .table-container:not(.dark-theme) {
+    background: var(--surface-color);
+    box-shadow: var(--shadow-color);
+}
+
+.dark-theme .table-container {
+    background: var(--surface-color);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 /* Table cell content styling with improved contrast */

@@ -20,8 +20,7 @@ public class ThemeService : IThemeService
     {
         try
         {
-            // Always start in light mode for now
-            // In the future, you can uncomment this to load saved preference:
+            //TODO: Use the below comments to read users preference for Light/Dark mode toggle - TB
             // var savedTheme = await _jsRuntime.InvokeAsync<string>("localStorage.getItem", "darkMode");
             // _isDarkMode = savedTheme == "true";
 
