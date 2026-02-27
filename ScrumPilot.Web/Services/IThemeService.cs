@@ -4,6 +4,7 @@ public interface IThemeService
 {
     bool IsDarkMode { get; }
     event Action OnThemeChanged;
+    Task InitializeAsync();
     void ToggleDarkMode();
-    void SetDarkMode(bool isDark);
+    Task SetDarkMode(bool isDark);
 }

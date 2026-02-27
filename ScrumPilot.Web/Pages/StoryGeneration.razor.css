@@ -2,6 +2,17 @@
    Layout Centering
    ============================ */
 
+@keyframes fadeInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 .sg-page {
     min-height: calc(100vh - 64px); /* adjust if your appbar height differs */
     display: flex;

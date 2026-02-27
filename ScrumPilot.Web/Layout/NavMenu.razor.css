@@ -1,5 +1,5 @@
 .navbar-toggler {
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: var(--sidebar-bg-hover);
 }
 
 .top-row {
@@ -13,6 +13,7 @@
     font-size: 1.1rem;
     margin: 0;
     padding: 0;
+    color: var(--sidebar-text-active); /* Using CSS variable for consistency */
 }
 
 .bi {
@@ -50,23 +51,27 @@
         padding-bottom: 1rem;
     }
 
+    /* Using CSS variables for consistent sidebar theming */
     .nav-item ::deep a {
-        color: #d7d7d7;
+        color: var(--sidebar-text); /* Light blue-tinted white from CSS variables */
         border-radius: 4px;
         height: 3rem;
         display: flex;
         align-items: center;
         line-height: 3rem;
+        transition: all 0.3s ease;
     }
 
 .nav-item ::deep a.active {
-    background-color: rgba(255,255,255,0.37);
-    color: white;
+    background-color: var(--sidebar-bg-active); /* Using CSS variable */
+    color: var(--sidebar-text-active); /* Pure white from CSS variables */
+    font-weight: 600;
 }
 
 .nav-item ::deep a:hover {
-    background-color: rgba(255,255,255,0.1);
-    color: white;
+    background-color: var(--sidebar-bg-hover); /* Using CSS variable */
+    color: var(--sidebar-text-active); /* Pure white from CSS variables */
+    transform: translateX(4px);
 }
 
 @media (min-width: 641px) {

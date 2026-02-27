@@ -2,28 +2,64 @@ html, body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
 
-/* CSS Variables for theming */
+/* CSS Variables for comprehensive theming */
 :root {
-    --primary-color: #1b6ec2;
-    --primary-border: #1861ac;
-    --bg-color: #ffffff;
-    --text-color: #212529;
-    --navbar-bg: #ffffff; /* White navbar in light mode */
-    --navbar-text: #ffffff; /* Dark text in light mode */
-    --surface-color: #ffffff;
-    --content-bg: #ffffff;
+    --primary-color: #1b6ec2; /* Main brand color for buttons, links, and primary elements */
+    --primary-border: #1861ac; /* Border color for primary buttons and focused elements */
+    --bg-color: #ffffff; /* Main page/body background color */
+    --text-color: #212529; /* Default text color throughout the application */
+    --surface-color: #ffffff; /* Background color for cards, modals, and elevated surfaces */
+    --content-bg: #ffffff; /* Main content area background color */
+    --secondary-bg: #f8f9fa; /* Secondary background for subtle sections and alternating rows */
+    --border-color: rgba(0, 0, 0, 0.125); /* Default border color for form elements and dividers */
+    --shadow-color: rgba(0, 0, 0, 0.15); /* Shadow color for depth effects and elevation */
+    --hover-bg: rgba(0, 0, 0, 0.05); /* Background color for hover states on interactive elements */
+
+    /* Sidebar-specific variables (always light text on dark gradient) */
+    --sidebar-text: #e3f2fd; /* Light blue-tinted text for sidebar links */
+    --sidebar-text-active: #ffffff; /* Pure white for active sidebar links */
+    --sidebar-bg-hover: rgba(255, 255, 255, 0.1); /* Light overlay for hover states */
+    --sidebar-bg-active: rgba(255, 255, 255, 0.2); /* Light overlay for active states */
 }
 
 /* Dark theme variables */
 .dark-theme {
-    --primary-color: #4dabf7;
-    --primary-border: #339af0;
-    --bg-color: #212529;
-    --text-color: #f8f9fa;
-    --navbar-bg: #343a40; /* Dark gray navbar in dark mode */
-    --navbar-text: #ffffff; /* Light text in dark mode */
-    --surface-color: #343a40;
-    --content-bg: #212529;
+    --primary-color: #4dabf7; /* Main brand color adjusted for dark theme contrast */
+    --primary-border: #339af0; /* Border color for primary elements in dark theme */
+    --bg-color: #212529; /* Dark main page/body background color */
+    --text-color: #f8f9fa; /* Light text color for readability on dark backgrounds */
+    --surface-color: #343a40; /* Dark background for cards and elevated surfaces */
+    --content-bg: #212529; /* Dark main content area background */
+    --secondary-bg: #495057; /* Dark secondary background for subtle sections */
+    --border-color: rgba(255, 255, 255, 0.125); /* Light border color for dark theme elements */
+    --shadow-color: rgba(0, 0, 0, 0.3); /* Stronger shadow color for dark theme depth effects */
+    --hover-bg: rgba(255, 255, 255, 0.1); /* Light hover background for dark theme interactions */
+
+    /* Sidebar variables remain the same in dark theme since sidebar background never changes */
+    --sidebar-text: #e3f2fd;
+    --sidebar-text-active: #ffffff;
+    --sidebar-bg-hover: rgba(255, 255, 255, 0.1);
+    --sidebar-bg-active: rgba(255, 255, 255, 0.2);
+}
+
+/* Light theme class for explicit theming */
+.light-theme {
+    --primary-color: #1b6ec2; /* Main brand color for light theme (same as default) */
+    --primary-border: #1861ac; /* Border color for primary elements in light theme */
+    --bg-color: #ffffff; /* Light main page/body background color */
+    --text-color: #212529; /* Dark text color for light backgrounds */
+    --surface-color: #ffffff; /* Light background for cards and elevated surfaces */
+    --content-bg: #ffffff; /* Light main content area background */
+    --secondary-bg: #f8f9fa; /* Light secondary background for subtle sections */
+    --border-color: rgba(0, 0, 0, 0.125); /* Dark border color for light theme elements */
+    --shadow-color: rgba(0, 0, 0, 0.15); /* Standard shadow color for light theme depth effects */
+    --hover-bg: rgba(0, 0, 0, 0.05); /* Dark hover background for light theme interactions */
+
+    /* Sidebar variables remain the same in light theme since sidebar background never changes */
+    --sidebar-text: #e3f2fd;
+    --sidebar-text-active: #ffffff;
+    --sidebar-bg-hover: rgba(255, 255, 255, 0.1);
+    --sidebar-bg-active: rgba(255, 255, 255, 0.2);
 }
 
 /* Apply theme variables to major layout elements */
@@ -50,31 +86,21 @@ main {
     padding-top: 1.1rem;
 }
 
-/* Top row styling */
+/* Top row styling - Matching purple gradient from sidebar */
 .top-row {
-    background-color: var(--surface-color);
-    color: var(--text-color);
-    border-bottom: 1px solid var(--primary-color);
-    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+    background: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 100%) !important;
+    color: #ffffff !important;
+    border-bottom: 1px solid #3a0647 !important;
 }
 
-.dark-theme .top-row {
-    background-color: var(--surface-color) !important;
-    color: var(--text-color) !important;
-    border-bottom-color: #495057 !important;
-}
-
-/* Top row links and buttons */
+/* Top row links and buttons - Always white text */
 .top-row a {
-    color: inherit;
+    color: #ffffff !important;
 }
 
-.dark-theme .top-row a {
-    color: var(--text-color) !important;
-}
-
-.dark-theme .top-row a:hover {
-    color: var(--primary-color) !important;
+.top-row a:hover {
+    color: #e3f2fd !important;
+    opacity: 0.8;
 }
 
 /* General dark theme text and elements */
@@ -101,7 +127,7 @@ main {
 }
 
 .navbar-dark {
-    background-color: var(--navbar-bg) !important;
+    background-color: var(--bg-color) !important;
     transition: background-color 0.3s ease;
 }
 
@@ -116,6 +142,7 @@ main {
     padding: 0.5rem 0;
     width: 100%;
     margin-bottom: 0.25rem;
+    color: #ffffff; /* Always white since sidebar is dark */
 }
 
 .navbar-brand:hover,
@@ -139,24 +166,14 @@ main {
     opacity: 0.8;
 }
 
-/* Navigation links */
+/* Navigation links - Always light colored for dark sidebar background */
 .nav-link {
-    color: var(--navbar-text) !important;
+    color: #e3f2fd !important;
     transition: color 0.3s ease;
 }
 
 .nav-link:hover,
 .nav-link:focus {
-    color: var(--primary-color) !important;
-}
-
-/* Dark theme specific overrides (if needed) */
-.dark-theme .nav-link {
-    color: #adb5bd !important;
-}
-
-.dark-theme .nav-link:hover,
-.dark-theme .nav-link:focus {
     color: #ffffff !important;
 }
 
@@ -260,6 +277,8 @@ a, .btn-link {
 }
 
     .loading-progress-text:after {
+        content: "Loading...";
+    }
         content: var(--blazor-load-percentage-text, "Loading");
     }
 

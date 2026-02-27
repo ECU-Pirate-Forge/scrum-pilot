@@ -1,0 +1,174 @@
+@page "/scrum-board"
+@using MudBlazor
+@using ScrumPilot.Shared.Models
+@using System.Net.Http.Json
+@inject HttpClient Http
+
+<div class="kanban-page">
+
+    <!-- If loading stories, show spinner. Else loads the rest of the page with the generated stories -->
+    @if (_loading)
+{
+    <div class="d-flex flex-column align-center justify-center" style="height:60vh;">
+        <MudProgressCircular Indeterminate="true" Size="Size.Large" />
+        <MudText Class="mt-4" Typo="Typo.subtitle1">Loading AI stories…</MudText>
+    </div>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.False" Class="pa-0">
+        <div class="page-header">
+            <MudText Typo="Typo.h3" Class="page-title">
+                <MudIcon Icon="Icons.Material.Filled.Dashboard" Class="me-2" />
+                Kanban Board
+            </MudText>
+        </div>
+
+        <MudDropContainer T="Story"
+                          Items="@Items"
+                          ItemsSelector="@((item, dropzone) => item.Status.ToString() == dropzone)"
+                          ItemDropped="OnItemDropped"
+                          Class="d-flex flex-grow-1 kanban-container">
+            <ChildContent>
+                <div class="kanban-columns-wrapper">
+                    <div class="kanban-column column-todo">
+                        <div class="column-header">
+                            <div class="column-title-section">
+                                <MudIcon Icon="Icons.Material.Filled.Assignment" Class="column-icon" />
+                                <MudText Typo="Typo.h5" Class="column-title">TO DO</MudText>
+                                <MudChip T="string" Size="Size.Small" Class="task-count-chip"
+                                         Style="background-color: #a855f7 !important; color: white !important; border-radius: 50% !important; height: 32px !important; width: 32px !important; padding: 0 !important; display: flex !important; align-items: center !important; justify-content: center !important; margin-left: auto !important;">
+                                    @Items.Count(i => i.Status == StoryStatus.ToDo)
+                                </MudChip>
+                            </div>
+                        </div>
+                        <MudDropZone T="Story" Identifier="@nameof(StoryStatus.ToDo)" Class="kanban-dropzone" style="min-height: 100%;"/>
+                    </div>
+
+                    <div class="kanban-column column-inprogress">
+                        <div class="column-header">
+                            <div class="column-title-section">
+                                <MudIcon Icon="Icons.Material.Filled.Speed" Class="column-icon" />
+                                <MudText Typo="Typo.h5" Class="column-title">IN PROGRESS</MudText>
+                                <MudChip T="string" Size="Size.Small" Class="task-count-chip"
+                                         Style="background-color: #a855f7 !important; color: white !important; border-radius: 50% !important; height: 32px !important; width: 32px !important; padding: 0 !important; display: flex !important; align-items: center !important; justify-content: center !important; margin-left: auto !important;">
+                                    @Items.Count(i => i.Status == StoryStatus.InProgress)
+                                </MudChip>
+                            </div>
+                        </div>
+                        <MudDropZone T="Story" Identifier="@nameof(StoryStatus.InProgress)" Class="kanban-dropzone" style="min-height: 100%;"/>
+                    </div>
+
+                    <div class="kanban-column column-done">
+                        <div class="column-header">
+                            <div class="column-title-section">
+                                <MudIcon Icon="Icons.Material.Filled.CheckCircle" Class="column-icon" />
+                                <MudText Typo="Typo.h5" Class="column-title">DONE</MudText>
+                                <MudChip T="string" Size="Size.Small" Class="task-count-chip"
+                                         Style="background-color: #a855f7 !important; color: white !important; border-radius: 50% !important; height: 32px !important; width: 32px !important; padding: 0 !important; display: flex !important; align-items: center !important; justify-content: center !important; margin-left: auto !important;">
+                                    @Items.Count(i => i.Status == StoryStatus.Done)
+                                </MudChip>
+                            </div>
+                        </div>
+                        <MudDropZone T="Story" Identifier="@nameof(StoryStatus.Done)" Class="kanban-dropzone" style="min-height: 100%;"/>
+                    </div>
+                </div>
+            </ChildContent>
+
+            <ItemRenderer>
+                <div class="kanban-card-wrapper" Style="border-radius: 32px;">
+                    <MudCard Class="kanban-card" Elevation="4" Style="border-radius: 32px;">
+                        <div class="card-priority-stripe @GetPriorityClass(context)"></div>
+
+                        <MudCardContent Class="pa-4">
+                            <div class="card-header">
+                                <span class="task-badge @(context.IsAiGenerated ? "task-ai" : "task-story")">
+                                    @(context.IsAiGenerated ? "AI Story" : "Story")
+                                </span>
+
+                                <MudIcon Icon="Icons.Material.Filled.DragIndicator"
+                                         Class="drag-handle"
+                                         Style="cursor: grab;" />
+                            </div>
+
+                            <MudText Typo="Typo.subtitle1" Class="card-title" Style="margin-left: 10px;">
+                                @context.Title
+                            </MudText>
+
+                            <MudText Typo="Typo.body2" Class="card-id" Style="margin-left: 10px;">
+                                ID: @context.Id
+                            </MudText>
+
+                            <div class="card-footer">
+                                <div class="priority-section">
+                                    <span class="priority-badge @GetPriorityBadgeClass(context)">
+                                        @context.Priority
+                                    </span>
+                                </div>
+
+                                <MudAvatar Size="Size.Small" Color="Color.Primary" Class="assignee-avatar">
+                                    <MudText Typo="Typo.caption" Class="avatar-text"
+                                             Style="background-color: #a855f7 !important; color: white !important; border-radius: 50% !important; height: 32px !important; width: 32px !important; padding: 0 !important; display: flex !important; align-items: center !important; justify-content: center !important; margin-left: auto !important;">
+                                        @GetStoryInitials(context)
+                                    </MudText>
+                                </MudAvatar>
+                            </div>
+                        </MudCardContent>
+                    </MudCard>
+                </div>
+            </ItemRenderer>
+        </MudDropContainer>
+    </MudContainer>
+}
+</div>
+
+@code {
+
+    private List<Story> Items = new();
+    private bool _loading = true;
+
+    //Api Intergration for getting stories
+    protected override async Task OnInitializedAsync()
+    {
+        _loading = true;
+        Items = new();
+
+        try
+        {
+            var stories = await Http.GetFromJsonAsync<List<Story>>("story");
+            if (stories is not null && stories.Any())
+                Items = stories;
+        }
+        catch
+        {
+            
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OnItemDropped(MudItemDropInfo<Story> dropInfo)
+    {
+        // Dropzone identifiers are: "ToDo", "InProgress", "Done"
+        if (Enum.TryParse<StoryStatus>(dropInfo.DropzoneIdentifier, out var newStatus))
+            dropInfo.Item.Status = newStatus;
+    }
+
+    private string GetPriorityClass(Story story)
+        => story.Priority.ToString().ToLower();
+
+    private string GetPriorityBadgeClass(Story story)
+        => story.Priority.ToString() switch
+        {
+            "High" => "priority-high",
+            "Medium" => "priority-medium",
+            "Low" => "priority-low",
+            _ => "priority-medium"
+        };
+
+    private string GetStoryInitials(Story story)
+        => story.IsAiGenerated ? "AI" : "ST";
+
+}

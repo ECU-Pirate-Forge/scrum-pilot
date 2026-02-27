@@ -32,8 +32,9 @@
 @code {
     private bool _isDarkMode = false;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
+        await ThemeService.InitializeAsync();
         _isDarkMode = ThemeService.IsDarkMode;
         ThemeService.OnThemeChanged += OnThemeChanged;
     }

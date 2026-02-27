@@ -19,6 +19,8 @@ namespace ScrumPilot.Shared.Models
 
         public bool IsAiGenerated { get; set; }
 
+        public bool IsDraft { get; set; }
+
         public DateTime DateCreated { get; set; }
         public DateTime LastUpdated { get; set; }
     }
