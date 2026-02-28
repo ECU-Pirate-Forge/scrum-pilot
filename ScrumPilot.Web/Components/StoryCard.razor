@@ -1,4 +1,4 @@
-﻿@using ScrumPilot.Shared.Models
+@using ScrumPilot.Shared.Models
 
 @if (StoryModel != null)
 {
@@ -14,7 +14,7 @@
                     <MudText Typo="Typo.h4" Class="story-title mb-3" Style="font-weight: 600; color: var(--mud-palette-text-primary);">
                         @StoryModel.Title
                     </MudText>
-                    <div class="story-badges mb-4 d-flex flex-wrap gap-2">
+                    <MudStack Row Spacing="2" Class="mb-4">
                         <MudChip T="string" 
                                  Size="Size.Medium" 
                                  Color="@GetStatusColor(StoryModel.Status)"
@@ -42,12 +42,12 @@
                                 AI Generated
                             </MudChip>
                         }
-                    </div>
+                    </MudStack>
                 </div>
 
                 <MudDivider Class="mb-4" />
 
-                <div class="story-body mb-4" style="animation: fadeInUp 1s ease-out;">
+                <MudStack Class="mb-4" Style="animation: fadeInUp 1s ease-out;">
                     <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600; color: var(--mud-palette-text-primary);">
                         <MudIcon Icon="Icons.Material.Filled.Description" Class="me-2" />
                         Description
@@ -83,36 +83,36 @@
                         {
                             <MudItem xs="12" sm="6" md="4">
                                 <MudPaper Class="pa-3" Style="background-color: var(--mud-palette-action-hover); border-radius: 8px; transition: transform 0.2s ease;">
-                                    <div class="d-flex align-center">
+                                    <MudStack Row AlignItems="Center">
                                         <MudIcon Icon="Icons.Material.Filled.Timeline" Color="Color.Primary" Class="me-2" Size="Size.Medium" />
-                                        <div>
+                                        <MudStack>
                                             <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Story Points</MudText>
                                             <MudText Typo="Typo.h6" Style="font-weight: 600;">@StoryModel.StoryPoints</MudText>
-                                        </div>
-                                    </div>
+                                        </MudStack>
+                                    </MudStack>
                                 </MudPaper>
                             </MudItem>
                         }
                         <MudItem xs="12" sm="6" md="4">
                             <MudPaper Class="pa-3" Style="background-color: var(--mud-palette-action-hover); border-radius: 8px; transition: transform 0.2s ease;">
-                                <div class="d-flex align-center">
+                                <MudStack Row AlignItems="Center">
                                     <MudIcon Icon="Icons.Material.Filled.CalendarToday" Color="Color.Success" Class="me-2" Size="Size.Medium" />
-                                    <div>
+                                    <MudStack>
                                         <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Created</MudText>
                                         <MudText Typo="Typo.body1" Style="font-weight: 600;">@StoryModel.DateCreated.ToString("MMM dd, yyyy")</MudText>
-                                    </div>
-                                </div>
+                                    </MudStack>
+                                </MudStack>
                             </MudPaper>
                         </MudItem>
                         <MudItem xs="12" sm="6" md="4">
                             <MudPaper Class="pa-3" Style="background-color: var(--mud-palette-action-hover); border-radius: 8px; transition: transform 0.2s ease;">
-                                <div class="d-flex align-center">
+                                <MudStack Row AlignItems="Center">
                                     <MudIcon Icon="Icons.Material.Filled.Update" Color="Color.Warning" Class="me-2" Size="Size.Medium" />
-                                    <div>
+                                    <MudStack>
                                         <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Last Updated</MudText>
                                         <MudText Typo="Typo.body1" Style="font-weight: 600;">@StoryModel.LastUpdated.ToString("MMM dd, yyyy")</MudText>
-                                    </div>
-                                </div>
+                                    </MudStack>
+                                </MudStack>
                             </MudPaper>
                         </MudItem>
                     </MudGrid>
