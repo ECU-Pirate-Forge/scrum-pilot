@@ -1,9 +1,9 @@
-﻿using ScrumPilot.Shared.Models;
+﻿using ScrumPilot.Shared.Models; 
 
-namespace ScrumPilot.API.Services
-{
-    public interface IStudentService
-    {
-        List<Student> GetStudents();
-    }
+namespace ScrumPilot.API.Services 
+{ 
+     public interface IStudentService 
+    { 
+        List<Student> GetStudents(); 
+    } 
 }
