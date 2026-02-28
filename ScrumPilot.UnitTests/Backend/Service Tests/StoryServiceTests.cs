@@ -1,4 +1,6 @@
 using Microsoft.Extensions.Configuration;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using ScrumPilot.API.Services;
 using ScrumPilot.Shared.Models;
 using System.Net;
@@ -9,22 +11,33 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
 {
     public class StoryServiceTests : IDisposable
     {
-        private readonly Mock<HttpMessageHandler> _mockHandler;
-        private readonly HttpClient _mockHttpClient;
+        private readonly TestHttpMessageHandler _testHandler;
+        private readonly HttpClient _httpClient;
         private readonly IConfiguration _mockConfiguration;
         private readonly StoryService _storyService;
+        private HttpRequestMessage? _capturedRequest;
 
         public StoryServiceTests()
         {
-            _mockHandler = new Mock<HttpMessageHandler>();
-            _mockHttpClient = new HttpClient(_mockHandler.Object);
+            // Default handler that returns 200 OK
+            _testHandler = new TestHttpMessageHandler((request, cancellation) =>
+            {
+                _capturedRequest = request;
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("{\"response\": \"{}\"}", Encoding.UTF8, "application/json")
+                });
+            });
+
+            _httpClient = new HttpClient(_testHandler);
             _mockConfiguration = Substitute.For<IConfiguration>();
-            _storyService = new StoryService(_mockHttpClient, _mockConfiguration);
+            _storyService = new StoryService(_httpClient, _mockConfiguration);
         }
 
         public void Dispose()
         {
-            _mockHttpClient?.Dispose();
+            _httpClient?.Dispose();
+            _testHandler?.Dispose();
         }
 
         #region GetStories Tests
@@ -81,10 +94,10 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
             };
 
             SetupConfiguration("http://localhost:11434/", "llama2");
-            SetupHttpResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
+            var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
 
             // Act
-            var result = await _storyService.GenerateAiStory(problemStatement);
+            var result = await service.GenerateAiStory(problemStatement);
 
             // Assert
             Assert.NotNull(result);
@@ -133,14 +146,14 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
             var problemStatement = "Test problem";
             var baseUrl = "   "; // Just whitespace
             _mockConfiguration["OllamaBaseUrl"].Returns(baseUrl);
-            
+
             // This will not trigger the validation check since the service only uses IsNullOrEmpty
             // So it will try to make HTTP call and fail differently
-            SetupHttpTimeout(); // Setup timeout to simulate connection failure
+            var service = CreateServiceWithTimeout(); // Setup timeout to simulate connection failure
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => _storyService.GenerateAiStory(problemStatement));
+                () => service.GenerateAiStory(problemStatement));
             Assert.Contains("An unexpected error occurred while calling the Ollama API", exception.Message);
         }
 
@@ -150,11 +163,11 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
             // Arrange
             var problemStatement = "Test problem";
             SetupConfiguration("http://localhost:11434/", "llama2");
-            SetupHttpResponse("Error occurred", HttpStatusCode.InternalServerError);
+            var service = CreateServiceWithResponse("Error occurred", HttpStatusCode.InternalServerError);
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<HttpRequestException>(
-                () => _storyService.GenerateAiStory(problemStatement));
+                () => service.GenerateAiStory(problemStatement));
             Assert.Contains("Ollama API request failed with status InternalServerError", exception.Message);
         }
 
@@ -164,11 +177,11 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
             // Arrange
             var problemStatement = "Test problem";
             SetupConfiguration("http://localhost:11434/", "llama2");
-            SetupHttpTimeout();
+            var service = CreateServiceWithTimeout();
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<TimeoutException>(
-                () => _storyService.GenerateAiStory(problemStatement));
+                () => service.GenerateAiStory(problemStatement));
             Assert.Equal("The request to Ollama timed out", exception.Message);
         }
 
@@ -178,13 +191,13 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
             // Arrange
             var problemStatement = "Test problem";
             var ollamaResponse = new { response = "" };
-            
+
             SetupConfiguration("http://localhost:11434/", "llama2");
-            SetupHttpResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
+            var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => _storyService.GenerateAiStory(problemStatement));
+                () => service.GenerateAiStory(problemStatement));
             Assert.Contains("An unexpected error occurred while parsing the AI story response", exception.Message);
         }
 
@@ -194,13 +207,13 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
             // Arrange
             var problemStatement = "Test problem";
             var ollamaResponse = new { response = "This is not JSON" };
-            
+
             SetupConfiguration("http://localhost:11434/", "llama2");
-            SetupHttpResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
+            var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => _storyService.GenerateAiStory(problemStatement));
+                () => service.GenerateAiStory(problemStatement));
             Assert.Contains("Failed to find a JSON object in the AI response", exception.Message);
         }
 
@@ -218,12 +231,12 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
 
             var responseWithExtraText = $"Here is your story: {JsonSerializer.Serialize(aiResponse)} Hope this helps!";
             var ollamaResponse = new { response = responseWithExtraText };
-            
+
             SetupConfiguration("http://localhost:11434/", "llama2");
-            SetupHttpResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
+            var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
 
             // Act
-            var result = await _storyService.GenerateAiStory(problemStatement);
+            var result = await service.GenerateAiStory(problemStatement);
 
             // Assert
             Assert.NotNull(result);
@@ -238,13 +251,13 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
             var problemStatement = "Test problem";
             var invalidResponse = new { title = "Test", description = "Missing required fields" };
             var ollamaResponse = new { response = JsonSerializer.Serialize(invalidResponse) };
-            
+
             SetupConfiguration("http://localhost:11434/", "llama2");
-            SetupHttpResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
+            var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => _storyService.GenerateAiStory(problemStatement));
+                () => service.GenerateAiStory(problemStatement));
             Assert.Contains("Failed to parse AI response as JSON", exception.Message);
         }
 
@@ -255,7 +268,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
             var problemStatement = "As a user, I want to test the system";
             var baseUrl = "http://localhost:11434/";
             var model = "llama2";
-            
+
             var aiResponse = new AiStoryResponse
             {
                 Title = "Test Story",
@@ -264,27 +277,22 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
             };
 
             var ollamaResponse = new { response = JsonSerializer.Serialize(aiResponse) };
-            
+
             SetupConfiguration(baseUrl, model);
-            
-            HttpRequestMessage? capturedRequest = null;
-            SetupHttpResponseWithRequestCapture(
-                JsonSerializer.Serialize(ollamaResponse), 
-                HttpStatusCode.OK,
-                req => capturedRequest = req);
+            var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
 
             // Act
-            await _storyService.GenerateAiStory(problemStatement);
+            await service.GenerateAiStory(problemStatement);
 
             // Assert - Verify the request was made correctly
-            Assert.NotNull(capturedRequest);
+            Assert.NotNull(_capturedRequest);
             var expectedUrl = $"{baseUrl}api/generate";
-            Assert.Equal(expectedUrl, capturedRequest.RequestUri?.ToString());
-            Assert.Equal(HttpMethod.Post, capturedRequest.Method);
-            
-            var requestContent = await capturedRequest.Content!.ReadAsStringAsync();
+            Assert.Equal(expectedUrl, _capturedRequest.RequestUri?.ToString());
+            Assert.Equal(HttpMethod.Post, _capturedRequest.Method);
+
+            var requestContent = await _capturedRequest.Content!.ReadAsStringAsync();
             var requestObject = JsonSerializer.Deserialize<JsonElement>(requestContent);
-            
+
             Assert.Equal(model, requestObject.GetProperty("model").GetString());
             Assert.Contains(problemStatement, requestObject.GetProperty("prompt").GetString());
             Assert.False(requestObject.GetProperty("stream").GetBoolean());
@@ -300,42 +308,72 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
             _mockConfiguration["OllamaModel"].Returns(model);
         }
 
-        private void SetupHttpResponse(string responseContent, HttpStatusCode statusCode)
+        private void ConfigureHttpResponse(string responseContent, HttpStatusCode statusCode)
+        {
+            // Replace the handler's response function
+            var response = new HttpResponseMessage(statusCode)
+            {
+                Content = new StringContent(responseContent, Encoding.UTF8, "application/json")
+            };
+
+            // Create new handler with the configured response
+            var newHandler = new TestHttpMessageHandler((request, cancellation) =>
+            {
+                _capturedRequest = request;
+                return Task.FromResult(response);
+            });
+
+            // Replace the HttpClient's handler (requires recreating the service)
+            _httpClient.Dispose();
+            var newHttpClient = new HttpClient(newHandler);
+
+            // We need to recreate the service with the new client
+            var newService = new StoryService(newHttpClient, _mockConfiguration);
+
+            // Update the field reference (this is a limitation of this approach)
+            // For a production test, consider using dependency injection or factory pattern
+        }
+
+        private void ConfigureHttpTimeout()
+        {
+            var newHandler = new TestHttpMessageHandler((request, cancellation) =>
+            {
+                _capturedRequest = request;
+                throw new TaskCanceledException("The operation was canceled.");
+            });
+
+            _httpClient.Dispose();
+            var newHttpClient = new HttpClient(newHandler);
+        }
+
+        // Simplified approach: Set response directly on the test handler
+        private StoryService CreateServiceWithResponse(string responseContent, HttpStatusCode statusCode)
         {
             var response = new HttpResponseMessage(statusCode)
             {
                 Content = new StringContent(responseContent, Encoding.UTF8, "application/json")
             };
 
-            _mockHandler.Protected()
-                .Setup<Task<HttpResponseMessage>>("SendAsync", 
-                    ItExpr.IsAny<HttpRequestMessage>(), 
-                    ItExpr.IsAny<CancellationToken>())
-                .ReturnsAsync(response);
-        }
-
-        private void SetupHttpTimeout()
-        {
-            _mockHandler.Protected()
-                .Setup<Task<HttpResponseMessage>>("SendAsync",
-                    ItExpr.IsAny<HttpRequestMessage>(),
-                    ItExpr.IsAny<CancellationToken>())
-                .ThrowsAsync(new TaskCanceledException("The operation was canceled."));
-        }
-
-        private void SetupHttpResponseWithRequestCapture(string responseContent, HttpStatusCode statusCode, Action<HttpRequestMessage> captureCallback)
-        {
-            var response = new HttpResponseMessage(statusCode)
+            var handler = new TestHttpMessageHandler((request, cancellation) =>
             {
-                Content = new StringContent(responseContent, Encoding.UTF8, "application/json")
-            };
+                _capturedRequest = request;
+                return Task.FromResult(response);
+            });
 
-            _mockHandler.Protected()
-                .Setup<Task<HttpResponseMessage>>("SendAsync",
-                    ItExpr.IsAny<HttpRequestMessage>(),
-                    ItExpr.IsAny<CancellationToken>())
-                .Callback<HttpRequestMessage, CancellationToken>((req, _) => captureCallback(req))
-                .ReturnsAsync(response);
+            var httpClient = new HttpClient(handler);
+            return new StoryService(httpClient, _mockConfiguration);
+        }
+
+        private StoryService CreateServiceWithTimeout()
+        {
+            var handler = new TestHttpMessageHandler((request, cancellation) =>
+            {
+                _capturedRequest = request;
+                throw new TaskCanceledException("The operation was canceled.");
+            });
+
+            var httpClient = new HttpClient(handler);
+            return new StoryService(httpClient, _mockConfiguration);
         }
 
         #endregion
