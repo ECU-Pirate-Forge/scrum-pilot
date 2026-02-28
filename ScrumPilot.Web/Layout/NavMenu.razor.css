@@ -7,27 +7,41 @@
     background-color: rgba(0,0,0,0.4);
     display: flex;
     align-items: center;
+    /* Hide this section on desktop since we have the full-width top bar */
+}
+
+@media (min-width: 641px) {
+    .top-row {
+        display: none; /* Hide on desktop */
+    }
 }
 
 .navbar-brand {
     font-size: 1.1rem;
     margin: 0;
-    padding: 0.5rem;
-    color: var(--sidebar-text-active); /* Using CSS variable for consistency */
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-    flex-shrink: 0;
-    width: auto;
+    padding: 0;
+    color: #ffffff;
 }
 
 .navbar-logo {
-    height: 2.5rem; /* Fits nicely within 3.5rem navbar */
+    height: 2.2rem; /* Fits nicely within 3.5rem navbar */
     width: auto; /* Maintain aspect ratio */
-    max-width: 250px; /* Reasonable max width */
+    max-width: 180px; /* Reasonable max width for sidebar */
     object-fit: contain; /* Ensure logo fits within bounds */
     display: block;
+    filter: brightness(0) invert(1); /* Make logo white for dark sidebar */
+    transition: opacity 0.3s ease;
+}
+
+.navbar-logo:hover {
+    opacity: 0.8;
+}
+
+.nav-fluid {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
 }
 
 .bi {
@@ -67,7 +81,7 @@
 
     /* Using CSS variables for consistent sidebar theming */
     .nav-item ::deep a {
-        color: var(--sidebar-text); /* Light blue-tinted white from CSS variables */
+        color: #e3f2fd;
         border-radius: 4px;
         height: 3rem;
         display: flex;
@@ -77,15 +91,34 @@
     }
 
 .nav-item ::deep a.active {
-    background-color: var(--sidebar-bg-active); /* Using CSS variable */
-    color: var(--sidebar-text-active); /* Pure white from CSS variables */
+    background-color: rgba(255,255,255,0.2);
+    color: #ffffff;
     font-weight: 600;
 }
 
 .nav-item ::deep a:hover {
-    background-color: var(--sidebar-bg-hover); /* Using CSS variable */
-    color: var(--sidebar-text-active); /* Pure white from CSS variables */
+    background-color: rgba(255,255,255,0.1);
+    color: #ffffff;
     transform: translateX(4px);
+}
+
+.nav-scrollable {
+    /* Allow sidebar to scroll for tall menus and account for fixed top bar */
+    height: calc(100vh - 3.5rem);
+    overflow-y: auto;
+    margin-top: 3.5rem; /* Push navigation content below the fixed top bar */
+}
+
+/* Mobile-specific styling */
+@media (max-width: 640.98px) {
+    .nav-scrollable {
+        margin-top: 0; /* Reset margin on mobile */
+        height: auto; /* Reset height on mobile */
+    }
+
+    .top-row {
+        display: flex !important; /* Show on mobile for hamburger menu */
+    }
 }
 
 @media (min-width: 641px) {
@@ -98,9 +131,7 @@
         display: block;
     }
 
-    .nav-scrollable {
-        /* Allow sidebar to scroll for tall menus */
-        height: calc(100vh - 3.5rem);
-        overflow-y: auto;
+    .top-row {
+        display: none; /* Hide on desktop */
     }
 }

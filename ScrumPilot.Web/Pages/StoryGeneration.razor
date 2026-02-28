@@ -43,35 +43,37 @@
     </MudPaper>
 
     @* Story Component area - shows loading or actual story *@
-    <div class="d-flex justify-center mt-6">
+    <MudStack Justify="Justify.Center" Class="mt-6">
         @if (_isLoading)
         {
-            <MudProgressCircular Color="Color.Secondary" Size="Size.Small" Indeterminate="true" />
+            <MudStack AlignItems="AlignItems.Center">
+                <MudProgressCircular Color="Color.Secondary" Size="Size.Small" Indeterminate="true" />
+            </MudStack>
         }
         else
         {
             @if (_generatedStory != null)
             {
-                <div style="width: 100%; animation: fadeInDown 0.5s ease-out;">
+                <MudStack Style="width: 100%; animation: fadeInDown 0.5s ease-out;">
                     <MudAlert Severity="Severity.Success" 
                               Class="mb-4 mx-auto" 
                               Style="text-align: center; max-width: 500px; border-radius: 12px; background: linear-gradient(45deg, #4CAF50, #81C784);">
-                        <div class="d-flex align-center justify-center">
+                        <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center">
                             <MudIcon Icon="Icons.Material.Filled.CheckCircle" Class="me-2" />
                             <MudText Typo="Typo.h6" Style="color: white; font-weight: 600;">
                                 Story Generated Successfully!
                             </MudText>
-                        </div>
+                        </MudStack>
                     </MudAlert>
                     <StoryCard StoryModel="@_generatedStory" />
-                </div>
+                </MudStack>
             }
             else
             {
                 <StoryCard StoryModel="@_generatedStory" />
             }
         }
-    </div>
+    </MudStack>
 </MudContainer>
 
 @code {

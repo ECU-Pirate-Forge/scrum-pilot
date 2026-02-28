@@ -6,13 +6,11 @@
     <title>ScrumPilot.Web</title>
     <base href="/" />
 
-    <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
+    <!-- Only MudBlazor CSS - no Bootstrap conflicts -->
     <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="css/app.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <link href="ScrumPilot.Web.styles.css" rel="stylesheet" />
-    <script type="importmap"></script>
-    <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
 
 </head>
 
@@ -31,9 +29,8 @@
         <span class="dismiss">🗙</span>
     </div>
 
+    <!-- Only MudBlazor JS - no duplicates -->
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
-
     <script src="_framework/blazor.webassembly.js"></script>
-    <script src="_content/MudBlazor/MudBlazor.min.js"></script>
 </body>
 </html>

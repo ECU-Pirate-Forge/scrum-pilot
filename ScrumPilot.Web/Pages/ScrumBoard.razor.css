@@ -1,285 +1,131 @@
-/* ScrumBoard.razor.css — responsive Kanban board with theme support */
+/* ScrumBoard - Direct CSS with high specificity for MudBlazor override */
 
-/* Page spacing */
-.kanban-page {
-  min-height: 100vh;
-  background-color: var(--content-bg);
-  color: var(--text-color);
-  transition: background-color 0.3s ease, color 0.3s ease;
+/* Hover effects for colored columns */
+.mud-paper.kanban-column.column-todo:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.2), 0 8px 24px rgba(220, 38, 38, 0.15) !important;
 }
 
-/* Header */
-.page-header { 
-  margin-bottom: 14px;
-  color: var(--text-color);
+.mud-paper.kanban-column.column-inprogress:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.2), 0 8px 24px rgba(250, 204, 21, 0.15) !important;
 }
 
-/* Kanban columns wrapper */
-.kanban-columns-wrapper {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 12px;
-  width: 100%;
+.mud-paper.kanban-column.column-done:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.2), 0 8px 24px rgba(22, 163, 74, 0.15) !important;
 }
 
-/* Lane - Dynamic theming */
-.kanban-column {
-  flex: 1 1 0;
-  background: var(--surface-color);
-  border: 1px solid rgba(128, 128, 128, 0.2);
-  border-radius: 12px;
-  padding: 0;
-  height: calc(100vh - 190px);
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  overflow: hidden;
-  transition: background-color 0.3s ease, border-color 0.3s ease;
+/* Kanban dropzone styling - FULL AREA COVERAGE */
+.kanban-dropzone {
+    min-height: 500px !important;
+    height: 100% !important;
+    padding: 16px !important;
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+    overflow-y: auto !important;
+    background: var(--mud-palette-background) !important;
+    border-radius: 0 0 8px 8px !important;
+    /* Ensure full width and height for drop target */
+    width: 100% !important;
+    box-sizing: border-box !important;
 }
 
-/* Dark theme specific overrides for columns */
-.dark-theme .kanban-column {
-  background: #2a2a2a;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+/* Enhanced dropzone hover state with visual feedback */
+.kanban-dropzone.mud-drop-zone-drag-over {
+    background-color: var(--mud-palette-action-hover) !important;
+    border: 2px dashed var(--mud-palette-primary) !important;
+    border-radius: 8px !important;
+    transform: scale(1.01) !important;
+    transition: all 0.2s ease !important;
 }
 
-/* Light theme specific overrides for columns */
-.light-theme .kanban-column {
-  background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+/* Make the entire drop zone clickable/droppable */
+.mud-drop-zone {
+    min-height: inherit !important;
+    height: 100% !important;
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
 }
 
-/* Colored top border for each column - Enhanced visibility */
-.column-todo { 
-  border-top: 6px solid #dc2626; /* Bright red for ToDo */
-  box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.1); /* Subtle red glow */
-}
-.column-inprogress { 
-  border-top: 6px solid #facc15; /* Bright yellow for In Progress */
-  box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.1); /* Subtle yellow glow */
-}
-.column-done { 
-  border-top: 6px solid #16a34a; /* Bright green for Done */
-  box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.1); /* Subtle green glow */
-}
-
-/* Lane header - Responsive to theme with color coding */
-.column-header {
-  padding: 12px 12px 10px;
-  border-bottom: 1px solid rgba(128, 128, 128, 0.2);
-  color: var(--text-color);
-  background: var(--bg-color);
-  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+/* Visual feedback for empty drop zones */
+.kanban-dropzone:empty::before {
+    content: "Drop cards here" !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    height: 200px !important;
+    color: var(--mud-palette-text-secondary) !important;
+    font-style: italic !important;
+    opacity: 0.5 !important;
+    border: 2px dashed var(--mud-palette-lines-default) !important;
+    border-radius: 8px !important;
+    margin: 8px 0 !important;
 }
 
-/* Dark theme header */
-.dark-theme .column-header {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.2);
+/* Hide the empty message when dragging over */
+.kanban-dropzone.mud-drop-zone-drag-over:empty::before {
+    content: "Release to drop here" !important;
+    opacity: 0.8 !important;
+    color: var(--mud-palette-primary) !important;
+    border-color: var(--mud-palette-primary) !important;
+    background-color: var(--mud-palette-primary-lighten) !important;
 }
 
-/* Light theme header */
-.light-theme .column-header {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-  background: rgba(0, 0, 0, 0.05);
+/* Card wrapper styling */
+.kanban-card-wrapper {
+    width: 100% !important;
+    margin-bottom: 16px !important;
+    flex-shrink: 0 !important;
 }
 
-/* Color-coded column headers */
-.column-todo .column-header {
-  background: linear-gradient(135deg, rgba(220, 38, 38, 0.1) 0%, var(--bg-color) 100%);
+.kanban-card-wrapper:last-child {
+    margin-bottom: 0 !important;
 }
 
-.column-inprogress .column-header {
-  background: linear-gradient(135deg, rgba(250, 204, 21, 0.1) 0%, var(--bg-color) 100%);
+/* Card hover effects */
+.kanban-card-wrapper:hover .mud-card {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
+    transition: all 0.3s ease !important;
 }
 
-.column-done .column-header {
-  background: linear-gradient(135deg, rgba(22, 163, 74, 0.1) 0%, var(--bg-color) 100%);
+/* Priority stripe styling */
+.card-priority-stripe {
+    height: 6px !important;
+    width: 100% !important;
+    flex-shrink: 0 !important;
 }
 
-/* Dark theme color-coded headers */
-.dark-theme .column-todo .column-header {
-  background: linear-gradient(135deg, rgba(220, 38, 38, 0.2) 0%, rgba(0, 0, 0, 0.2) 100%);
+.priority-high .card-priority-stripe {
+    background-color: #ef4444 !important;
 }
 
-.dark-theme .column-inprogress .column-header {
-  background: linear-gradient(135deg, rgba(250, 204, 21, 0.2) 0%, rgba(0, 0, 0, 0.2) 100%);
+.priority-medium .card-priority-stripe {
+    background-color: #eab308 !important;
 }
 
-.dark-theme .column-done .column-header {
-  background: linear-gradient(135deg, rgba(22, 163, 74, 0.2) 0%, rgba(0, 0, 0, 0.2) 100%);
+.priority-low .card-priority-stripe {
+    background-color: #22c55e !important;
 }
 
-.column-title-section {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+/* Dragging state */
+.kanban-card-wrapper.mud-dragging {
+    transform: rotate(2deg) scale(1.02) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25) !important;
+    z-index: 1000 !important;
+    opacity: 0.8 !important;
 }
 
-.column-title {
-  font-weight: 700;
-  font-size: 0.875rem;
-  letter-spacing: 0.05em;
-  color: var(--text-color);
+/* Improve dragging cursor */
+.kanban-card-wrapper[draggable="true"] {
+    cursor: grab !important;
 }
 
-/* Card - Theme responsive */
-.kanban-card-wrapper { 
-  margin: 10px;
-  flex-shrink: 0;
-  background-color: var(--bg-color) !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12) !important;
-  font-size: large;
-  color: var(--text-color);
-  border: 1px solid rgba(128, 128, 128, 0.1);
-  border-radius: 8px;
-  transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
-}
-
-/* Dark theme cards */
-.dark-theme .kanban-card-wrapper {
-  background-color: #343a40 !important;
-  color: #f8f9fa !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-/* Light theme cards */
-.light-theme .kanban-card-wrapper {
-  background-color: #ffffff !important;
-  color: #212529 !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12) !important;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-.card-header {
-  background-color: var(--surface-color);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: var(--text-color);
-  font-family: Tahoma, sans-serif;
-  justify-content: left;
-  margin-left: auto;
-  margin-right: auto;
-  width: 95%;
-  border-bottom: 1px solid rgba(128, 128, 128, 0.2);
-  margin-top: 10px;
-  padding: 10px 5px;
-  border-radius: 8px 8px 0 0;
-  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
-}
-
-/* Dark theme card header */
-.dark-theme .card-header {
-  background-color: rgba(255, 255, 255, 0.1);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-/* Light theme card header */
-.light-theme .card-header {
-  background-color: rgba(0, 0, 0, 0.05);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-/* Footer */
-.card-footer {
-  background-color: var(--surface-color);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: var(--text-color);
-  margin-left: auto;
-  margin-right: auto;
-  width: 95%;
-  border-top: 1px solid rgba(128, 128, 128, 0.2);
-  margin-bottom: 10px;
-  padding: 10px 5px;
-  border-radius: 0 0 8px 8px;
-  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
-}
-
-/* Dark theme card footer */
-.dark-theme .card-footer {
-  background-color: rgba(255, 255, 255, 0.1);
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-/* Light theme card footer */
-.light-theme .card-footer {
-  background-color: rgba(0, 0, 0, 0.05);
-  border-top: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-/* Responsive */
-@media (max-width: 900px) {
-  .kanban-columns-wrapper {
-    flex-wrap: wrap;
-  }
-  .kanban-column { 
-    flex: 1 1 300px;
-    height: auto;
-    min-height: 400px;
-  }
-}
-
-/* Priority badge styling */
-.priority-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px 12px;
-  border-radius: 999px;
-  font-weight: 600;
-  font-size: 0.875rem;
-  text-transform: capitalize;
-  white-space: nowrap;
-}
-
-.priority-high {
-  background-color: #ef4444;
-  color: #ffffff;
-}
-
-.priority-medium {
-  background-color: #eab308;
-  color: #ffffff;
-}
-
-.priority-low {
-  background-color: #22c55e;
-  color: #ffffff;
-}
-
-/* Task type badge styling */
-.task-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px 12px;
-  border-radius: 999px;
-  font-weight: 600;
-  font-size: 0.875rem;
-  text-transform: capitalize;
-  white-space: nowrap;
-}
-
-.task-feature {
-  background-color: #a855f7;
-  color: #ffffff;
-}
-
-.task-bug {
-  background-color: #ef4444;
-  color: #ffffff;
-}
-
-.task-performance {
-  background-color: #22c55e;
-  color: #ffffff;
-}
-
-.task-task {
-  background-color: #6b7280;
-  color: #ffffff;
+.kanban-card-wrapper[draggable="true"]:active {
+    cursor: grabbing !important;
 }

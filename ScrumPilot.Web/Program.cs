@@ -8,7 +8,7 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-// Register MudBlazor services (for the button component only)
+// Register MudBlazor services with built-in theming
 builder.Services.AddMudServices();
 
 // Register simple theme service

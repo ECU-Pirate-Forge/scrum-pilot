@@ -2,27 +2,33 @@
     position: relative;
     display: flex;
     flex-direction: column;
-    background-color: var(--bg-color);
-    color: var(--text-color);
     min-height: 100vh;
-    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-main {
-    flex: 1;
-    background-color: var(--content-bg);
-    color: var(--text-color);
-    transition: background-color 0.3s ease, color 0.3s ease;
-}
+/* Adjust for desktop layout */
+@media (min-width: 641px) {
+    .page {
+        flex-direction: row;
+    }
 
-/* Light theme main override */
-.light-theme main {
-    background-color: #ffffff;
-}
+    .sidebar {
+        width: 250px;
+        height: 100vh;
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 999; /* Below top bar */
+        /* Remove padding-top - let purple bar overlay */
+    }
 
-/* Dark theme main override */
-.dark-theme main {
-    background-color: #212529;
+    main {
+        flex: 1;
+        margin-left: 250px; /* Account for sidebar width */
+    }
+
+    .content {
+        padding: 1.1rem 2rem !important;
+    }
 }
 
 .sidebar {
@@ -35,76 +41,91 @@ main {
 .top-row {
     background: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 100%);
     border-bottom: 1px solid #3a0647;
-    justify-content: flex-end;
+    justify-content: space-between; /* Space between logo comparison and theme toggle */
+    align-items: center;
     height: 3.5rem;
     display: flex;
-    align-items: center;
     margin: 0;
     box-sizing: border-box;
     color: #ffffff;
-    /* Remove theme-dependent transitions since we're keeping it consistent */
+    position: relative;
+    /* Extend across full viewport width */
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    width: 100vw;
+    z-index: 1000;
+    padding-left: 250px; /* Account for sidebar width */
+    padding-right: 1.5rem;
 }
 
-    .top-row ::deep a, .top-row ::deep .btn-link {
-        white-space: nowrap;
-        margin-left: 1.5rem;
-        text-decoration: none;
-        color: #ffffff;
-        transition: opacity 0.3s ease;
-    }
-
-    .top-row ::deep a:hover, .top-row ::deep .btn-link:hover {
-        text-decoration: underline;
-        opacity: 0.8;
-    }
-
-    .top-row ::deep a:first-child {
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-/* Theme toggle button styling - always white text on blue background */
-.top-row .btn {
-    transition: all 0.3s ease;
-    border-radius: 6px;
-    padding: 0.375rem 0.75rem;
-    color: #ffffff;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+/* Logo section - clean single logo */
+.logo-section {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
 }
 
-.top-row .btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    background-color: rgba(255, 255, 255, 0.1);
-    color: #ffffff;
+.main-logo {
+    height: 2.8rem; /* Fits nicely within the 3.5rem header */
+    width: auto; /* Maintain aspect ratio */
+    max-width: 200px; /* Reasonable max width */
+    object-fit: contain; /* Ensure logo fits within bounds */
+    transition: opacity 0.3s ease;
 }
 
+.main-logo:hover {
+    opacity: 0.8;
+}
+
+/* Adjust main content to account for fixed header */
+main {
+    flex: 1;
+    padding-top: 3.5rem; /* Same as top-row height */
+}
+
+/* Responsive adjustments */
 @media (max-width: 640.98px) {
     .top-row {
-        justify-content: space-between;
+        padding-left: 1rem; /* Reset padding on mobile */
+        position: relative; /* Reset positioning on mobile */
+        width: auto;
     }
 
-    .top-row ::deep a, .top-row ::deep .btn-link {
-        margin-left: 0;
+    main {
+        padding-top: 0; /* Reset padding on mobile */
     }
 }
 
-@media (min-width: 641px) {
-    .page {
-        flex-direction: row;
-    }
+/* Centered logo container */
+.top-row-logo {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+}
 
-    .sidebar {
-        width: 250px;
-        height: 100vh;
-        position: sticky;
-        top: 0;
-    }
+/* Centered logo styling */
+.navbar-logo-center {
+    height: 2.2rem;
+    max-width: 250px;
+    width: 250px;
+    transition: opacity 0.3s ease;
+    object-fit: contain;
+    object-position: center center;
+}
 
-    .top-row {
-        position: sticky;
-        top: 0;
-        z-index: 1;
+.navbar-logo-center:hover {
+    opacity: 0.8;
+}
+
+/* Ensure other elements don't interfere with centered logo */
+.top-row > *:not(.top-row-logo) {
+    z-index: 1;
+    position: relative;
+}
     }
 
     .top-row.auth ::deep a:first-child {

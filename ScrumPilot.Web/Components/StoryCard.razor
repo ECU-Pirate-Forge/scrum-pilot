@@ -1,53 +1,34 @@
-﻿@using ScrumPilot.Shared.Models
+@using ScrumPilot.Shared.Models
+@using MudBlazor
 
 @if (StoryModel != null)
 {
     <div style="animation: slideInUp 0.6s ease-out;">
         <MudContainer MaxWidth="MaxWidth.Medium" Class="pa-4">
-            <MudPaper Class="pa-6" 
-                      Elevation="4" 
-                      Style="border-radius: 12px; 
-                             background: linear-gradient(135deg, var(--mud-palette-surface) 0%, var(--mud-palette-background) 100%); 
-                             border: 3px solid var(--mud-palette-primary); 
-                             box-shadow: 0 6px 25px rgba(25, 118, 210, 0.2), 0 0 0 1px rgba(25, 118, 210, 0.1);">
+            <MudPaper Class="pa-6" Elevation="4" Style="border-radius: 12px; background: linear-gradient(135deg, var(--mud-palette-surface) 0%, var(--mud-palette-background) 100%); border: 3px solid var(--mud-palette-primary); box-shadow: 0 6px 25px rgba(25, 118, 210, 0.2), 0 0 0 1px rgba(25, 118, 210, 0.1);">
                 <div class="story-header">
                     <MudText Typo="Typo.h4" Class="story-title mb-3" Style="font-weight: 600; color: var(--mud-palette-text-primary);">
                         @StoryModel.Title
                     </MudText>
-                    <div class="story-badges mb-4 d-flex flex-wrap gap-2">
-                        <MudChip T="string" 
-                                 Size="Size.Medium" 
-                                 Color="@GetStatusColor(StoryModel.Status)"
-                                 Icon="@GetStatusIcon(StoryModel.Status)"
-                                 Variant="Variant.Filled"
-                                 Style="animation: fadeInLeft 0.8s ease-out;">
+                    <MudStack Row Spacing="2" Class="mb-4">
+                        <MudChip T="string" Size="Size.Medium" Color="@GetStatusColor(StoryModel.Status)" Icon="@GetStatusIcon(StoryModel.Status)" Variant="Variant.Filled" Style="animation: fadeInLeft 0.8s ease-out;">
                             @StoryModel.Status
                         </MudChip>
-                        <MudChip T="string" 
-                                 Size="Size.Medium" 
-                                 Color="@GetPriorityColor(StoryModel.Priority)"
-                                 Icon="@GetPriorityIcon(StoryModel.Priority)"
-                                 Variant="Variant.Filled"
-                                 Style="animation: fadeInLeft 1s ease-out;">
+                        <MudChip T="string" Size="Size.Medium" Color="@GetPriorityColor(StoryModel.Priority)" Icon="@GetPriorityIcon(StoryModel.Priority)" Variant="Variant.Filled" Style="animation: fadeInLeft 1s ease-out;">
                             @StoryModel.Priority Priority
                         </MudChip>
                         @if (StoryModel.IsAiGenerated)
                         {
-                            <MudChip T="string" 
-                                     Size="Size.Medium" 
-                                     Color="Color.Info"
-                                     Icon="Icons.Material.Filled.SmartToy"
-                                     Variant="Variant.Filled"
-                                     Style="animation: fadeInLeft 1.2s ease-out;">
+                            <MudChip T="string" Size="Size.Medium" Color="Color.Info" Icon="Icons.Material.Filled.SmartToy" Variant="Variant.Filled" Style="animation: fadeInLeft 1.2s ease-out;">
                                 AI Generated
                             </MudChip>
                         }
-                    </div>
+                    </MudStack>
                 </div>
 
                 <MudDivider Class="mb-4" />
 
-                <div class="story-body mb-4" style="animation: fadeInUp 1s ease-out;">
+                <MudStack Class="mb-4" Style="animation: fadeInUp 1s ease-out;">
                     <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600; color: var(--mud-palette-text-primary);">
                         <MudIcon Icon="Icons.Material.Filled.Description" Class="me-2" />
                         Description
@@ -69,7 +50,7 @@
                             No description provided
                         </MudText>
                     }
-                </div>
+                </MudStack>
 
                 <MudDivider Class="mb-4" />
 
@@ -78,41 +59,41 @@
                         <MudIcon Icon="Icons.Material.Filled.Info" Class="me-2" />
                         Story Details
                     </MudText>
-                    <MudGrid AlignItems="Center" Spacing="3">
+                    <MudGrid AlignItems="AlignItems.Center" Spacing="3">
                         @if (StoryModel.StoryPoints.HasValue)
                         {
                             <MudItem xs="12" sm="6" md="4">
                                 <MudPaper Class="pa-3" Style="background-color: var(--mud-palette-action-hover); border-radius: 8px; transition: transform 0.2s ease;">
-                                    <div class="d-flex align-center">
+                                    <MudStack Row AlignItems="AlignItems.Center">
                                         <MudIcon Icon="Icons.Material.Filled.Timeline" Color="Color.Primary" Class="me-2" Size="Size.Medium" />
-                                        <div>
+                                        <MudStack>
                                             <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Story Points</MudText>
                                             <MudText Typo="Typo.h6" Style="font-weight: 600;">@StoryModel.StoryPoints</MudText>
-                                        </div>
-                                    </div>
+                                        </MudStack>
+                                    </MudStack>
                                 </MudPaper>
                             </MudItem>
                         }
                         <MudItem xs="12" sm="6" md="4">
                             <MudPaper Class="pa-3" Style="background-color: var(--mud-palette-action-hover); border-radius: 8px; transition: transform 0.2s ease;">
-                                <div class="d-flex align-center">
+                                <MudStack Row AlignItems="AlignItems.Center">
                                     <MudIcon Icon="Icons.Material.Filled.CalendarToday" Color="Color.Success" Class="me-2" Size="Size.Medium" />
-                                    <div>
+                                    <MudStack>
                                         <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Created</MudText>
                                         <MudText Typo="Typo.body1" Style="font-weight: 600;">@StoryModel.DateCreated.ToString("MMM dd, yyyy")</MudText>
-                                    </div>
-                                </div>
+                                    </MudStack>
+                                </MudStack>
                             </MudPaper>
                         </MudItem>
                         <MudItem xs="12" sm="6" md="4">
                             <MudPaper Class="pa-3" Style="background-color: var(--mud-palette-action-hover); border-radius: 8px; transition: transform 0.2s ease;">
-                                <div class="d-flex align-center">
+                                <MudStack Row AlignItems="AlignItems.Center">
                                     <MudIcon Icon="Icons.Material.Filled.Update" Color="Color.Warning" Class="me-2" Size="Size.Medium" />
-                                    <div>
+                                    <MudStack>
                                         <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Last Updated</MudText>
                                         <MudText Typo="Typo.body1" Style="font-weight: 600;">@StoryModel.LastUpdated.ToString("MMM dd, yyyy")</MudText>
-                                    </div>
-                                </div>
+                                    </MudStack>
+                                </MudStack>
                             </MudPaper>
                         </MudItem>
                     </MudGrid>
