@@ -45,7 +45,7 @@
     display: none;
 }
 
-/* Theme-aware floating surface */
+/* Theme-aware floating surface - use MudBlazor theme variables */
 .sg-floating .mud-input-control {
     background: var(--mud-palette-surface);
     border: 1px solid var(--mud-palette-lines-default);

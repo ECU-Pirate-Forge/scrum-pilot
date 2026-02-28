@@ -1,14 +1,17 @@
-/* ScrumBoard.razor.css — clean dark Kanban board with colored column tops */
+/* ScrumBoard.razor.css — responsive Kanban board with theme support */
 
 /* Page spacing */
 .kanban-page {
   min-height: 100vh;
+  background-color: var(--content-bg);
+  color: var(--text-color);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Header */
 .page-header { 
   margin-bottom: 14px;
-  color: #fff;
+  color: var(--text-color);
 }
 
 /* Kanban columns wrapper */
@@ -19,11 +22,11 @@
   width: 100%;
 }
 
-/* Lane */
+/* Lane - Dynamic theming */
 .kanban-column {
   flex: 1 1 0;
-  background: #2a2a2a;
-  border: 1px solid rgba(255,255,255,0.1);
+  background: var(--surface-color);
+  border: 1px solid rgba(128, 128, 128, 0.2);
   border-radius: 12px;
   padding: 0;
   height: calc(100vh - 190px);
@@ -31,19 +34,80 @@
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
-/* Colored top border for each column */
-.column-todo { border-top: 4px solid #f97316; }
-.column-inprogress { border-top: 4px solid #eab308; }
-.column-done { border-top: 4px solid #22c55e; }
+/* Dark theme specific overrides for columns */
+.dark-theme .kanban-column {
+  background: #2a2a2a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
 
-/* Lane header */
+/* Light theme specific overrides for columns */
+.light-theme .kanban-column {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Colored top border for each column - Enhanced visibility */
+.column-todo { 
+  border-top: 6px solid #dc2626; /* Bright red for ToDo */
+  box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.1); /* Subtle red glow */
+}
+.column-inprogress { 
+  border-top: 6px solid #facc15; /* Bright yellow for In Progress */
+  box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.1); /* Subtle yellow glow */
+}
+.column-done { 
+  border-top: 6px solid #16a34a; /* Bright green for Done */
+  box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.1); /* Subtle green glow */
+}
+
+/* Lane header - Responsive to theme with color coding */
 .column-header {
   padding: 12px 12px 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
-  color: #fff;
-  background: rgba(0,0,0,0.2);
+  border-bottom: 1px solid rgba(128, 128, 128, 0.2);
+  color: var(--text-color);
+  background: var(--bg-color);
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Dark theme header */
+.dark-theme .column-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* Light theme header */
+.light-theme .column-header {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* Color-coded column headers */
+.column-todo .column-header {
+  background: linear-gradient(135deg, rgba(220, 38, 38, 0.1) 0%, var(--bg-color) 100%);
+}
+
+.column-inprogress .column-header {
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.1) 0%, var(--bg-color) 100%);
+}
+
+.column-done .column-header {
+  background: linear-gradient(135deg, rgba(22, 163, 74, 0.1) 0%, var(--bg-color) 100%);
+}
+
+/* Dark theme color-coded headers */
+.dark-theme .column-todo .column-header {
+  background: linear-gradient(135deg, rgba(220, 38, 38, 0.2) 0%, rgba(0, 0, 0, 0.2) 100%);
+}
+
+.dark-theme .column-inprogress .column-header {
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.2) 0%, rgba(0, 0, 0, 0.2) 100%);
+}
+
+.dark-theme .column-done .column-header {
+  background: linear-gradient(135deg, rgba(22, 163, 74, 0.2) 0%, rgba(0, 0, 0, 0.2) 100%);
 }
 
 .column-title-section {
@@ -56,52 +120,96 @@
   font-weight: 700;
   font-size: 0.875rem;
   letter-spacing: 0.05em;
+  color: var(--text-color);
 }
 
-
-/* Card */
+/* Card - Theme responsive */
 .kanban-card-wrapper { 
   margin: 10px;
   flex-shrink: 0;
-  background-color: #ffffff !important;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12) !important;
+  background-color: var(--bg-color) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12) !important;
   font-size: large;
-  color: rgb(0, 0, 0);
+  color: var(--text-color);
+  border: 1px solid rgba(128, 128, 128, 0.1);
+  border-radius: 8px;
+  transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
 }
 
+/* Dark theme cards */
+.dark-theme .kanban-card-wrapper {
+  background-color: #343a40 !important;
+  color: #f8f9fa !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
 
+/* Light theme cards */
+.light-theme .kanban-card-wrapper {
+  background-color: #ffffff !important;
+  color: #212529 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12) !important;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
 
 .card-header {
-  background-color: #dbd9d9e3;
+  background-color: var(--surface-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: rgb(0, 0, 0);
+  color: var(--text-color);
   font-family: Tahoma, sans-serif;
   justify-content: left;
   margin-left: auto;
   margin-right: auto;
   width: 95%;
-  border-bottom: #d2d4d6 solid 1px !important;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.2);
   margin-top: 10px;
   padding: 10px 5px;
+  border-radius: 8px 8px 0 0;
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Dark theme card header */
+.dark-theme .card-header {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Light theme card header */
+.light-theme .card-header {
+  background-color: rgba(0, 0, 0, 0.05);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 /* Footer */
 .card-footer {
-  background-color: #dbd9d9e3;
+  background-color: var(--surface-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: rgb(0, 0, 0);
+  color: var(--text-color);
   margin-left: auto;
   margin-right: auto;
   width: 95%;
-  border-top: #d2d4d6 solid 1px !important;
+  border-top: 1px solid rgba(128, 128, 128, 0.2);
   margin-bottom: 10px;
   padding: 10px 5px;
+  border-radius: 0 0 8px 8px;
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
 
+/* Dark theme card footer */
+.dark-theme .card-footer {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Light theme card footer */
+.light-theme .card-footer {
+  background-color: rgba(0, 0, 0, 0.05);
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
 
 /* Responsive */
 @media (max-width: 900px) {
