@@ -12,8 +12,22 @@
 .navbar-brand {
     font-size: 1.1rem;
     margin: 0;
-    padding: 0;
+    padding: 0.5rem;
     color: var(--sidebar-text-active); /* Using CSS variable for consistency */
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    flex-shrink: 0;
+    width: auto;
+}
+
+.navbar-logo {
+    height: 2.5rem; /* Fits nicely within 3.5rem navbar */
+    width: auto; /* Maintain aspect ratio */
+    max-width: 250px; /* Reasonable max width */
+    object-fit: contain; /* Ensure logo fits within bounds */
+    display: block;
 }
 
 .bi {
