@@ -1,4 +1,6 @@
-﻿@inherits LayoutComponentBase
+﻿@using ScrumPilot.Web.Services
+@inject IThemeService ThemeService
+@inherits LayoutComponentBase
 @inject IJSRuntime JSRuntime
 @using MudBlazor
 
@@ -13,18 +15,10 @@
 
     <main>
         <div class="top-row px-4">
-            <!-- All 3 Logos - Swapped Order for Testing -->
-            <div class="logo-comparison">
+            <!-- Single Logo in Upper Left -->
+            <div class="logo-section">
                 <a class="navbar-brand" href="">
-                    <img src="/images/ScrumPilot_Option1_450x102.png?v=2" alt="Logo 1" class="comparison-logo" />
-                </a>
-
-                <a class="navbar-brand" href="">
-                    <img src="/images/ScrumPilot_Option2_450x102.png?v=2" alt="Logo 2" class="comparison-logo" />
-                </a>
-
-                <a class="navbar-brand" href="">
-                    <img src="/images/ScrumPilot_Logo_250x56_Transparent.png?v=2" alt="Logo 3" class="comparison-logo" />
+                    <img src="/images/logo.png" alt="ScrumPilot" class="main-logo" />
                 </a>
             </div>
 

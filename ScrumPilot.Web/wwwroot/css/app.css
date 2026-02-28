@@ -2,15 +2,6 @@ html, body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
 
-/* Only keep essential utility classes */
-.flex-1 {
-    flex: 1;
-}
-
-.w-100 {
-    width: 100%;
-}
-
 .kanban-dropzone {
     min-height: 200px;
     padding: 8px;
@@ -24,30 +15,12 @@ a {
     color: #0071c1;
 }
 
-.btn-primary {
-    color: #fff;
-    background-color: #1b6ec2;
-    border-color: #1861ac;
-}
-
-.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+.dark-theme a, .dark-theme .btn-link {
+    color: var(--primary-color);
 }
 
 .content {
     padding-top: 1.1rem;
-}
-
-.valid.modified:not([type=checkbox]) {
-    outline: 1px solid #26b050;
-}
-
-.invalid {
-    outline: 1px solid red;
-}
-
-.validation-message {
-    color: red;
 }
 
 #blazor-error-ui {
@@ -119,6 +92,10 @@ a {
 
 code {
     color: #c02d76;
+}
+
+.dark-theme code {
+    color: #ff79c6;
 }
 
 .form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {

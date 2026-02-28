@@ -33,7 +33,10 @@
 
 .sidebar {
     background-image: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%);
+    transition: background-image 0.3s ease;
 }
+
+/* The sidebar keeps the same gradient in both themes since it's the brand identity */
 
 .top-row {
     background: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 100%);
@@ -57,25 +60,22 @@
     padding-right: 1.5rem;
 }
 
-/* Logo comparison container - clean */
-.logo-comparison {
+/* Logo section - clean single logo */
+.logo-section {
     display: flex;
     align-items: center;
-    gap: 30px;
-    flex: 1;
-    justify-content: center;
+    flex: 0 0 auto;
 }
 
-.comparison-logo {
-    height: 3.2rem; /* Much larger - almost fill the 3.5rem bar height */
-    width: 14rem; /* Force explicit width for all logos */
-    max-width: none; /* Remove width constraint */
+.main-logo {
+    height: 2.8rem; /* Fits nicely within the 3.5rem header */
+    width: auto; /* Maintain aspect ratio */
+    max-width: 200px; /* Reasonable max width */
+    object-fit: contain; /* Ensure logo fits within bounds */
     transition: opacity 0.3s ease;
-    object-fit: contain;
-    /* No background - transparent logos directly on gradient */
 }
 
-.comparison-logo:hover {
+.main-logo:hover {
     opacity: 0.8;
 }
 

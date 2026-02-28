@@ -201,3 +201,7 @@ client.on(Events.MessageCreate, async (message) => {
 
 // Log in using the token from .env
 client.login(process.env.DISCORD_TOKEN);
+
+if (process.env.NODE_ENV === 'test') {
+  module.exports = { parseTimeRange, formatMessagesToJson, fetchMessagesInRange };
+}
