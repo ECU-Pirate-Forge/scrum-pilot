@@ -1,0 +1,339 @@
+/* ============================
+   Draft Stories Page Theming
+   ============================ */
+
+.draft-page {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.draft-header {
+    margin-bottom: 30px;
+}
+
+.draft-title {
+    color: var(--mud-palette-primary);
+    margin-bottom: 8px;
+}
+
+.draft-subtitle {
+    color: var(--mud-palette-text-secondary);
+    font-size: 1.1rem;
+    margin: 0;
+}
+
+.loading-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--mud-palette-text-secondary);
+}
+
+.loading-text {
+    font-size: 1.2rem;
+}
+
+.empty-state {
+    padding: 40px;
+    background-color: var(--mud-palette-info-lighten);
+    border-left: 4px solid var(--mud-palette-info);
+    border-radius: 4px;
+    color: var(--mud-palette-text-primary);
+}
+
+.empty-state-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.empty-state-subtitle {
+    color: var(--mud-palette-text-secondary);
+}
+
+.table-container {
+    background: #ffffff; /* Explicit light mode default */
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Apply theme variables after explicit defaults */
+.light-theme .table-container, .table-container:not(.dark-theme) {
+    background: var(--surface-color);
+    box-shadow: var(--shadow-color);
+}
+
+.dark-theme .table-container {
+    background: var(--surface-color);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Table cell content styling with improved contrast */
+.story-title {
+    color: var(--mud-palette-primary) !important;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+/* Light blue for story titles in dark mode - all rows */
+.dark-theme .story-title {
+    color: #64b5f6 !important; /* Light blue that works well on dark backgrounds */
+}
+
+/* Ensure dark theme colors apply to striped rows too */
+.dark-theme .table-container .mud-table-striped .mud-table-row .story-title,
+.dark-theme .table-container .mud-table-striped .mud-table-row:nth-child(odd) .story-title,
+.dark-theme .table-container .mud-table-striped .mud-table-row:nth-child(even) .story-title {
+    color: #64b5f6 !important; /* Light blue for all story titles in dark mode */
+}
+
+.story-description {
+    white-space: pre-wrap;
+    color: var(--mud-palette-text-primary) !important;
+    line-height: 1.5;
+    opacity: 0.8;
+}
+
+.story-points {
+    font-weight: 700;
+    font-size: 1.3rem;
+    color: var(--mud-palette-primary) !important;
+}
+
+/* Light blue for story points in dark mode - all rows */
+.dark-theme .story-points {
+    color: #64b5f6 !important; /* Same light blue for consistency */
+}
+
+/* Ensure dark theme colors apply to striped rows too */
+.dark-theme .table-container .mud-table-striped .mud-table-row .story-points,
+.dark-theme .table-container .mud-table-striped .mud-table-row:nth-child(odd) .story-points,
+.dark-theme .table-container .mud-table-striped .mud-table-row:nth-child(even) .story-points {
+    color: #64b5f6 !important; /* Light blue for all story points in dark mode */
+}
+
+.created-date {
+    font-weight: 500;
+    color: var(--mud-palette-text-primary) !important;
+}
+
+.created-time {
+    font-size: 0.85rem;
+    color: var(--mud-palette-text-primary) !important;
+    opacity: 0.7;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.action-buttons .mud-button {
+    min-width: 80px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.2s ease;
+}
+
+.action-buttons .mud-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Modify overlay styling */
+.modify-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+}
+
+.modify-container {
+    background-color: var(--bg-color);
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    border: 1px solid var(--border-color);
+}
+
+.modify-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px 0 24px;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 0;
+}
+
+.modify-title {
+    color: var(--text-color);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+}
+
+.close-button {
+    min-width: auto;
+}
+
+.modify-content {
+    padding: 0;
+}
+
+.modify-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 24px;
+    border-top: 1px solid var(--border-color);
+    background-color: var(--surface-color);
+    border-radius: 0 0 12px 12px;
+}
+
+/* Story Modification Overlay */
+.modify-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.modify-container {
+    background: var(--mud-palette-surface);
+    border-radius: 12px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+    max-width: 90vw;
+    max-height: 90vh;
+    width: 800px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: slideInUp 0.3s ease-out;
+}
+
+.modify-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--mud-palette-divider);
+    background: linear-gradient(135deg, var(--mud-palette-primary) 0%, rgba(27, 110, 194, 0.1) 100%);
+}
+
+.modify-title {
+    color: var(--mud-palette-primary);
+    font-weight: 600;
+    margin: 0;
+}
+
+.close-button {
+    color: var(--mud-palette-text-secondary);
+}
+
+.modify-content {
+    flex: 1;
+    overflow-y: auto;
+    background: var(--mud-palette-background);
+}
+
+.modify-actions {
+    padding: 16px 24px;
+    border-top: 1px solid var(--mud-palette-divider);
+    display: flex;
+    justify-content: flex-end;
+    background: var(--mud-palette-surface);
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideInUp {
+    from { 
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to { 
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Dark theme overrides for modify overlay */
+.dark-theme .modify-overlay {
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.dark-theme .modify-container {
+    background: var(--mud-palette-surface);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+/* Responsive design for modify overlay */
+@media (max-width: 768px) {
+    .modify-container {
+        width: 95vw;
+        max-height: 95vh;
+    }
+
+    .modify-header {
+        padding: 16px 20px;
+    }
+
+    .modify-actions {
+        padding: 12px 20px;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .modify-actions .mud-button {
+        width: 100%;
+    }
+}
+
+/* Ensure proper contrast on striped rows */
+.table-container .mud-table-striped .mud-table-row:nth-child(odd) .story-title,
+.table-container .mud-table-striped .mud-table-row:nth-child(odd) .story-description,
+.table-container .mud-table-striped .mud-table-row:nth-child(odd) .story-points,
+.table-container .mud-table-striped .mud-table-row:nth-child(odd) .created-date,
+.table-container .mud-table-striped .mud-table-row:nth-child(odd) .created-time {
+    color: var(--mud-palette-text-primary) !important;
+}
+
+/* Primary color elements should stay primary even on striped rows in light theme */
+.light-theme .table-container .mud-table-striped .mud-table-row:nth-child(odd) .story-title,
+.light-theme .table-container .mud-table-striped .mud-table-row:nth-child(odd) .story-points {
+    color: var(--mud-palette-primary) !important;
+}
+
+/* But in dark theme, use light blue for better visibility */
+.dark-theme .table-container .mud-table-striped .mud-table-row:nth-child(odd) .story-title,
+.dark-theme .table-container .mud-table-striped .mud-table-row:nth-child(odd) .story-points {
+    color: #64b5f6 !important;
+}

@@ -38,8 +38,8 @@ namespace ScrumPilot.API.Services
                     .CreateMany(5)
                     .Where(s => s.IsDraft)
                     .ToList();
-                
-                return GetStories()
+
+            return stories;
         }
 
         /// <summary>

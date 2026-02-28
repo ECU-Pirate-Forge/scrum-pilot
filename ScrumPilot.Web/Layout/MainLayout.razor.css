@@ -2,40 +2,82 @@
     position: relative;
     display: flex;
     flex-direction: column;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    min-height: 100vh;
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 main {
     flex: 1;
-    background-color: rgb(34, 34, 34);
+    background-color: var(--content-bg);
+    color: var(--text-color);
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Light theme main override */
+.light-theme main {
+    background-color: #ffffff;
+}
+
+/* Dark theme main override */
+.dark-theme main {
+    background-color: #212529;
 }
 
 .sidebar {
     background-image: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%);
+    transition: background-image 0.3s ease;
 }
 
+/* The sidebar keeps the same gradient in both themes since it's the brand identity */
+
 .top-row {
-    background-color: #f7f7f7;
-    border-bottom: 1px solid #d6d5d5;
+    background: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 100%);
+    border-bottom: 1px solid #3a0647;
     justify-content: flex-end;
     height: 3.5rem;
     display: flex;
     align-items: center;
+    margin: 0;
+    box-sizing: border-box;
+    color: #ffffff;
+    /* Remove theme-dependent transitions since we're keeping it consistent */
 }
 
     .top-row ::deep a, .top-row ::deep .btn-link {
         white-space: nowrap;
         margin-left: 1.5rem;
         text-decoration: none;
+        color: #ffffff;
+        transition: opacity 0.3s ease;
     }
 
     .top-row ::deep a:hover, .top-row ::deep .btn-link:hover {
         text-decoration: underline;
+        opacity: 0.8;
     }
 
     .top-row ::deep a:first-child {
         overflow: hidden;
         text-overflow: ellipsis;
     }
+
+/* Theme toggle button styling - always white text on blue background */
+.top-row .btn {
+    transition: all 0.3s ease;
+    border-radius: 6px;
+    padding: 0.375rem 0.75rem;
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.top-row .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+}
 
 @media (max-width: 640.98px) {
     .top-row {

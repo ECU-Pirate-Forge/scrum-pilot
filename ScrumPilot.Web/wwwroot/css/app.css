@@ -2,6 +2,209 @@ html, body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
 
+/* CSS Variables for comprehensive theming */
+:root {
+    --primary-color: #1b6ec2; /* Main brand color for buttons, links, and primary elements */
+    --primary-border: #1861ac; /* Border color for primary buttons and focused elements */
+    --bg-color: #ffffff; /* Main page/body background color */
+    --text-color: #212529; /* Default text color throughout the application */
+    --surface-color: #ffffff; /* Background color for cards, modals, and elevated surfaces */
+    --content-bg: #ffffff; /* Main content area background color */
+    --secondary-bg: #f8f9fa; /* Secondary background for subtle sections and alternating rows */
+    --border-color: rgba(0, 0, 0, 0.125); /* Default border color for form elements and dividers */
+    --shadow-color: rgba(0, 0, 0, 0.15); /* Shadow color for depth effects and elevation */
+    --hover-bg: rgba(0, 0, 0, 0.05); /* Background color for hover states on interactive elements */
+
+    /* Sidebar-specific variables (always light text on dark gradient) */
+    --sidebar-text: #e3f2fd; /* Light blue-tinted text for sidebar links */
+    --sidebar-text-active: #ffffff; /* Pure white for active sidebar links */
+    --sidebar-bg-hover: rgba(255, 255, 255, 0.1); /* Light overlay for hover states */
+    --sidebar-bg-active: rgba(255, 255, 255, 0.2); /* Light overlay for active states */
+}
+
+/* Dark theme variables */
+.dark-theme {
+    --primary-color: #4dabf7; /* Main brand color adjusted for dark theme contrast */
+    --primary-border: #339af0; /* Border color for primary elements in dark theme */
+    --bg-color: #212529; /* Dark main page/body background color */
+    --text-color: #f8f9fa; /* Light text color for readability on dark backgrounds */
+    --surface-color: #343a40; /* Dark background for cards and elevated surfaces */
+    --content-bg: #212529; /* Dark main content area background */
+    --secondary-bg: #495057; /* Dark secondary background for subtle sections */
+    --border-color: rgba(255, 255, 255, 0.125); /* Light border color for dark theme elements */
+    --shadow-color: rgba(0, 0, 0, 0.3); /* Stronger shadow color for dark theme depth effects */
+    --hover-bg: rgba(255, 255, 255, 0.1); /* Light hover background for dark theme interactions */
+
+    /* Sidebar variables remain the same in dark theme since sidebar background never changes */
+    --sidebar-text: #e3f2fd;
+    --sidebar-text-active: #ffffff;
+    --sidebar-bg-hover: rgba(255, 255, 255, 0.1);
+    --sidebar-bg-active: rgba(255, 255, 255, 0.2);
+}
+
+/* Light theme class for explicit theming */
+.light-theme {
+    --primary-color: #1b6ec2; /* Main brand color for light theme (same as default) */
+    --primary-border: #1861ac; /* Border color for primary elements in light theme */
+    --bg-color: #ffffff; /* Light main page/body background color */
+    --text-color: #212529; /* Dark text color for light backgrounds */
+    --surface-color: #ffffff; /* Light background for cards and elevated surfaces */
+    --content-bg: #ffffff; /* Light main content area background */
+    --secondary-bg: #f8f9fa; /* Light secondary background for subtle sections */
+    --border-color: rgba(0, 0, 0, 0.125); /* Dark border color for light theme elements */
+    --shadow-color: rgba(0, 0, 0, 0.15); /* Standard shadow color for light theme depth effects */
+    --hover-bg: rgba(0, 0, 0, 0.05); /* Dark hover background for light theme interactions */
+
+    /* Sidebar variables remain the same in light theme since sidebar background never changes */
+    --sidebar-text: #e3f2fd;
+    --sidebar-text-active: #ffffff;
+    --sidebar-bg-hover: rgba(255, 255, 255, 0.1);
+    --sidebar-bg-active: rgba(255, 255, 255, 0.2);
+}
+
+/* Apply theme variables to major layout elements - Explicit light theme first */
+html, body {
+    background-color: #ffffff; /* Explicit light mode default */
+    color: #212529; /* Explicit dark text default */
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Apply CSS variables after explicit defaults */
+html.light-theme, body.light-theme,
+html:not(.dark-theme), body:not(.dark-theme) {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+
+.page {
+    background-color: #ffffff; /* Explicit light mode default */
+    color: #212529; /* Explicit dark text default */
+    min-height: 100vh;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Apply CSS variables after explicit defaults */
+.page.light-theme, .page:not(.dark-theme) {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+
+main {
+    background-color: #ffffff; /* Explicit light mode default */
+    color: #212529; /* Explicit dark text default */
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Apply CSS variables after explicit defaults */
+main.light-theme, main:not(.dark-theme) {
+    background-color: var(--content-bg);
+    color: var(--text-color);
+}
+
+.content {
+    background-color: #ffffff; /* Explicit light mode default */
+    color: #212529; /* Explicit dark text default */
+    padding-top: 1.1rem;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Apply CSS variables after explicit defaults */
+.content.light-theme, .content:not(.dark-theme) {
+    background-color: var(--content-bg);
+    color: var(--text-color);
+}
+
+/* Top row styling - Matching purple gradient from sidebar */
+.top-row {
+    background: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 100%) !important;
+    color: #ffffff !important;
+    border-bottom: 1px solid #3a0647 !important;
+}
+
+/* Top row links and buttons - Always white text */
+.top-row a {
+    color: #ffffff !important;
+}
+
+.top-row a:hover {
+    color: #e3f2fd !important;
+    opacity: 0.8;
+}
+
+/* General dark theme text and elements */
+.dark-theme h1, .dark-theme h2, .dark-theme h3, .dark-theme h4, .dark-theme h5, .dark-theme h6 {
+    color: var(--text-color);
+}
+
+.dark-theme p, .dark-theme div, .dark-theme span {
+    color: var(--text-color);
+}
+
+/* Form inputs in dark mode */
+.dark-theme input, .dark-theme textarea, .dark-theme select {
+    background-color: var(--surface-color);
+    color: var(--text-color);
+    border-color: #495057;
+}
+
+.dark-theme input:focus, .dark-theme textarea:focus, .dark-theme select:focus {
+    background-color: var(--surface-color);
+    color: var(--text-color);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(77, 171, 247, 0.25);
+}
+
+.navbar-dark {
+    background-color: var(--bg-color) !important;
+    transition: background-color 0.3s ease;
+}
+
+/* Navbar brand styling */
+.navbar-brand {
+    font-weight: bold;
+    transition: opacity 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    height: 3.5rem;
+    padding: 0.5rem 0;
+    width: 100%;
+    margin-bottom: 0.25rem;
+    color: #ffffff; /* Always white since sidebar is dark */
+}
+
+.navbar-brand:hover,
+.navbar-brand:focus {
+    opacity: 0.9;
+}
+
+/* Navbar logo styling */
+.navbar-logo {
+    height: 2.2rem;
+    max-width: 250px;
+    width: 250px;
+    transition: opacity 0.3s ease;
+    object-fit: contain;
+    object-position: left center;
+    margin-left: 0.75rem;
+    margin-top: -0.3rem;
+}
+
+.navbar-logo:hover {
+    opacity: 0.8;
+}
+
+/* Navigation links - Always light colored for dark sidebar background */
+.nav-link {
+    color: #e3f2fd !important;
+    transition: color 0.3s ease;
+}
+
+.nav-link:hover,
+.nav-link:focus {
+    color: #ffffff !important;
+}
+
 h1:focus {
     outline: none;
 }
@@ -12,8 +215,12 @@ a, .btn-link {
 
 .btn-primary {
     color: #fff;
-    background-color: #1b6ec2;
-    border-color: #1861ac;
+    background-color: var(--primary-color);
+    border-color: var(--primary-border);
+}
+
+.dark-theme a, .dark-theme .btn-link {
+    color: var(--primary-color);
 }
 
 .btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
@@ -58,7 +265,7 @@ a, .btn-link {
     }
 
 .blazor-error-boundary {
-    background: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTYiIGhlaWdodD0iNDkiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIG92ZXJmbG93PSJoaWRkZW4iPjxkZWZzPjxjbGlwUGF0aCBpZD0iY2xpcDAiPjxyZWN0IHg9IjIzNSIgeT0iNTEiIHdpZHRoPSI1NiIgaGVpZ2h0PSI0OSIvPjwvY2xpcFBhdGg+PC9kZWZzPjxnIGNsaXAtcGF0aD0idXJsKCNjbGlwMCkiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0yMzUgLTUxKSI+PHBhdGggZD0iTTI2My41MDYgNTFDMjY0LjcxNyA1MSAyNjUuODEzIDUxLjQ4MzcgMjY2LjYwNiA1Mi4yNjU4TDI2Ny4wNTIgNTIuNzk4NyAyNjcuNTM5IDUzLjYyODMgMjkwLjE4NSA5Mi4xODMxIDI5MC41NDUgOTIuNzk1IDI5MC42NTYgOTIuOTk2QzI5MC44NzcgOTMuNTEzIDI5MSA5NC4wODE1IDI5MSA5NC42NzgyIDI5MSA5Ny4wNjUxIDI4OS4wMzggOTkgMjg2LjYxNyA5OUwyNDAuMzgzIDk5QzIzNy45NjMgOTkgMjM2IDk3LjA2NTEgMjM2IDk0LjY3ODIgMjM2IDk0LjM3OTkgMjM2LjAzMSA5NC4wODg2IDIzNi4wODkgOTMuODA3MkwyMzYuMzM4IDkzLjAxNjIgMjM2Ljg1OCA5Mi4xMzE0IDI1OS40NzMgNTMuNjI5NCAyNTkuOTYxIDUyLjc5ODUgMjYwLjQwNyA1Mi4yNjU4QzI2MS4yIDUxLjQ4MzcgMjYyLjI5NiA1MSAyNjMuNTA2IDUxWk0yNjMuNTg2IDY2LjAxODNDMjYwLjczNyA2Ni4wMTgzIDI1OS4zMTMgNjcuMTI0NSAyNTkuMzEzIDY5LjMzNyAyNTkuMzEzIDY5LjYxMDIgMjU5LjMzMiA2OS44NjA4IDI1OS4zNzEgNzAuMDg4N0wyNjEuNzk1IDg0LjAxNjEgMjY1LjM4IDg0LjAxNjEgMjY3LjgyMSA2OS43NDc1QzI2Ny44NiA2OS43MzA5IDI2Ny44NzkgNjkuNTg3NyAyNjcuODc5IDY5LjMxNzkgMjY3Ljg3OSA2Ny4xMTgyIDI2Ni40NDggNjYuMDE4MyAyNjMuNTg2IDY2LjAxODNaTTI2My41NzYgODYuMDU0N0MyNjEuMDQ5IDg2LjA1NDcgMjU5Ljc4NiA4Ny4zMDA1IDI1OS43ODYgODkuNzkyMSAyNTkuNzg2IDkyLjI4MzcgMjYxLjA0OSA5My41Mjk1IDI2My41NzYgOTMuNTI5NSAyNjYuMTE2IDkzLjUyOTUgMjY3LjM4NyA5Mi4yODM3IDI2Ny4zODcgODkuNzkyMSAyNjcuMzg3IDg3LjMwMDUgMjY2LjExNiA4Ni4wNTQ3IDI2My41NzYgODYuMDU0N1oiIGZpbGw9IiNGRkU1MDAiIGZpbGwtcnVsZT0iZXZlbm9kZCIvPjwvZz48L3N2Zz4=) no-repeat 1rem/1.8rem, #b32121;
+    background: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTYiIGhlaWdodD0iNDkiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIG92ZXJmbG93PSJoaWRkZW4iPjxkZWZzPjxjbGlwUGF0aCBpZD0iY2xpcDAiPjxyZWN0IHg9IjIzNSIgeT0iNTEiIHdpZHRoPSI1NiIgaGVpZ2h0PSI0OSIvPjwvY2xpcFBhdGg+PC9kZWZzPjxnIGNsaXAtcGF0aD0idXJsKCNjbGlwMCkiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0yMzUgLTUxKSI+PHBhdGggZD0iTTI2My41MDYgNTFDMjY0LjcxNyA1MSAyNjUuODEzIDUxLjQ4MzcgMjY2LjYwNiA1Mi4yNjU4TDI2Ny4wNTIgNTIuNzk4NyAyNjcuNTM5IDUzLjYyODMgMjkwLjE4NSA5Mi4xODMxIDI5MC41NDUgOTIuNzk1IDI5MC42NTYgOTIuOTk2QzI5MC44NzcgOTMuNTEzIDI5MSA5NC4wODE1IDI5MSA5NC42NzgyIDI5MSA5Ny4wNjUxIDI4OS4wMzggOTkgMjg2LjYxNyA5OUwyNDAuMzgzIDk5QzIzNy45NjMgOTkgMjM2IDk3LjA2NTEgMjM2IDk0LjY3ODIgMjM2IDk0LjM3OTkgMjM2LjAzMSA5NC4wODg2IDIzNi4wODkgOTMuODA3MkwyMzYuMzM4IDkzLjAxNjIgMjM2Ljg1OCA5Mi4xMzE0IDI1OS40NzMgNTMuNjI5NCAyNTkuOTYxIDUyLjc5ODUgMjYwLjQwNyA1Mi4yNjU4QzI2MS4yIDUxLjQ4MzcgMjYyLjI5NiA1MSAyNjMuNTA2IDUxWk0yNjMuNTg2IDY2LjAxODNDMjYwLjczNyA2Ni4wMTgzIDI1OS4zMTMgNjcuMTI0NSAyNTkuMzEzIDY5LjMzNyAyNTkuMzEzIDY5LjYxMDIgMjU5LjMzMiA2OS44NjA4IDI1OS4zNzEgNzAuMDg4N0wyNjEuNzk1IDg0LjAxNjEgMjY1LjM4IDg0LjAxNjEgMjY3LjgyMSA2OS43NDc1QzI2Ny44NiA2OS43MzA5IDI2Ny44NzkgNjkuNTg3NyAyNjcuODc5IDY5LjMxNzkgMjY3Ljg3OSA2Ny4xMTgyIDI2Ni40NDggNjYuMDE4MyAyNjMuNTg2IDY2LjAxODNaTTI2My41NzYgODYuMDU0N0MyNjEuMDQ5IDg2LjA1NDcgMjU5Ljc86ODcuMzAwNSAyNTkuNzg2IDg5LjY5MjEgMjU5Ljc4NiA5Mi4yODM3IDI2MS4wNDkgOTMuNTI5NSAyNjMuNTc2IDkzLjUyOTUgMjY2LjExNiA5My41Mjk1IDI2Ny4zODcgOTIuMjgzNyAyNjcuMzg3IDg5Ljc5MjEgMjY3LjM4NyA4Ny4zMDA1IDI2Ni4xMTYgODYuMDU0NyAyNjMuNTc2IDg2LjA1NDdaIiBmaWxsPSIjRkZFNTAwIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiLz48L2c+PC9zdmc+) no-repeat 1rem/1.8rem, #b32121;
     padding: 1rem 1rem 1rem 3.7rem;
     color: white;
 }
@@ -105,6 +312,10 @@ a, .btn-link {
 
 code {
     color: #c02d76;
+}
+
+.dark-theme code {
+    color: #ff79c6;
 }
 
 .form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
