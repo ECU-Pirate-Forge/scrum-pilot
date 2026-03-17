@@ -1,7 +1,7 @@
 # Entity Framework Setup Documentation
 
 ## Overview
-This document outlines the Entity Framework Core setup for the ScrumPilot project using SQLite with a code-first approach and migrations. The data access layer is now separated into the `ScrumPilot.Data` project following clean architecture principles.
+This document outlines the Entity Framework Core setup for the ScrumPilot project using SQLite with a code-first approach and migrations. The data access layer is separated into the `ScrumPilot.Data` project following clean architecture principles.
 
 ## Project Structure
 
@@ -13,8 +13,8 @@ ScrumPilot.Data/
 ├── Repositories/
 │   ├── IStoryRepository.cs         # Story repository interface
 │   ├── StoryRepository.cs          # Story repository implementation
-│   ├── IStudentRepository.cs       # Student repository interface
-│   └── StudentRepository.cs        # Student repository implementation
+│   ├── IStudentRepository.cs       # Student repository interface (not used in current branch)
+│   └── StudentRepository.cs        # Student repository implementation (not used in current branch)
 ├── Migrations/                     # EF Core migration files
 ├── Seeders/
 │   └── DatabaseSeeder.cs          # Database seeding logic
@@ -55,6 +55,18 @@ This configures:
 - Repository pattern implementations
 - All data access dependencies
 
+## Architecture Pattern
+
+**Current Implementation**: Controller → Service → Repository
+
+```
+StoryController → IStoryService → IStoryRepository → Database
+```
+
+- **Controllers**: Handle HTTP requests/responses
+- **Services**: Contain business logic and orchestration
+- **Repositories**: Handle data access and database operations
+
 ## Entities
 
 ### Story
@@ -63,15 +75,9 @@ This configures:
 - Optional fields: `Description`, `StoryPoints`
 - Boolean flags: `IsAiGenerated`, `IsDraft`
 
-### Student
-- Primary key: `Guid Id`
-- Required fields: `FirstName`, `LastName`, `DateCreated`, `LastUpdated`
-- Other fields: `GradeLevel`, `IsFullTime`
-
 ## Repository Pattern
 Implements the repository pattern for data access:
-- `IStoryRepository` / `StoryRepository`
-- `IStudentRepository` / `StudentRepository`
+- `IStoryRepository` / `StoryRepository` - Handles all Story data operations
 
 ## Migrations
 
@@ -101,26 +107,19 @@ dotnet ef migrations script --project ScrumPilot.Data --startup-project ScrumPil
 The application automatically applies pending migrations at startup when running in Development environment.
 
 ## Database Seeding
-Initial data is seeded through `DatabaseSeeder.SeedDatabase()` which runs at startup in Development environment.
+Initial data is seeded through `DatabaseSeeder.SeedDatabase()` which runs at startup in Development environment. The seeder includes sample stories with one draft story for testing.
 
 ## API Endpoints
 
-### Stories
-- `GET /api/story` - Get all stories
-- `GET /api/story/{id}` - Get story by ID
-- `GET /api/story/status/{status}` - Get stories by status
-- `GET /api/story/drafts` - Get draft stories
-- `POST /api/story` - Create new story
-- `PUT /api/story/{id}` - Update existing story
-- `DELETE /api/story/{id}` - Delete story
-- `POST /api/story/generate` - Generate AI story (also saves to database)
+### Currently Implemented Stories Endpoints
+- `GET /api/story/getAllStories` - Get all stories
+- `GET /api/story/getDraftStories` - Get draft stories only
+- `POST /api/story/generateAiStories` - Generate AI story and save to database
 
-### Students
-- `GET /api/students` - Get all students
-- `GET /api/students/{id}` - Get student by ID
-- `POST /api/students` - Create new student
-- `PUT /api/students/{id}` - Update existing student
-- `DELETE /api/students/{id}` - Delete student
+### Frontend Integration
+- **ScrumBoard**: Uses `getAllStories` to populate Kanban board
+- **DraftStoriesPage**: Uses `getDraftStories` to show draft stories for review
+- **StoryGeneration**: Uses `generateAiStories` to create new AI-generated stories
 
 ## Development Workflow
 
@@ -144,10 +143,12 @@ Initial data is seeded through `DatabaseSeeder.SeedDatabase()` which runs at sta
 ### Maintainability
 - Data access changes are isolated to the Data project
 - Repository pattern provides abstraction over Entity Framework
+- Service layer provides business logic separation
 - Extension methods provide clean dependency injection setup
 
 ### Testability
 - Repository interfaces can be easily mocked for unit testing
+- Service layer can be tested independently
 - Data layer can be tested in isolation from API controllers
 
 ## Notes
@@ -155,3 +156,4 @@ Initial data is seeded through `DatabaseSeeder.SeedDatabase()` which runs at sta
 - Enum values are stored as strings in the database for readability
 - Timestamps are automatically managed by the DbContext
 - GUIDs are used as primary keys for all entities
+- CRUD operations beyond the current endpoints are handled by other team members
