@@ -107,16 +107,3 @@ code {
     text-align: start;
 }
 
-/* Dashboard tiles */
-
-.dashboard-tile {
-    cursor: pointer;
-    padding: 20px;
-    border-radius: 8px;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.dashboard-tile:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 6px 18px rgba(0,0,0,0.15);
-}
