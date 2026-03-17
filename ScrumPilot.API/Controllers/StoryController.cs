@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using ScrumPilot.API.Services;
+using ScrumPilot.Data.Repositories;
 using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.API.Controllers
@@ -9,20 +10,29 @@ namespace ScrumPilot.API.Controllers
     public class StoryController : ControllerBase
     {
         private readonly IStoryService _storyService;
+        private readonly IStoryRepository _storyRepository;
 
-        public StoryController(IStoryService storyService)
+        public StoryController(IStoryService storyService, IStoryRepository storyRepository)
         {
             _storyService = storyService;
+            _storyRepository = storyRepository;
         }
 
-        [HttpGet]
-        public ActionResult<List<Story>> GetStories()
+        [HttpGet("getAllStories")]
+        public async Task<ActionResult<IEnumerable<Story>>> GetAllStories()
         {
-            var stories = _storyService.GetStories();
+            var stories = await _storyService.GetAllStoriesAsync();
             return Ok(stories);
         }
 
-        [HttpPost("generate")]
+        [HttpGet("getDraftStories")]
+        public async Task<ActionResult<IEnumerable<Story>>> GetDraftStories()
+        {
+            var draftStories = await _storyService.GetDraftStoriesAsync();
+            return Ok(draftStories);
+        }
+
+        [HttpPost("generateAiStories")]
         public async Task<ActionResult<Story>> GenerateAiStory([FromBody] string problemStatement)
         {
             if (string.IsNullOrWhiteSpace(problemStatement))
@@ -33,7 +43,9 @@ namespace ScrumPilot.API.Controllers
             try
             {
                 var story = await _storyService.GenerateAiStory(problemStatement);
-                return Ok(story);
+                // Save the generated story to the database
+                var savedStory = await _storyRepository.AddAsync(story);
+                return Ok(savedStory);
             }
             catch (InvalidOperationException ex)
             {

@@ -175,7 +175,7 @@ else
 
         try
         {
-            var stories = await Http.GetFromJsonAsync<List<Story>>("story");
+            var stories = await Http.GetFromJsonAsync<List<Story>>("api/story/getAllStories");
             if (stories is not null && stories.Any())
                 Items = stories;
         }

@@ -99,7 +99,7 @@
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
             // Call the API
-            var response = await Http.PostAsync("story/generate", content);
+            var response = await Http.PostAsync("api/story/generateAiStories", content);
 
             if (response.IsSuccessStatusCode)
             {
