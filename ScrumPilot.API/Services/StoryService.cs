@@ -88,16 +88,6 @@ namespace ScrumPilot.API.Services
             return story;
         }
 
-        // / <summary>
-        // / Generates AI-based Scrum user stories for each problem statement in the provided list.
-        // / Processes statements sequentially to preserve ordering. If any individual generation
-        // / fails, the exception is propagated and the entire request fails.
-        // / </summary>
-        // / <param name="problemStatements">The ordered list of problem statements to generate stories for.</param>
-        // / <returns>An ordered <see cref="List{Story}"/> matching the input list order.</returns>
-        // / <exception cref="InvalidOperationException">Thrown if the Ollama URL is not configured or the AI response cannot be parsed.</exception>
-        // / <exception cref="HttpRequestException">Thrown if the Ollama API request fails.</exception>
-        // / <exception cref="TimeoutException">Thrown if the request to the Ollama API times out.</exception>
         public async Task<List<Story>> GenerateAiStory(List<string> problemStatements)
         {
             var stories = new List<Story>();
