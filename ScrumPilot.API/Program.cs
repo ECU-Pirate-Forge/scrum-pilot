@@ -6,7 +6,10 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddScoped<IStoryService, StoryService>();
-builder.Services.AddHttpClient();
+builder.Services.AddHttpClient<StoryService>(client =>
+{
+    client.Timeout = TimeSpan.FromMinutes(5);
+});
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
@@ -15,18 +18,12 @@ builder.Services.AddSwaggerGen();
 // Add CORS policy for Blazor WebAssembly
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowBlazor",
-        policy => policy
-            .WithOrigins("https://localhost:7280") // Blazor app's HTTPS port
-            .AllowAnyHeader()
-            .AllowAnyMethod());
-});
-builder.Services.AddCors(options =>
-{
     options.AddPolicy("AllowBlazor", policy =>
         policy.WithOrigins(
                 "http://localhost:5199",
-                "https://localhost:7280"
+                "http://127.0.0.1:5199",
+                "https://localhost:7280",
+                "https://127.0.0.1:7280"
             )
             .AllowAnyHeader()
             .AllowAnyMethod()

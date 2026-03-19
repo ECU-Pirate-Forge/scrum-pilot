@@ -95,7 +95,7 @@
         try
         {
             // Create JSON content from the problem statement
-            var jsonContent = JsonSerializer.Serialize(_message);
+            var jsonContent = JsonSerializer.Serialize(new List<string> { _message });
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
             // Call the API
@@ -104,10 +104,11 @@
             if (response.IsSuccessStatusCode)
             {
                 var jsonResponse = await response.Content.ReadAsStringAsync();
-                _generatedStory = JsonSerializer.Deserialize<Story>(jsonResponse, new JsonSerializerOptions
+                var stories = JsonSerializer.Deserialize<List<Story>>(jsonResponse, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
                 });
+                _generatedStory = stories?[0];
 
                 _message = string.Empty; // Clear the input field
             }

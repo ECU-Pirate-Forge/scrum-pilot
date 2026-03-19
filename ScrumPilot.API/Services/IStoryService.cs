@@ -8,6 +8,6 @@ namespace ScrumPilot.API.Services
 
         List<Story> GetDraftStories();
 
-        Task<Story> GenerateAiStory(string problemStatement);
+        Task<List<Story>> GenerateAiStory(List<string> problemStatements);
     }
 }
