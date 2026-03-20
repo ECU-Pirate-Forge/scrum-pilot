@@ -1,5 +1,4 @@
 ﻿using AutoFixture;
-using ScrumPilot.Shared.Models;
 using ScrumPilot.Data.Repositories;
 using System.Text;
 using System.Text.Json;
