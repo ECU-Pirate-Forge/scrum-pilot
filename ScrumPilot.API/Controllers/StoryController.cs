@@ -10,12 +10,10 @@ namespace ScrumPilot.API.Controllers
     public class StoryController : ControllerBase
     {
         private readonly IStoryService _storyService;
-        private readonly IStoryRepository _storyRepository;
 
-        public StoryController(IStoryService storyService, IStoryRepository storyRepository)
+        public StoryController(IStoryService storyService)
         {
             _storyService = storyService;
-            _storyRepository = storyRepository;
         }
 
         [HttpGet("getAllStories")]
@@ -43,9 +41,8 @@ namespace ScrumPilot.API.Controllers
             try
             {
                 var story = await _storyService.GenerateAiStory(problemStatement);
-                // Save the generated story to the database
-                var savedStory = await _storyRepository.AddAsync(story);
-                return Ok(savedStory);
+
+                return Ok(story);
             }
             catch (InvalidOperationException ex)
             {
