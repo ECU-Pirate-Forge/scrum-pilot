@@ -1,6 +1,7 @@
 ﻿using AutoFixture;
 using ScrumPilot.Data.Repositories;
 using ScrumPilot.Shared.Models;
+using ScrumPilot.Data.Repositories;
 using System.Text;
 using System.Text.Json;
 
@@ -15,20 +16,18 @@ namespace ScrumPilot.API.Services
         public StoryService(HttpClient httpClient, IConfiguration configuration, IStoryRepository storyRepository)
         {
             _httpClient = httpClient;
-            _configuration = configuration; 
+            _configuration = configuration;
             _storyRepository = storyRepository;
         }
 
         public async Task<IEnumerable<Story>> GetAllStoriesAsync()
         {
-            var fixture = new Fixture();
-            return fixture.Build<Story>().CreateMany(5);
+            return await _storyRepository.GetAllStoriesAsync();
         }
 
         public async Task<IEnumerable<Story>> GetDraftStoriesAsync()
         {
-            var fixture = new Fixture();
-            return fixture.Build<Story>().CreateMany(5).Where(s => s.IsDraft);
+            return await _storyRepository.GetDraftStoriesAsync();
         }
 
         /// <summary>
@@ -47,7 +46,7 @@ namespace ScrumPilot.API.Services
         /// <exception cref="TimeoutException">
         /// Thrown if the request to the Ollama API times out.
         /// </exception>
-        public async Task<Story> GenerateAiStory(string problemStatement)
+        private async Task<Story> GenerateAiStory(string problemStatement)
         {
             var ollamaBaseUrl = _configuration["OllamaBaseUrl"];
             var ollamaModel = _configuration["OllamaModel"];
@@ -63,7 +62,6 @@ namespace ScrumPilot.API.Services
 
             var story = new Story
             {
-                Id = Guid.NewGuid(),
                 Title = aiStoryResponse.Title,
                 Description = $"{aiStoryResponse.UserStory}\n\nAcceptance Criteria:\n{string.Join("\n", aiStoryResponse.AcceptanceCriteria.Select(ac => $"• {ac}"))}",
                 Status = StoryStatus.ToDo,
@@ -75,6 +73,19 @@ namespace ScrumPilot.API.Services
             };
 
             return story;
+        }
+
+        public async Task<List<Story>> GenerateAiStory(List<string> problemStatements)
+        {
+            var stories = new List<Story>();
+
+            foreach (var problemStatement in problemStatements)
+            {
+                var story = await GenerateAiStory(problemStatement);
+                stories.Add(story);
+            }
+
+            return stories;
         }
 
         private string BuildPrompt(string problemStatement)
@@ -103,7 +114,8 @@ namespace ScrumPilot.API.Services
             {
                 model = model,
                 prompt = prompt,
-                stream = false
+                stream = false,
+                format = "json"
             };
 
             var json = JsonSerializer.Serialize(requestBody);

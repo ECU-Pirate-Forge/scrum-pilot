@@ -1,4 +1,7 @@
 using ScrumPilot.API.Services;
+using ScrumPilot.Data.Extensions;
+using ScrumPilot.Data.Context;
+using ScrumPilot.Data.Seeders;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ScrumPilot.Data.Repositories;
@@ -7,10 +10,14 @@ using ScrumPilot.Data.Repositories;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add Data services (EF Core, repositories)
-builder.Services.AddScoped<IStoryRepository, StoryRepository>();
+builder.Services.AddDataServices(builder.Configuration);
+
 // Add services to the container.
 builder.Services.AddScoped<IStoryService, StoryService>();
-builder.Services.AddHttpClient();
+builder.Services.AddHttpClient<StoryService>(client =>
+{
+    client.Timeout = TimeSpan.FromMinutes(5);
+});
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
@@ -19,18 +26,12 @@ builder.Services.AddSwaggerGen();
 // Add CORS policy for Blazor WebAssembly
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowBlazor",
-        policy => policy
-            .WithOrigins("https://localhost:7280") // Blazor app's HTTPS port
-            .AllowAnyHeader()
-            .AllowAnyMethod());
-});
-builder.Services.AddCors(options =>
-{
     options.AddPolicy("AllowBlazor", policy =>
         policy.WithOrigins(
                 "http://localhost:5199",
-                "https://localhost:7280"
+                "http://127.0.0.1:5199",
+                "https://localhost:7280",
+                "https://127.0.0.1:7280"
             )
             .AllowAnyHeader()
             .AllowAnyMethod()
@@ -42,6 +43,14 @@ var app = builder.Build();
 // Apply pending migrations at startup (development only)
 if (app.Environment.IsDevelopment())
 {
+    using (var scope = app.Services.CreateScope())
+    {
+        var context = scope.ServiceProvider.GetRequiredService<ScrumPilotContext>();
+        context.Database.Migrate();
+
+        // Seed database with initial data
+        DatabaseSeeder.SeedDatabase(context);
+    }
 }
 
 // Configure the HTTP request pipeline.

@@ -1,5 +1,8 @@
 <Solution>
-  <Project Path="ScrumPilot.Data/ScrumPilot.Data.csproj" />
+  <Project Path="ScrumPilot.API/ScrumPilot.API.csproj" />
+  <Project Path="ScrumPilot.Data/ScrumPilot.Data.csproj">
+    <Build Solution="Debug|*" Project="false" />
+  </Project>
   <Project Path="ScrumPilot.Shared/ScrumPilot.Shared.csproj" />
   <Project Path="ScrumPilot.UnitTests/ScrumPilot.UnitTests.csproj">
     <Build Solution="Debug|*" Project="false" />

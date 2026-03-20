@@ -1,7 +1,29 @@
 ﻿@page "/"
 
-<PageTitle>Home</PageTitle>
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
 
-<h1>ScrumPilot Project Dashboard</h1>
+<MudText Typo="Typo.h4">Scrum Pilot Dashboard</MudText>
 
-Generate and manage user stories efficiently.
+<MudGrid Spacing="3">
+
+<MudItem xs="12" sm="6" md="4">
+<DashboardTile Title="Scrum Board"
+Description="View sprint tasks"
+Href="/scrum-board"/>
+</MudItem>
+
+<MudItem xs="12" sm="6" md="4">
+<DashboardTile Title="Story Generation"
+Description="Generate user stories"
+Href="/storygeneration"/>
+</MudItem>
+
+<MudItem xs="12" sm="6" md="4">
+<DashboardTile Title="Draft Stories"
+Description="Review generated drafts"
+Href="/draft-stories"/>
+</MudItem>
+
+</MudGrid>
+
+</MudContainer>

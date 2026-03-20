@@ -1,6 +1,26 @@
-@ScrumPilot.API_HostAddress = http://localhost:5219
+@HostAddress = http://localhost:5219
 
-GET {{ScrumPilot.API_HostAddress}}/weatherforecast/
+GET {{HostAddress}}/api/story
 Accept: application/json
+
+###
+
+### Generate a single story (single item in list)
+POST {{HostAddress}}/api/story/generate
+Content-Type: application/json
+
+["Users need a way to reset their password"]
+
+###
+
+### Generate multiple stories 
+POST {{HostAddress}}/api/story/generate
+Content-Type: application/json
+
+[
+  "Users need a way to reset their password",
+  "Admins need to view all active users",
+  "Users want to update their profile picture"
+]
 
 ###
