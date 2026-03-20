@@ -14,7 +14,7 @@
 }
 
 .sg-page {
-    min-height: calc(100vh - 64px); /* adjust if your appbar height differs */
+    min-height: calc(100vh - 64px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -28,6 +28,88 @@
     align-items: center;
     gap: 20px;
     background: transparent;
+}
+
+.sg-input-wrap,
+.sg-list-wrap,
+.sg-submit-wrap {
+    width: 100%;
+}
+
+.sg-input-wrap {
+    margin-bottom: 14px;
+}
+
+.sg-list-wrap {
+    margin-bottom: 14px;
+}
+
+.sg-input-row {
+    width: 100%;
+    align-items: center;
+    gap: 10px;
+}
+
+.sg-list-shell {
+    width: 100%;
+    padding: 12px;
+    max-height: 220px;
+    overflow-y: auto;
+    border-radius: 12px;
+    background: var(--mud-palette-background);
+    border-color: var(--mud-palette-lines-default);
+}
+
+.sg-empty-list {
+    padding: 12px;
+}
+
+.sg-list-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 14px;
+    border-radius: 10px;
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-default);
+    border-left: 4px solid var(--mud-palette-primary);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    transition: transform 140ms ease, box-shadow 140ms ease;
+}
+
+
+
+.sg-list-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.16);
+}
+
+.sg-list-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+}
+
+.sg-list-index {
+    min-width: 34px;
+    justify-content: center;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.sg-list-text {
+    flex: 1;
+    word-break: break-word;
+    color: var(--mud-palette-text-primary);
+    font-weight: 500;
+    line-height: 1.5;
+}
+
+.sg-list-delete {
+    flex-shrink: 0;
 }
 
 
@@ -97,4 +179,23 @@
 .sg-submit:active,
 .sg-submit:focus {
     box-shadow: 0 14px 32px rgba(0, 0, 0, 0.22), 0 0 0 4px var(--mud-palette-primary-lighten) !important;
+}
+
+.sg-success-alert {
+    text-align: center;
+    width: min(500px, 100%);
+}
+
+.sg-success-text {
+    font-weight: 600;
+}
+
+.sg-nav-row {
+    margin-top: 12px;
+    gap: 8px;
+}
+
+.sg-nav-position {
+    min-width: 70px;
+    text-align: center;
 }
