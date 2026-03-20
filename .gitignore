@@ -483,3 +483,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Local dev overrides
+ScrumPilot.Web/wwwroot/appsettings.Development.json
