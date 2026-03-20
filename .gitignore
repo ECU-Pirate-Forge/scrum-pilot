@@ -489,3 +489,5 @@ $RECYCLE.BIN/
 *.sqlite
 *.sqlite3
 Data/
+# Local dev overrides
+ScrumPilot.Web/wwwroot/appsettings.Development.json
