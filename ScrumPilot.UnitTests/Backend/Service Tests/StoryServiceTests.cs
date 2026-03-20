@@ -53,7 +53,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
             Assert.Equal(5, result.Count); // AutoFixture generates 5 stories
             Assert.All(result, story =>
             {
-                Assert.NotEqual(Guid.Empty, story.Id);
+                Assert.True(story.Id >= 0); // ID should be non-negative for auto-increment
                 Assert.NotNull(story.Title);
                 Assert.NotNull(story.Description);
                 Assert.True(Enum.IsDefined(typeof(StoryStatus), story.Status));

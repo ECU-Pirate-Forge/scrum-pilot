@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using ScrumPilot.API.Services;
+using ScrumPilot.Data.Repositories;
 using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.API.Controllers
@@ -15,15 +16,25 @@ namespace ScrumPilot.API.Controllers
             _storyService = storyService;
         }
 
-        [HttpGet]
-        public ActionResult<List<Story>> GetStories()
+        [HttpGet("getAllStories")]
+        public async Task<ActionResult<IEnumerable<Story>>> GetAllStories()
         {
-            var stories = _storyService.GetStories();
+            var stories = await _storyService.GetAllStoriesAsync();
             return Ok(stories);
         }
 
-        [HttpPost("generate")]
+
+        [HttpGet("getDraftStories")]
+        public async Task<ActionResult<IEnumerable<Story>>> GetDraftStories()
+        {
+            var draftStories = await _storyService.GetDraftStoriesAsync();
+            return Ok(draftStories);
+        }
+
+        [HttpPost("generateAiStories")]
         public async Task<ActionResult<List<Story>>> GenerateAiStory([FromBody] List<string> problemStatements)
+
+
         {
             if (problemStatements == null || problemStatements.Count == 0)
             {
@@ -37,9 +48,11 @@ namespace ScrumPilot.API.Controllers
 
             try
             {
-                var stories = await _storyService.GenerateAiStory(problemStatements);
-                return Ok(stories);
+                var story = await _storyService.GenerateAiStory(problemStatement);
+
+                return Ok(story);
             }
+            
             catch (InvalidOperationException ex)
             {
                 return BadRequest($"Failed to generate AI story: {ex.Message}");

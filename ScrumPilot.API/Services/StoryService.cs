@@ -1,5 +1,6 @@
 ﻿using AutoFixture;
 using ScrumPilot.Shared.Models;
+using ScrumPilot.Data.Repositories;
 using System.Text;
 using System.Text.Json;
 
@@ -9,37 +10,23 @@ namespace ScrumPilot.API.Services
     {
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _configuration;
+        private readonly IStoryRepository _storyRepository;
 
-        public StoryService(HttpClient httpClient, IConfiguration configuration)
+        public StoryService(HttpClient httpClient, IConfiguration configuration, IStoryRepository storyRepository)
         {
             _httpClient = httpClient;
             _configuration = configuration;
+            _storyRepository = storyRepository;
         }
 
-        public List<Story> GetStories()
+        public async Task<IEnumerable<Story>> GetAllStoriesAsync()
         {
-            //TODO: Connect to DB to get real stories instead of generating them with AutoFixture
-
-            //Create our fixture
-            var fixture = new Fixture();
-
-            var stories = fixture
-                .Build<Story>()
-                .CreateMany(5)
-                .ToList();
-
-            return stories;
+            return await _storyRepository.GetAllStoriesAsync();
         }
-        public List<Story> GetDraftStories()
-        {
-                var fixture = new Fixture();
-                var stories = fixture
-                    .Build<Story>()
-                    .CreateMany(5)
-                    .Where(s => s.IsDraft)
-                    .ToList();
 
-            return stories;
+        public async Task<IEnumerable<Story>> GetDraftStoriesAsync()
+        {
+            return await _storyRepository.GetDraftStoriesAsync();
         }
 
         /// <summary>
@@ -74,7 +61,6 @@ namespace ScrumPilot.API.Services
 
             var story = new Story
             {
-                Id = Guid.NewGuid(),
                 Title = aiStoryResponse.Title,
                 Description = $"{aiStoryResponse.UserStory}\n\nAcceptance Criteria:\n{string.Join("\n", aiStoryResponse.AcceptanceCriteria.Select(ac => $"• {ac}"))}",
                 Status = StoryStatus.ToDo,

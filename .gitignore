@@ -484,5 +484,10 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 
+# SQLite database files
+*.db
+*.sqlite
+*.sqlite3
+Data/
 # Local dev overrides
 ScrumPilot.Web/wwwroot/appsettings.Development.json
