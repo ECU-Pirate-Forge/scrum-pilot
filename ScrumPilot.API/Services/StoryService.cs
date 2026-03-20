@@ -61,7 +61,6 @@ namespace ScrumPilot.API.Services
 
             var story = new Story
             {
-                Id = Guid.NewGuid(),
                 Title = aiStoryResponse.Title,
                 Description = $"{aiStoryResponse.UserStory}\n\nAcceptance Criteria:\n{string.Join("\n", aiStoryResponse.AcceptanceCriteria.Select(ac => $"• {ac}"))}",
                 Status = StoryStatus.ToDo,

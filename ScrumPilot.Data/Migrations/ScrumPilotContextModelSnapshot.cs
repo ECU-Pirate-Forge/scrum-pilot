@@ -19,9 +19,9 @@ namespace ScrumPilot.Data.Migrations
 
             modelBuilder.Entity("ScrumPilot.Shared.Models.Story", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("DateCreated")
                         .HasColumnType("TEXT");

@@ -19,6 +19,7 @@ namespace ScrumPilot.Data.Context
             modelBuilder.Entity<Story>(entity =>
             {
                 entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd(); // Auto-increment identity column
                 entity.Property(e => e.Title).IsRequired().HasMaxLength(200);
                 entity.Property(e => e.Description).HasMaxLength(2000);
                 entity.Property(e => e.Status).HasConversion<string>();
