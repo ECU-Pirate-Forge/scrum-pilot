@@ -58,7 +58,7 @@ namespace ScrumPilot.API.Services
         /// <exception cref="TimeoutException">
         /// Thrown if the request to the Ollama API times out.
         /// </exception>
-        public async Task<Story> GenerateAiStory(string problemStatement)
+        private async Task<Story> GenerateAiStory(string problemStatement)
         {
             var ollamaBaseUrl = _configuration["OllamaBaseUrl"];
             var ollamaModel = _configuration["OllamaModel"];
@@ -88,6 +88,19 @@ namespace ScrumPilot.API.Services
             return story;
         }
 
+        public async Task<List<Story>> GenerateAiStory(List<string> problemStatements)
+        {
+            var stories = new List<Story>();
+
+            foreach (var problemStatement in problemStatements)
+            {
+                var story = await GenerateAiStory(problemStatement);
+                stories.Add(story);
+            }
+
+            return stories;
+        }
+
         private string BuildPrompt(string problemStatement)
         {
             return $@"You are helping generate Scrum user stories.
@@ -114,7 +127,8 @@ namespace ScrumPilot.API.Services
             {
                 model = model,
                 prompt = prompt,
-                stream = false
+                stream = false,
+                format = "json"
             };
 
             var json = JsonSerializer.Serialize(requestBody);
