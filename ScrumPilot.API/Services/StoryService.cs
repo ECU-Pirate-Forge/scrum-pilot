@@ -1,5 +1,6 @@
 ﻿using AutoFixture;
 using ScrumPilot.Data.Repositories;
+using ScrumPilot.Shared.Models;
 using System.Text;
 using System.Text.Json;
 
@@ -14,18 +15,20 @@ namespace ScrumPilot.API.Services
         public StoryService(HttpClient httpClient, IConfiguration configuration, IStoryRepository storyRepository)
         {
             _httpClient = httpClient;
-            _configuration = configuration;
+            _configuration = configuration; 
             _storyRepository = storyRepository;
         }
 
         public async Task<IEnumerable<Story>> GetAllStoriesAsync()
         {
-            return await _storyRepository.GetAllStoriesAsync();
+            var fixture = new Fixture();
+            return fixture.Build<Story>().CreateMany(5);
         }
 
         public async Task<IEnumerable<Story>> GetDraftStoriesAsync()
         {
-            return await _storyRepository.GetDraftStoriesAsync();
+            var fixture = new Fixture();
+            return fixture.Build<Story>().CreateMany(5).Where(s => s.IsDraft);
         }
 
         /// <summary>
@@ -195,6 +198,21 @@ namespace ScrumPilot.API.Services
                 }
             }
             return null;
+        }
+
+        public async Task<Story> CreateStoryAsync(Story story)
+        {
+            return await _storyRepository.AddAsync(story);
+        }
+
+        public async Task<Story> UpdateStoryAsync(Story story)
+        {
+            return await _storyRepository.UpdateAsync(story);
+        }
+
+        public async Task<bool> DeleteStoryAsync(Guid id)
+        {
+            return await _storyRepository.DeleteAsync(id);
         }
 
     }

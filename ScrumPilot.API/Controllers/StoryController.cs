@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
 using ScrumPilot.API.Services;
-using ScrumPilot.Data.Repositories;
 using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.API.Controllers
@@ -10,12 +9,10 @@ namespace ScrumPilot.API.Controllers
     public class StoryController : ControllerBase
     {
         private readonly IStoryService _storyService;
-        private readonly IStoryRepository _storyRepository;
 
-        public StoryController(IStoryService storyService, IStoryRepository storyRepository)
+        public StoryController(IStoryService storyService)
         {
             _storyService = storyService;
-            _storyRepository = storyRepository;
         }
 
         [HttpGet("getAllStories")]
@@ -43,9 +40,7 @@ namespace ScrumPilot.API.Controllers
             try
             {
                 var story = await _storyService.GenerateAiStory(problemStatement);
-                // Save the generated story to the database
-                var savedStory = await _storyRepository.AddAsync(story);
-                return Ok(savedStory);
+                return Ok(story);
             }
             catch (InvalidOperationException ex)
             {
@@ -63,6 +58,28 @@ namespace ScrumPilot.API.Controllers
             {
                 return StatusCode(500, $"An unexpected error occurred: {ex.Message}");
             }
+        }
+
+        [HttpPost]
+        public async Task<ActionResult<Story>> CreateStory([FromBody] Story story)
+        {
+            var created = await _storyService.CreateStoryAsync(story);
+            return Ok(created);
+        }
+
+        [HttpPut]
+        public async Task<ActionResult<Story>> UpdateStory([FromBody] Story story)
+        {
+            var updated = await _storyService.UpdateStoryAsync(story);
+            return Ok(updated);
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<ActionResult> DeleteStory(Guid id)
+        {
+            var success = await _storyService.DeleteStoryAsync(id);
+            if (!success) return NotFound();
+            return NoContent();
         }
     }
 }

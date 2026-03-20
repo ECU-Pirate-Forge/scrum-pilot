@@ -1,16 +1,13 @@
 using ScrumPilot.API.Services;
-using ScrumPilot.Data.Extensions;
-using ScrumPilot.Data.Context;
-using ScrumPilot.Data.Seeders;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using ScrumPilot.Data.Repositories;
 
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add Data services (EF Core, repositories)
-builder.Services.AddDataServices(builder.Configuration);
-
+builder.Services.AddScoped<IStoryRepository, StoryRepository>();
 // Add services to the container.
 builder.Services.AddScoped<IStoryService, StoryService>();
 builder.Services.AddHttpClient();
@@ -45,14 +42,6 @@ var app = builder.Build();
 // Apply pending migrations at startup (development only)
 if (app.Environment.IsDevelopment())
 {
-    using (var scope = app.Services.CreateScope())
-    {
-        var context = scope.ServiceProvider.GetRequiredService<ScrumPilotContext>();
-        context.Database.Migrate();
-
-        // Seed database with initial data
-        DatabaseSeeder.SeedDatabase(context);
-    }
 }
 
 // Configure the HTTP request pipeline.
