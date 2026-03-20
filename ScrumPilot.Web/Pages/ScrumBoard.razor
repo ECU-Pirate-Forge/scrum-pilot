@@ -108,56 +108,65 @@
                     </MudStack>
                 </ChildContent>
 
-                <ItemRenderer>
-                    <div class="kanban-card-wrapper">
-                        <MudCard Elevation="8"
-                                 Style="border-radius: 12px; cursor: pointer; margin-bottom: 12px; transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);"
-                                 @onclick="() => OpenStoryDetails(context)">
-                            <!-- Priority stripe -->
-                            <div class="card-priority-stripe @GetPriorityClass(context)"></div>
+<ItemRenderer>
+    <div class="kanban-card-wrapper">
+        <MudCard Elevation="8"
+                 Style="border-radius: 12px; margin-bottom: 12px; transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);">
+            <!-- Priority stripe -->
+            <div class="card-priority-stripe @GetPriorityClass(context)"></div>
 
-                            <!-- Card Header -->
-                            <MudCardContent Class="pa-3" Style="padding-bottom: 8px;">
-                                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-                                    <MudChip T="string" Size="Size.Small" 
-                                             Color="@(context.IsAiGenerated ? Color.Info : Color.Default)"
-                                             Variant="Variant.Filled">
-                                        @(context.IsAiGenerated ? "AI Story" : "Story")
-                                    </MudChip>
-                                    <MudIcon Icon="Icons.Material.Filled.DragIndicator"
-                                             Size="Size.Small"
-                                             Style="color: var(--mud-palette-text-secondary); cursor: grab;" />
-                                </MudStack>
-                            </MudCardContent>
+            <!-- Card Header -->
+            <MudCardContent Class="pa-3" Style="padding-bottom: 8px;">
+                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                    <MudChip T="string" Size="Size.Small"
+                             Color="@(context.IsAiGenerated ? Color.Info : Color.Default)"
+                             Variant="Variant.Filled">
+                        @(context.IsAiGenerated ? "AI Story" : "Story")
+                    </MudChip>
+                    <MudIcon Icon="Icons.Material.Filled.DragIndicator"
+                             Size="Size.Small"
+                             Style="color: var(--mud-palette-text-secondary); cursor: grab;" />
+                </MudStack>
+            </MudCardContent>
 
-                            <!-- Card Content -->
-                            <MudCardContent Class="pa-3" Style="padding-top: 0; padding-bottom: 8px;">
-                                <MudText Typo="Typo.subtitle1" Style="font-weight: 600; margin-bottom: 8px; line-height: 1.4;">
-                                    @context.Title
-                                </MudText>
-                                <MudText Typo="Typo.body2" Style="opacity: 0.7;">
-                                    ID: @context.Id
-                                </MudText>
-                            </MudCardContent>
+            <!-- Card Content -->
+            <MudCardContent Class="pa-3" Style="padding-top: 0; padding-bottom: 8px;">
+                <MudText Typo="Typo.subtitle1" Style="font-weight: 600; margin-bottom: 8px; line-height: 1.4;">
+                    @context.Title
+                </MudText>
+                <MudText Typo="Typo.body2" Style="opacity: 0.7;">
+                    ID: @context.Id
+                </MudText>
+            </MudCardContent>
 
-                            <!-- Card Footer -->
-                            <MudCardActions Class="pa-3" Style="padding-top: 0;">
-                                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mud-width-full">
-                                    <MudChip T="string" Size="Size.Small" 
-                                             Color="@GetPriorityChipColor(context.Priority)"
-                                             Variant="Variant.Filled">
-                                        @context.Priority
-                                    </MudChip>
-                                    <MudAvatar Size="Size.Small" Color="Color.Primary">
-                                        <MudText Typo="Typo.caption">
-                                            @GetStoryInitials(context)
-                                        </MudText>
-                                    </MudAvatar>
-                                </MudStack>
-                            </MudCardActions>
-                        </MudCard>
-                    </div>
-                </ItemRenderer>
+            <!-- Card Footer -->
+            <MudCardActions Class="pa-3" Style="padding-top: 0;">
+                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mud-width-full">
+                    <MudChip T="string" Size="Size.Small"
+                             Color="@GetPriorityChipColor(context.Priority)"
+                             Variant="Variant.Filled">
+                        @context.Priority
+                    </MudChip>
+
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                        <MudButton Variant="Variant.Text"
+                                   Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Visibility"
+                                   OnClick="@(() => OpenStoryDetails(context))">
+                            View Details
+                        </MudButton>
+
+                        <MudAvatar Size="Size.Small" Color="Color.Primary">
+                            <MudText Typo="Typo.caption">
+                                @GetStoryInitials(context)
+                            </MudText>
+                        </MudAvatar>
+                    </MudStack>
+                </MudStack>
+            </MudCardActions>
+        </MudCard>
+    </div>
+</ItemRenderer>
             </MudDropContainer>
 
             @if (SelectedStory is not null)
