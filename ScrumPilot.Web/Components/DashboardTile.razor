@@ -17,7 +17,6 @@
 </MudPaper>
 
 @code {
-
     [Parameter]
     public string Title { get; set; } = "";
 
@@ -27,9 +26,8 @@
     [Parameter]
     public string Href { get; set; } = "";
 
-    void Navigate()
+    private void Navigate()
     {
         Nav.NavigateTo(Href);
     }
-
 }

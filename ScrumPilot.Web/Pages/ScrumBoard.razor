@@ -8,192 +8,222 @@
 
     <!-- If loading stories, show spinner. Else loads the rest of the page with the generated stories -->
     @if (_loading)
-{
-    <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center" Style="height:60vh;">
-        <MudProgressCircular Indeterminate="true" Size="Size.Large" />
-        <MudText Class="mt-4" Typo="Typo.subtitle1">Loading AI stories…</MudText>
-    </MudStack>
-}
-else
-{
-    <MudContainer MaxWidth="MaxWidth.False" Class="pa-0">
-        <MudPaper Class="pa-4 mb-4" Elevation="2">
-            <MudStack Row AlignItems="AlignItems.Center">
-                <MudIcon Icon="Icons.Material.Filled.Dashboard" Size="Size.Large" />
-                <MudText Typo="Typo.h3">Kanban Board</MudText>
-            </MudStack>
-        </MudPaper>
-
-        <MudDropContainer T="Story"
-                          Items="@Items"
-                          ItemsSelector="@((item, dropzone) => item.Status.ToString() == dropzone)"
-                          ItemDropped="OnItemDropped"
-                          Class="d-flex" Style="flex: 1; min-height: calc(100vh - 200px);">
-            <ChildContent>
-                <MudStack Row Spacing="3" Class="mud-width-full" Style="height: 100%; flex: 1;">
-                    <MudPaper Class="kanban-column column-todo" Elevation="2" 
-                              Style="flex: 1; min-width: 300px; 
-                                     border-top: 6px solid #dc2626 !important; 
-                                     box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.1), 0 4px 16px rgba(220, 38, 38, 0.08) !important;
-                                     background: var(--mud-palette-surface) !important;
-                                     border: 1px solid var(--mud-palette-lines-default) !important;
-                                     border-top: 6px solid #dc2626 !important;
-                                     border-radius: 12px !important;
-                                     transition: all 0.3s ease;">
-                        <MudStack Row AlignItems="AlignItems.Center" Class="column-header" 
-                                  Style="background: linear-gradient(135deg, rgba(220, 38, 38, 0.15) 0%, var(--mud-palette-surface) 100%) !important;
-                                         border-bottom: 1px solid var(--mud-palette-divider) !important;
-                                         border-radius: 8px 8px 0 0 !important;
-                                         padding: 12px !important;">
-                            <MudIcon Icon="Icons.Material.Filled.Assignment" Color="Color.Error" Size="Size.Medium" />
-                            <MudText Typo="Typo.h5" Class="column-title" Style="font-weight: 700;">TO DO</MudText>
-                            <MudSpacer />
-                            <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Filled">
-                                @Items.Count(i => i.Status == StoryStatus.ToDo)
-                            </MudChip>
-                        </MudStack>
-                        <MudDropZone T="Story" Identifier="@nameof(StoryStatus.ToDo)" Class="kanban-dropzone" 
-                                     Style="min-height: 500px; height: 100%; width: 100%; flex: 1; display: flex; flex-direction: column; gap: 16px;" />
-                    </MudPaper>
-
-                    <MudPaper Class="kanban-column column-inprogress" Elevation="2" 
-                              Style="flex: 1; min-width: 300px; 
-                                     border-top: 6px solid #facc15 !important; 
-                                     box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.1), 0 4px 16px rgba(250, 204, 21, 0.08) !important;
-                                     background: var(--mud-palette-surface) !important;
-                                     border: 1px solid var(--mud-palette-lines-default) !important;
-                                     border-top: 6px solid #facc15 !important;
-                                     border-radius: 12px !important;
-                                     transition: all 0.3s ease;">
-                        <MudStack Row AlignItems="AlignItems.Center" Class="column-header" 
-                                  Style="background: linear-gradient(135deg, rgba(250, 204, 21, 0.15) 0%, var(--mud-palette-surface) 100%) !important;
-                                         border-bottom: 1px solid var(--mud-palette-divider) !important;
-                                         border-radius: 8px 8px 0 0 !important;
-                                         padding: 12px !important;">
-                            <MudIcon Icon="Icons.Material.Filled.Speed" Color="Color.Warning" Size="Size.Medium" />
-                            <MudText Typo="Typo.h5" Class="column-title" Style="font-weight: 700;">IN PROGRESS</MudText>
-                            <MudSpacer />
-                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled">
-                                @Items.Count(i => i.Status == StoryStatus.InProgress)
-                            </MudChip>
-                        </MudStack>
-                        <MudDropZone T="Story" Identifier="@nameof(StoryStatus.InProgress)" Class="kanban-dropzone" 
-                                     Style="min-height: 500px; height: 100%; width: 100%; flex: 1; display: flex; flex-direction: column; gap: 16px;" />
-                    </MudPaper>
-
-                    <MudPaper Class="kanban-column column-done" Elevation="2" 
-                              Style="flex: 1; min-width: 300px; 
-                                     border-top: 6px solid #16a34a !important; 
-                                     box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.1), 0 4px 16px rgba(22, 163, 74, 0.08) !important;
-                                     background: var(--mud-palette-surface) !important;
-                                     border: 1px solid var(--mud-palette-lines-default) !important;
-                                     border-top: 6px solid #16a34a !important;
-                                     border-radius: 12px !important;
-                                     transition: all 0.3s ease;">
-                        <MudStack Row AlignItems="AlignItems.Center" Class="column-header" 
-                                  Style="background: linear-gradient(135deg, rgba(22, 163, 74, 0.15) 0%, var(--mud-palette-surface) 100%) !important;
-                                         border-bottom: 1px solid var(--mud-palette-divider) !important;
-                                         border-radius: 8px 8px 0 0 !important;
-                                         padding: 12px !important;">
-                            <MudIcon Icon="Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Medium" />
-                            <MudText Typo="Typo.h5" Class="column-title" Style="font-weight: 700;">DONE</MudText>
-                            <MudSpacer />
-                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Filled">
-                                @Items.Count(i => i.Status == StoryStatus.Done)
-                            </MudChip>
-                        </MudStack>
-                        <MudDropZone T="Story" Identifier="@nameof(StoryStatus.Done)" Class="kanban-dropzone" 
-                                     Style="min-height: 500px; height: 100%; width: 100%; flex: 1; display: flex; flex-direction: column; gap: 16px;" />
-                    </MudPaper>
+    {
+        <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center" Style="height:60vh;">
+            <MudProgressCircular Indeterminate="true" Size="Size.Large" />
+            <MudText Class="mt-4" Typo="Typo.subtitle1">Loading AI stories…</MudText>
+        </MudStack>
+    }
+    else
+    {
+        <MudContainer MaxWidth="MaxWidth.False" Class="pa-0">
+            <MudPaper Class="pa-4 mb-4" Elevation="2">
+                <MudStack Row AlignItems="AlignItems.Center">
+                    <MudIcon Icon="Icons.Material.Filled.Dashboard" Size="Size.Large" />
+                    <MudText Typo="Typo.h3">Kanban Board</MudText>
                 </MudStack>
-            </ChildContent>
+            </MudPaper>
 
-            <ItemRenderer>
-                <div class="kanban-card-wrapper" draggable="true">
-                    <MudCard Elevation="8" Style="border-radius: 12px; cursor: grab; margin-bottom: 12px; transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);" 
-                             draggable="true">
-                        <!-- Priority stripe -->
-                        <div class="card-priority-stripe @GetPriorityClass(context)"></div>
-
-                        <!-- Card Header -->
-                        <MudCardContent Class="pa-3" Style="padding-bottom: 8px;">
-                            <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-                                <MudChip T="string" Size="Size.Small" 
-                                         Color="@(context.IsAiGenerated ? Color.Info : Color.Default)"
-                                         Variant="Variant.Filled">
-                                    @(context.IsAiGenerated ? "AI Story" : "Story")
+            <MudDropContainer T="Story"
+                              Items="@Items"
+                              ItemsSelector="@((item, dropzone) => item.Status.ToString() == dropzone)"
+                              ItemDropped="OnItemDropped"
+                              Class="d-flex" Style="flex: 1; min-height: calc(100vh - 200px);">
+                <ChildContent>
+                    <MudStack Row Spacing="3" Class="mud-width-full" Style="height: 100%; flex: 1;">
+                        <MudPaper Class="kanban-column column-todo" Elevation="2" 
+                                  Style="flex: 1; min-width: 300px; 
+                                         border-top: 6px solid #dc2626 !important; 
+                                         box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.1), 0 4px 16px rgba(220, 38, 38, 0.08) !important;
+                                         background: var(--mud-palette-surface) !important;
+                                         border: 1px solid var(--mud-palette-lines-default) !important;
+                                         border-top: 6px solid #dc2626 !important;
+                                         border-radius: 12px !important;
+                                         transition: all 0.3s ease;">
+                            <MudStack Row AlignItems="AlignItems.Center" Class="column-header" 
+                                      Style="background: linear-gradient(135deg, rgba(220, 38, 38, 0.15) 0%, var(--mud-palette-surface) 100%) !important;
+                                             border-bottom: 1px solid var(--mud-palette-divider) !important;
+                                             border-radius: 8px 8px 0 0 !important;
+                                             padding: 12px !important;">
+                                <MudIcon Icon="Icons.Material.Filled.Assignment" Color="Color.Error" Size="Size.Medium" />
+                                <MudText Typo="Typo.h5" Class="column-title" Style="font-weight: 700;">TO DO</MudText>
+                                <MudSpacer />
+                                <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Filled">
+                                    @Items.Count(i => i.Status == StoryStatus.ToDo)
                                 </MudChip>
-                                <MudIcon Icon="Icons.Material.Filled.DragIndicator"
-                                         Size="Size.Small"
-                                         Style="color: var(--mud-palette-text-secondary); cursor: grab;" />
                             </MudStack>
-                        </MudCardContent>
+                            <MudDropZone T="Story" Identifier="@nameof(StoryStatus.ToDo)" Class="kanban-dropzone" 
+                                         Style="min-height: 500px; height: 100%; width: 100%; flex: 1; display: flex; flex-direction: column; gap: 16px;" />
+                        </MudPaper>
 
-                        <!-- Card Content -->
-                        <MudCardContent Class="pa-3" Style="padding-top: 0; padding-bottom: 8px;">
-                            <MudText Typo="Typo.subtitle1" Style="font-weight: 600; margin-bottom: 8px; line-height: 1.4;">
-                                @context.Title
-                            </MudText>
-                            <MudText Typo="Typo.body2" Style="opacity: 0.7;">
-                                ID: @context.Id
-                            </MudText>
-                        </MudCardContent>
-
-                        <!-- Card Footer -->
-                        <MudCardActions Class="pa-3" Style="padding-top: 0;">
-                            <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mud-width-full">
-                                <MudChip T="string" Size="Size.Small" 
-                                         Color="@GetPriorityChipColor(context.Priority)"
-                                         Variant="Variant.Filled">
-                                    @context.Priority
+                        <MudPaper Class="kanban-column column-inprogress" Elevation="2" 
+                                  Style="flex: 1; min-width: 300px; 
+                                         border-top: 6px solid #facc15 !important; 
+                                         box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.1), 0 4px 16px rgba(250, 204, 21, 0.08) !important;
+                                         background: var(--mud-palette-surface) !important;
+                                         border: 1px solid var(--mud-palette-lines-default) !important;
+                                         border-top: 6px solid #facc15 !important;
+                                         border-radius: 12px !important;
+                                         transition: all 0.3s ease;">
+                            <MudStack Row AlignItems="AlignItems.Center" Class="column-header" 
+                                      Style="background: linear-gradient(135deg, rgba(250, 204, 21, 0.15) 0%, var(--mud-palette-surface) 100%) !important;
+                                             border-bottom: 1px solid var(--mud-palette-divider) !important;
+                                             border-radius: 8px 8px 0 0 !important;
+                                             padding: 12px !important;">
+                                <MudIcon Icon="Icons.Material.Filled.Speed" Color="Color.Warning" Size="Size.Medium" />
+                                <MudText Typo="Typo.h5" Class="column-title" Style="font-weight: 700;">IN PROGRESS</MudText>
+                                <MudSpacer />
+                                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled">
+                                    @Items.Count(i => i.Status == StoryStatus.InProgress)
                                 </MudChip>
-                                <MudAvatar Size="Size.Small" Color="Color.Primary">
-                                    <MudText Typo="Typo.caption">
-                                        @GetStoryInitials(context)
-                                    </MudText>
-                                </MudAvatar>
                             </MudStack>
-                        </MudCardActions>
-                    </MudCard>
-                </div>
-            </ItemRenderer>
-        </MudDropContainer>
-    </MudContainer>
-}
+                            <MudDropZone T="Story" Identifier="@nameof(StoryStatus.InProgress)" Class="kanban-dropzone" 
+                                         Style="min-height: 500px; height: 100%; width: 100%; flex: 1; display: flex; flex-direction: column; gap: 16px;" />
+                        </MudPaper>
+
+                        <MudPaper Class="kanban-column column-done" Elevation="2" 
+                                  Style="flex: 1; min-width: 300px; 
+                                         border-top: 6px solid #16a34a !important; 
+                                         box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.1), 0 4px 16px rgba(22, 163, 74, 0.08) !important;
+                                         background: var(--mud-palette-surface) !important;
+                                         border: 1px solid var(--mud-palette-lines-default) !important;
+                                         border-top: 6px solid #16a34a !important;
+                                         border-radius: 12px !important;
+                                         transition: all 0.3s ease;">
+                            <MudStack Row AlignItems="AlignItems.Center" Class="column-header" 
+                                      Style="background: linear-gradient(135deg, rgba(22, 163, 74, 0.15) 0%, var(--mud-palette-surface) 100%) !important;
+                                             border-bottom: 1px solid var(--mud-palette-divider) !important;
+                                             border-radius: 8px 8px 0 0 !important;
+                                             padding: 12px !important;">
+                                <MudIcon Icon="Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Medium" />
+                                <MudText Typo="Typo.h5" Class="column-title" Style="font-weight: 700;">DONE</MudText>
+                                <MudSpacer />
+                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Filled">
+                                    @Items.Count(i => i.Status == StoryStatus.Done)
+                                </MudChip>
+                            </MudStack>
+                            <MudDropZone T="Story" Identifier="@nameof(StoryStatus.Done)" Class="kanban-dropzone" 
+                                         Style="min-height: 500px; height: 100%; width: 100%; flex: 1; display: flex; flex-direction: column; gap: 16px;" />
+                        </MudPaper>
+                    </MudStack>
+                </ChildContent>
+
+                <ItemRenderer>
+                    <div class="kanban-card-wrapper">
+                        <MudCard Elevation="8"
+                                 Style="border-radius: 12px; cursor: pointer; margin-bottom: 12px; transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);"
+                                 @onclick="() => OpenStoryDetails(context)">
+                            <!-- Priority stripe -->
+                            <div class="card-priority-stripe @GetPriorityClass(context)"></div>
+
+                            <!-- Card Header -->
+                            <MudCardContent Class="pa-3" Style="padding-bottom: 8px;">
+                                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                    <MudChip T="string" Size="Size.Small" 
+                                             Color="@(context.IsAiGenerated ? Color.Info : Color.Default)"
+                                             Variant="Variant.Filled">
+                                        @(context.IsAiGenerated ? "AI Story" : "Story")
+                                    </MudChip>
+                                    <MudIcon Icon="Icons.Material.Filled.DragIndicator"
+                                             Size="Size.Small"
+                                             Style="color: var(--mud-palette-text-secondary); cursor: grab;" />
+                                </MudStack>
+                            </MudCardContent>
+
+                            <!-- Card Content -->
+                            <MudCardContent Class="pa-3" Style="padding-top: 0; padding-bottom: 8px;">
+                                <MudText Typo="Typo.subtitle1" Style="font-weight: 600; margin-bottom: 8px; line-height: 1.4;">
+                                    @context.Title
+                                </MudText>
+                                <MudText Typo="Typo.body2" Style="opacity: 0.7;">
+                                    ID: @context.Id
+                                </MudText>
+                            </MudCardContent>
+
+                            <!-- Card Footer -->
+                            <MudCardActions Class="pa-3" Style="padding-top: 0;">
+                                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mud-width-full">
+                                    <MudChip T="string" Size="Size.Small" 
+                                             Color="@GetPriorityChipColor(context.Priority)"
+                                             Variant="Variant.Filled">
+                                        @context.Priority
+                                    </MudChip>
+                                    <MudAvatar Size="Size.Small" Color="Color.Primary">
+                                        <MudText Typo="Typo.caption">
+                                            @GetStoryInitials(context)
+                                        </MudText>
+                                    </MudAvatar>
+                                </MudStack>
+                            </MudCardActions>
+                        </MudCard>
+                    </div>
+                </ItemRenderer>
+            </MudDropContainer>
+
+            @if (SelectedStory is not null)
+            {
+                <MudPaper Class="pa-4 mt-4" Elevation="3" Style="border-radius: 12px;">
+                    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3">
+                        <MudText Typo="Typo.h5">Story Details</MudText>
+
+                        <MudButton Variant="Variant.Text"
+                                   Color="Color.Secondary"
+                                   StartIcon="@Icons.Material.Filled.Close"
+                                   OnClick="CloseStoryDetails">
+                            Close
+                        </MudButton>
+                    </MudStack>
+
+                    <StoryCard StoryModel="SelectedStory" />
+                </MudPaper>
+            }
+        </MudContainer>
+    }
 </div>
 
 @code {
 
     private List<Story> Items = new();
     private bool _loading = true;
+    private Story? SelectedStory;
 
     //Api Intergration for getting stories
     protected override async Task OnInitializedAsync()
-    {
-        _loading = true;
-        Items = new();
+{
+    _loading = true;
+    Items = new();
 
-        try
-        {
-            var stories = await Http.GetFromJsonAsync<List<Story>>("story");
-            if (stories is not null && stories.Any())
-                Items = stories;
-        }
-        catch
-        {
-            
-        }
-        finally
-        {
-            _loading = false;
-        }
+    try
+    {
+        var stories = await Http.GetFromJsonAsync<List<Story>>("story");
+        if (stories is not null && stories.Any())
+            Items = stories;
     }
+    catch
+    {
+    }
+    finally
+    {
+        _loading = false;
+    }
+}
+
 
     private void OnItemDropped(MudItemDropInfo<Story> dropInfo)
     {
         // Dropzone identifiers are: "ToDo", "InProgress", "Done"
         if (Enum.TryParse<StoryStatus>(dropInfo.DropzoneIdentifier, out var newStatus))
             dropInfo.Item.Status = newStatus;
+    }
+
+    private void OpenStoryDetails(Story story)
+    {
+        SelectedStory = story;
+    }
+
+    private void CloseStoryDetails()
+    {
+        SelectedStory = null;
     }
 
     private string GetPriorityClass(Story story)

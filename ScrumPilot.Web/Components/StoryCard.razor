@@ -102,18 +102,6 @@
         </MudContainer>
     </div>
 }
-else
-{
-    <MudContainer MaxWidth="MaxWidth.Medium" Class="pa-4">
-        <MudPaper Class="pa-6" Elevation="2" Style="border-radius: 12px; text-align: center;">
-            <MudIcon Icon="Icons.Material.Filled.AutoStories" Size="Size.Large" Color="Color.Primary" Class="mb-3" />
-            <MudText Typo="Typo.h6" Class="mb-2">Ready to Generate Your Story!</MudText>
-            <MudText Typo="Typo.body1" Style="color: var(--mud-palette-text-secondary);">
-                Enter a problem statement above and click submit to generate an AI-powered user story.
-            </MudText>
-        </MudPaper>
-    </MudContainer>
-}
 
 @code {
     [Parameter] public ScrumPilot.Shared.Models.Story? StoryModel { get; set; }

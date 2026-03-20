@@ -1,29 +1,37 @@
 ﻿@page "/"
+@using MudBlazor
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
 
-<MudText Typo="Typo.h4">Scrum Pilot Dashboard</MudText>
+    <MudText Typo="Typo.h4">Scrum Pilot Dashboard</MudText>
 
-<MudGrid Spacing="3">
+    <MudText Typo="Typo.body1" Class="mb-4">
+        Quick access to core Scrum Pilot workflows.
+    </MudText>
 
-<MudItem xs="12" sm="6" md="4">
-<DashboardTile Title="Scrum Board"
-Description="View sprint tasks"
-Href="/scrum-board"/>
-</MudItem>
+    <MudGrid Spacing="3">
 
-<MudItem xs="12" sm="6" md="4">
-<DashboardTile Title="Story Generation"
-Description="Generate user stories"
-Href="/storygeneration"/>
-</MudItem>
+        <MudItem xs="12" sm="6" md="4">
+            <DashboardTile
+                Title="Scrum Board"
+                Description="View and manage sprint work."
+                Href="/scrum-board" />
+        </MudItem>
 
-<MudItem xs="12" sm="6" md="4">
-<DashboardTile Title="Draft Stories"
-Description="Review generated drafts"
-Href="/draft-stories"/>
-</MudItem>
+        <MudItem xs="12" sm="6" md="4">
+            <DashboardTile
+                Title="Generate Stories"
+                Description="Create user stories quickly."
+                Href="/storygeneration" />
+        </MudItem>
 
-</MudGrid>
+        <MudItem xs="12" sm="6" md="4">
+            <DashboardTile
+                Title="Draft Stories"
+                Description="Review and refine drafted stories."
+                Href="/draft-stories" />
+        </MudItem>
+
+    </MudGrid>
 
 </MudContainer>
