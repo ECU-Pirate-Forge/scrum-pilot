@@ -13,8 +13,6 @@ ScrumPilot.Data/
 ├── Repositories/
 │   ├── IStoryRepository.cs         # Story repository interface
 │   ├── StoryRepository.cs          # Story repository implementation
-│   ├── IStudentRepository.cs       # Student repository interface (not used in current branch)
-│   └── StudentRepository.cs        # Student repository implementation (not used in current branch)
 ├── Migrations/                     # EF Core migration files
 ├── Seeders/
 │   └── DatabaseSeeder.cs          # Database seeding logic
