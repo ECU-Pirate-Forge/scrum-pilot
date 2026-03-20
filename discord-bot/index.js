@@ -1,5 +1,8 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, Events, AttachmentBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, Events, AttachmentBuilder, PermissionsBitField} = require('discord.js');
+
+const READ_CHANNEL_ENV_KEY = 'SCRUMLORD_READ_CHANNEL_ID';
+const SPEAK_CHANNEL_ENV_KEY = 'SCRUMLORD_SPEAK_CHANNEL_ID';
 
 const client = new Client({
   intents: [
@@ -37,6 +40,52 @@ function parseTimeRange(rangeStr) {
   }
 
   return sinceDate;
+}
+
+function extractChannelId(input) {
+  if (!input) return null;
+
+  const mentionMatch = input.trim().match(/^<#(\d+)>$/);
+  if (mentionMatch) return mentionMatch[1];
+
+  const normalized = input.trim();
+  return /^\d+$/.test(normalized) ? normalized : null;
+}
+
+function getChannelRoutingConfig() {
+  const readChannelId = process.env[READ_CHANNEL_ENV_KEY] || null;
+  const speakChannelId = process.env[SPEAK_CHANNEL_ENV_KEY] || null;
+
+  return {
+    readChannelId,
+    speakChannelId,
+    isConfigured: Boolean(readChannelId && speakChannelId),
+  };
+}
+
+async function resolveConfiguredChannel(guild, channelId) {
+  if (!guild || !channelId) return null;
+
+  try {
+    return await guild.channels.fetch(channelId);
+  } catch (error) {
+    return null;
+  }
+}
+
+async function sendCommandReply(message, content, routingConfig) {
+  if (message.guild && routingConfig && routingConfig.speakChannelId) {
+    const speakChannel = await resolveConfiguredChannel(
+      message.guild,
+      routingConfig.speakChannelId
+    );
+
+    if (speakChannel && typeof speakChannel.send === 'function') {
+      return speakChannel.send(content);
+    }
+  }
+
+  return message.reply(content);
 }
 
 // Fetch messages from a channel within a time range
@@ -104,9 +153,80 @@ client.on(Events.MessageCreate, async (message) => {
   // Ignore messages from bots (including itself)
   if (message.author.bot) return;
 
+  const isCommand = message.content.startsWith('!');
+  if (!isCommand) return;
+
+  const routingConfig = getChannelRoutingConfig();
+
+  if (message.content.startsWith('!setchannels')) {
+    if (!message.guild) {
+      await message.reply('❌ `!setchannels` can only be used inside a server channel.');
+      return;
+    }
+
+    if (
+      !message.member ||
+      !message.member.permissions ||
+      !message.member.permissions.has(PermissionsBitField.Flags.ManageGuild)
+    ) {
+      await message.reply('❌ You need the **Manage Server** permission to run this command.');
+      return;
+    }
+
+    const args = message.content.trim().split(/\s+/);
+    if (args.length < 3) {
+      await message.reply(
+        '⚠️ Usage: `!setchannels <read_channel> <speak_channel>`\n' +
+          'Example: `!setchannels #team-chat #scrumlord-updates`'
+      );
+      return;
+    }
+
+    const readChannelId = extractChannelId(args[1]);
+    const speakChannelId = extractChannelId(args[2]);
+
+    if (!readChannelId || !speakChannelId) {
+      await message.reply(
+        '❌ Invalid channel reference. Use channel mentions like `#channel` or raw channel IDs.'
+      );
+      return;
+    }
+
+    const [readChannel, speakChannel] = await Promise.all([
+      resolveConfiguredChannel(message.guild, readChannelId),
+      resolveConfiguredChannel(message.guild, speakChannelId),
+    ]);
+
+    if (!readChannel || !speakChannel) {
+      await message.reply('❌ One or both channels could not be found in this server.');
+      return;
+    }
+
+    if (!readChannel.isTextBased() || !speakChannel.isTextBased()) {
+      await message.reply('❌ Both channels must be text-based channels.');
+      return;
+    }
+
+    await message.reply(
+      '✅ Manual configuration mode enabled. Add these values to `discord-bot/.env` and restart the bot:\n' +
+        `\`${READ_CHANNEL_ENV_KEY}=${readChannel.id}\`\n` +
+        `\`${SPEAK_CHANNEL_ENV_KEY}=${speakChannel.id}\``
+    );
+    return;
+  }
+
+  // Once configured, command input is accepted only from the read channel.
+  if (
+    routingConfig.isConfigured &&
+    message.guild &&
+    message.channel.id !== routingConfig.readChannelId
+  ) {
+    return;
+  }
+
   // Basic ping command to confirm the bot is alive and listening
   if (message.content === '!ping') {
-    message.reply('Pong! Scrumlord is watching. 👑');
+    await sendCommandReply(message, 'Pong! Scrumlord is watching. 👑', routingConfig);
     return;
   }
 
@@ -116,7 +236,8 @@ client.on(Events.MessageCreate, async (message) => {
 
     // Validate arguments
     if (args.length < 2) {
-      message.reply(
+      await sendCommandReply(
+        message,
         '⚠️ Usage: `!export <time_range>`\n' +
           'Examples:\n' +
           '  `!export 7d` - Export last 7 days\n' +
@@ -130,7 +251,8 @@ client.on(Events.MessageCreate, async (message) => {
     const sinceDate = parseTimeRange(timeRange);
 
     if (!sinceDate) {
-      message.reply(
+      await sendCommandReply(
+        message,
         '❌ Invalid time range format. Use: `<number><d|h|m>`\n' +
           'Examples: `7d` (7 days), `24h` (24 hours), `30m` (30 minutes)'
       );
@@ -138,13 +260,32 @@ client.on(Events.MessageCreate, async (message) => {
     }
 
     try {
+      const speakChannel =
+        (await resolveConfiguredChannel(message.guild, routingConfig.speakChannelId)) ||
+        message.channel;
+
+      const configuredReadChannel = await resolveConfiguredChannel(
+        message.guild,
+        routingConfig.readChannelId
+      );
+      const sourceChannel = configuredReadChannel || message.channel;
+
+      if (routingConfig.isConfigured && !configuredReadChannel) {
+        await sendCommandReply(
+          message,
+          `❌ Configured read channel (${READ_CHANNEL_ENV_KEY}) is unavailable.`,
+          routingConfig
+        );
+        return;
+      }
+
       // Send initial feedback
-      const fetchingMsg = await message.reply(
-        `⏳ Fetching messages from the last ${timeRange}...`
+      const fetchingMsg = await speakChannel.send(
+        `⏳ Fetching messages from <#${sourceChannel.id}> for the last ${timeRange}...`
       );
 
       // Fetch messages
-      const messages = await fetchMessagesInRange(message.channel, sinceDate);
+      const messages = await fetchMessagesInRange(sourceChannel, sinceDate);
 
       if (messages.length === 0) {
         fetchingMsg.edit(
@@ -168,17 +309,17 @@ client.on(Events.MessageCreate, async (message) => {
 
       // Create file attachment
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `messages-export-${message.channel.id}-${timestamp}.json`;
+      const filename = `messages-export-${sourceChannel.id}-${timestamp}.json`;
       const attachment = new AttachmentBuilder(jsonBuffer, { name: filename });
 
       // Send file
       await fetchingMsg.edit(
         `✅ Exported **${messages.length}** messages from the last ${timeRange}.`
       );
-      await message.channel.send({ files: [attachment] });
+      await speakChannel.send({ files: [attachment] });
 
       console.log(
-        `[Export] User ${message.author.tag} exported ${messages.length} messages from channel ${message.channel.name}`
+        `[Export] User ${message.author.tag} exported ${messages.length} messages from channel ${sourceChannel.name}`
       );
     } catch (error) {
       console.error('[Export Error]', error);
@@ -194,7 +335,7 @@ client.on(Events.MessageCreate, async (message) => {
         errorMsg += ` Error: ${error.message}`;
       }
 
-      message.reply(errorMsg);
+      await sendCommandReply(message, errorMsg, routingConfig);
     }
   }
 });
@@ -203,5 +344,5 @@ client.on(Events.MessageCreate, async (message) => {
 client.login(process.env.DISCORD_TOKEN);
 
 if (process.env.NODE_ENV === 'test') {
-  module.exports = { parseTimeRange, formatMessagesToJson, fetchMessagesInRange };
+  module.exports = { parseTimeRange, formatMessagesToJson, fetchMessagesInRange, extractChannelId, getChannelRoutingConfig };
 }
