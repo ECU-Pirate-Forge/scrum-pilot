@@ -4,8 +4,10 @@ namespace ScrumPilot.API.Services
 {
     public interface IStoryService
     {
-        Task<IEnumerable<Story>> GetAllStoriesAsync();
-        Task<IEnumerable<Story>> GetDraftStoriesAsync();
-        Task<Story> GenerateAiStory(string problemStatement);
+        List<Story> GetStories();
+
+        List<Story> GetDraftStories();
+
+        Task<List<Story>> GenerateAiStory(List<string> problemStatements);
     }
 }
