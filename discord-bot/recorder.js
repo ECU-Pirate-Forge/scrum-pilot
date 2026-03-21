@@ -25,6 +25,20 @@ function getChannel(guild, name, type = 'text') {
   );
 }
 
+function formatDate(timestamp) {
+  const date = new Date(parseInt(timestamp));
+  return date.toLocaleString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'America/New_York',
+    timeZoneName: 'short',
+  });
+}
+
 function subscribeUser(receiver, userId) {
   if (receiver.subscriptions.has(userId)) return;
 
@@ -113,6 +127,66 @@ async function stopRecording(guild) {
   }
 }
 
+async function compressAudio(inputPath) {
+  const outputPath = inputPath.replace('.ogg', '.mp3');
+  console.log('[Recorder] Compressing audio...');
+  await new Promise((resolve, reject) => {
+    const ffmpeg = spawn(ffmpegStatic, [
+      '-i', inputPath,
+      '-codec:a', 'libmp3lame',
+      '-q:a', '9',
+      outputPath
+    ]);
+    ffmpeg.on('close', (code) => code === 0 ? resolve() : reject(new Error(`ffmpeg exited with code ${code}`)));
+  });
+  return outputPath;
+}
+
+async function transcribeAndSummarize(filePath, recapChannel, controlChannel) {
+  const filename = path.basename(filePath);
+  const timestamp = filename.replace('recording-', '').replace('.ogg', '');
+  const dateString = formatDate(timestamp);
+
+    // Compress and send to Whisper
+  const compressedPath = await compressAudio(filePath);
+
+  try {
+    console.log('[Whisper] Sending to Whisper...');
+    const transcription = await openai.audio.transcriptions.create({
+      file: fs.createReadStream(compressedPath),
+      model: 'whisper-1',
+    });
+
+    fs.unlinkSync(compressedPath);
+
+    const transcript = transcription.text;
+    console.log('[Whisper] Transcript received.');
+
+    const summary = await summarize(transcript);
+
+    const markdownContent = summary
+      ? `# 📋 Meeting Recap\n*Recorded ${dateString}*\n\n## Summary\n${summary}\n\n## Full Transcript\n${transcript}`
+      : `# 📋 Meeting Transcript\n*Recorded ${dateString}*\n\n${transcript}`;
+
+    const markdownPath = filePath.replace('.ogg', '.md');
+    fs.writeFileSync(markdownPath, markdownContent);
+
+    await recapChannel.send({
+      content: `📋 Meeting recap from ${dateString}`,
+      files: [markdownPath]
+    });
+
+    fs.unlinkSync(filePath)
+    fs.unlinkSync(markdownPath);
+
+    console.log('[Recorder] Recap posted.');
+  } catch (err) {
+    console.error('[Recorder] Error during transcription/summary:', err);
+    if (fs.existsSync(compressedPath)) fs.unlinkSync(compressedPath);
+    await controlChannel.send('⚠️ Something went wrong processing the recording.');
+  }
+}
+
 async function summarize(transcript) {
   // Try Anthropic first
   try {
@@ -159,33 +233,6 @@ async function summarize(transcript) {
   return null;
 }
 
-async function transcribeAndSummarize(filePath, recapChannel, controlChannel) {
-  try {
-    console.log('[Whisper] Sending to Whisper...');
-    const transcription = await openai.audio.transcriptions.create({
-      file: fs.createReadStream(filePath),
-      model: 'whisper-1',
-    });
-
-    const transcript = transcription.text;
-    console.log('[Whisper] Transcript received.');
-
-    const summary = await summarize(transcript);
-
-    if (summary) {
-      await recapChannel.send(`## 📋 Meeting Recap\n\n**Summary:**\n${summary}\n\n**Full Transcript:**\n${transcript}`);
-    } else {
-      await recapChannel.send(`## 📋 Meeting Transcript\n\n${transcript}`);
-    }
-
-    console.log('[Recorder] Recap posted.');
-    fs.unlinkSync(filePath);
-  } catch (err) {
-    console.error('[Recorder] Error during transcription/summary:', err);
-    await controlChannel.send('⚠️ Something went wrong processing the recording.');
-  }
-}
-
 async function handleVoiceStateUpdate(oldState, newState) {
   const guild = newState.guild;
   const voiceChannel = getChannel(guild, MEETING_VOICE_CHANNEL, 'voice');
@@ -203,4 +250,4 @@ async function handleVoiceStateUpdate(oldState, newState) {
   }
 }
 
-module.exports = { handleVoiceStateUpdate };
+module.exports = { handleVoiceStateUpdate, compressAudio, summarize };
