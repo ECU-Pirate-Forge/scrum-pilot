@@ -27,7 +27,7 @@
     [Parameter]
     public string Href { get; set; } = "";
 
-    void Navigate()
+    private void Navigate()
     {
         Nav.NavigateTo(Href);
     }

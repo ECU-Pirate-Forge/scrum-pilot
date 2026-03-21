@@ -33,8 +33,6 @@ namespace ScrumPilot.API.Controllers
 
         [HttpPost("generateAiStories")]
         public async Task<ActionResult<List<Story>>> GenerateAiStory([FromBody] List<string> problemStatements)
-
-
         {
             if (problemStatements == null || problemStatements.Count == 0)
             {
@@ -48,7 +46,7 @@ namespace ScrumPilot.API.Controllers
 
             try
             {
-                var story = await _storyService.GenerateAiStory(problemStatement);
+                var story = await _storyService.GenerateAiStory(problemStatements);
 
                 return Ok(story);
             }
@@ -86,7 +84,7 @@ namespace ScrumPilot.API.Controllers
         }
 
         [HttpDelete("{id}")]
-        public async Task<ActionResult> DeleteStory(Guid id)
+        public async Task<ActionResult> DeleteStory(int id)
         {
             var success = await _storyService.DeleteStoryAsync(id);
             if (!success) return NotFound();
