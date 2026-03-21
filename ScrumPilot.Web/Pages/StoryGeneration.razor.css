@@ -16,11 +16,24 @@
 .sg-page {
     min-height: calc(100vh - 64px);
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 24px;
+    padding: 20px 0;
 }
 
-/* Wrapper for search + button */
+/* Input Container - separate elevated container */
+.sg-input-container {
+    width: min(900px, 92vw);
+    padding: 20px;
+    border-radius: 16px;
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-default);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* Main content wrapper */
 .sg-shell {
     width: min(900px, 92vw);
     display: flex;
@@ -148,10 +161,22 @@
     transform: translateY(-1px);
 }
 
-/* Focus ring using Mud primary color */
+/* Focus ring using green color for add functionality */
 .sg-floating:focus-within .mud-input-control {
-    border-color: var(--mud-palette-primary);
-    box-shadow: 0 14px 38px rgba(0, 0, 0, 0.22), 0 0 0 4px var(--mud-palette-primary-lighten);
+    border-color: var(--mud-palette-success);
+    box-shadow: 0 14px 38px rgba(0, 0, 0, 0.22), 0 0 0 4px rgba(76, 175, 80, 0.2);
+}
+
+/* Override focus styles to use green when text is present (matches add button) */
+.sg-floating.sg-has-text:focus-within .mud-input-control {
+    border-color: var(--mud-palette-success);
+    box-shadow: 0 14px 38px rgba(76, 175, 80, 0.3), 0 0 0 4px rgba(76, 175, 80, 0.2);
+}
+
+/* Add subtle green glow when text is present to match the add button theme */
+.sg-floating.sg-has-text .mud-input-control {
+    border-color: rgba(76, 175, 80, 0.3);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(76, 175, 80, 0.1);
 }
 
 

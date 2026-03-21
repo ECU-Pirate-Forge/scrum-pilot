@@ -8,7 +8,8 @@
 @inject ISnackbar Snackbar
 
 <MudContainer MaxWidth="MaxWidth.False" Class="sg-page">
-    <MudPaper Elevation="0" Class="sg-shell">
+    <!-- Input Section Container -->
+    <MudPaper Elevation="2" Class="sg-input-container mb-4">
         <div class="sg-input-wrap">
             <MudStack Row="true" Class="sg-input-row">
                 <MudTextField T="string"
@@ -18,20 +19,26 @@
                               Margin="Margin.Dense"
                               Immediate="true"
                               FullWidth="true"
-                              Class="sg-search sg-floating"
+                              Class="@($"sg-search sg-floating {(!string.IsNullOrWhiteSpace(_message) ? "sg-has-text" : "")}")"
                               OnKeyDown="HandleInputKeyDown"
                               Disabled="@_isLoading" />
 
-                <MudButton Variant="Variant.Outlined"
-                           Color="Color.Primary"
-                           StartIcon="@Icons.Material.Filled.Add"
-                           OnClick="AddProblemStatement"
-                           Disabled="@(_isLoading || string.IsNullOrWhiteSpace(_message))">
-                    Add
-                </MudButton>
+                @if (!string.IsNullOrWhiteSpace(_message))
+                {
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Success"
+                               StartIcon="@Icons.Material.Filled.Add"
+                               OnClick="AddProblemStatement"
+                               Disabled="@_isLoading">
+                        Add
+                    </MudButton>
+                }
             </MudStack>
         </div>
+    </MudPaper>
 
+    <!-- Main Content Container -->
+    <MudPaper Elevation="0" Class="sg-shell">
         <div class="sg-list-wrap">
             <MudPaper Outlined="true" Class="sg-list-shell">
                 @if (_problemStatements.Count == 0)
@@ -83,8 +90,8 @@
                        Disabled="@(_isLoading || _problemStatements.Count == 0)">
                 @if (_isLoading)
                 {
-                    <MudProgressCircular Color="Color.Secondary" Size="Size.Small" Indeterminate="true" />
-                    <span style="margin-left: 8px;">GENERATING...</span>
+                    <MudProgressCircular Color="Color.Primary" Size="Size.Small" Indeterminate="true" />
+                    <span style="margin-left: 8px;">WRITING YOUR STORIES...</span>
                 }
                 else
                 {
@@ -100,7 +107,8 @@
         @if (_isLoading)
         {
             <MudStack AlignItems="AlignItems.Center">
-                <MudProgressCircular Color="Color.Secondary" Size="Size.Small" Indeterminate="true" />
+                <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+                <MudText Class="mt-4" Typo="Typo.subtitle1">Writing your stories...</MudText>
             </MudStack>
         }
         else
