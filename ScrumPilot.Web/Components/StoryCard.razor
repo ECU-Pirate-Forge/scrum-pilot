@@ -1,0 +1,154 @@
+@using ScrumPilot.Shared.Models
+@using MudBlazor
+
+@if (StoryModel != null)
+{
+    <div style="animation: slideInUp 0.6s ease-out;">
+        <MudContainer MaxWidth="MaxWidth.Medium" Class="pa-4">
+            <MudPaper Class="pa-6" Elevation="4" Style="border-radius: 12px; background: linear-gradient(135deg, var(--mud-palette-surface) 0%, var(--mud-palette-background) 100%); border: 3px solid var(--mud-palette-primary); box-shadow: 0 6px 25px rgba(25, 118, 210, 0.2), 0 0 0 1px rgba(25, 118, 210, 0.1);">
+                <div class="story-header">
+                    <MudText Typo="Typo.h4" Class="story-title mb-3" Style="font-weight: 600; color: var(--mud-palette-text-primary);">
+                        @StoryModel.Title
+                    </MudText>
+                    <MudStack Row Spacing="2" Class="mb-4">
+                        <MudChip T="string" Size="Size.Medium" Color="@GetStatusColor(StoryModel.Status)" Icon="@GetStatusIcon(StoryModel.Status)" Variant="Variant.Filled" Style="animation: fadeInLeft 0.8s ease-out;">
+                            @StoryModel.Status
+                        </MudChip>
+                        <MudChip T="string" Size="Size.Medium" Color="@GetPriorityColor(StoryModel.Priority)" Icon="@GetPriorityIcon(StoryModel.Priority)" Variant="Variant.Filled" Style="animation: fadeInLeft 1s ease-out;">
+                            @StoryModel.Priority Priority
+                        </MudChip>
+                        @if (StoryModel.IsAiGenerated)
+                        {
+                            <MudChip T="string" Size="Size.Medium" Color="Color.Info" Icon="Icons.Material.Filled.SmartToy" Variant="Variant.Filled" Style="animation: fadeInLeft 1.2s ease-out;">
+                                AI Generated
+                            </MudChip>
+                        }
+                    </MudStack>
+                </div>
+
+                <MudDivider Class="mb-4" />
+
+                <MudStack Class="mb-4" Style="animation: fadeInUp 1s ease-out;">
+                    <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600; color: var(--mud-palette-text-primary);">
+                        <MudIcon Icon="Icons.Material.Filled.Description" Class="me-2" />
+                        Description
+                    </MudText>
+                    @if (!string.IsNullOrWhiteSpace(StoryModel.Description))
+                    {
+                        <MudPaper Class="pa-4" Style="background-color: var(--mud-palette-background-grey); border-radius: 8px; border-left: 4px solid var(--mud-palette-primary);">
+                            @foreach (var line in StoryModel.Description.Split('\n'))
+                            {
+                                <MudText Typo="Typo.body1" Class="mb-2" Style="line-height: 1.6;">
+                                    @line
+                                </MudText>
+                            }
+                        </MudPaper>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Class="no-description" Style="font-style: italic; color: var(--mud-palette-text-secondary);">
+                            No description provided
+                        </MudText>
+                    }
+                </MudStack>
+
+                <MudDivider Class="mb-4" />
+
+                <div class="story-footer" style="animation: fadeInUp 1.2s ease-out;">
+                    <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600; color: var(--mud-palette-text-primary);">
+                        <MudIcon Icon="Icons.Material.Filled.Info" Class="me-2" />
+                        Story Details
+                    </MudText>
+                    <MudGrid AlignItems="AlignItems.Center" Spacing="3">
+                        @if (StoryModel.StoryPoints.HasValue)
+                        {
+                            <MudItem xs="12" sm="6" md="4">
+                                <MudPaper Class="pa-3" Style="background-color: var(--mud-palette-action-hover); border-radius: 8px; transition: transform 0.2s ease;">
+                                    <MudStack Row AlignItems="AlignItems.Center">
+                                        <MudIcon Icon="Icons.Material.Filled.Timeline" Color="Color.Primary" Class="me-2" Size="Size.Medium" />
+                                        <MudStack>
+                                            <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Story Points</MudText>
+                                            <MudText Typo="Typo.h6" Style="font-weight: 600;">@StoryModel.StoryPoints</MudText>
+                                        </MudStack>
+                                    </MudStack>
+                                </MudPaper>
+                            </MudItem>
+                        }
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudPaper Class="pa-3" Style="background-color: var(--mud-palette-action-hover); border-radius: 8px; transition: transform 0.2s ease;">
+                                <MudStack Row AlignItems="AlignItems.Center">
+                                    <MudIcon Icon="Icons.Material.Filled.CalendarToday" Color="Color.Success" Class="me-2" Size="Size.Medium" />
+                                    <MudStack>
+                                        <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Created</MudText>
+                                        <MudText Typo="Typo.body1" Style="font-weight: 600;">@StoryModel.DateCreated.ToString("MMM dd, yyyy")</MudText>
+                                    </MudStack>
+                                </MudStack>
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudPaper Class="pa-3" Style="background-color: var(--mud-palette-action-hover); border-radius: 8px; transition: transform 0.2s ease;">
+                                <MudStack Row AlignItems="AlignItems.Center">
+                                    <MudIcon Icon="Icons.Material.Filled.Update" Color="Color.Warning" Class="me-2" Size="Size.Medium" />
+                                    <MudStack>
+                                        <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Last Updated</MudText>
+                                        <MudText Typo="Typo.body1" Style="font-weight: 600;">@StoryModel.LastUpdated.ToString("MMM dd, yyyy")</MudText>
+                                    </MudStack>
+                                </MudStack>
+                            </MudPaper>
+                        </MudItem>
+                    </MudGrid>
+                </div>
+            </MudPaper>
+        </MudContainer>
+    </div>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.Medium" Class="pa-4">
+        <MudPaper Class="pa-6" Elevation="2" Style="border-radius: 12px; text-align: center;">
+            <MudIcon Icon="Icons.Material.Filled.AutoStories" Size="Size.Large" Color="Color.Primary" Class="mb-3" />
+            <MudText Typo="Typo.h6" Class="mb-2">Ready to Generate Your Story!</MudText>
+            <MudText Typo="Typo.body1" Style="color: var(--mud-palette-text-secondary);">
+                Enter a problem statement above and click submit to generate an AI-powered user story.
+            </MudText>
+        </MudPaper>
+    </MudContainer>
+}
+
+@code {
+    [Parameter] public ScrumPilot.Shared.Models.Story? StoryModel { get; set; }
+
+    private string GetStatusIcon(ScrumPilot.Shared.Models.StoryStatus status) => status switch
+    {
+        ScrumPilot.Shared.Models.StoryStatus.ToDo => Icons.Material.Filled.Assignment,
+        ScrumPilot.Shared.Models.StoryStatus.InProgress => Icons.Material.Filled.Refresh,
+        ScrumPilot.Shared.Models.StoryStatus.Done => Icons.Material.Filled.CheckCircle,
+        _ => Icons.Material.Filled.Assignment
+    };
+
+    private string GetPriorityIcon(ScrumPilot.Shared.Models.StoryPriority priority) => priority switch
+    {
+        ScrumPilot.Shared.Models.StoryPriority.Lowest => Icons.Material.Filled.KeyboardDoubleArrowDown,
+        ScrumPilot.Shared.Models.StoryPriority.Low => Icons.Material.Filled.KeyboardArrowDown,
+        ScrumPilot.Shared.Models.StoryPriority.High => Icons.Material.Filled.KeyboardArrowUp,
+        ScrumPilot.Shared.Models.StoryPriority.Highest => Icons.Material.Filled.KeyboardDoubleArrowUp,
+        _ => Icons.Material.Filled.KeyboardArrowRight
+    };
+
+    private Color GetStatusColor(ScrumPilot.Shared.Models.StoryStatus status) => status switch
+    {
+        ScrumPilot.Shared.Models.StoryStatus.ToDo => Color.Default,
+        ScrumPilot.Shared.Models.StoryStatus.InProgress => Color.Warning,
+        ScrumPilot.Shared.Models.StoryStatus.Done => Color.Success,
+        _ => Color.Default
+    };
+
+    private Color GetPriorityColor(ScrumPilot.Shared.Models.StoryPriority priority) => priority switch
+    {
+        ScrumPilot.Shared.Models.StoryPriority.Lowest => Color.Default,
+        ScrumPilot.Shared.Models.StoryPriority.Low => Color.Info,
+        ScrumPilot.Shared.Models.StoryPriority.High => Color.Warning,
+        ScrumPilot.Shared.Models.StoryPriority.Highest => Color.Error,
+        _ => Color.Default
+    };
+}

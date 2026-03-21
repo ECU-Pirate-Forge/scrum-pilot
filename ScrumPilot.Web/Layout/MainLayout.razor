@@ -1,0 +1,93 @@
+﻿@using ScrumPilot.Web.Services
+@inject IThemeService ThemeService
+@inherits LayoutComponentBase
+@inject IJSRuntime JSRuntime
+@using MudBlazor
+
+<MudThemeProvider @ref="@_mudThemeProvider" Theme="currentTheme" IsDarkMode="@_isDarkMode" />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <div class="top-row px-4">
+            <!-- Single Logo in Upper Left -->
+            <div class="logo-section">
+                <a class="navbar-brand" href="">
+                    <img src="/images/logo.png" alt="ScrumPilot" class="main-logo" />
+                </a>
+            </div>
+
+            <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
+                           Color="Color.Inherit"
+                           OnClick="@ToggleDarkMode"
+                           Title="Toggle dark mode" />
+        </div>
+
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+@code {
+    private bool _isDarkMode = false;
+    private MudThemeProvider _mudThemeProvider;
+
+    MudTheme currentTheme = new()
+    {
+        PaletteLight = new PaletteLight()
+        {
+            Primary = "#1b6ec2",
+            AppbarBackground = "#1b6ec2",
+            Surface = "#ffffff",
+            Background = "#ffffff",
+            TextPrimary = "#212529",
+            TextSecondary = "#666666"
+        },
+        PaletteDark = new PaletteDark()
+        {
+            Primary = "#90caf9",           // Bright light blue for high contrast
+            Secondary = "#f48fb1",         // Pink accent for variety
+            AppbarBackground = "#1a1a1a",   
+            Surface = "#2d2d30",           // Slightly lighter than background
+            Background = "#1e1e1e",        // Dark background
+            TextPrimary = "#ffffff",       // Pure white for maximum contrast
+            TextSecondary = "#e0e0e0",     // Very light gray for secondary text
+            TextDisabled = "#9e9e9e",      // Medium gray for disabled
+            ActionDefault = "#e0e0e0",     // Light for clickable elements
+            ActionDisabled = "#757575",    // Darker for disabled actions
+            Divider = "rgba(255, 255, 255, 0.2)", // More visible dividers
+            DividerLight = "rgba(255, 255, 255, 0.1)", 
+            TableLines = "rgba(255, 255, 255, 0.2)", // Visible table lines
+            LinesDefault = "rgba(255, 255, 255, 0.2)", 
+            LinesInputs = "rgba(255, 255, 255, 0.4)", // Clear input borders
+            TableStriped = "rgba(255, 255, 255, 0.05)", // Subtle stripes
+            HoverOpacity = 0.1,           // More pronounced hover effects
+            GrayDefault = "#424242",      // Lighter gray for better contrast
+            GrayLight = "#616161",        // 
+            GrayLighter = "#757575",      // 
+            GrayDark = "#303030",         // 
+            GrayDarker = "#212121"        // 
+        }
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Check system preference
+            _isDarkMode = await _mudThemeProvider.GetSystemPreference();
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleDarkMode()
+    {
+        _isDarkMode = !_isDarkMode;
+    }
+}

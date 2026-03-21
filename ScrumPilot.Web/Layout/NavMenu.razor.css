@@ -1,0 +1,137 @@
+.navbar-toggler {
+    background-color: var(--sidebar-bg-hover);
+}
+
+.top-row {
+    height: 3.5rem;
+    background-color: rgba(0,0,0,0.4);
+    display: flex;
+    align-items: center;
+    /* Hide this section on desktop since we have the full-width top bar */
+}
+
+@media (min-width: 641px) {
+    .top-row {
+        display: none; /* Hide on desktop */
+    }
+}
+
+.navbar-brand {
+    font-size: 1.1rem;
+    margin: 0;
+    padding: 0;
+    color: #ffffff;
+}
+
+.navbar-logo {
+    height: 2.2rem; /* Fits nicely within 3.5rem navbar */
+    width: auto; /* Maintain aspect ratio */
+    max-width: 180px; /* Reasonable max width for sidebar */
+    object-fit: contain; /* Ensure logo fits within bounds */
+    display: block;
+    filter: brightness(0) invert(1); /* Make logo white for dark sidebar */
+    transition: opacity 0.3s ease;
+}
+
+.navbar-logo:hover {
+    opacity: 0.8;
+}
+
+.nav-fluid {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.bi {
+    display: inline-block;
+    position: relative;
+    width: 1.25rem;
+    height: 1.25rem;
+    margin-right: 0.75rem;
+    top: -1px;
+    background-size: cover;
+}
+
+.bi-house-door-fill-nav-menu {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='white' class='bi bi-house-door-fill' viewBox='0 0 16 16'%3E%3Cpath d='M6.5 14.5v-3.505c0-.245.25-.495.5-.495h2c.25 0 .5.25.5.5v3.5a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5v-7a.5.5 0 0 0-.146-.354L13 5.793V2.5a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1.293L8.354 1.146a.5.5 0 0 0-.708 0l-6 6A.5.5 0 0 0 1.5 7.5v7a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5Z'/%3E%3C/svg%3E");
+}
+
+.bi-plus-square-fill-nav-menu {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='white' class='bi bi-plus-square-fill' viewBox='0 0 16 16'%3E%3Cpath d='M2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H2zm6.5 4.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3a.5.5 0 0 1 1 0z'/%3E%3C/svg%3E");
+}
+
+.bi-list-nested-nav-menu {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='white' class='bi bi-list-nested' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M4.5 11.5A.5.5 0 0 1 5 11h10a.5.5 0 0 1 0 1H5a.5.5 0 0 1-.5-.5zm-2-4A.5.5 0 0 1 3 7h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm-2-4A.5.5 0 0 1 1 3h10a.5.5 0 0 1 0 1H1a.5.5 0 0 1-.5-.5z'/%3E%3C/svg%3E");
+}
+
+.nav-item {
+    font-size: 0.9rem;
+    padding-bottom: 0.5rem;
+}
+
+    .nav-item:first-of-type {
+        padding-top: 1rem;
+    }
+
+    .nav-item:last-of-type {
+        padding-bottom: 1rem;
+    }
+
+    /* Using CSS variables for consistent sidebar theming */
+    .nav-item ::deep a {
+        color: #e3f2fd;
+        border-radius: 4px;
+        height: 3rem;
+        display: flex;
+        align-items: center;
+        line-height: 3rem;
+        transition: all 0.3s ease;
+    }
+
+.nav-item ::deep a.active {
+    background-color: rgba(255,255,255,0.2);
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.nav-item ::deep a:hover {
+    background-color: rgba(255,255,255,0.1);
+    color: #ffffff;
+    transform: translateX(4px);
+}
+
+.nav-scrollable {
+    /* Allow sidebar to scroll for tall menus and account for fixed top bar */
+    height: calc(100vh - 3.5rem);
+    overflow-y: auto;
+    margin-top: 3.5rem; /* Push navigation content below the fixed top bar */
+}
+
+/* Mobile-specific styling */
+@media (max-width: 640.98px) {
+    .nav-scrollable {
+        margin-top: 0; /* Reset margin on mobile */
+        height: auto; /* Reset height on mobile */
+    }
+
+    .top-row {
+        display: flex !important; /* Show on mobile for hamburger menu */
+    }
+}
+
+@media (min-width: 641px) {
+    .navbar-toggler {
+        display: none;
+    }
+
+    .collapse {
+        /* Never collapse the sidebar for wide screens */
+        display: block;
+    }
+
+    .top-row {
+        display: none; /* Hide on desktop */
+    }
+}
