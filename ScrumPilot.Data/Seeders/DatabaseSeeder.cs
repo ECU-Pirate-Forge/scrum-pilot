@@ -48,7 +48,7 @@ namespace ScrumPilot.Data.Seeders
                     Title = "Dashboard Analytics",
                     Description = "As an admin, I want to view analytics on the dashboard so that I can monitor system usage.",
                     Status = StoryStatus.Done,
-                    Priority = StoryPriority.Lowest,
+                    Priority = StoryPriority.Medium,
                     StoryPoints = 8,
                     IsAiGenerated = true,
                     IsDraft = false

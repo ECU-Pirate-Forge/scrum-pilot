@@ -3,10 +3,9 @@
 namespace ScrumPilot.Shared.Models
 {
     public enum StoryPriority
-    {
-        Lowest,
+    {       
         Low,
-        High,
-        Highest
+        Medium,
+        High
     }
 }

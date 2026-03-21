@@ -199,10 +199,9 @@ else
     {
         return priority switch
         {
-            StoryPriority.Highest => Color.Error,    // Red for critical
-            StoryPriority.High => Color.Warning,     // Orange for important
-            StoryPriority.Low => Color.Info,         // Blue for low priority
-            StoryPriority.Lowest => Color.Default,   // Gray for lowest
+            StoryPriority.High => Color.Error,      // Red
+            StoryPriority.Medium => Color.Warning,  // Orange/Yellow  
+            StoryPriority.Low => Color.Success,     // Green
             _ => Color.Default
         };
     }

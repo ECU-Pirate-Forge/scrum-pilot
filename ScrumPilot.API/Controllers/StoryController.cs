@@ -23,7 +23,6 @@ namespace ScrumPilot.API.Controllers
             return Ok(stories);
         }
 
-
         [HttpGet("getDraftStories")]
         public async Task<ActionResult<IEnumerable<Story>>> GetDraftStories()
         {
