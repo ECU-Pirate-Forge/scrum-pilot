@@ -11,7 +11,7 @@ using ScrumPilot.Data.Context;
 namespace ScrumPilot.Data.Migrations
 {
     [DbContext(typeof(ScrumPilotContext))]
-    [Migration("20260320182007_InitialCreate")]
+    [Migration("20260321032250_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />

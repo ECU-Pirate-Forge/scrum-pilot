@@ -222,7 +222,7 @@ namespace ScrumPilot.API.Services
             return await _storyRepository.UpdateAsync(story);
         }
 
-        public async Task<bool> DeleteStoryAsync(Guid id)
+        public async Task<bool> DeleteStoryAsync(int id)
         {
             return await _storyRepository.DeleteAsync(id);
         }
