@@ -1,0 +1,35 @@
+@using MudBlazor
+@inject NavigationManager Nav
+
+<MudPaper Class="dashboard-tile pa-4" Elevation="3" @onclick="Navigate">
+
+    <MudText Typo="Typo.h6">
+        @Title
+    </MudText>
+
+    @if (!string.IsNullOrWhiteSpace(Description))
+    {
+        <MudText Typo="Typo.body2" Class="mt-2">
+            @Description
+        </MudText>
+    }
+
+</MudPaper>
+
+@code {
+
+    [Parameter]
+    public string Title { get; set; } = "";
+
+    [Parameter]
+    public string Description { get; set; } = "";
+
+    [Parameter]
+    public string Href { get; set; } = "";
+
+    void Navigate()
+    {
+        Nav.NavigateTo(Href);
+    }
+
+}

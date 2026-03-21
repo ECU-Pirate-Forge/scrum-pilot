@@ -6,7 +6,7 @@ namespace ScrumPilot.Shared.Models
 {
     public class Story
     {
-        public Guid Id { get; set; }
+        public int Id { get; set; }
 
         public required string Title { get; set; }
 

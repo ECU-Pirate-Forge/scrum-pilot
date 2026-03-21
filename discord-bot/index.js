@@ -3,6 +3,8 @@ const { Client, GatewayIntentBits, Events, AttachmentBuilder, PermissionsBitFiel
 
 const READ_CHANNEL_ENV_KEY = 'SCRUMLORD_READ_CHANNEL_ID';
 const SPEAK_CHANNEL_ENV_KEY = 'SCRUMLORD_SPEAK_CHANNEL_ID';
+const { handleVoiceStateUpdate } = require('./recorder');
+//const { handleVoiceStateUpdate, watchForCraigLink, setClient } = require('./craig')
 
 const client = new Client({
   intents: [
@@ -146,6 +148,11 @@ function formatMessagesToJson(messages) {
 // Confirmation bot has joined server
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`Scrumlord is online. Logged in as ${readyClient.user.tag}`);
+  //setClient(readyClient);
+});
+
+client.on(Events.VoiceStateUpdate, (oldState, newState) => {
+  handleVoiceStateUpdate(oldState, newState);
 });
 
 // Message monitoring hook for both data collection and command lookout
@@ -339,6 +346,11 @@ client.on(Events.MessageCreate, async (message) => {
     }
   }
 });
+
+// // Craig voice state trigger
+// client.on(Events.VoiceStateUpdate, (oldState, newState) => {
+//   handleVoiceStateUpdate(oldState, newState);
+// });
 
 // Log in using the token from .env
 client.login(process.env.DISCORD_TOKEN);
