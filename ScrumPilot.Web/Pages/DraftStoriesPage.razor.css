@@ -82,12 +82,13 @@
 
 .modify-header {
     display: flex;
-    justify-content: flex-start;
+    justify-content: space-between;
     align-items: center;
     padding: 24px 28px;
     border-bottom: 2px solid var(--mud-palette-divider);
     background-color: var(--mud-palette-surface);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    position: relative;
 }
 
 .modify-title {
@@ -98,13 +99,9 @@
 }
 
 .close-button {
-    position: absolute;
-    top: 16px;
-    right: 16px;
     min-width: auto !important;
     width: auto !important;
     padding: 8px 12px !important;
-    z-index: 10;
     background-color: transparent !important;
     white-space: nowrap !important;
 }
@@ -115,16 +112,6 @@
     background-color: var(--mud-palette-background);
     border-top: 1px solid var(--mud-palette-divider);
     border-bottom: 1px solid var(--mud-palette-divider);
-}
-
-.modify-actions {
-    padding: 20px 28px;
-    border-top: 2px solid var(--mud-palette-divider);
-    background-color: var(--mud-palette-surface);
-    display: flex;
-    justify-content: flex-end;
-    gap: 16px;
-    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
 }
 
 /* Responsive design */
