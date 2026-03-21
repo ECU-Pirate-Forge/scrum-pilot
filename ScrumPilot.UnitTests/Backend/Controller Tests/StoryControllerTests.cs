@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
+using NSubstitute;
 using ScrumPilot.API.Controllers;
 using ScrumPilot.API.Services;
 using ScrumPilot.Shared.Models;
+using Xunit;
 
 namespace ScrumPilot.UnitTests.Backend.Controller_Tests
 {
@@ -17,14 +19,14 @@ namespace ScrumPilot.UnitTests.Backend.Controller_Tests
         }
 
         [Fact]
-        public void GetStories_ReturnsOkResult_WithListOfStories()
+        public async Task GetAllStories_ReturnsOkResult_WithListOfStories()
         {
             // Arrange
             var expectedStories = new List<Story>
             {
                 new Story 
                 { 
-                    Id = Guid.NewGuid(), 
+                    Id = 1, 
                     Title = "Test Story 1", 
                     Description = "Test Description 1",
                     Status = StoryStatus.ToDo,
@@ -34,7 +36,7 @@ namespace ScrumPilot.UnitTests.Backend.Controller_Tests
                 },
                 new Story 
                 { 
-                    Id = Guid.NewGuid(), 
+                    Id = 2, 
                     Title = "Test Story 2", 
                     Description = "Test Description 2",
                     Status = StoryStatus.InProgress,
@@ -44,35 +46,92 @@ namespace ScrumPilot.UnitTests.Backend.Controller_Tests
                 }
             };
 
-            _mockStoryService.GetStories().Returns(expectedStories);
+            _mockStoryService.GetAllStoriesAsync().Returns(expectedStories);
 
             // Act
-            var result = _controller.GetStories();
+            var result = await _controller.GetAllStories();
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
             var actualStories = Assert.IsType<List<Story>>(okResult.Value);
             Assert.Equal(expectedStories.Count, actualStories.Count);
             Assert.Equal(expectedStories, actualStories);
-            _mockStoryService.Received(1).GetStories();
+            await _mockStoryService.Received(1).GetAllStoriesAsync();
         }
 
         [Fact]
-        public void GetStories_ReturnsOkResult_WithEmptyList_WhenNoStories()
+        public async Task GetAllStories_ReturnsOkResult_WithEmptyList_WhenNoStories()
         {
             // Arrange
             var expectedStories = new List<Story>();
-            _mockStoryService.GetStories().Returns(expectedStories);
+            _mockStoryService.GetAllStoriesAsync().Returns(expectedStories);
 
             // Act
-            var result = _controller.GetStories();
+            var result = await _controller.GetAllStories();
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
             var actualStories = Assert.IsType<List<Story>>(okResult.Value);
             Assert.Empty(actualStories);
-            _mockStoryService.Received(1).GetStories();
+            await _mockStoryService.Received(1).GetAllStoriesAsync();
         }
+
+
+
+
+
+        [Fact]
+        public async Task GetDraftStories_ReturnsOkResult_WithDraftStories()
+        {
+            // Arrange
+            var expectedDraftStories = new List<Story>
+            {
+                new Story 
+                { 
+                    Id = 1, 
+                    Title = "Draft Story 1", 
+                    Description = "Draft Description 1",
+                    Status = StoryStatus.ToDo,
+                    Priority = StoryPriority.Low,
+                    IsDraft = true,
+                    DateCreated = DateTime.UtcNow,
+                    LastUpdated = DateTime.UtcNow
+                }
+            };
+
+            _mockStoryService.GetDraftStoriesAsync().Returns(expectedDraftStories);
+
+            // Act
+            var result = await _controller.GetDraftStories();
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result.Result);
+            var actualStories = Assert.IsType<List<Story>>(okResult.Value);
+            Assert.Single(actualStories);
+            Assert.True(actualStories[0].IsDraft);
+            await _mockStoryService.Received(1).GetDraftStoriesAsync();
+        }
+
+        [Fact]
+        public async Task GetDraftStories_ReturnsOkResult_WithEmptyList_WhenNoDraftStories()
+        {
+            // Arrange
+            var expectedStories = new List<Story>();
+            _mockStoryService.GetDraftStoriesAsync().Returns(expectedStories);
+
+            // Act
+            var result = await _controller.GetDraftStories();
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result.Result);
+            var actualStories = Assert.IsType<List<Story>>(okResult.Value);
+            Assert.Empty(actualStories);
+            await _mockStoryService.Received(1).GetDraftStoriesAsync();
+        }
+
+
+
+
 
         [Fact]
         public async Task GenerateAiStory_ReturnsOkResult_WithGeneratedStories_WhenValidProblemStatements()
@@ -83,7 +142,7 @@ namespace ScrumPilot.UnitTests.Backend.Controller_Tests
             {
                 new Story
                 {
-                    Id = Guid.NewGuid(),
+                    Id = 1,
                     Title = "User Login Story",
                     Description = "Generated story description",
                     Status = StoryStatus.ToDo,
@@ -213,5 +272,114 @@ namespace ScrumPilot.UnitTests.Backend.Controller_Tests
             Assert.Equal($"An unexpected error occurred: {exceptionMessage}", statusCodeResult.Value);
             await _mockStoryService.Received(1).GenerateAiStory(problemStatements);
         }
+
+
+
+
+
+        [Fact]
+        public async Task CreateStory_ReturnsOkResult_WithCreatedStory()
+        {
+            // Arrange
+            var inputStory = new Story
+            {
+                Title = "New Story",
+                Description = "New Description",
+                Status = StoryStatus.ToDo,
+                Priority = StoryPriority.Medium
+            };
+
+            var createdStory = new Story
+            {
+                Id = 1,
+                Title = inputStory.Title,
+                Description = inputStory.Description,
+                Status = inputStory.Status,
+                Priority = inputStory.Priority,
+                DateCreated = DateTime.UtcNow,
+                LastUpdated = DateTime.UtcNow
+            };
+
+            _mockStoryService.CreateStoryAsync(inputStory).Returns(createdStory);
+
+            // Act
+            var result = await _controller.CreateStory(inputStory);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result.Result);
+            var actualStory = Assert.IsType<Story>(okResult.Value);
+            Assert.Equal(createdStory.Id, actualStory.Id);
+            Assert.Equal(createdStory.Title, actualStory.Title);
+            await _mockStoryService.Received(1).CreateStoryAsync(inputStory);
+        }
+
+
+
+
+
+        [Fact]
+        public async Task UpdateStory_ReturnsOkResult_WithUpdatedStory()
+        {
+            // Arrange
+            var updatedStory = new Story
+            {
+                Id = 1,
+                Title = "Updated Story",
+                Description = "Updated Description",
+                Status = StoryStatus.InProgress,
+                Priority = StoryPriority.High,
+                DateCreated = DateTime.UtcNow.AddDays(-1),
+                LastUpdated = DateTime.UtcNow
+            };
+
+            _mockStoryService.UpdateStoryAsync(updatedStory).Returns(updatedStory);
+
+            // Act
+            var result = await _controller.UpdateStory(updatedStory);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result.Result);
+            var actualStory = Assert.IsType<Story>(okResult.Value);
+            Assert.Equal(updatedStory.Id, actualStory.Id);
+            Assert.Equal(updatedStory.Title, actualStory.Title);
+            Assert.Equal(StoryStatus.InProgress, actualStory.Status);
+            await _mockStoryService.Received(1).UpdateStoryAsync(updatedStory);
+        }
+
+
+
+
+
+        [Fact]
+        public async Task DeleteStory_ReturnsNoContent_WhenSuccessfullyDeleted()
+        {
+            // Arrange
+            var storyId = 1;
+            _mockStoryService.DeleteStoryAsync(storyId).Returns(true);
+
+            // Act
+            var result = await _controller.DeleteStory(storyId);
+
+            // Assert
+            Assert.IsType<NoContentResult>(result);
+            await _mockStoryService.Received(1).DeleteStoryAsync(storyId);
+        }
+
+        [Fact]
+        public async Task DeleteStory_ReturnsNotFound_WhenStoryDoesNotExist()
+        {
+            // Arrange
+            var storyId = 999;
+            _mockStoryService.DeleteStoryAsync(storyId).Returns(false);
+
+            // Act
+            var result = await _controller.DeleteStory(storyId);
+
+            // Assert
+            Assert.IsType<NotFoundResult>(result);
+            await _mockStoryService.Received(1).DeleteStoryAsync(storyId);
+        }
+
+
     }
 }
