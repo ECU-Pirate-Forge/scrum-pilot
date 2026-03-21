@@ -7,37 +7,91 @@
 @inject HttpClient Http
 @inject ISnackbar Snackbar
 
-
 <MudContainer MaxWidth="MaxWidth.False" Class="sg-page">
     <MudPaper Elevation="0" Class="sg-shell">
+        <div class="sg-input-wrap">
+            <MudStack Row="true" Class="sg-input-row">
+                <MudTextField T="string"
+                              @bind-Value="_message"
+                              Placeholder="Enter problem statement"
+                              Variant="Variant.Filled"
+                              Margin="Margin.Dense"
+                              Immediate="true"
+                              FullWidth="true"
+                              Class="sg-search sg-floating"
+                              OnKeyDown="HandleInputKeyDown"
+                              Disabled="@_isLoading" />
 
-        <MudTextField T="string"
-                      @bind-Value="_message"
-                      Placeholder="Enter Problem Statement here"
-                      Variant="Variant.Filled"
-                      Margin="Margin.Dense"
-                      Immediate="true"
-                      FullWidth="true"
-                      Class="sg-search sg-floating"
-                      OnKeyDown="HandleKeyDown"
-                      Disabled="@_isLoading" />
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="AddProblemStatement"
+                           Disabled="@(_isLoading || string.IsNullOrWhiteSpace(_message))">
+                    Add
+                </MudButton>
+            </MudStack>
+        </div>
 
-        <MudButton Class="sg-submit"
-                   Variant="Variant.Filled"
-                   Color="Color.Primary"
-                   EndIcon="@Icons.Material.Filled.ArrowForward"
-                   OnClick="SendMessage"
-                   Disabled="@_isLoading">
-            @if (_isLoading)
-            {
-                <MudProgressCircular Color="Color.Secondary" Size="Size.Small" Indeterminate="true" />
-                <span style="margin-left: 8px;">GENERATING...</span>
-            }
-            else
-            {
-                <span>SUBMIT</span>
-            }
-        </MudButton>
+        <div class="sg-list-wrap">
+            <MudPaper Outlined="true" Class="sg-list-shell">
+                @if (_problemStatements.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="sg-empty-list">
+                        No problem statements added yet.
+                    </MudText>
+                }
+                else
+                {
+                    <MudStack Spacing="1">
+                        @for (var index = 0; index < _problemStatements.Count; index++)
+                        {
+                            var currentIndex = index;
+                            var itemNumber = currentIndex + 1;
+                            var currentStatement = _problemStatements[currentIndex];
+
+                            <MudPaper Outlined="true" Class="sg-list-item" @key="@($"statement-{itemNumber}-{currentStatement}")">
+                                <div class="sg-list-content">
+                                    <MudChip T="string"
+                                             Size="Size.Small"
+                                             Variant="Variant.Filled"
+                                             Color="Color.Primary"
+                                             Class="sg-list-index">
+                                        @itemNumber
+                                    </MudChip>
+                                    <MudText Typo="Typo.body1" Class="sg-list-text">@currentStatement</MudText>
+                                </div>
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                               Color="Color.Error"
+                                               Size="Size.Small"
+                                               Class="sg-list-delete"
+                                               OnClick="@(() => RemoveProblemStatement(currentIndex))"
+                                               Disabled="@_isLoading"
+                                               AriaLabel="Remove problem statement" />
+                            </MudPaper>
+                        }
+                    </MudStack>
+                }
+            </MudPaper>
+        </div>
+
+        <div class="sg-submit-wrap">
+            <MudButton Class="sg-submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       EndIcon="@Icons.Material.Filled.ArrowForward"
+                       OnClick="SendMessage"
+                       Disabled="@(_isLoading || _problemStatements.Count == 0)">
+                @if (_isLoading)
+                {
+                    <MudProgressCircular Color="Color.Secondary" Size="Size.Small" Indeterminate="true" />
+                    <span style="margin-left: 8px;">GENERATING...</span>
+                }
+                else
+                {
+                    <span>@($"GENERATE STORIES ({_problemStatements.Count})")</span>
+                }
+            </MudButton>
+        </div>
 
     </MudPaper>
 
@@ -51,25 +105,42 @@
         }
         else
         {
-            @if (_generatedStory != null)
+            @if (_generatedStories.Count > 0)
             {
                 <MudStack Style="width: 100%; animation: fadeInDown 0.5s ease-out;">
-                    <MudAlert Severity="Severity.Success" 
-                              Class="mb-4 mx-auto" 
-                              Style="text-align: center; max-width: 500px; border-radius: 12px; background: linear-gradient(45deg, #4CAF50, #81C784);">
+                    <MudAlert Severity="Severity.Success" Class="mb-4 mx-auto sg-success-alert">
                         <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center">
                             <MudIcon Icon="Icons.Material.Filled.CheckCircle" Class="me-2" />
-                            <MudText Typo="Typo.h6" Style="color: white; font-weight: 600;">
+                            <MudText Typo="Typo.h6" Class="sg-success-text">
                                 Story Generated Successfully!
                             </MudText>
                         </MudStack>
                     </MudAlert>
-                    <StoryCard StoryModel="@_generatedStory" />
+
+                    <StoryCard StoryModel="@CurrentStory" />
+
+                    <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center" Class="sg-nav-row">
+                        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
+                                       Color="Color.Primary"
+                                       OnClick="ShowPreviousStory"
+                                       Disabled="@(_currentStoryIndex == 0)"
+                                       AriaLabel="Show previous story" />
+
+                        <MudText Typo="Typo.subtitle1" Class="sg-nav-position">
+                            @($"{_currentStoryIndex + 1} of {_generatedStories.Count}")
+                        </MudText>
+
+                        <MudIconButton Icon="@Icons.Material.Filled.ArrowForward"
+                                       Color="Color.Primary"
+                                       OnClick="ShowNextStory"
+                                       Disabled="@(_currentStoryIndex >= _generatedStories.Count - 1)"
+                                       AriaLabel="Show next story" />
+                    </MudStack>
                 </MudStack>
             }
             else
             {
-                <StoryCard StoryModel="@_generatedStory" />
+                <StoryCard StoryModel="@CurrentStory" />
             }
         }
     </MudStack>
@@ -78,13 +149,38 @@
 @code {
     private string _message = string.Empty;
     private bool _isLoading = false;
-    private Story? _generatedStory = null;
+    private readonly List<string> _problemStatements = new();
+    private List<Story> _generatedStories = new();
+    private int _currentStoryIndex = 0;
+    private Story? CurrentStory => _generatedStories.Count == 0 ? null : _generatedStories[_currentStoryIndex];
 
-    private async Task SendMessage()
+    private void AddProblemStatement()
     {
         if (string.IsNullOrWhiteSpace(_message))
         {
             Snackbar.Add("Please enter a problem statement.", Severity.Warning);
+            return;
+        }
+
+        _problemStatements.Add(_message.Trim());
+        _message = string.Empty;
+    }
+
+    private void RemoveProblemStatement(int index)
+    {
+        if (index < 0 || index >= _problemStatements.Count)
+        {
+            return;
+        }
+
+        _problemStatements.RemoveAt(index);
+    }
+
+    private async Task SendMessage()
+    {
+        if (_problemStatements.Count == 0)
+        {
+            Snackbar.Add("Add at least one problem statement before generating stories.", Severity.Warning);
             return;
         }
 
@@ -93,22 +189,30 @@
 
         try
         {
-            // Create JSON content from the problem statement
-            var jsonContent = JsonSerializer.Serialize(_message);
+            var jsonContent = JsonSerializer.Serialize(_problemStatements);
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
             // Call the API
-            var response = await Http.PostAsync("story/generate", content);
+            var response = await Http.PostAsync("api/story/generateAiStories", content);
 
             if (response.IsSuccessStatusCode)
             {
                 var jsonResponse = await response.Content.ReadAsStringAsync();
-                _generatedStory = JsonSerializer.Deserialize<Story>(jsonResponse, new JsonSerializerOptions
+                var stories = JsonSerializer.Deserialize<List<Story>>(jsonResponse, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
                 });
 
-                _message = string.Empty; // Clear the input field
+                if (stories is null || stories.Count == 0)
+                {
+                    Snackbar.Add("Generation completed but the response did not contain valid stories.", Severity.Error);
+                    return;
+                }
+
+                _generatedStories = stories;
+                _currentStoryIndex = 0;
+                _problemStatements.Clear();
+                _message = string.Empty;
             }
             else
             {
@@ -120,11 +224,11 @@
         {
             Snackbar.Add($"Network error: {ex.Message}", Severity.Error);
         }
-        catch (TaskCanceledException ex)
+        catch (TaskCanceledException)
         {
             Snackbar.Add("Request timed out. Please try again.", Severity.Error);
         }
-        catch (JsonException ex)
+        catch (JsonException)
         {
             Snackbar.Add("Failed to parse response from server.", Severity.Error);
         }
@@ -139,11 +243,29 @@
         }
     }
 
-    private async Task HandleKeyDown(KeyboardEventArgs e)
+    private Task HandleInputKeyDown(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter" && (e.CtrlKey || e.MetaKey))
+        if (e.Key == "Enter")
         {
-            await SendMessage();
+            AddProblemStatement();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void ShowPreviousStory()
+    {
+        if (_currentStoryIndex > 0)
+        {
+            _currentStoryIndex--;
+        }
+    }
+
+    private void ShowNextStory()
+    {
+        if (_currentStoryIndex < _generatedStories.Count - 1)
+        {
+            _currentStoryIndex++;
         }
     }
 }

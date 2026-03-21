@@ -1,5 +1,7 @@
 ﻿using AutoFixture;
+using ScrumPilot.Data.Repositories;
 using ScrumPilot.Shared.Models;
+using ScrumPilot.Data.Repositories;
 using System.Text;
 using System.Text.Json;
 
@@ -9,37 +11,23 @@ namespace ScrumPilot.API.Services
     {
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _configuration;
+        private readonly IStoryRepository _storyRepository;
 
-        public StoryService(HttpClient httpClient, IConfiguration configuration)
+        public StoryService(HttpClient httpClient, IConfiguration configuration, IStoryRepository storyRepository)
         {
             _httpClient = httpClient;
             _configuration = configuration;
+            _storyRepository = storyRepository;
         }
 
-        public List<Story> GetStories()
+        public async Task<IEnumerable<Story>> GetAllStoriesAsync()
         {
-            //TODO: Connect to DB to get real stories instead of generating them with AutoFixture
-
-            //Create our fixture
-            var fixture = new Fixture();
-
-            var stories = fixture
-                .Build<Story>()
-                .CreateMany(5)
-                .ToList();
-
-            return stories;
+            return await _storyRepository.GetAllStoriesAsync();
         }
-        public List<Story> GetDraftStories()
-        {
-                var fixture = new Fixture();
-                var stories = fixture
-                    .Build<Story>()
-                    .CreateMany(5)
-                    .Where(s => s.IsDraft)
-                    .ToList();
 
-            return stories;
+        public async Task<IEnumerable<Story>> GetDraftStoriesAsync()
+        {
+            return await _storyRepository.GetDraftStoriesAsync();
         }
 
         /// <summary>
@@ -58,7 +46,7 @@ namespace ScrumPilot.API.Services
         /// <exception cref="TimeoutException">
         /// Thrown if the request to the Ollama API times out.
         /// </exception>
-        public async Task<Story> GenerateAiStory(string problemStatement)
+        private async Task<Story> GenerateAiStory(string problemStatement)
         {
             var ollamaBaseUrl = _configuration["OllamaBaseUrl"];
             var ollamaModel = _configuration["OllamaModel"];
@@ -74,7 +62,6 @@ namespace ScrumPilot.API.Services
 
             var story = new Story
             {
-                Id = Guid.NewGuid(),
                 Title = aiStoryResponse.Title,
                 Description = $"{aiStoryResponse.UserStory}\n\nAcceptance Criteria:\n{string.Join("\n", aiStoryResponse.AcceptanceCriteria.Select(ac => $"• {ac}"))}",
                 Status = StoryStatus.ToDo,
@@ -86,6 +73,19 @@ namespace ScrumPilot.API.Services
             };
 
             return story;
+        }
+
+        public async Task<List<Story>> GenerateAiStory(List<string> problemStatements)
+        {
+            var stories = new List<Story>();
+
+            foreach (var problemStatement in problemStatements)
+            {
+                var story = await GenerateAiStory(problemStatement);
+                stories.Add(story);
+            }
+
+            return stories;
         }
 
         private string BuildPrompt(string problemStatement)
@@ -114,7 +114,8 @@ namespace ScrumPilot.API.Services
             {
                 model = model,
                 prompt = prompt,
-                stream = false
+                stream = false,
+                format = "json"
             };
 
             var json = JsonSerializer.Serialize(requestBody);
@@ -209,6 +210,21 @@ namespace ScrumPilot.API.Services
                 }
             }
             return null;
+        }
+
+        public async Task<Story> CreateStoryAsync(Story story)
+        {
+            return await _storyRepository.AddAsync(story);
+        }
+
+        public async Task<Story> UpdateStoryAsync(Story story)
+        {
+            return await _storyRepository.UpdateAsync(story);
+        }
+
+        public async Task<bool> DeleteStoryAsync(Guid id)
+        {
+            return await _storyRepository.DeleteAsync(id);
         }
 
     }

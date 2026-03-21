@@ -24,6 +24,11 @@ jest.mock('discord.js', () => {
       buffer,
       name: options.name,
     })),
+    PermissionsBitField: {
+      Flags: {
+        ManageGuild: 'ManageGuild',
+      },
+    },
   };
 });
 
@@ -43,6 +48,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   process.env.DISCORD_TOKEN = 'test-token';
   process.env.NODE_ENV = 'test';
+  delete process.env.SCRUMLORD_READ_CHANNEL_ID;
+  delete process.env.SCRUMLORD_SPEAK_CHANNEL_ID;
 
   // Re-require after resetModules so we get the fresh mock references
   ({ Client, GatewayIntentBits, Events } = require('discord.js'));
@@ -75,6 +82,27 @@ beforeEach(() => {
 
     test('logs in with the token from .env', () => {
       expect(mockClient.login).toHaveBeenCalledWith('test-token');
+    });
+  });
+
+  // -------------------------------------------------------
+  // channel routing helpers
+  // -------------------------------------------------------
+
+  describe('channel routing helpers', () => {
+    test('extractChannelId parses channel mentions', () => {
+      expect(bot.extractChannelId('<#123>')).toBe('123');
+    });
+
+    test('getChannelRoutingConfig reads routing values from env', () => {
+      process.env.SCRUMLORD_READ_CHANNEL_ID = '111';
+      process.env.SCRUMLORD_SPEAK_CHANNEL_ID = '222';
+
+      expect(bot.getChannelRoutingConfig()).toEqual({
+        readChannelId: '111',
+        speakChannelId: '222',
+        isConfigured: true,
+      });
     });
   });
 
@@ -304,6 +332,79 @@ beforeEach(() => {
       await messageHandler(msg);
       expect(msg.reply).not.toHaveBeenCalled();
     });
+
+    test('routes ping response to configured speak channel', async () => {
+      process.env.SCRUMLORD_READ_CHANNEL_ID = '111';
+      process.env.SCRUMLORD_SPEAK_CHANNEL_ID = '222';
+
+      jest.resetModules();
+      jest.clearAllMocks();
+      ({ Client, GatewayIntentBits, Events } = require('discord.js'));
+      dotenv = require('dotenv');
+      bot = require('../index');
+      mockClient = Client.mock.results[0].value;
+
+      messageHandler = getHandler(mockClient, Events.MessageCreate, 'on');
+
+      const speakChannel = { send: jest.fn() };
+
+      const msg = {
+        author: { bot: false },
+        content: '!ping',
+        channel: { id: '111', send: jest.fn() },
+        guild: {
+          id: 'guild-1',
+          channels: {
+            fetch: jest.fn((id) => {
+              if (id === '222') return Promise.resolve(speakChannel);
+              return Promise.resolve(null);
+            }),
+          },
+        },
+        reply: jest.fn(),
+      };
+
+      await messageHandler(msg);
+
+      expect(speakChannel.send).toHaveBeenCalledWith('Pong! Scrumlord is watching. 👑');
+      expect(msg.reply).not.toHaveBeenCalled();
+    });
+
+    test('ignores ping when command is outside configured read channel', async () => {
+      process.env.SCRUMLORD_READ_CHANNEL_ID = '111';
+      process.env.SCRUMLORD_SPEAK_CHANNEL_ID = '222';
+
+      jest.resetModules();
+      jest.clearAllMocks();
+      ({ Client, GatewayIntentBits, Events } = require('discord.js'));
+      dotenv = require('dotenv');
+      bot = require('../index');
+      mockClient = Client.mock.results[0].value;
+
+      messageHandler = getHandler(mockClient, Events.MessageCreate, 'on');
+
+      const speakChannel = { send: jest.fn() };
+
+      const msg = {
+        author: { bot: false },
+        content: '!ping',
+        channel: { id: '999', send: jest.fn() },
+        guild: {
+          id: 'guild-1',
+          channels: {
+            fetch: jest.fn((id) => {
+              if (id === '222') return Promise.resolve(speakChannel);
+              return Promise.resolve(null);
+            }),
+          },
+        },
+        reply: jest.fn(),
+      };
+
+      await messageHandler(msg);
+      expect(speakChannel.send).not.toHaveBeenCalled();
+      expect(msg.reply).not.toHaveBeenCalled();
+    });
   });
 
   // -------------------------------------------------------
@@ -402,5 +503,59 @@ beforeEach(() => {
 
       await messageHandler(msg);
       expect(msg.reply).toHaveBeenCalledWith(expect.stringContaining('cannot access'));
+    });
+  });
+
+  // -------------------------------------------------------
+  // !setchannels command
+  // -------------------------------------------------------
+
+  describe('!setchannels command', () => {
+    let messageHandler;
+
+    beforeEach(() => {
+      messageHandler = getHandler(mockClient, Events.MessageCreate, 'on');
+    });
+
+    const makeSetChannelsMessage = (content) => ({
+      author: { bot: false },
+      content,
+      guild: {
+        channels: {
+          fetch: jest.fn((id) => {
+            if (id === '111' || id === '222') {
+              return Promise.resolve({
+                id,
+                isTextBased: () => true,
+              });
+            }
+
+            return Promise.resolve(null);
+          }),
+        },
+      },
+      member: {
+        permissions: {
+          has: jest.fn().mockReturnValue(true),
+        },
+      },
+      channel: { id: '222', send: jest.fn() },
+      reply: jest.fn(),
+    });
+
+    test('requires manage server permission', async () => {
+      const msg = makeSetChannelsMessage('!setchannels <#111> <#222>');
+      msg.member.permissions.has = jest.fn().mockReturnValue(false);
+
+      await messageHandler(msg);
+      expect(msg.reply).toHaveBeenCalledWith(expect.stringContaining('Manage Server'));
+    });
+
+    test('responds with env values for manual configuration', async () => {
+      const msg = makeSetChannelsMessage('!setchannels <#111> <#222>');
+
+      await messageHandler(msg);
+      expect(msg.reply).toHaveBeenCalledWith(expect.stringContaining('SCRUMLORD_READ_CHANNEL_ID=111'));
+      expect(msg.reply).toHaveBeenCalledWith(expect.stringContaining('SCRUMLORD_SPEAK_CHANNEL_ID=222'));
     });
   });
