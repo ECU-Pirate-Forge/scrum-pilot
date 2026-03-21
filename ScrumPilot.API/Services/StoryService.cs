@@ -1,4 +1,5 @@
 ﻿using AutoFixture;
+using ScrumPilot.Data.Repositories;
 using ScrumPilot.Shared.Models;
 using ScrumPilot.Data.Repositories;
 using System.Text;
@@ -209,6 +210,21 @@ namespace ScrumPilot.API.Services
                 }
             }
             return null;
+        }
+
+        public async Task<Story> CreateStoryAsync(Story story)
+        {
+            return await _storyRepository.AddAsync(story);
+        }
+
+        public async Task<Story> UpdateStoryAsync(Story story)
+        {
+            return await _storyRepository.UpdateAsync(story);
+        }
+
+        public async Task<bool> DeleteStoryAsync(Guid id)
+        {
+            return await _storyRepository.DeleteAsync(id);
         }
 
     }

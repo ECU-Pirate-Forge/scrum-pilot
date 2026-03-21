@@ -70,5 +70,27 @@ namespace ScrumPilot.API.Controllers
                 return StatusCode(500, $"An unexpected error occurred: {ex.Message}");
             }
         }
+
+        [HttpPost]
+        public async Task<ActionResult<Story>> CreateStory([FromBody] Story story)
+        {
+            var created = await _storyService.CreateStoryAsync(story);
+            return Ok(created);
+        }
+
+        [HttpPut]
+        public async Task<ActionResult<Story>> UpdateStory([FromBody] Story story)
+        {
+            var updated = await _storyService.UpdateStoryAsync(story);
+            return Ok(updated);
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<ActionResult> DeleteStory(Guid id)
+        {
+            var success = await _storyService.DeleteStoryAsync(id);
+            if (!success) return NotFound();
+            return NoContent();
+        }
     }
 }
