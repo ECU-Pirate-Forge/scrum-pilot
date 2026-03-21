@@ -1,103 +1,240 @@
 @using ScrumPilot.Shared.Models
-@using MudBlazor
 
 @if (StoryModel != null)
 {
     <div style="animation: slideInUp 0.6s ease-out;">
         <MudContainer MaxWidth="MaxWidth.Medium" Class="pa-4">
-            <MudPaper Class="pa-6" Elevation="4" Style="border-radius: 12px; background: linear-gradient(135deg, var(--mud-palette-surface) 0%, var(--mud-palette-background) 100%); border: 3px solid var(--mud-palette-primary); box-shadow: 0 6px 25px rgba(25, 118, 210, 0.2), 0 0 0 1px rgba(25, 118, 210, 0.1);">
-                <div class="story-header">
-                    <MudText Typo="Typo.h4" Class="story-title mb-3" Style="font-weight: 600; color: var(--mud-palette-text-primary);">
-                        @StoryModel.Title
-                    </MudText>
-                    <MudStack Row Spacing="2" Class="mb-4">
-                        <MudChip T="string" Size="Size.Medium" Color="@GetStatusColor(StoryModel.Status)" Icon="@GetStatusIcon(StoryModel.Status)" Variant="Variant.Filled" Style="animation: fadeInLeft 0.8s ease-out;">
-                            @StoryModel.Status
-                        </MudChip>
-                        <MudChip T="string" Size="Size.Medium" Color="@GetPriorityColor(StoryModel.Priority)" Icon="@GetPriorityIcon(StoryModel.Priority)" Variant="Variant.Filled" Style="animation: fadeInLeft 1s ease-out;">
+            <MudPaper Class="pa-6"
+                      Elevation="4"
+                      Style="border-radius: 12px;
+                             background: linear-gradient(135deg, var(--mud-palette-surface) 0%, var(--mud-palette-background) 100%);
+                             border: 3px solid var(--mud-palette-primary);
+                             box-shadow: 0 6px 25px rgba(25, 118, 210, 0.2);">
+
+                <!-- EDIT / SAVE / CANCEL BUTTONS -->
+                <div class="d-flex gap-2 mb-4">
+                    @if (isEditMode)
+                    {
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Success"
+                                   StartIcon="@Icons.Material.Filled.Save"
+                                   OnClick="SaveChanges">
+                            Save
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Default"
+                                   StartIcon="@Icons.Material.Filled.Cancel"
+                                   OnClick="CancelEdit">
+                            Cancel
+                        </MudButton>
+                    }
+                    else
+                    {
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Edit"
+                                   OnClick="StartEdit">
+                            Edit
+                        </MudButton>
+                    }
+                </div>
+
+                <!-- ERROR MESSAGE -->
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <MudAlert Severity="Severity.Error" Class="mb-3">
+                        @errorMessage
+                    </MudAlert>
+                }
+
+                <!-- TITLE -->
+                <div class="story-header mb-3">
+                    @if (isEditMode)
+                    {
+                        <MudTextField @bind-Value="editTitle"
+                                      Label="Title"
+                                      Variant="Variant.Outlined"
+                                      Required="true"
+                                      Error="@titleError"
+                                      ErrorText="Title is required"
+                                      Style="font-weight: 600;" />
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.h4"
+                                 Style="font-weight: 600; color: var(--mud-palette-text-primary);">
+                            @StoryModel.Title
+                        </MudText>
+                    }
+                </div>
+
+                <!-- BADGES -->
+                <div class="d-flex flex-wrap gap-2 mb-4">
+                    <MudChip T="string"
+                             Size="Size.Medium"
+                             Color="@GetStatusColor(StoryModel.Status)"
+                             Icon="@GetStatusIcon(StoryModel.Status)"
+                             Variant="Variant.Filled">
+                        @StoryModel.Status
+                    </MudChip>
+
+                    @if (isEditMode)
+                    {
+                        <MudSelect T="StoryPriority"
+                                   @bind-Value="editPriority"
+                                   Label="Priority"
+                                   Variant="Variant.Outlined"
+                                   Style="min-width: 150px;">
+                            <MudSelectItem Value="StoryPriority.Lowest">Lowest</MudSelectItem>
+                            <MudSelectItem Value="StoryPriority.Low">Low</MudSelectItem>
+                            <MudSelectItem Value="StoryPriority.High">High</MudSelectItem>
+                            <MudSelectItem Value="StoryPriority.Highest">Highest</MudSelectItem>
+                        </MudSelect>
+                    }
+                    else
+                    {
+                        <MudChip T="string"
+                                 Size="Size.Medium"
+                                 Color="@GetPriorityColor(StoryModel.Priority)"
+                                 Icon="@GetPriorityIcon(StoryModel.Priority)"
+                                 Variant="Variant.Filled">
                             @StoryModel.Priority Priority
                         </MudChip>
-                        @if (StoryModel.IsAiGenerated)
-                        {
-                            <MudChip T="string" Size="Size.Medium" Color="Color.Info" Icon="Icons.Material.Filled.SmartToy" Variant="Variant.Filled" Style="animation: fadeInLeft 1.2s ease-out;">
-                                AI Generated
-                            </MudChip>
-                        }
-                    </MudStack>
+                    }
+
+                    @if (StoryModel.IsAiGenerated)
+                    {
+                        <MudChip T="string"
+                                 Size="Size.Medium"
+                                 Color="Color.Info"
+                                 Icon="Icons.Material.Filled.SmartToy"
+                                 Variant="Variant.Filled">
+                            AI Generated
+                        </MudChip>
+                    }
                 </div>
 
                 <MudDivider Class="mb-4" />
 
-                <MudStack Class="mb-4" Style="animation: fadeInUp 1s ease-out;">
-                    <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600; color: var(--mud-palette-text-primary);">
+                <!-- DESCRIPTION -->
+                <div class="mb-4">
+                    <MudText Typo="Typo.h6" Class="mb-3"
+                             Style="font-weight: 600;">
                         <MudIcon Icon="Icons.Material.Filled.Description" Class="me-2" />
                         Description
                     </MudText>
-                    @if (!string.IsNullOrWhiteSpace(StoryModel.Description))
+
+                    @if (isEditMode)
                     {
-                        <MudPaper Class="pa-4" Style="background-color: var(--mud-palette-background-grey); border-radius: 8px; border-left: 4px solid var(--mud-palette-primary);">
-                            @foreach (var line in StoryModel.Description.Split('\n'))
-                            {
-                                <MudText Typo="Typo.body1" Class="mb-2" Style="line-height: 1.6;">
-                                    @line
-                                </MudText>
-                            }
-                        </MudPaper>
+                        <MudTextField @bind-Value="editDescription"
+                                      Label="Description"
+                                      Variant="Variant.Outlined"
+                                      Lines="5"
+                                      Class="mb-3" />
                     }
                     else
                     {
-                        <MudText Typo="Typo.body2" Class="no-description" Style="font-style: italic; color: var(--mud-palette-text-secondary);">
-                            No description provided
-                        </MudText>
+                        @if (!string.IsNullOrWhiteSpace(StoryModel.Description))
+                        {
+                            <MudPaper Class="pa-4"
+                                      Style="background-color: var(--mud-palette-background-grey);
+                                             border-radius: 8px;
+                                             border-left: 4px solid var(--mud-palette-primary);">
+                                @foreach (var line in StoryModel.Description.Split('\n'))
+                                {
+                                    <MudText Typo="Typo.body1" Class="mb-2"
+                                             Style="line-height: 1.6;">@line</MudText>
+                                }
+                            </MudPaper>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2"
+                                     Style="font-style: italic; color: var(--mud-palette-text-secondary);">
+                                No description provided
+                            </MudText>
+                        }
                     }
-                </MudStack>
+                </div>
 
                 <MudDivider Class="mb-4" />
 
-                <div class="story-footer" style="animation: fadeInUp 1.2s ease-out;">
-                    <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600; color: var(--mud-palette-text-primary);">
+                <!-- STORY DETAILS -->
+                <div>
+                    <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">
                         <MudIcon Icon="Icons.Material.Filled.Info" Class="me-2" />
                         Story Details
                     </MudText>
-                    <MudGrid AlignItems="AlignItems.Center" Spacing="3">
-                        @if (StoryModel.StoryPoints.HasValue)
-                        {
-                            <MudItem xs="12" sm="6" md="4">
-                                <MudPaper Class="pa-3" Style="background-color: var(--mud-palette-action-hover); border-radius: 8px; transition: transform 0.2s ease;">
-                                    <MudStack Row AlignItems="AlignItems.Center">
-                                        <MudIcon Icon="Icons.Material.Filled.Timeline" Color="Color.Primary" Class="me-2" Size="Size.Medium" />
-                                        <MudStack>
-                                            <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Story Points</MudText>
-                                            <MudText Typo="Typo.h6" Style="font-weight: 600;">@StoryModel.StoryPoints</MudText>
-                                        </MudStack>
-                                    </MudStack>
-                                </MudPaper>
-                            </MudItem>
-                        }
+                    <MudGrid AlignItems="Center" Spacing="3">
                         <MudItem xs="12" sm="6" md="4">
-                            <MudPaper Class="pa-3" Style="background-color: var(--mud-palette-action-hover); border-radius: 8px; transition: transform 0.2s ease;">
-                                <MudStack Row AlignItems="AlignItems.Center">
-                                    <MudIcon Icon="Icons.Material.Filled.CalendarToday" Color="Color.Success" Class="me-2" Size="Size.Medium" />
-                                    <MudStack>
-                                        <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Created</MudText>
-                                        <MudText Typo="Typo.body1" Style="font-weight: 600;">@StoryModel.DateCreated.ToString("MMM dd, yyyy")</MudText>
-                                    </MudStack>
-                                </MudStack>
+                            <MudPaper Class="pa-3"
+                                      Style="background-color: var(--mud-palette-action-hover);
+                                             border-radius: 8px;">
+                                <div class="d-flex align-center">
+                                    <MudIcon Icon="Icons.Material.Filled.Timeline"
+                                             Color="Color.Primary" Class="me-2" />
+                                    <div style="width: 100%;">
+                                        <MudText Typo="Typo.caption"
+                                                 Style="color: var(--mud-palette-text-secondary);">
+                                            Story Points
+                                        </MudText>
+                                        @if (isEditMode)
+                                        {
+                                            <MudNumericField @bind-Value="editStoryPoints"
+                                                             Variant="Variant.Outlined"
+                                                             Min="1" Max="100" />
+                                        }
+                                        else
+                                        {
+                                            <MudText Typo="Typo.h6" Style="font-weight: 600;">
+                                                @(StoryModel.StoryPoints?.ToString() ?? "-")
+                                            </MudText>
+                                        }
+                                    </div>
+                                </div>
                             </MudPaper>
                         </MudItem>
                         <MudItem xs="12" sm="6" md="4">
-                            <MudPaper Class="pa-3" Style="background-color: var(--mud-palette-action-hover); border-radius: 8px; transition: transform 0.2s ease;">
-                                <MudStack Row AlignItems="AlignItems.Center">
-                                    <MudIcon Icon="Icons.Material.Filled.Update" Color="Color.Warning" Class="me-2" Size="Size.Medium" />
-                                    <MudStack>
-                                        <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Last Updated</MudText>
-                                        <MudText Typo="Typo.body1" Style="font-weight: 600;">@StoryModel.LastUpdated.ToString("MMM dd, yyyy")</MudText>
-                                    </MudStack>
-                                </MudStack>
+                            <MudPaper Class="pa-3"
+                                      Style="background-color: var(--mud-palette-action-hover);
+                                             border-radius: 8px;">
+                                <div class="d-flex align-center">
+                                    <MudIcon Icon="Icons.Material.Filled.CalendarToday"
+                                             Color="Color.Success" Class="me-2" />
+                                    <div>
+                                        <MudText Typo="Typo.caption"
+                                                 Style="color: var(--mud-palette-text-secondary);">
+                                            Created
+                                        </MudText>
+                                        <MudText Typo="Typo.body1" Style="font-weight: 600;">
+                                            @StoryModel.DateCreated.ToString("MMM dd, yyyy")
+                                        </MudText>
+                                    </div>
+                                </div>
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudPaper Class="pa-3"
+                                      Style="background-color: var(--mud-palette-action-hover);
+                                             border-radius: 8px;">
+                                <div class="d-flex align-center">
+                                    <MudIcon Icon="Icons.Material.Filled.Update"
+                                             Color="Color.Warning" Class="me-2" />
+                                    <div>
+                                        <MudText Typo="Typo.caption"
+                                                 Style="color: var(--mud-palette-text-secondary);">
+                                            Last Updated
+                                        </MudText>
+                                        <MudText Typo="Typo.body1" Style="font-weight: 600;">
+                                            @StoryModel.LastUpdated.ToString("MMM dd, yyyy")
+                                        </MudText>
+                                    </div>
+                                </div>
                             </MudPaper>
                         </MudItem>
                     </MudGrid>
                 </div>
+
             </MudPaper>
         </MudContainer>
     </div>
@@ -105,10 +242,13 @@
 else
 {
     <MudContainer MaxWidth="MaxWidth.Medium" Class="pa-4">
-        <MudPaper Class="pa-6" Elevation="2" Style="border-radius: 12px; text-align: center;">
-            <MudIcon Icon="Icons.Material.Filled.AutoStories" Size="Size.Large" Color="Color.Primary" Class="mb-3" />
+        <MudPaper Class="pa-6" Elevation="2"
+                  Style="border-radius: 12px; text-align: center;">
+            <MudIcon Icon="Icons.Material.Filled.AutoStories"
+                     Size="Size.Large" Color="Color.Primary" Class="mb-3" />
             <MudText Typo="Typo.h6" Class="mb-2">Ready to Generate Your Story!</MudText>
-            <MudText Typo="Typo.body1" Style="color: var(--mud-palette-text-secondary);">
+            <MudText Typo="Typo.body1"
+                     Style="color: var(--mud-palette-text-secondary);">
                 Enter a problem statement above and click submit to generate an AI-powered user story.
             </MudText>
         </MudPaper>
@@ -117,6 +257,53 @@ else
 
 @code {
     [Parameter] public ScrumPilot.Shared.Models.Story? StoryModel { get; set; }
+
+    private bool isEditMode = false;
+    private bool titleError = false;
+    private string errorMessage = "";
+
+    private string editTitle = "";
+    private string editDescription = "";
+    private StoryPriority editPriority;
+    private int? editStoryPoints;
+
+    private void StartEdit()
+    {
+        editTitle = StoryModel!.Title ?? "";
+        editDescription = StoryModel.Description ?? "";
+        editPriority = StoryModel.Priority;
+        editStoryPoints = StoryModel.StoryPoints;
+        titleError = false;
+        errorMessage = "";
+        isEditMode = true;
+    }
+
+    private void SaveChanges()
+    {
+        if (string.IsNullOrWhiteSpace(editTitle))
+        {
+            titleError = true;
+            errorMessage = "Save failed: Title is required.";
+            return;
+        }
+
+        StoryModel!.Title = editTitle;
+        StoryModel.Description = editDescription;
+        StoryModel.Priority = editPriority;
+        StoryModel.StoryPoints = editStoryPoints;
+        StoryModel.LastUpdated = DateTime.Now;
+
+        titleError = false;
+        errorMessage = "";
+        isEditMode = false;
+    }
+
+    private void CancelEdit()
+    {
+        titleError = false;
+        errorMessage = "";
+        isEditMode = false;
+    }
 
     private string GetStatusIcon(ScrumPilot.Shared.Models.StoryStatus status) => status switch
     {

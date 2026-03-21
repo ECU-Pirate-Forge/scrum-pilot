@@ -1,0 +1,12 @@
+Table Story [headercolor: #175e7a] {
+	StoryId integer [ pk, increment, not null, unique ]
+	Title text
+	Description text
+	Status text
+	Priority text
+	StoryPoints integer
+	IsAiGenerated integer
+	IsDraft integer
+	DateCreated text
+	LastUpdated text
+}

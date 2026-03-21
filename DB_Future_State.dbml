@@ -1,0 +1,32 @@
+Table Task [headercolor: #175e7a] {
+	TaskId integer [ pk, increment, not null, unique ]
+	StoryId integer
+	Name text
+	Description text
+	Status text
+	DateCreated text
+	LastUpdated text
+}
+
+Table Story [headercolor: #175e7a] {
+	StoryId integer [ pk, increment, not null, unique ]
+	EpicId integer
+	Title text
+	Description text
+	Status text
+	Priority text
+	StoryPoints integer
+	IsAiGenerated integer
+	IsDraft integer
+	DateCreated text
+	LastUpdated text
+}
+
+Table Epic [headercolor: #175e7a] {
+	EpicId integer [ pk, increment, not null, unique ]
+	Name text [ not null ]
+	DateCreated text [ not null ]
+}
+
+Ref: Task.StoryId > Story.StoryId
+Ref: Story.EpicId > Epic.EpicId
