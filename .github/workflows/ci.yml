@@ -2,7 +2,8 @@ name: .NET CI
 
 on:
   push:
-    branches: [ gha-ci-dotnet-test ]
+    branches:
+      - 'feature/**'
   pull_request:
     branches: [development]
   workflow_dispatch:
