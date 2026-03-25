@@ -28,9 +28,9 @@ jobs:
 
       - name: Restore dependencies
         run: dotnet restore ./ScrumPilot.slnx
-      #- name: Restore dependencies (unit tests)
-      #  run: dotnet restore ./ScrumPilot.UnitTests/ScrumPilot.UnitTests.csproj
-      - name: Build (solution)
+      - name: Restore dependencies (unit tests)
+        run: dotnet restore ./ScrumPilot.UnitTests/ScrumPilot.UnitTests.csproj
+      - name: Build
         run: dotnet build ./ScrumPilot.slnx --no-restore --configuration Release
       - name: Test (Unit Tests)
         run: dotnet test ./ScrumPilot.UnitTests/ScrumPilot.UnitTests.csproj --no-build --configuration Release 
