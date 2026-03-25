@@ -5,6 +5,7 @@
 @using MudBlazor
 
 <MudThemeProvider @ref="@_mudThemeProvider" Theme="currentTheme" IsDarkMode="@_isDarkMode" />
+<MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
@@ -51,7 +52,7 @@
         },
         PaletteDark = new PaletteDark()
         {
-            Primary = "#90caf9",           // Bright light blue for high contrast
+            Primary = "#1b6ec2",           // Same as light mode for better contrast with white text
             Secondary = "#f48fb1",         // Pink accent for variety
             AppbarBackground = "#1a1a1a",   
             Surface = "#2d2d30",           // Slightly lighter than background
@@ -81,7 +82,7 @@
         if (firstRender)
         {
             // Check system preference
-            _isDarkMode = await _mudThemeProvider.GetSystemPreference();
+            _isDarkMode = await _mudThemeProvider.GetSystemDarkModeAsync();
             StateHasChanged();
         }
     }

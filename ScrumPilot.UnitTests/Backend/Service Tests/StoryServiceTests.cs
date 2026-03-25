@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using ScrumPilot.API.Services;
+using ScrumPilot.Data.Repositories;
 using ScrumPilot.Shared.Models;
 using System.Net;
 using System.Text;
@@ -14,6 +15,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
         private readonly TestHttpMessageHandler _testHandler;
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _mockConfiguration;
+        private readonly IStoryRepository _mockRepository;
         private readonly StoryService _storyService;
         private HttpRequestMessage? _capturedRequest;
 
@@ -31,7 +33,8 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
 
             _httpClient = new HttpClient(_testHandler);
             _mockConfiguration = Substitute.For<IConfiguration>();
-            _storyService = new StoryService(_httpClient, _mockConfiguration);
+            _mockRepository = Substitute.For<IStoryRepository>();
+            _storyService = new StoryService(_httpClient, _mockConfiguration, _mockRepository);
         }
 
         public void Dispose()
@@ -40,41 +43,127 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
             _testHandler?.Dispose();
         }
 
-        #region GetStories Tests
-
         [Fact]
-        public void GetStories_ReturnsListOfStories_WithExpectedCount()
+        public async Task GetAllStoriesAsync_ReturnsStoriesFromRepository()
         {
+            // Arrange
+            var expectedStories = new List<Story>
+            {
+                new Story { Id = 1, Title = "Story 1", Description = "Description 1" },
+                new Story { Id = 2, Title = "Story 2", Description = "Description 2" }
+            };
+            _mockRepository.GetAllStoriesAsync().Returns(expectedStories);
+
             // Act
-            var result = _storyService.GetStories();
+            var result = await _storyService.GetAllStoriesAsync();
 
             // Assert
             Assert.NotNull(result);
-            Assert.Equal(5, result.Count); // AutoFixture generates 5 stories
-            Assert.All(result, story =>
-            {
-                Assert.NotEqual(Guid.Empty, story.Id);
-                Assert.NotNull(story.Title);
-                Assert.NotNull(story.Description);
-                Assert.True(Enum.IsDefined(typeof(StoryStatus), story.Status));
-                Assert.True(Enum.IsDefined(typeof(StoryPriority), story.Priority));
-            });
+            Assert.Equal(expectedStories.Count, result.Count());
+            Assert.Equal(expectedStories, result);
+            await _mockRepository.Received(1).GetAllStoriesAsync();
         }
 
         [Fact]
-        public void GetStories_ReturnsUniqueStories_OnMultipleCalls()
+        public async Task GetAllStoriesAsync_ReturnsEmptyList_WhenNoStoriesExist()
         {
+            // Arrange
+            var expectedStories = new List<Story>();
+            _mockRepository.GetAllStoriesAsync().Returns(expectedStories);
+
             // Act
-            var firstCall = _storyService.GetStories();
-            var secondCall = _storyService.GetStories();
+            var result = await _storyService.GetAllStoriesAsync();
 
             // Assert
-            Assert.NotEqual(firstCall.Select(s => s.Id), secondCall.Select(s => s.Id));
+            Assert.NotNull(result);
+            Assert.Empty(result);
+            await _mockRepository.Received(1).GetAllStoriesAsync();
         }
 
-        #endregion
+        [Fact]
+        public async Task GetDraftStoriesAsync_ReturnsDraftStoriesFromRepository()
+        {
+            // Arrange
+            var expectedDraftStories = new List<Story>
+            {
+                new Story { Id = 1, Title = "Draft Story", Description = "Draft Description", IsDraft = true }
+            };
+            _mockRepository.GetDraftStoriesAsync().Returns(expectedDraftStories);
 
-        #region GenerateAiStory Tests
+            // Act
+            var result = await _storyService.GetDraftStoriesAsync();
+
+            // Assert
+            Assert.NotNull(result);
+            Assert.Single(result);
+            Assert.True(result.First().IsDraft);
+            await _mockRepository.Received(1).GetDraftStoriesAsync();
+        }
+
+        [Fact]
+        public async Task CreateStoryAsync_CallsRepositoryAddAsync()
+        {
+            // Arrange
+            var inputStory = new Story { Title = "New Story", Description = "New Description" };
+            var createdStory = new Story { Id = 1, Title = inputStory.Title, Description = inputStory.Description };
+            _mockRepository.AddAsync(inputStory).Returns(createdStory);
+
+            // Act
+            var result = await _storyService.CreateStoryAsync(inputStory);
+
+            // Assert
+            Assert.NotNull(result);
+            Assert.Equal(createdStory.Id, result.Id);
+            Assert.Equal(createdStory.Title, result.Title);
+            await _mockRepository.Received(1).AddAsync(inputStory);
+        }
+
+        [Fact]
+        public async Task UpdateStoryAsync_CallsRepositoryUpdateAsync()
+        {
+            // Arrange
+            var updatedStory = new Story { Id = 1, Title = "Updated Story", Description = "Updated Description" };
+            _mockRepository.UpdateAsync(updatedStory).Returns(updatedStory);
+
+            // Act
+            var result = await _storyService.UpdateStoryAsync(updatedStory);
+
+            // Assert
+            Assert.NotNull(result);
+            Assert.Equal(updatedStory.Id, result.Id);
+            Assert.Equal(updatedStory.Title, result.Title);
+            await _mockRepository.Received(1).UpdateAsync(updatedStory);
+        }
+
+        [Fact]
+        public async Task DeleteStoryAsync_ReturnsTrueWhenSuccessfullyDeleted()
+        {
+            // Arrange
+            var storyId = 1;
+            _mockRepository.DeleteAsync(storyId).Returns(true);
+
+            // Act
+            var result = await _storyService.DeleteStoryAsync(storyId);
+
+            // Assert
+            Assert.True(result);
+            await _mockRepository.Received(1).DeleteAsync(storyId);
+        }
+
+        [Fact]
+        public async Task DeleteStoryAsync_ReturnsFalseWhenStoryNotFound()
+        {
+            // Arrange
+            var storyId = 999;
+            _mockRepository.DeleteAsync(storyId).Returns(false);
+
+            // Act
+            var result = await _storyService.DeleteStoryAsync(storyId);
+
+            // Assert
+            Assert.False(result);
+            await _mockRepository.Received(1).DeleteAsync(storyId);
+        }
 
         [Fact]
         public async Task GenerateAiStory_ReturnsStory_WhenValidResponse()
@@ -97,7 +186,8 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
             var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
 
             // Act
-            var result = await service.GenerateAiStory(problemStatement);
+            var results = await service.GenerateAiStory(new List<string> { problemStatement });
+            var result = results[0];
 
             // Assert
             Assert.NotNull(result);
@@ -109,7 +199,6 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
             Assert.Equal(StoryStatus.ToDo, result.Status);
             Assert.Equal(StoryPriority.Low, result.Priority);
             Assert.True(result.IsAiGenerated);
-            Assert.NotEqual(Guid.Empty, result.Id);
         }
 
         [Fact]
@@ -121,7 +210,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => _storyService.GenerateAiStory(problemStatement));
+                () => _storyService.GenerateAiStory(new List<string> { problemStatement }));
             Assert.Equal("OllamaBaseUrl is not configured.", exception.Message);
         }
 
@@ -135,7 +224,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => _storyService.GenerateAiStory(problemStatement));
+                () => _storyService.GenerateAiStory(new List<string> { problemStatement }));
             Assert.Equal("OllamaBaseUrl is not configured.", exception.Message);
         }
 
@@ -153,7 +242,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => service.GenerateAiStory(problemStatement));
+                () => service.GenerateAiStory(new List<string> { problemStatement }));
             Assert.Contains("An unexpected error occurred while calling the Ollama API", exception.Message);
         }
 
@@ -167,7 +256,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<HttpRequestException>(
-                () => service.GenerateAiStory(problemStatement));
+                () => service.GenerateAiStory(new List<string> { problemStatement }));
             Assert.Contains("Ollama API request failed with status InternalServerError", exception.Message);
         }
 
@@ -181,7 +270,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<TimeoutException>(
-                () => service.GenerateAiStory(problemStatement));
+                () => service.GenerateAiStory(new List<string> { problemStatement }));
             Assert.Equal("The request to Ollama timed out", exception.Message);
         }
 
@@ -197,7 +286,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => service.GenerateAiStory(problemStatement));
+                () => service.GenerateAiStory(new List<string> { problemStatement }));
             Assert.Contains("An unexpected error occurred while parsing the AI story response", exception.Message);
         }
 
@@ -213,7 +302,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => service.GenerateAiStory(problemStatement));
+                () => service.GenerateAiStory(new List<string> { problemStatement }));
             Assert.Contains("Failed to find a JSON object in the AI response", exception.Message);
         }
 
@@ -236,7 +325,8 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
             var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
 
             // Act
-            var result = await service.GenerateAiStory(problemStatement);
+            var results = await service.GenerateAiStory(new List<string> { problemStatement });
+            var result = results[0];
 
             // Assert
             Assert.NotNull(result);
@@ -257,7 +347,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => service.GenerateAiStory(problemStatement));
+                () => service.GenerateAiStory(new List<string> { problemStatement }));
             Assert.Contains("Failed to parse AI response as JSON", exception.Message);
         }
 
@@ -282,7 +372,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
             var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
 
             // Act
-            await service.GenerateAiStory(problemStatement);
+            await service.GenerateAiStory(new List<string> { problemStatement });
 
             // Assert - Verify the request was made correctly
             Assert.NotNull(_capturedRequest);
@@ -298,9 +388,46 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
             Assert.False(requestObject.GetProperty("stream").GetBoolean());
         }
 
-        #endregion
+        [Fact]
+        public async Task GenerateAiStory_ReturnsCorrectCountAndProperties_WhenMultipleStatements()
+        {
+            // Arrange
+            var aiResponse = new AiStoryResponse
+            {
+                Title = "Test Story",
+                UserStory = "As a user, I want to test, so that I can verify functionality.",
+                AcceptanceCriteria = ["I see the result"]
+            };
 
-        #region Helper Methods
+            var ollamaResponse = new { response = JsonSerializer.Serialize(aiResponse) };
+
+            SetupConfiguration("http://localhost:11434/", "llama2");
+            var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
+
+            // Act
+            var result = await service.GenerateAiStory(["Statement 1", "Statement 2", "Statement 3"]);
+
+            // Assert
+            Assert.NotNull(result);
+            Assert.Equal(3, result.Count);
+            Assert.All(result, story =>
+            {
+                Assert.True(story.IsAiGenerated);
+                Assert.Equal(StoryStatus.ToDo, story.Status);
+            });
+        }
+
+        [Fact]
+        public async Task GenerateAiStory_PropagatesException_WhenAnyStoryGenerationFails()
+        {
+            // Arrange
+            SetupConfiguration("http://localhost:11434/", "llama2");
+            var service = CreateServiceWithResponse("Error body", HttpStatusCode.InternalServerError);
+
+            // Act & Assert
+            await Assert.ThrowsAsync<HttpRequestException>(
+                () => service.GenerateAiStory(["Problem 1", "Problem 2"]));
+        }
 
         private void SetupConfiguration(string baseUrl, string model)
         {
@@ -328,7 +455,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
             var newHttpClient = new HttpClient(newHandler);
 
             // We need to recreate the service with the new client
-            var newService = new StoryService(newHttpClient, _mockConfiguration);
+            var newService = new StoryService(newHttpClient, _mockConfiguration, _mockRepository);
 
             // Update the field reference (this is a limitation of this approach)
             // For a production test, consider using dependency injection or factory pattern
@@ -346,7 +473,6 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
             var newHttpClient = new HttpClient(newHandler);
         }
 
-        // Simplified approach: Set response directly on the test handler
         private StoryService CreateServiceWithResponse(string responseContent, HttpStatusCode statusCode)
         {
             var response = new HttpResponseMessage(statusCode)
@@ -361,7 +487,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
             });
 
             var httpClient = new HttpClient(handler);
-            return new StoryService(httpClient, _mockConfiguration);
+            return new StoryService(httpClient, _mockConfiguration, _mockRepository);
         }
 
         private StoryService CreateServiceWithTimeout()
@@ -373,9 +499,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
             });
 
             var httpClient = new HttpClient(handler);
-            return new StoryService(httpClient, _mockConfiguration);
+            return new StoryService(httpClient, _mockConfiguration, _mockRepository);
         }
-
-        #endregion
     }
 }

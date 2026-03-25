@@ -35,6 +35,7 @@ a {
     position: fixed;
     width: 100%;
     z-index: 1000;
+    color: #333; /* Added dark text color for better contrast on light yellow background */
 }
 
     #blazor-error-ui .dismiss {
@@ -106,3 +107,4 @@ code {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+

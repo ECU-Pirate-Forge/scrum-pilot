@@ -12,7 +12,7 @@
         </MudStack>
     </MudPaper>
 
-@if (allStories == null)
+@if (draftStories == null)
 {
     <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center" Style="min-height: 400px;">
         <MudProgressCircular Indeterminate="true" Size="Size.Large" />
@@ -106,25 +106,17 @@ else
                     <MudIcon Icon="@Icons.Material.Filled.Edit" Class="me-2" />
                     Modifying Story
                 </MudText>
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Secondary"
+                           StartIcon="@Icons.Material.Filled.Close"
+                           OnClick="CloseModify"
+                           Class="close-button">
+                    Close
+                </MudButton>
             </div>
 
             <div class="modify-content">
                 <StoryCard StoryModel="@modifyingStory" />
-            </div>
-
-            <div class="modify-actions">
-                <MudButton Variant="Variant.Filled" 
-                           Color="Color.Primary"
-                           OnClick="CloseModify"
-                           StartIcon="@Icons.Material.Filled.Save"
-                           Class="me-2">
-                    Save Changes
-                </MudButton>
-                <MudButton Variant="Variant.Outlined" 
-                           Color="Color.Default"
-                           OnClick="CloseModify">
-                    Cancel
-                </MudButton>
             </div>
         </div>
     </div>
@@ -132,10 +124,7 @@ else
 </MudContainer>
 
 @code {
-    //  Mock data 
-
-    private List<Story>? allStories;
-    private List<Story> draftStories = new();
+    private List<Story>? draftStories;
     private Story? modifyingStory = null; // Track which story is being modified
 
     [Inject]
@@ -143,66 +132,35 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        // Load all stories and filter for AI-generated ones
-        allStories = await GetStoriesAsync();
-        draftStories = allStories?.Where(s => s.IsAiGenerated).ToList() ?? new List<Story>();
+        // Load draft stories directly from API
+        draftStories = await GetDraftStoriesAsync();
     }
-    private async Task<List<Story>> GetStoriesAsync()
+
+    private async Task<List<Story>> GetDraftStoriesAsync()
     {
-       
-        //await Task.Delay(300); //Simulate API delay
-        return new List<Story>
+        try
         {
-            new Story
-            {
-                Id = Guid.NewGuid(),
-                Title = "Implement User Authentication",
-                Description = "As a user, I want to log in securely so I can access my dashboard.\n\nAcceptance Criteria:\n• I see a login form with username and password fields\n• I receive an error message for invalid credentials\n• I am redirected to dashboard after successful login",
-                Status = StoryStatus.ToDo,
-                Priority = StoryPriority.High,
-                StoryPoints = 5,
-                IsAiGenerated = true,
-                DateCreated = DateTime.Now.AddHours(-2),
-                LastUpdated = DateTime.Now.AddHours(-2)
-            },
-            new Story
-            {
-                Id = Guid.NewGuid(),
-                Title = "Create Sprint Board View",
-                Description = "As a scrum master, I want to view stories on a board to track progress.\n\nAcceptance Criteria:\n• I see columns for To Do, In Progress, and Done\n• I can drag and drop stories between columns\n• I see story points displayed on each card",
-                Status = StoryStatus.ToDo,
-                Priority = StoryPriority.Highest,
-                StoryPoints = 8,
-                IsAiGenerated = true,
-                DateCreated = DateTime.Now.AddHours(-1),
-                LastUpdated = DateTime.Now.AddHours(-1)
-            },
-            new Story
-            {
-                Id = Guid.NewGuid(),
-                Title = "Add Story Estimation",
-                Description = "As a team member, I want to estimate story points for sprint planning.\n\nAcceptance Criteria:\n• I see a Fibonacci scale for estimation\n• I can assign points to any story\n• I see the total points for the sprint",
-                Status = StoryStatus.ToDo,
-                Priority = StoryPriority.Low,
-                StoryPoints = 3,
-                IsAiGenerated = true,
-                DateCreated = DateTime.Now.AddMinutes(-30),
-                LastUpdated = DateTime.Now.AddMinutes(-30)
-            }
-        };
+            var response = await Http.GetFromJsonAsync<List<Story>>("api/story/getDraftStories");
+            return response ?? new List<Story>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading draft stories: {ex.Message}");
+            return new List<Story>();
+        }
     }
 
-    /// Removes from UI
-
+    /// Commits a draft story (removes from UI for now)
     private async Task CommitStory(Story story)
     {
-
-        draftStories.Remove(story);
+        // TODO: When CRUD endpoints are available, mark story as non-draft
+        // For now, just remove from UI
+        draftStories?.Remove(story);
         StateHasChanged();
+        await Task.CompletedTask;
     }
 
     /// Opens a modification dialog or redirects to edit page
-
     private async Task ModifyStory(Story story)
     {
         // Set the story to be modified, which will trigger the StoryCard to render
@@ -218,13 +176,14 @@ else
         StateHasChanged();
     }
 
-    /// Removes from UI
-
+    /// Rejects and removes a draft story (removes from UI for now)
     private async Task RejectStory(Story story)
     {
-
-        draftStories.Remove(story);
+        // TODO: When CRUD endpoints are available, delete story from database
+        // For now, just remove from UI
+        draftStories?.Remove(story);
         StateHasChanged();
+        await Task.CompletedTask;
     }
 
 
@@ -232,10 +191,9 @@ else
     {
         return priority switch
         {
-            StoryPriority.Highest => Color.Error,    // Red for critical
-            StoryPriority.High => Color.Warning,     // Orange for important
-            StoryPriority.Low => Color.Info,         // Blue for low priority
-            StoryPriority.Lowest => Color.Default,   // Gray for lowest
+            StoryPriority.High => Color.Error,      // Red
+            StoryPriority.Medium => Color.Warning,  // Orange/Yellow  
+            StoryPriority.Low => Color.Success,     // Green
             _ => Color.Default
         };
     }
