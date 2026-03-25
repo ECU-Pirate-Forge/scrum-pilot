@@ -27,10 +27,10 @@ jobs:
       #   run: dotnet test --no-build --configuration Release --verbosity normal
 
       - name: Restore dependencies
-        run: dotnet restore ./ScrumPilot.slnx --verbosity diagnostic
+        run: dotnet restore ./ScrumPilot.slnx
       - name: Restore dependencies (unit tests)
-        run: dotnet restore ./ScrumPilot.UnitTests/ScrumPilot.UnitTests.csproj --verbosity diagnostic
-      - name: Build 
-        run: dotnet build ./ScrumPilot.slnx --no-restore --configuration Release --verbosity diagnostic
+        run: dotnet restore ./ScrumPilot.UnitTests/ScrumPilot.UnitTests.csproj
+      - name: Build (solution)
+        run: dotnet build ./ScrumPilot.slnx --no-restore --configuration Release
       - name: Test (Unit Tests)
-        run: dotnet test ./ScrumPilot.UnitTests/ScrumPilot.UnitTests.csproj --no-build --configuration Release --verbosity diagnostic
+        run: dotnet test ./ScrumPilot.UnitTests/ScrumPilot.UnitTests.csproj --no-build --configuration Release --verbosity normal
