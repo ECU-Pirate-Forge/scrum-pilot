@@ -10,15 +10,27 @@ on:
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
     steps:
       - uses: actions/checkout@v4
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      - name: Restore dependencies (solution)
-        run: dotnet restore ./ScrumPilot.slnx
-      - name: Build (solution)
-        run: dotnet build ./ScrumPilot.slnx --no-restore --configuration Release
-      - name: Test (unit project)
-        run: dotnet test ./ScrumPilot.UnitTests/ScrumPilot.UnitTests.csproj --no-build --configuration Release --verbosity normal
+          
+      # - name: Restore dependencies
+      #   run: dotnet restore
+      # - name: Build
+      #   run: dotnet build --no-restore --configuration Release
+      # - name: Test
+      #   run: dotnet test --no-build --configuration Release --verbosity normal
+
+      - name: Restore dependencies
+        run: dotnet restore ./ScrumPilot.slnx --verbosity diagnostic
+      - name: Restore dependencies (unit tests)
+        run: dotnet restore ./ScrumPilot.UnitTests/ScrumPilot.UnitTests.csproj --verbosity diagnostic
+      - name: Build 
+        run: dotnet build ./ScrumPilot.slnx --no-restore --configuration Release --verbosity diagnostic
+      - name: Test (Unit Tests)
+        run: dotnet test ./ScrumPilot.UnitTests/ScrumPilot.UnitTests.csproj --no-build --configuration Release --verbosity diagnostic
