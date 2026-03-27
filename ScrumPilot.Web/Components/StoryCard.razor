@@ -179,14 +179,24 @@
                                         </MudText>
                                         @if (isEditMode)
                                         {
-                                            <MudNumericField @bind-Value="editStoryPoints"
-                                                             Variant="Variant.Outlined"
-                                                             Min="1" Max="100" />
+                                            <MudSelect T="StoryPoints"
+                                                       @bind-Value="editStoryPoints"
+                                                       Label="Story Points"
+                                                       Variant="Variant.Outlined">
+                                                <MudSelectItem Value="StoryPoints.Zero">0</MudSelectItem>
+                                                <MudSelectItem Value="StoryPoints.One">1</MudSelectItem>
+                                                <MudSelectItem Value="StoryPoints.Two">2</MudSelectItem>
+                                                <MudSelectItem Value="StoryPoints.Three">3</MudSelectItem>
+                                                <MudSelectItem Value="StoryPoints.Five">5</MudSelectItem>
+                                                <MudSelectItem Value="StoryPoints.Eight">8</MudSelectItem>
+                                                <MudSelectItem Value="StoryPoints.Thirteen">13</MudSelectItem>
+                                                <MudSelectItem Value="StoryPoints.TwentyOne">21</MudSelectItem>
+                                            </MudSelect>
                                         }
                                         else
                                         {
                                             <MudText Typo="Typo.h6" Style="font-weight: 600;">
-                                                @(StoryModel.StoryPoints?.ToString() ?? "-")
+                                                @((int)StoryModel.StoryPoints)
                                             </MudText>
                                         }
                                     </div>
@@ -268,7 +278,7 @@ else
     private string editTitle = "";
     private string editDescription = "";
     private StoryPriority editPriority;
-    private int? editStoryPoints;
+    private StoryPoints editStoryPoints;
 
     private void StartEdit()
     {
