@@ -29,7 +29,7 @@ namespace ScrumPilot.Data.Seeders
                     Description = "As a user, I want to be able to log in to the application so that I can access my personalized content.",
                     Status = StoryStatus.ToDo,
                     Priority = StoryPriority.High,
-                    StoryPoints = 5,
+                    StoryPoints = StoryPoints.Five,
                     IsAiGenerated = false,
                     IsDraft = false
                 },
@@ -39,7 +39,7 @@ namespace ScrumPilot.Data.Seeders
                     Description = "As a user, I want to create and manage my profile so that I can personalize my experience.",
                     Status = StoryStatus.InProgress,
                     Priority = StoryPriority.Low,
-                    StoryPoints = 3,
+                    StoryPoints = StoryPoints.Three,
                     IsAiGenerated = false,
                     IsDraft = false
                 },
@@ -49,7 +49,7 @@ namespace ScrumPilot.Data.Seeders
                     Description = "As an admin, I want to view analytics on the dashboard so that I can monitor system usage.",
                     Status = StoryStatus.Done,
                     Priority = StoryPriority.Medium,
-                    StoryPoints = 8,
+                    StoryPoints = StoryPoints.Eight,
                     IsAiGenerated = true,
                     IsDraft = false
                 },
@@ -59,7 +59,7 @@ namespace ScrumPilot.Data.Seeders
                     Description = "As an Admin, I need to be able to retrieve data from our Database.",
                     Status = StoryStatus.ToDo,
                     Priority = StoryPriority.High,
-                    StoryPoints = 5,
+                    StoryPoints = StoryPoints.Five,
                     IsAiGenerated = true,
                     IsDraft = true
                 }

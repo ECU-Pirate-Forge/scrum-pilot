@@ -112,10 +112,10 @@
             <MudCardContent Class="pa-3" Style="padding-bottom: 8px; border-bottom: 1px solid var(--mud-palette-divider);">
                 <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                     <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
-                        @if (context.StoryPoints.HasValue)
+                        @if (context.StoryPoints != StoryPoints.Zero)
                         {
                             <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Filled">
-                                @context.StoryPoints SP
+                                @((int)context.StoryPoints) SP
                             </MudChip>
                         }
                     </MudStack>
