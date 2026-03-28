@@ -241,6 +241,9 @@
 
     private async Task OnItemDropped(MudItemDropInfo<Story> dropInfo)
     {
+        if (dropInfo.Item is null)
+            return;
+
         // Dropzone identifiers are: "ToDo", "InProgress", "Done"
         if (!Enum.TryParse<StoryStatus>(dropInfo.DropzoneIdentifier, out var newStatus))
         {
