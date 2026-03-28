@@ -75,6 +75,20 @@ namespace ScrumPilot.API.Controllers
             return Ok(created);
         }
 
+        [HttpPost("commitDraft")]
+        public async Task<ActionResult<Story>> CommitDraftStory([FromBody] Story draftStory)
+        {
+            try
+            {
+                var committed = await _storyService.CommitDraftStoryAsync(draftStory);
+                return Ok(committed);
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound("Draft story not found.");
+            }
+        }
+
         [HttpPut]
         public async Task<ActionResult<Story>> UpdateStory([FromBody] Story story)
         {

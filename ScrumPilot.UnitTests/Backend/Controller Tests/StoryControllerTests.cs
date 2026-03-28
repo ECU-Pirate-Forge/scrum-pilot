@@ -346,6 +346,76 @@ namespace ScrumPilot.UnitTests.Backend.Controller_Tests
             await _mockStoryService.Received(1).UpdateStoryAsync(updatedStory);
         }
 
+        [Fact]
+        public async Task CommitDraftStory_ReturnsOkResult_WithCommittedStory()
+        {
+            // Arrange
+            var draftStory = new Story
+            {
+                Id = 7,
+                Title = "Draft Story",
+                Description = "Draft Description",
+                Status = StoryStatus.ToDo,
+                Priority = StoryPriority.Medium,
+                IsDraft = true,
+                DateCreated = DateTime.UtcNow,
+                LastUpdated = DateTime.UtcNow
+            };
+
+            var committedStory = new Story
+            {
+                Id = draftStory.Id,
+                Title = draftStory.Title,
+                Description = draftStory.Description,
+                Status = draftStory.Status,
+                Priority = draftStory.Priority,
+                IsDraft = false,
+                DateCreated = DateTime.UtcNow,
+                LastUpdated = DateTime.UtcNow
+            };
+
+            _mockStoryService.CommitDraftStoryAsync(draftStory).Returns(committedStory);
+
+            // Act
+            var result = await _controller.CommitDraftStory(draftStory);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result.Result);
+            var actualStory = Assert.IsType<Story>(okResult.Value);
+            Assert.Equal(committedStory.Id, actualStory.Id);
+            Assert.False(actualStory.IsDraft);
+            await _mockStoryService.Received(1).CommitDraftStoryAsync(draftStory);
+        }
+
+        [Fact]
+        public async Task CommitDraftStory_ReturnsNotFound_WhenDraftStoryMissing()
+        {
+            // Arrange
+            var draftStory = new Story
+            {
+                Id = 99,
+                Title = "Missing Draft",
+                Description = "Missing",
+                Status = StoryStatus.ToDo,
+                Priority = StoryPriority.Low,
+                IsDraft = true,
+                DateCreated = DateTime.UtcNow,
+                LastUpdated = DateTime.UtcNow
+            };
+
+            _mockStoryService
+                .CommitDraftStoryAsync(draftStory)
+                .Returns(Task.FromException<Story>(new KeyNotFoundException("Draft story not found.")));
+
+            // Act
+            var result = await _controller.CommitDraftStory(draftStory);
+
+            // Assert
+            var notFoundResult = Assert.IsType<NotFoundObjectResult>(result.Result);
+            Assert.Equal("Draft story not found.", notFoundResult.Value);
+            await _mockStoryService.Received(1).CommitDraftStoryAsync(draftStory);
+        }
+
 
 
 

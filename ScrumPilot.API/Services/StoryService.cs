@@ -217,6 +217,20 @@ namespace ScrumPilot.API.Services
             return await _storyRepository.AddAsync(story);
         }
 
+        public async Task<Story> CommitDraftStoryAsync(Story draftStory)
+        {
+            var existingDraft = await _storyRepository.GetByIdAsync(draftStory.Id);
+            if (existingDraft is null || !existingDraft.IsDraft)
+            {
+                throw new KeyNotFoundException("Draft story not found.");
+            }
+
+            existingDraft.IsDraft = false;
+            existingDraft.LastUpdated = DateTime.UtcNow;
+
+            return await _storyRepository.UpdateAsync(existingDraft);
+        }
+
         public async Task<Story> UpdateStoryAsync(Story story)
         {
             return await _storyRepository.UpdateAsync(story);

@@ -119,6 +119,105 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
         }
 
         [Fact]
+        public async Task CommitDraftStoryAsync_UpdatesExistingDraft_ToBacklog()
+        {
+            // Arrange
+            var draftStory = new Story
+            {
+                Id = 1,
+                Title = "Draft Story",
+                Description = "Draft Description",
+                Status = StoryStatus.ToDo,
+                Priority = StoryPriority.Medium,
+                StoryPoints = 5,
+                IsAiGenerated = true,
+                IsDraft = true,
+                DateCreated = DateTime.UtcNow.AddDays(-1),
+                LastUpdated = DateTime.UtcNow.AddDays(-1)
+            };
+
+            var updatedStory = new Story
+            {
+                Id = 1,
+                Title = draftStory.Title,
+                Description = draftStory.Description,
+                Status = draftStory.Status,
+                Priority = draftStory.Priority,
+                StoryPoints = draftStory.StoryPoints,
+                IsAiGenerated = draftStory.IsAiGenerated,
+                IsDraft = false,
+                DateCreated = draftStory.DateCreated,
+                LastUpdated = DateTime.UtcNow
+            };
+
+            _mockRepository.GetByIdAsync(draftStory.Id).Returns(draftStory);
+            _mockRepository.UpdateAsync(Arg.Is<Story>(s => s.Id == draftStory.Id && !s.IsDraft)).Returns(updatedStory);
+
+            // Act
+            var result = await _storyService.CommitDraftStoryAsync(draftStory);
+
+            // Assert
+            Assert.NotNull(result);
+            Assert.Equal(updatedStory.Id, result.Id);
+            Assert.False(result.IsDraft);
+            await _mockRepository.Received(1).GetByIdAsync(draftStory.Id);
+            await _mockRepository.Received(1).UpdateAsync(Arg.Is<Story>(s => s.Id == draftStory.Id && !s.IsDraft));
+            await _mockRepository.DidNotReceive().AddAsync(Arg.Any<Story>());
+            await _mockRepository.DidNotReceive().DeleteAsync(Arg.Any<int>());
+        }
+
+        [Fact]
+        public async Task CommitDraftStoryAsync_ThrowsKeyNotFoundException_WhenDraftMissing()
+        {
+            // Arrange
+            var draftStory = new Story
+            {
+                Id = 99,
+                Title = "Missing Draft",
+                Description = "Missing",
+                Status = StoryStatus.ToDo,
+                Priority = StoryPriority.Low,
+                IsDraft = true,
+                DateCreated = DateTime.UtcNow,
+                LastUpdated = DateTime.UtcNow
+            };
+
+            _mockRepository.GetByIdAsync(draftStory.Id).Returns((Story?)null);
+
+            // Act & Assert
+            await Assert.ThrowsAsync<KeyNotFoundException>(() => _storyService.CommitDraftStoryAsync(draftStory));
+            await _mockRepository.Received(1).GetByIdAsync(draftStory.Id);
+            await _mockRepository.DidNotReceive().AddAsync(Arg.Any<Story>());
+            await _mockRepository.DidNotReceive().DeleteAsync(Arg.Any<int>());
+        }
+
+        [Fact]
+        public async Task CommitDraftStoryAsync_ThrowsKeyNotFoundException_WhenStoryIsNotDraft()
+        {
+            // Arrange
+            var nonDraftStory = new Story
+            {
+                Id = 4,
+                Title = "Backlog Story",
+                Description = "Backlog Description",
+                Status = StoryStatus.ToDo,
+                Priority = StoryPriority.Low,
+                IsDraft = false,
+                DateCreated = DateTime.UtcNow,
+                LastUpdated = DateTime.UtcNow
+            };
+
+            _mockRepository.GetByIdAsync(nonDraftStory.Id).Returns(nonDraftStory);
+
+            // Act & Assert
+            await Assert.ThrowsAsync<KeyNotFoundException>(() => _storyService.CommitDraftStoryAsync(nonDraftStory));
+            await _mockRepository.Received(1).GetByIdAsync(nonDraftStory.Id);
+            await _mockRepository.DidNotReceive().UpdateAsync(Arg.Any<Story>());
+            await _mockRepository.DidNotReceive().AddAsync(Arg.Any<Story>());
+            await _mockRepository.DidNotReceive().DeleteAsync(Arg.Any<int>());
+        }
+
+        [Fact]
         public async Task UpdateStoryAsync_CallsRepositoryUpdateAsync()
         {
             // Arrange
