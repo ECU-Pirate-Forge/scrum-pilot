@@ -1,0 +1,72 @@
+@using MudBlazor
+@using ScrumPilot.Shared.Models
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudText Typo="Typo.h5">Generated Stories</MudText>
+
+            @if (Stories is not null && Stories.Count > 0)
+            {
+                <StoryCard StoryModel="@Stories[_currentStoryIndex]" />
+
+                <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center" Class="sg-nav-row">
+                    <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
+                                   Color="Color.Primary"
+                                   OnClick="ShowPreviousStory"
+                                   Disabled="@(_currentStoryIndex == 0)"
+                                   AriaLabel="Show previous story" />
+
+                    <MudText Typo="Typo.subtitle1" Class="sg-nav-position">
+                        @($"{_currentStoryIndex + 1} of {Stories.Count}")
+                    </MudText>
+
+                    <MudIconButton Icon="@Icons.Material.Filled.ArrowForward"
+                                   Color="Color.Primary"
+                                   OnClick="ShowNextStory"
+                                   Disabled="@(_currentStoryIndex >= Stories.Count - 1)"
+                                   AriaLabel="Show next story" />
+                </MudStack>
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+                    No generated stories were returned.
+                </MudAlert>
+            }
+        </MudStack>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Close">
+            Close
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public List<Story> Stories { get; set; } = new();
+
+    private int _currentStoryIndex = 0;
+
+    private void ShowPreviousStory()
+    {
+        if (_currentStoryIndex > 0)
+            _currentStoryIndex--;
+    }
+
+    private void ShowNextStory()
+    {
+        if (_currentStoryIndex < Stories.Count - 1)
+            _currentStoryIndex++;
+    }
+
+    private void Close()
+    {
+        MudDialog.Close();
+    }
+}
