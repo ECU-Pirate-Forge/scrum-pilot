@@ -5,7 +5,7 @@ using ScrumPilot.API.Services;
 using ScrumPilot.Shared.Models;
 using Xunit;
 
-namespace ScrumPilot.UnitTests.Backend.Controller_Tests
+namespace ScrumPilot.UnitTests.Backend.ControllerTests
 {
     public class StoryControllerTests
     {
