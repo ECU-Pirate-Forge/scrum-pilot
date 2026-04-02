@@ -23,7 +23,6 @@ namespace ScrumPilot.API.Controllers
             return Ok(stories);
         }
 
-
         [HttpGet("getDraftStories")]
         public async Task<ActionResult<IEnumerable<Story>>> GetDraftStories()
         {
@@ -33,8 +32,6 @@ namespace ScrumPilot.API.Controllers
 
         [HttpPost("generateAiStories")]
         public async Task<ActionResult<List<Story>>> GenerateAiStory([FromBody] List<string> problemStatements)
-
-
         {
             if (problemStatements == null || problemStatements.Count == 0)
             {
@@ -48,7 +45,7 @@ namespace ScrumPilot.API.Controllers
 
             try
             {
-                var story = await _storyService.GenerateAiStory(problemStatement);
+                var story = await _storyService.GenerateAiStory(problemStatements);
 
                 return Ok(story);
             }
@@ -69,6 +66,28 @@ namespace ScrumPilot.API.Controllers
             {
                 return StatusCode(500, $"An unexpected error occurred: {ex.Message}");
             }
+        }
+
+        [HttpPost]
+        public async Task<ActionResult<Story>> CreateStory([FromBody] Story story)
+        {
+            var created = await _storyService.CreateStoryAsync(story);
+            return Ok(created);
+        }
+
+        [HttpPut]
+        public async Task<ActionResult<Story>> UpdateStory([FromBody] Story story)
+        {
+            var updated = await _storyService.UpdateStoryAsync(story);
+            return Ok(updated);
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<ActionResult> DeleteStory(int id)
+        {
+            var success = await _storyService.DeleteStoryAsync(id);
+            if (!success) return NotFound();
+            return NoContent();
         }
     }
 }

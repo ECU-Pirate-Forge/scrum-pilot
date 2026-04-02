@@ -56,7 +56,7 @@ else
                 </MudTd>
                 <MudTd DataLabel="Points" Style="text-align: center; vertical-align: top;">
                     <div class="story-points">
-                        @(context.StoryPoints?.ToString() ?? "-")
+                        @((int)context.StoryPoints)
                     </div>
                 </MudTd>
                 <MudTd DataLabel="Created" Style="vertical-align: top;">
@@ -106,25 +106,17 @@ else
                     <MudIcon Icon="@Icons.Material.Filled.Edit" Class="me-2" />
                     Modifying Story
                 </MudText>
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Secondary"
+                           StartIcon="@Icons.Material.Filled.Close"
+                           OnClick="CloseModify"
+                           Class="close-button">
+                    Close
+                </MudButton>
             </div>
 
             <div class="modify-content">
                 <StoryCard StoryModel="@modifyingStory" />
-            </div>
-
-            <div class="modify-actions">
-                <MudButton Variant="Variant.Filled" 
-                           Color="Color.Primary"
-                           OnClick="CloseModify"
-                           StartIcon="@Icons.Material.Filled.Save"
-                           Class="me-2">
-                    Save Changes
-                </MudButton>
-                <MudButton Variant="Variant.Outlined" 
-                           Color="Color.Default"
-                           OnClick="CloseModify">
-                    Cancel
-                </MudButton>
             </div>
         </div>
     </div>
@@ -199,10 +191,9 @@ else
     {
         return priority switch
         {
-            StoryPriority.Highest => Color.Error,    // Red for critical
-            StoryPriority.High => Color.Warning,     // Orange for important
-            StoryPriority.Low => Color.Info,         // Blue for low priority
-            StoryPriority.Lowest => Color.Default,   // Gray for lowest
+            StoryPriority.High => Color.Error,      // Red
+            StoryPriority.Medium => Color.Warning,  // Orange/Yellow  
+            StoryPriority.Low => Color.Success,     // Green
             _ => Color.Default
         };
     }

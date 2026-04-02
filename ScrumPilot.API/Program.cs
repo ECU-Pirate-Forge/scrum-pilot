@@ -4,6 +4,7 @@ using ScrumPilot.Data.Context;
 using ScrumPilot.Data.Seeders;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using ScrumPilot.Data.Repositories;
 
 
 var builder = WebApplication.CreateBuilder(args);

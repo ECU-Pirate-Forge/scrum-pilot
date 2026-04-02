@@ -16,8 +16,16 @@ npm install
 Create a `.env` file in the `discord-bot` directory:
 ```
 DISCORD_TOKEN=your_bot_token_here
+SCRUMLORD_READ_CHANNEL_ID=channel_id
+SCRUMLORD_SPEAK_CHANNEL_ID=channel_id
 ```
 > **Never commit your `.env` file.** It is already covered by `.gitignore`.
+
+### Channel Routing (Manual Setup)
+- `SCRUMLORD_READ_CHANNEL_ID`: channel where Scrumlord reads source messages
+- `SCRUMLORD_SPEAK_CHANNEL_ID`: channel where Scrumlord posts command output
+
+Use `!setchannels <read_channel> <speak_channel>` prints the channel IDs, or you can just copy them manually
 
 ### Getting a Bot Token
 1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)

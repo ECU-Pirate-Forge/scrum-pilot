@@ -147,10 +147,9 @@ async function compressAudio(inputPath) {
     const ffmpeg = spawn(ffmpegStatic, [
       '-i', inputPath,
       '-codec:a', 'libmp3lame',
-      '-b:a', '32k',
+      '-q:a', '9',
       outputPath
     ]);
-    ffmpeg.on('error', (err) => reject(new Error(`ffmpeg spawn error: ${err.message}`)));
     ffmpeg.on('close', (code) => code === 0 ? resolve() : reject(new Error(`ffmpeg exited with code ${code}`)));
   });
   return outputPath;
@@ -161,18 +160,10 @@ async function transcribeAndSummarize(filePath, recapChannel, controlChannel) {
   const timestamp = filename.replace('recording-', '').replace('.ogg', '');
   const dateString = formatDate(timestamp);
 
-  let compressedPath;
+    // Compress and send to Whisper
+  const compressedPath = await compressAudio(filePath);
+
   try {
-    compressedPath = await compressAudio(filePath);
-
-    const MAX_WHISPER_BYTES = 25 * 1024 * 1024;
-    const { size } = fs.statSync(compressedPath);
-    if (size > MAX_WHISPER_BYTES) {
-      fs.unlinkSync(compressedPath);
-      await controlChannel.send(`⚠️ Recording is too large to transcribe (${(size / 1024 / 1024).toFixed(1)} MB). Try shorter meetings or contact an admin.`);
-      return;
-    }
-
     console.log('[Whisper] Sending to Whisper...');
     const transcription = await openai.audio.transcriptions.create({
       file: fs.createReadStream(compressedPath),
@@ -198,20 +189,14 @@ async function transcribeAndSummarize(filePath, recapChannel, controlChannel) {
       files: [markdownPath]
     });
 
-    await controlChannel.send(`✅ Recap from ${dateString} has been posted in <#${recapChannel.id}>.`);
-
-    fs.unlinkSync(filePath);
+    fs.unlinkSync(filePath)
     fs.unlinkSync(markdownPath);
 
     console.log('[Recorder] Recap posted.');
   } catch (err) {
-    if (compressedPath && fs.existsSync(compressedPath)) fs.unlinkSync(compressedPath);
-    const isCorrupt = err.message.includes('ffmpeg');
-    const userMessage = isCorrupt
-      ? `⚠️ Recording from ${dateString} appears to be corrupted and could not be processed.`
-      : `⚠️ Something went wrong processing the recording from ${dateString}.`;
-    console.error(`[Recorder] Error during transcription/summary:`, err);
-    await controlChannel.send(userMessage); 
+    console.error('[Recorder] Error during transcription/summary:', err);
+    if (fs.existsSync(compressedPath)) fs.unlinkSync(compressedPath);
+    await controlChannel.send('⚠️ Something went wrong processing the recording.');
   }
 }
 

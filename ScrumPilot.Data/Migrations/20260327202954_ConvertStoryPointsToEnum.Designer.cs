@@ -11,8 +11,8 @@ using ScrumPilot.Data.Context;
 namespace ScrumPilot.Data.Migrations
 {
     [DbContext(typeof(ScrumPilotContext))]
-    [Migration("20260320182007_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20260327202954_ConvertStoryPointsToEnum")]
+    partial class ConvertStoryPointsToEnum
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -51,7 +51,7 @@ namespace ScrumPilot.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<int?>("StoryPoints")
+                    b.Property<int>("StoryPoints")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("Title")
