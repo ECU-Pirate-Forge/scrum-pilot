@@ -42,10 +42,18 @@ async function reprocessFile(filePath, recapChannel, controlChannel) {
   console.log(`[Reprocess] Processing: ${filename} (recorded ${dateString})`);
   await controlChannel.send(`🔄 Reprocessing recording from ${dateString}...`);
 
-  const compressedPath = await compressAudio(filePath);
-
-
+  let compressedPath;
   try {
+    compressedPath = await compressAudio(filePath);
+
+    const MAX_WHISPER_BYTES = 25 * 1024 * 1024;
+    const { size } = fs.statSync(compressedPath);
+    if (size > MAX_WHISPER_BYTES) {
+      fs.unlinkSync(compressedPath);
+      await controlChannel.send(`⚠️ Recording from ${dateString} is too large to transcribe (${(size / 1024 / 1024).toFixed(1)} MB).`);
+      return;
+    }
+
     console.log('[Whisper] Sending to Whisper...');
     const transcription = await openai.audio.transcriptions.create({
       file: fs.createReadStream(compressedPath),
@@ -71,17 +79,23 @@ async function reprocessFile(filePath, recapChannel, controlChannel) {
       files: [markdownPath]
     });
 
+    await controlChannel.send(`✅ Recap from ${dateString} has been posted in <#${recapChannel.id}>.`);
+
     fs.unlinkSync(filePath);
     fs.unlinkSync(markdownPath);
     console.log(`[Reprocess] Done: ${filename}`);
   } catch (err) {
-    if (fs.existsSync(compressedPath)) fs.unlinkSync(compressedPath);
-    console.error(`[Reprocess] Failed for ${filename}:`, err.message);
-    await controlChannel.send(`⚠️ Failed to reprocess recording from ${dateString}.`);   
+    if (compressedPath && fs.existsSync(compressedPath)) fs.unlinkSync(compressedPath);
+    const isCorrupt = err.message.includes('ffmpeg');
+    const userMessage = isCorrupt
+      ? `⚠️ Recording from ${dateString} appears to be corrupted and could not be processed.`
+      : `⚠️ Something went wrong processing the recording from ${dateString}.`;
+    console.error(`[Recorder] Error during transcription/summary:`, err);
+    await controlChannel.send(userMessage);
   }
 }
 
-client.once('ready', async () => {
+client.once('clientReady', async () => {
   console.log(`[Reprocess] Logged in as ${client.user.tag}`);
 
   const guild = client.guilds.cache.first();

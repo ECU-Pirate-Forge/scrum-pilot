@@ -4,6 +4,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const prism = require('prism-media');
+const Anthropic = require('@anthropic-ai/sdk');
 const OpenAI = require('openai');
 
 const MEETING_VOICE_CHANNEL = 'voice Scrum Pilot';
@@ -11,6 +12,7 @@ const BOT_COMMANDS_CHANNEL = 'bot-commands';
 const RECAP_CHANNEL = 'standup-recap';
 const QUORUM = 2
 
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 let connection = null;
@@ -52,6 +54,12 @@ function subscribeUser(receiver, userId) {
     rate: 48000
   });
 
+  decoder.on('error', (err) => {
+    console.warn(`[Recorder] Opus decode error (user ${userId}):`, err.message);
+  });
+  opusStream.on('error', (err) => {
+    console.warn(`[Recorder] Opus stream error (user ${userId}):`, err.message);
+  });
   opusStream.pipe(decoder).pipe(ffmpegProcess.stdin, { end: false });
 }
 
@@ -108,7 +116,12 @@ async function stopRecording(guild) {
   const recapChannel = getChannel(guild, RECAP_CHANNEL);
 
   if (ffmpegProcess) {
-    ffmpegProcess.stdin.end();
+    await new Promise((resolve) => {
+      ffmpegProcess.on('close', resolve);
+      if (ffmpegProcess.stdin && !ffmpegProcess.stdin.destroyed) {
+        ffmpegProcess.stdin.end();
+      }
+    });
     ffmpegProcess = null;
   }
 
@@ -134,9 +147,10 @@ async function compressAudio(inputPath) {
     const ffmpeg = spawn(ffmpegStatic, [
       '-i', inputPath,
       '-codec:a', 'libmp3lame',
-      '-q:a', '9',
+      '-b:a', '32k',
       outputPath
     ]);
+    ffmpeg.on('error', (err) => reject(new Error(`ffmpeg spawn error: ${err.message}`)));
     ffmpeg.on('close', (code) => code === 0 ? resolve() : reject(new Error(`ffmpeg exited with code ${code}`)));
   });
   return outputPath;
@@ -147,10 +161,18 @@ async function transcribeAndSummarize(filePath, recapChannel, controlChannel) {
   const timestamp = filename.replace('recording-', '').replace('.ogg', '');
   const dateString = formatDate(timestamp);
 
-    // Compress and send to Whisper
-  const compressedPath = await compressAudio(filePath);
-
+  let compressedPath;
   try {
+    compressedPath = await compressAudio(filePath);
+
+    const MAX_WHISPER_BYTES = 25 * 1024 * 1024;
+    const { size } = fs.statSync(compressedPath);
+    if (size > MAX_WHISPER_BYTES) {
+      fs.unlinkSync(compressedPath);
+      await controlChannel.send(`⚠️ Recording is too large to transcribe (${(size / 1024 / 1024).toFixed(1)} MB). Try shorter meetings or contact an admin.`);
+      return;
+    }
+
     console.log('[Whisper] Sending to Whisper...');
     const transcription = await openai.audio.transcriptions.create({
       file: fs.createReadStream(compressedPath),
@@ -176,22 +198,26 @@ async function transcribeAndSummarize(filePath, recapChannel, controlChannel) {
       files: [markdownPath]
     });
 
-    fs.unlinkSync(filePath)
+    await controlChannel.send(`✅ Recap from ${dateString} has been posted in <#${recapChannel.id}>.`);
+
+    fs.unlinkSync(filePath);
     fs.unlinkSync(markdownPath);
 
     console.log('[Recorder] Recap posted.');
   } catch (err) {
-    console.error('[Recorder] Error during transcription/summary:', err);
-    if (fs.existsSync(compressedPath)) fs.unlinkSync(compressedPath);
-    await controlChannel.send('⚠️ Something went wrong processing the recording.');
+    if (compressedPath && fs.existsSync(compressedPath)) fs.unlinkSync(compressedPath);
+    const isCorrupt = err.message.includes('ffmpeg');
+    const userMessage = isCorrupt
+      ? `⚠️ Recording from ${dateString} appears to be corrupted and could not be processed.`
+      : `⚠️ Something went wrong processing the recording from ${dateString}.`;
+    console.error(`[Recorder] Error during transcription/summary:`, err);
+    await controlChannel.send(userMessage); 
   }
 }
 
 async function summarize(transcript) {
   // Try Anthropic first
   try {
-    const { Anthropic } = require('@anthropic-ai/sdk');
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
     const message = await anthropic.messages.create({
       model: 'claude-opus-4-6',
