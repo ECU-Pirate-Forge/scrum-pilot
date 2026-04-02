@@ -16,7 +16,7 @@ builder.Services.AddSingleton<IThemeService, ThemeService>();
 
 // Read ApiBaseUrl from appsettings.json
 var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? "https://localhost:7195/";
-builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri("http://localhost:5219") });
+builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(apiBaseUrl) });
 
 await builder.Build().RunAsync();
 
