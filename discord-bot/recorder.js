@@ -4,6 +4,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const prism = require('prism-media');
+const Anthropic = require('@anthropic-ai/sdk');
 const OpenAI = require('openai');
 
 const MEETING_VOICE_CHANNEL = 'voice Scrum Pilot';
@@ -11,6 +12,7 @@ const BOT_COMMANDS_CHANNEL = 'bot-commands';
 const RECAP_CHANNEL = 'standup-recap';
 const QUORUM = 2
 
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 let connection = null;
@@ -52,6 +54,12 @@ function subscribeUser(receiver, userId) {
     rate: 48000
   });
 
+  decoder.on('error', (err) => {
+    console.warn(`[Recorder] Opus decode error (user ${userId}):`, err.message);
+  });
+  opusStream.on('error', (err) => {
+    console.warn(`[Recorder] Opus stream error (user ${userId}):`, err.message);
+  });
   opusStream.pipe(decoder).pipe(ffmpegProcess.stdin, { end: false });
 }
 
@@ -108,7 +116,12 @@ async function stopRecording(guild) {
   const recapChannel = getChannel(guild, RECAP_CHANNEL);
 
   if (ffmpegProcess) {
-    ffmpegProcess.stdin.end();
+    await new Promise((resolve) => {
+      ffmpegProcess.on('close', resolve);
+      if (ffmpegProcess.stdin && !ffmpegProcess.stdin.destroyed) {
+        ffmpegProcess.stdin.end();
+      }
+    });
     ffmpegProcess = null;
   }
 
@@ -190,8 +203,6 @@ async function transcribeAndSummarize(filePath, recapChannel, controlChannel) {
 async function summarize(transcript) {
   // Try Anthropic first
   try {
-    const { Anthropic } = require('@anthropic-ai/sdk');
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
     const message = await anthropic.messages.create({
       model: 'claude-opus-4-6',
