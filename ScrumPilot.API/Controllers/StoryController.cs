@@ -89,5 +89,20 @@ namespace ScrumPilot.API.Controllers
             if (!success) return NotFound();
             return NoContent();
         }
+
+        [HttpPost("addAudioTranscript")]
+        public async Task<ActionResult> AddAudioTranscript([FromBody] AudioTranscript transcript)
+        {
+            //TODO: Implement logic to add transcript to DB
+            return Ok();
+        }
+
+        [HttpPost("addMessageTranscript")]
+        public async Task<ActionResult> AddMessageTranscript([FromBody] MessageTranscript transcript)
+        {
+            //TODO: Implement logic to add transcript to DB
+            return Ok();
+        }
+
     }
 }
