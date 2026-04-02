@@ -251,8 +251,12 @@
             _ => Color.Default
         };
 
-    private string GetStoryInitials(Story story)
-        => story.IsAiGenerated ? "AI" : "ST";
+    private string GetStoryInitials(Story story) => story.Origin switch
+    {
+        StoryOrigin.AiGenerated => "AI",
+        StoryOrigin.BotGenerated => "BT",
+        _ => "ST"
+    };
 
     private string GetColumnColor(StoryStatus status)
         => status switch

@@ -30,7 +30,7 @@ namespace ScrumPilot.Data.Seeders
                     Status = StoryStatus.ToDo,
                     Priority = StoryPriority.High,
                     StoryPoints = StoryPoints.Five,
-                    IsAiGenerated = false,
+                    Origin = StoryOrigin.WebUserCreated,
                     IsDraft = false
                 },
                 new Story
@@ -40,7 +40,7 @@ namespace ScrumPilot.Data.Seeders
                     Status = StoryStatus.InProgress,
                     Priority = StoryPriority.Low,
                     StoryPoints = StoryPoints.Three,
-                    IsAiGenerated = false,
+                    Origin = StoryOrigin.WebUserCreated,
                     IsDraft = false
                 },
                 new Story
@@ -50,7 +50,7 @@ namespace ScrumPilot.Data.Seeders
                     Status = StoryStatus.Done,
                     Priority = StoryPriority.Medium,
                     StoryPoints = StoryPoints.Eight,
-                    IsAiGenerated = true,
+                    Origin = StoryOrigin.AiGenerated,
                     IsDraft = false
                 },
                 new Story
@@ -60,7 +60,7 @@ namespace ScrumPilot.Data.Seeders
                     Status = StoryStatus.ToDo,
                     Priority = StoryPriority.High,
                     StoryPoints = StoryPoints.Five,
-                    IsAiGenerated = true,
+                    Origin = StoryOrigin.AiGenerated,
                     IsDraft = true
                 }
             };
