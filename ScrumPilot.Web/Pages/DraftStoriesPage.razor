@@ -56,7 +56,7 @@ else
                 </MudTd>
                 <MudTd DataLabel="Points" Style="text-align: center; vertical-align: top;">
                     <div class="story-points">
-                        @(context.StoryPoints?.ToString() ?? "-")
+                        @((int)context.StoryPoints)
                     </div>
                 </MudTd>
                 <MudTd DataLabel="Created" Style="vertical-align: top;">

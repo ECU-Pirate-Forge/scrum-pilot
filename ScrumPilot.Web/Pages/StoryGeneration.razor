@@ -2,10 +2,12 @@
 @using MudBlazor
 @using Microsoft.AspNetCore.Components.Web
 @using ScrumPilot.Shared.Models
+@using ScrumPilot.Web.Components
 @using System.Text.Json
 @using System.Text
 @inject HttpClient Http
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
 <MudContainer MaxWidth="MaxWidth.False" Class="sg-page">
     <!-- Input Section Container -->
@@ -104,54 +106,15 @@
 
     @* Story Component area - shows loading or actual story *@
     <MudStack Justify="Justify.Center" Class="mt-6">
-        @if (_isLoading)
-        {
-            <MudStack AlignItems="AlignItems.Center">
-                <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
-                <MudText Class="mt-4" Typo="Typo.subtitle1">Writing your stories...</MudText>
-            </MudStack>
-        }
-        else
-        {
-            @if (_generatedStories.Count > 0)
-            {
-                <MudStack Style="width: 100%; animation: fadeInDown 0.5s ease-out;">
-                    <MudAlert Severity="Severity.Success" Class="mb-4 mx-auto sg-success-alert">
-                        <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center">
-                            <MudIcon Icon="Icons.Material.Filled.CheckCircle" Class="me-2" />
-                            <MudText Typo="Typo.h6" Class="sg-success-text">
-                                Story Generated Successfully!
-                            </MudText>
-                        </MudStack>
-                    </MudAlert>
-
-                    <StoryCard StoryModel="@CurrentStory" />
-
-                    <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center" Class="sg-nav-row">
-                        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
-                                       Color="Color.Primary"
-                                       OnClick="ShowPreviousStory"
-                                       Disabled="@(_currentStoryIndex == 0)"
-                                       AriaLabel="Show previous story" />
-
-                        <MudText Typo="Typo.subtitle1" Class="sg-nav-position">
-                            @($"{_currentStoryIndex + 1} of {_generatedStories.Count}")
-                        </MudText>
-
-                        <MudIconButton Icon="@Icons.Material.Filled.ArrowForward"
-                                       Color="Color.Primary"
-                                       OnClick="ShowNextStory"
-                                       Disabled="@(_currentStoryIndex >= _generatedStories.Count - 1)"
-                                       AriaLabel="Show next story" />
-                    </MudStack>
-                </MudStack>
-            }
-            else
-            {
-                <StoryCard StoryModel="@CurrentStory" />
-            }
-        }
+    @if (_isLoading)
+    {
+        <MudStack AlignItems="AlignItems.Center">
+            <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+            <MudText Class="mt-4" Typo="Typo.subtitle1">Writing your stories...</MudText>
+        </MudStack>
+    }
     </MudStack>
+
 </MudContainer>
 
 @code {
@@ -212,15 +175,35 @@
                 });
 
                 if (stories is null || stories.Count == 0)
-                {
-                    Snackbar.Add("Generation completed but the response did not contain valid stories.", Severity.Error);
-                    return;
-                }
+{
+    Snackbar.Add("Generation completed but the response did not contain valid stories.", Severity.Error);
+    return;
+}
 
-                _generatedStories = stories;
-                _currentStoryIndex = 0;
-                _problemStatements.Clear();
-                _message = string.Empty;
+var dialogParameters = new DialogParameters
+{
+    ["Stories"] = stories
+};
+
+
+               _generatedStories = stories;
+_currentStoryIndex = 0;
+_problemStatements.Clear();
+_message = string.Empty;
+
+
+var options = new DialogOptions
+{
+    CloseButton = true,
+    MaxWidth = MaxWidth.Large,
+    FullWidth = true,
+    BackdropClick = true
+};
+
+await DialogService.ShowAsync<GeneratedStoriesModal>(
+    "Generated Stories",
+    dialogParameters,
+    options);
             }
             else
             {
@@ -261,19 +244,5 @@
         return Task.CompletedTask;
     }
 
-    private void ShowPreviousStory()
-    {
-        if (_currentStoryIndex > 0)
-        {
-            _currentStoryIndex--;
-        }
-    }
-
-    private void ShowNextStory()
-    {
-        if (_currentStoryIndex < _generatedStories.Count - 1)
-        {
-            _currentStoryIndex++;
-        }
-    }
+    
 }
