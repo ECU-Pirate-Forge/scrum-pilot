@@ -198,7 +198,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
                 Assert.Contains(criteria, result.Description));
             Assert.Equal(StoryStatus.ToDo, result.Status);
             Assert.Equal(StoryPriority.Low, result.Priority);
-            Assert.True(result.IsAiGenerated);
+            Assert.Equal(StoryOrigin.AiGenerated, result.Origin);
         }
 
         [Fact]
@@ -412,7 +412,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             Assert.Equal(3, result.Count);
             Assert.All(result, story =>
             {
-                Assert.True(story.IsAiGenerated);
+                Assert.Equal(StoryOrigin.AiGenerated, story.Origin);
                 Assert.Equal(StoryStatus.ToDo, story.Status);
             });
         }
