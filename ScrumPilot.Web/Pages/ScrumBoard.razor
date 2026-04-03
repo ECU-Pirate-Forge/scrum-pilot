@@ -258,20 +258,6 @@
         finally
         {
             _loading = false;
-        }
-    }
-        try
-        {
-            var stories = await Http.GetFromJsonAsync<List<Story>>("api/story/getNonDraftStories");
-            if (stories is not null && stories.Any())
-                Items = stories;
-        }
-        catch
-        {
-        }
-        finally
-        {
-            _loading = false;
             _needsRefresh = true;
         }
     }
