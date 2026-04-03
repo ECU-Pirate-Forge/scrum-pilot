@@ -8,7 +8,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 
-namespace ScrumPilot.UnitTests.Backend.Service_Tests
+namespace ScrumPilot.UnitTests.Backend.ServiceTests
 {
     public class StoryServiceTests : IDisposable
     {
