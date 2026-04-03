@@ -11,5 +11,6 @@ namespace ScrumPilot.API.Services
         Task<Story> CreateStoryAsync(Story story);
         Task<Story> UpdateStoryAsync(Story story);
         Task<bool> DeleteStoryAsync(int id);
+        Task<Story> CreateDraftStoryAsync(Story story);
     }
 }

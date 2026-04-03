@@ -214,6 +214,13 @@ namespace ScrumPilot.API.Services
 
         public async Task<Story> CreateStoryAsync(Story story)
         {
+            story.IsDraft = false;
+            return await _storyRepository.AddAsync(story);
+        }
+
+        public async Task<Story> CreateDraftStoryAsync(Story story)
+        {
+            story.IsDraft = true;
             return await _storyRepository.AddAsync(story);
         }
 

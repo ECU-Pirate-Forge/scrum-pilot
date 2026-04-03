@@ -68,10 +68,39 @@ namespace ScrumPilot.API.Controllers
             }
         }
 
-        [HttpPost]
+        [HttpPost("createStory")]
         public async Task<ActionResult<Story>> CreateStory([FromBody] Story story)
         {
             var created = await _storyService.CreateStoryAsync(story);
+            return Ok(created);
+        }
+
+        [HttpPost("createStories")]
+        public async Task<ActionResult<List<Story>>> CreateStories([FromBody] List<Story> stories)
+        {
+            var created = new List<Story>();
+            foreach (var story in stories)
+            {
+                created.Add(await _storyService.CreateStoryAsync(story));
+            }
+            return Ok(created);
+        }
+
+        [HttpPost("createDraftStory")]
+        public async Task<ActionResult<Story>> CreateDraftStory([FromBody] Story story)
+        {
+            var created = await _storyService.CreateDraftStoryAsync(story);
+            return Ok(created);
+        }
+
+        [HttpPost("createDraftStories")]
+        public async Task<ActionResult<List<Story>>> CreateDraftStories([FromBody] List<Story> stories)
+        {
+            var created = new List<Story>();
+            foreach (var story in stories)
+            {
+                created.Add(await _storyService.CreateDraftStoryAsync(story));
+            }
             return Ok(created);
         }
 
