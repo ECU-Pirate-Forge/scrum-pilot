@@ -45,7 +45,7 @@ namespace ScrumPilot.API.Controllers
 
             try
             {
-                var story = await _storyService.GenerateAiStory(problemStatements);
+                var story = await _storyService.GenerateAiStories(problemStatements);
 
                 return Ok(story);
             }
