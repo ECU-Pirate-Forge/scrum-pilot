@@ -101,14 +101,14 @@
                         </MudChip>
                     }
 
-                    @if (StoryModel.IsAiGenerated)
+                    @if (StoryModel.Origin != StoryOrigin.WebUserCreated)
                     {
                         <MudChip T="string"
                                  Size="Size.Medium"
                                  Color="Color.Info"
                                  Icon="Icons.Material.Filled.SmartToy"
                                  Variant="Variant.Filled">
-                            AI Generated
+                            @GetOriginLabel(StoryModel.Origin)
                         </MudChip>
                     }
                 </div>
@@ -346,6 +346,14 @@ else
         ScrumPilot.Shared.Models.StoryStatus.InProgress => Color.Warning,
         ScrumPilot.Shared.Models.StoryStatus.Done => Color.Success,
         _ => Color.Default
+    };
+
+    private string GetOriginLabel(ScrumPilot.Shared.Models.StoryOrigin origin) => origin switch
+    {
+        ScrumPilot.Shared.Models.StoryOrigin.AiGenerated => "AI Generated",
+        ScrumPilot.Shared.Models.StoryOrigin.BotGenerated => "Bot Generated",
+        ScrumPilot.Shared.Models.StoryOrigin.WebUserCreated => "Web User",
+        _ => origin.ToString()
     };
 
     private Color GetPriorityColor(ScrumPilot.Shared.Models.StoryPriority priority) => priority switch

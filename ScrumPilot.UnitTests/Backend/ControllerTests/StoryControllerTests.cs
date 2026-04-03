@@ -5,7 +5,7 @@ using ScrumPilot.API.Services;
 using ScrumPilot.Shared.Models;
 using Xunit;
 
-namespace ScrumPilot.UnitTests.Backend.Controller_Tests
+namespace ScrumPilot.UnitTests.Backend.ControllerTests
 {
     public class StoryControllerTests
     {
@@ -147,7 +147,7 @@ namespace ScrumPilot.UnitTests.Backend.Controller_Tests
                     Description = "Generated story description",
                     Status = StoryStatus.ToDo,
                     Priority = StoryPriority.Low,
-                    IsAiGenerated = true,
+                    Origin = StoryOrigin.AiGenerated,
                     DateCreated = DateTime.UtcNow,
                     LastUpdated = DateTime.UtcNow
                 }
@@ -163,7 +163,7 @@ namespace ScrumPilot.UnitTests.Backend.Controller_Tests
             var actualStories = Assert.IsType<List<Story>>(okResult.Value);
             Assert.Equal(expectedStories[0].Id, actualStories[0].Id);
             Assert.Equal(expectedStories[0].Title, actualStories[0].Title);
-            Assert.Equal(expectedStories[0].IsAiGenerated, actualStories[0].IsAiGenerated);
+            Assert.Equal(expectedStories[0].Origin, actualStories[0].Origin);
             await _mockStoryService.Received(1).GenerateAiStory(problemStatements);
         }
 
