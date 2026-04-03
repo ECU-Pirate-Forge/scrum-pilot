@@ -1,6 +1,6 @@
 using System.Net;
 
-namespace ScrumPilot.UnitTests.Backend.Service_Tests
+namespace ScrumPilot.UnitTests.Backend.ServiceTests
 {
     /// <summary>
     /// Test HTTP message handler that allows us to configure responses for testing
