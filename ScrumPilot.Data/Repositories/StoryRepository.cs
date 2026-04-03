@@ -69,5 +69,13 @@ namespace ScrumPilot.Data.Repositories
                 .OrderByDescending(s => s.DateCreated)
                 .ToListAsync();
         }
+
+        public async Task<IEnumerable<Story>> GetNonDraftStoriesAsync()
+        {
+            return await _context.Stories
+                .Where(s => !s.IsDraft)
+                .OrderByDescending(s => s.DateCreated)
+                .ToListAsync();
+        }
     }
 }

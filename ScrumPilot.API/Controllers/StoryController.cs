@@ -23,6 +23,13 @@ namespace ScrumPilot.API.Controllers
             return Ok(stories);
         }
 
+        [HttpGet("getNonDraftStories")]
+        public async Task<ActionResult<IEnumerable<Story>>> GetNonDraftStories()
+        {
+            var stories = await _storyService.GetNonDraftStoriesAsync();
+            return Ok(stories);
+        }
+
         [HttpGet("getDraftStories")]
         public async Task<ActionResult<IEnumerable<Story>>> GetDraftStories()
         {
@@ -73,6 +80,13 @@ namespace ScrumPilot.API.Controllers
         {
             var created = await _storyService.CreateStoryAsync(story);
             return Ok(created);
+        }
+
+        [HttpPost("commitStory")]
+        public async Task<ActionResult<Story>> CommitStory([FromBody] Story story)
+        {
+            var committed = await _storyService.CommitStoryAsync(story);
+            return Ok(committed);
         }
 
         [HttpPost("createStories")]

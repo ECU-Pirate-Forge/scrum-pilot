@@ -18,6 +18,7 @@
     {
         <MudContainer MaxWidth="MaxWidth.False" Class="pa-0">
             <MudDropContainer T="Story"
+                              @ref="_dropContainer"
                               Items="@Items"
                               ItemsSelector="@((item, dropzone) => item.Status.ToString() == dropzone)"
                               ItemDropped="OnItemDropped"
@@ -118,6 +119,14 @@
                                 @((int)context.StoryPoints) SP
                             </MudChip>
                         }
+                        else
+                        {
+                            <MudTooltip Text="Unpointed">
+                                <MudIcon Icon="@Icons.Material.Filled.ErrorOutline"
+                                         Color="Color.Error"
+                                         Size="Size.Small" />
+                            </MudTooltip>
+                        }
                     </MudStack>
                     <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
                         <MudButton Variant="Variant.Text"
@@ -186,7 +195,7 @@
                     </div>
 
                     <div class="details-content">
-                        <StoryCard StoryModel="SelectedStory" />
+                        <StoryCard StoryModel="SelectedStory" OnSave="HandleStorySave" />
                     </div>
                 </div>
             </div>
@@ -199,27 +208,48 @@
     private List<Story> Items = new();
     private bool _loading = true;
     private Story? SelectedStory;
+    private MudDropContainer<Story>? _dropContainer;
+    private bool _needsRefresh = false;
 
     //Api Intergration for getting stories
     protected override async Task OnInitializedAsync()
-{
-    _loading = true;
-    Items = new();
+    {
+        await LoadStoriesAsync();
+    }
 
-    try
+    protected override Task OnAfterRenderAsync(bool firstRender)
     {
-        var stories = await Http.GetFromJsonAsync<List<Story>>("api/story/getAllStories");
-        if (stories is not null && stories.Any())
-            Items = stories;
+        if (_needsRefresh)
+        {
+            _needsRefresh = false;
+            _dropContainer?.Refresh();
+        }
+        return Task.CompletedTask;
     }
-    catch
+
+    private async Task LoadStoriesAsync(bool showLoading = true)
     {
+        if (showLoading)
+        {
+            _loading = true;
+            Items = new();
+        }
+
+        try
+        {
+            var stories = await Http.GetFromJsonAsync<List<Story>>("api/story/getNonDraftStories");
+            if (stories is not null && stories.Any())
+                Items = stories;
+        }
+        catch
+        {
+        }
+        finally
+        {
+            _loading = false;
+            _needsRefresh = true;
+        }
     }
-    finally
-    {
-        _loading = false;
-    }
-}
 
 
     private void OnItemDropped(MudItemDropInfo<Story> dropInfo)
@@ -234,9 +264,27 @@
         SelectedStory = story;
     }
 
-    private void CloseStoryDetails()
+    private async Task CloseStoryDetails()
     {
         SelectedStory = null;
+        await LoadStoriesAsync(showLoading: false);
+    }
+
+    private async Task HandleStorySave(Story story)
+    {
+        try
+        {
+            var response = await Http.PutAsJsonAsync("api/story", story);
+            if (response.IsSuccessStatusCode)
+            {
+                SelectedStory = null;
+                await LoadStoriesAsync(showLoading: false);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating story: {ex.Message}");
+        }
     }
 
     private string GetPriorityClass(Story story)
