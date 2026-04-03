@@ -31,7 +31,7 @@ namespace ScrumPilot.API.Controllers
         }
 
         [HttpPost("generateAiStories")]
-        public async Task<ActionResult<List<Story>>> GenerateAiStory([FromBody] List<string> problemStatements)
+        public async Task<ActionResult<List<Story>>> GenerateAiStories([FromBody] List<string> problemStatements)
         {
             if (problemStatements == null || problemStatements.Count == 0)
             {

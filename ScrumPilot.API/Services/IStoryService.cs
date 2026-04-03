@@ -6,7 +6,7 @@ namespace ScrumPilot.API.Services
     {
         Task<IEnumerable<Story>> GetAllStoriesAsync();
         Task<IEnumerable<Story>> GetDraftStoriesAsync();
-        Task<List<Story>> GenerateAiStory(List<string> problemStatements);
+        Task<List<Story>> GenerateAiStories(List<string> problemStatements);
 
         Task<Story> CreateStoryAsync(Story story);
         Task<Story> UpdateStoryAsync(Story story);
