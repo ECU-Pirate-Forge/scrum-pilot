@@ -66,7 +66,7 @@ namespace ScrumPilot.API.Services
                 Description = $"{aiStoryResponse.UserStory}\n\nAcceptance Criteria:\n{string.Join("\n", aiStoryResponse.AcceptanceCriteria.Select(ac => $"• {ac}"))}",
                 Status = StoryStatus.ToDo,
                 Priority = StoryPriority.Low,
-                IsAiGenerated = true,
+                Origin = StoryOrigin.AiGenerated,
                 IsDraft = true,
                 DateCreated = DateTime.UtcNow,
                 LastUpdated = DateTime.UtcNow
