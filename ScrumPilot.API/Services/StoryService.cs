@@ -1,7 +1,6 @@
 ﻿using AutoFixture;
 using ScrumPilot.Data.Repositories;
 using ScrumPilot.Shared.Models;
-using ScrumPilot.Data.Repositories;
 using System.Text;
 using System.Text.Json;
 
@@ -227,6 +226,20 @@ namespace ScrumPilot.API.Services
         {
             story.IsDraft = true;
             return await _storyRepository.AddAsync(story);
+        }
+
+        public async Task<Story> CommitDraftStoryAsync(Story draftStory)
+        {
+            var existingDraft = await _storyRepository.GetByIdAsync(draftStory.Id);
+            if (existingDraft is null || !existingDraft.IsDraft)
+            {
+                throw new KeyNotFoundException("Draft story not found.");
+            }
+
+            existingDraft.IsDraft = false;
+            existingDraft.LastUpdated = DateTime.UtcNow;
+
+            return await _storyRepository.UpdateAsync(existingDraft);
         }
 
         public async Task<Story> UpdateStoryAsync(Story story)

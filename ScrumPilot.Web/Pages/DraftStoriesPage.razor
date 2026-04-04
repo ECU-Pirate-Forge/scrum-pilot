@@ -12,6 +12,20 @@
         </MudStack>
     </MudPaper>
 
+    @if (!string.IsNullOrWhiteSpace(_commitErrorMessage))
+    {
+        <MudAlert Severity="Severity.Error" Icon="@Icons.Material.Filled.ErrorOutline" Class="mb-4">
+            @_commitErrorMessage
+        </MudAlert>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_commitSuccessMessage))
+    {
+        <MudAlert Severity="Severity.Success" Icon="@Icons.Material.Filled.CheckCircle" Class="mb-4">
+            @_commitSuccessMessage
+        </MudAlert>
+    }
+
 @if (draftStories == null)
 {
     <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center" Style="min-height: 400px;">
@@ -70,8 +84,16 @@ else
                                    Color="Color.Success"
                                    OnClick="@(() => CommitStory(context))"
                                    StartIcon="@Icons.Material.Filled.Check"
+                                   Disabled="@_committingStoryIds.Contains(context.Id)"
                                    Style="width: 85px; min-width: 85px;">
-                            Commit
+                            @if (_committingStoryIds.Contains(context.Id))
+                            {
+                                <span>...</span>
+                            }
+                            else
+                            {
+                                <span>Commit</span>
+                            }
                         </MudButton>
                         <MudButton Variant="Variant.Filled" 
                                    Size="Size.Small" 
@@ -126,6 +148,9 @@ else
 @code {
     private List<Story>? draftStories;
     private Story? modifyingStory = null; // Track which story is being modified
+    private readonly HashSet<int> _committingStoryIds = new();
+    private string _commitErrorMessage = string.Empty;
+    private string _commitSuccessMessage = string.Empty;
 
     [Inject]
     private HttpClient Http { get; set; } = default!;
