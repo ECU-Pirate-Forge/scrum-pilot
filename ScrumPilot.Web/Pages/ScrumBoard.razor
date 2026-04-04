@@ -25,6 +25,7 @@
 
         <MudContainer MaxWidth="MaxWidth.False" Class="pa-0">
             <MudDropContainer T="Story"
+                              @ref="_dropContainer"
                               Items="@Items"
                               ItemsSelector="@((item, dropzone) => item.Status.ToString() == dropzone)"
                               ItemDropped="OnItemDropped"
@@ -125,6 +126,14 @@
                                 @((int)context.StoryPoints) SP
                             </MudChip>
                         }
+                        else
+                        {
+                            <MudTooltip Text="Unpointed">
+                                <MudIcon Icon="@Icons.Material.Filled.ErrorOutline"
+                                         Color="Color.Error"
+                                         Size="Size.Small" />
+                            </MudTooltip>
+                        }
                     </MudStack>
                     <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
                         <MudButton Variant="Variant.Text"
@@ -193,7 +202,7 @@
                     </div>
 
                     <div class="details-content">
-                        <StoryCard StoryModel="SelectedStory" />
+                        <StoryCard StoryModel="SelectedStory" OnSave="HandleStorySave" />
                     </div>
                 </div>
             </div>
@@ -207,6 +216,8 @@
     private bool _loading = true;
     private Story? SelectedStory;
     private string _moveStoryErrorMessage = string.Empty;
+    private MudDropContainer<Story>? _dropContainer;
+    private bool _needsRefresh = false;
 
     //Api Intergration for getting stories
     protected override async Task OnInitializedAsync()
@@ -214,11 +225,23 @@
         await LoadStoriesAsync();
     }
 
-    private async Task LoadStoriesAsync()
+    protected override Task OnAfterRenderAsync(bool firstRender)
     {
-        _loading = true;
-        _moveStoryErrorMessage = string.Empty;
-        Items = new();
+        if (_needsRefresh)
+        {
+            _needsRefresh = false;
+            _dropContainer?.Refresh();
+        }
+        return Task.CompletedTask;
+    }
+
+    private async Task LoadStoriesAsync(bool showLoading = true)
+    {
+        if (showLoading)
+        {
+            _loading = true;
+            Items = new();
+        }
 
         try
         {
@@ -235,6 +258,7 @@
         finally
         {
             _loading = false;
+            _needsRefresh = true;
         }
     }
 
@@ -296,9 +320,27 @@
         SelectedStory = story;
     }
 
-    private void CloseStoryDetails()
+    private async Task CloseStoryDetails()
     {
         SelectedStory = null;
+        await LoadStoriesAsync(showLoading: false);
+    }
+
+    private async Task HandleStorySave(Story story)
+    {
+        try
+        {
+            var response = await Http.PutAsJsonAsync("api/story", story);
+            if (response.IsSuccessStatusCode)
+            {
+                SelectedStory = null;
+                await LoadStoriesAsync(showLoading: false);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating story: {ex.Message}");
+        }
     }
 
     private string GetPriorityClass(Story story)

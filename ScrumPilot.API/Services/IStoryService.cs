@@ -10,8 +10,10 @@ namespace ScrumPilot.API.Services
         Task<List<Story>> GenerateAiStories(List<string> problemStatements);
 
         Task<Story> CreateStoryAsync(Story story);
+        Task<Story> CommitStoryAsync(Story story);
         Task<Story> UpdateStoryAsync(Story story);
         Task<bool> DeleteStoryAsync(int id);
         Task<Story> CreateDraftStoryAsync(Story story);
+        Task<IEnumerable<Story>> GetNonDraftStoriesAsync();
     }
 }

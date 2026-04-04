@@ -25,6 +25,11 @@ namespace ScrumPilot.API.Services
             return await _storyRepository.GetAllStoriesAsync();
         }
 
+        public async Task<IEnumerable<Story>> GetNonDraftStoriesAsync()
+        {
+            return await _storyRepository.GetNonDraftStoriesAsync();
+        }
+
         public async Task<IEnumerable<Story>> GetDraftStoriesAsync()
         {
             return await _storyRepository.GetDraftStoriesAsync();
@@ -226,13 +231,20 @@ namespace ScrumPilot.API.Services
 
         public async Task<Story> UpdateStoryAsync(Story story)
         {
+            story.LastUpdated = DateTime.UtcNow;
             return await _storyRepository.UpdateAsync(story);
         }
 
-        public async Task<bool> DeleteStoryAsync(int id)
+        public async Task<bool> DeleteStoryAsync(int id) //Currently a hard delete. Maybe we reconsider this?
         {
             return await _storyRepository.DeleteAsync(id);
         }
 
+        public async Task<Story> CommitStoryAsync(Story story)
+        {
+            story.IsDraft = false;
+            story.LastUpdated = DateTime.UtcNow;
+            return await _storyRepository.UpdateAsync(story);
+        }
     }
 }

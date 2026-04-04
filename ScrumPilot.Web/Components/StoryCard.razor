@@ -270,6 +270,7 @@ else
 
 @code {
     [Parameter] public ScrumPilot.Shared.Models.Story? StoryModel { get; set; }
+    [Parameter] public EventCallback<ScrumPilot.Shared.Models.Story> OnSave { get; set; }
 
     private bool isEditMode = false;
     private bool titleError = false;
@@ -291,7 +292,7 @@ else
         isEditMode = true;
     }
 
-    private void SaveChanges()
+    private async Task SaveChanges()
     {
         if (string.IsNullOrWhiteSpace(editTitle))
         {
@@ -309,6 +310,11 @@ else
         titleError = false;
         errorMessage = "";
         isEditMode = false;
+
+        if (OnSave.HasDelegate)
+        {
+            await OnSave.InvokeAsync(StoryModel);
+        }
     }
 
     private void CancelEdit()
