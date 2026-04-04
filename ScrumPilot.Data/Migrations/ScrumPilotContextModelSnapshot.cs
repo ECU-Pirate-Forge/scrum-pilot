@@ -63,13 +63,14 @@ namespace ScrumPilot.Data.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");
 
-                    b.Property<bool>("IsAiGenerated")
-                        .HasColumnType("INTEGER");
-
                     b.Property<bool>("IsDraft")
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("LastUpdated")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Origin")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Priority")

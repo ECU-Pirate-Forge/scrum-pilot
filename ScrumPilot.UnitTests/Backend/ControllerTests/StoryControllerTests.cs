@@ -5,7 +5,7 @@ using ScrumPilot.API.Services;
 using ScrumPilot.Shared.Models;
 using Xunit;
 
-namespace ScrumPilot.UnitTests.Backend.Controller_Tests
+namespace ScrumPilot.UnitTests.Backend.ControllerTests
 {
     public class StoryControllerTests
     {
@@ -147,37 +147,37 @@ namespace ScrumPilot.UnitTests.Backend.Controller_Tests
                     Description = "Generated story description",
                     Status = StoryStatus.ToDo,
                     Priority = StoryPriority.Low,
-                    IsAiGenerated = true,
+                    Origin = StoryOrigin.AiGenerated,
                     DateCreated = DateTime.UtcNow,
                     LastUpdated = DateTime.UtcNow
                 }
             };
 
-            _mockStoryService.GenerateAiStory(problemStatements).Returns(expectedStories);
+            _mockStoryService.GenerateAiStories(problemStatements).Returns(expectedStories);
 
             // Act
-            var result = await _controller.GenerateAiStory(problemStatements);
+            var result = await _controller.GenerateAiStories(problemStatements);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
             var actualStories = Assert.IsType<List<Story>>(okResult.Value);
             Assert.Equal(expectedStories[0].Id, actualStories[0].Id);
             Assert.Equal(expectedStories[0].Title, actualStories[0].Title);
-            Assert.Equal(expectedStories[0].IsAiGenerated, actualStories[0].IsAiGenerated);
-            await _mockStoryService.Received(1).GenerateAiStory(problemStatements);
+            Assert.Equal(expectedStories[0].Origin, actualStories[0].Origin);
+            await _mockStoryService.Received(1).GenerateAiStories(problemStatements);
         }
 
         [Fact]
         public async Task GenerateAiStory_ReturnsBadRequest_WhenProblemStatementsIsNullOrEmpty()
         {
             // Act
-            var resultNull = await _controller.GenerateAiStory(null!);
-            var resultEmpty = await _controller.GenerateAiStory(new List<string>());
+            var resultNull = await _controller.GenerateAiStories(null!);
+            var resultEmpty = await _controller.GenerateAiStories(new List<string>());
 
             // Assert
             Assert.Equal("At least one problem statement is required.", Assert.IsType<BadRequestObjectResult>(resultNull.Result).Value);
             Assert.Equal("At least one problem statement is required.", Assert.IsType<BadRequestObjectResult>(resultEmpty.Result).Value);
-            await _mockStoryService.DidNotReceive().GenerateAiStory(Arg.Any<List<string>>());
+            await _mockStoryService.DidNotReceive().GenerateAiStories(Arg.Any<List<string>>());
         }
 
         [Theory]
@@ -190,12 +190,12 @@ namespace ScrumPilot.UnitTests.Backend.Controller_Tests
             var problemStatements = new List<string> { "Valid statement", invalidStatement! };
 
             // Act
-            var result = await _controller.GenerateAiStory(problemStatements);
+            var result = await _controller.GenerateAiStories(problemStatements);
 
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
             Assert.Equal("All problem statements must be non-empty strings.", badRequestResult.Value);
-            await _mockStoryService.DidNotReceive().GenerateAiStory(Arg.Any<List<string>>());
+            await _mockStoryService.DidNotReceive().GenerateAiStories(Arg.Any<List<string>>());
         }
 
         [Fact]
@@ -204,16 +204,16 @@ namespace ScrumPilot.UnitTests.Backend.Controller_Tests
             // Arrange
             var problemStatements = new List<string> { "Test problem statement" };
             var exceptionMessage = "Invalid operation occurred";
-            _mockStoryService.GenerateAiStory(problemStatements)
+            _mockStoryService.GenerateAiStories(problemStatements)
                 .Returns(Task.FromException<List<Story>>(new InvalidOperationException(exceptionMessage)));
 
             // Act
-            var result = await _controller.GenerateAiStory(problemStatements);
+            var result = await _controller.GenerateAiStories(problemStatements);
 
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
             Assert.Equal($"Failed to generate AI story: {exceptionMessage}", badRequestResult.Value);
-            await _mockStoryService.Received(1).GenerateAiStory(problemStatements);
+            await _mockStoryService.Received(1).GenerateAiStories(problemStatements);
         }
 
         [Fact]
@@ -222,17 +222,17 @@ namespace ScrumPilot.UnitTests.Backend.Controller_Tests
             // Arrange
             var problemStatements = new List<string> { "Test problem statement" };
             var exceptionMessage = "Network error";
-            _mockStoryService.GenerateAiStory(problemStatements)
+            _mockStoryService.GenerateAiStories(problemStatements)
                 .Returns(Task.FromException<List<Story>>(new HttpRequestException(exceptionMessage)));
 
             // Act
-            var result = await _controller.GenerateAiStory(problemStatements);
+            var result = await _controller.GenerateAiStories(problemStatements);
 
             // Assert
             var statusCodeResult = Assert.IsType<ObjectResult>(result.Result);
             Assert.Equal(502, statusCodeResult.StatusCode);
             Assert.Equal($"Failed to communicate with Ollama service: {exceptionMessage}", statusCodeResult.Value);
-            await _mockStoryService.Received(1).GenerateAiStory(problemStatements);
+            await _mockStoryService.Received(1).GenerateAiStories(problemStatements);
         }
 
         [Fact]
@@ -241,17 +241,17 @@ namespace ScrumPilot.UnitTests.Backend.Controller_Tests
             // Arrange
             var problemStatements = new List<string> { "Test problem statement" };
             var exceptionMessage = "Request timed out";
-            _mockStoryService.GenerateAiStory(problemStatements)
+            _mockStoryService.GenerateAiStories(problemStatements)
                 .Returns(Task.FromException<List<Story>>(new TimeoutException(exceptionMessage)));
 
             // Act
-            var result = await _controller.GenerateAiStory(problemStatements);
+            var result = await _controller.GenerateAiStories(problemStatements);
 
             // Assert
             var statusCodeResult = Assert.IsType<ObjectResult>(result.Result);
             Assert.Equal(408, statusCodeResult.StatusCode);
             Assert.Equal($"Request timed out: {exceptionMessage}", statusCodeResult.Value);
-            await _mockStoryService.Received(1).GenerateAiStory(problemStatements);
+            await _mockStoryService.Received(1).GenerateAiStories(problemStatements);
         }
 
         [Fact]
@@ -260,17 +260,17 @@ namespace ScrumPilot.UnitTests.Backend.Controller_Tests
             // Arrange
             var problemStatements = new List<string> { "Test problem statement" };
             var exceptionMessage = "Unexpected error";
-            _mockStoryService.GenerateAiStory(problemStatements)
+            _mockStoryService.GenerateAiStories(problemStatements)
                 .Returns(Task.FromException<List<Story>>(new Exception(exceptionMessage)));
 
             // Act
-            var result = await _controller.GenerateAiStory(problemStatements);
+            var result = await _controller.GenerateAiStories(problemStatements);
 
             // Assert
             var statusCodeResult = Assert.IsType<ObjectResult>(result.Result);
             Assert.Equal(500, statusCodeResult.StatusCode);
             Assert.Equal($"An unexpected error occurred: {exceptionMessage}", statusCodeResult.Value);
-            await _mockStoryService.Received(1).GenerateAiStory(problemStatements);
+            await _mockStoryService.Received(1).GenerateAiStories(problemStatements);
         }
 
 

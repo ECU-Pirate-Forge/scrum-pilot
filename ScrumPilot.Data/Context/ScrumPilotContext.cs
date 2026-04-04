@@ -26,6 +26,7 @@ namespace ScrumPilot.Data.Context
                 entity.Property(e => e.Description).HasMaxLength(2000);
                 entity.Property(e => e.Status).HasConversion<string>();
                 entity.Property(e => e.Priority).HasConversion<string>();
+                entity.Property(e => e.Origin).HasConversion<string>();
                 entity.Property(e => e.DateCreated).IsRequired();
                 entity.Property(e => e.LastUpdated).IsRequired();
             });

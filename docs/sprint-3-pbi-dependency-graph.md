@@ -23,4 +23,7 @@ graph TD
     PBI75["#75 Update GitHub Actions Workflow"]
     PBI94["#94 Update Story Status When Dragging Cards on the Scrum Board"]
 
+    PBI119["#119 Connect Frontend to Backend"]
+
     PBI97 --> PBI101
+    PBI90 --> PBI89
