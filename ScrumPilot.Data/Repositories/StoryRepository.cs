@@ -20,6 +20,14 @@ namespace ScrumPilot.Data.Repositories
                 .ToListAsync();
         }
 
+        //public async Task<IEnumerable<Story>> GetActiveStoriesAsync(epicId)
+        //{
+        //    return await _context.Stories
+        //        .Where(s => s.EpicId == epicId && s.Status != StoryStatus.Closed)
+        //        .OrderByDescending(s => s.DateCreated)
+        //        .ToListAsync();
+        //}
+
         public async Task<Story?> GetByIdAsync(int id)
         {
             return await _context.Stories

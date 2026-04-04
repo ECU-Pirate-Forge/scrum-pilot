@@ -7,20 +7,23 @@ namespace ScrumPilot.Data.Seeders
     {
         public static void SeedDatabase(ScrumPilotContext context)
         {
-            // Debug: Check if database is empty
+            SeedStories(context);
+            SeedMessageTranscripts(context);
+        }
+
+        private static void SeedStories(ScrumPilotContext context)
+        {
             var storyCount = context.Stories.Count();
             Console.WriteLine($"[SEEDER] Current story count: {storyCount}");
 
-            // Only seed if database is empty
             if (context.Stories.Any())
             {
                 Console.WriteLine("[SEEDER] Database already has stories, skipping seed.");
                 return;
             }
 
-            Console.WriteLine("[SEEDER] Database is empty, seeding data...");
+            Console.WriteLine("[SEEDER] Seeding stories...");
 
-            // Seed Stories
             var stories = new[]
             {
                 new Story
@@ -70,6 +73,47 @@ namespace ScrumPilot.Data.Seeders
 
             Console.WriteLine($"[SEEDER] Successfully seeded {rowsAffected} stories.");
             Console.WriteLine($"[SEEDER] Draft stories added: {stories.Count(s => s.IsDraft)}");
+        }
+
+        private static void SeedMessageTranscripts(ScrumPilotContext context)
+        {
+            if (context.MessageTranscripts.Any())
+            {
+                Console.WriteLine("[SEEDER] Database already has message transcripts, skipping seed.");
+                return;
+            }
+
+            Console.WriteLine("[SEEDER] Seeding message transcripts...");
+
+            var transcript = new MessageTranscript
+            {
+                Messages = new List<DiscordMessage>
+                {
+                    new DiscordMessage
+                    {
+                        Author = new DiscordAuthor { Id = "111111111111111111", Username = "alex_dev" },
+                        Content = "Yesterday I finished the login page UI. Today I'm starting on form validation. No blockers.",
+                        Timestamp = new DateTime(2025, 6, 9, 9, 1, 0, DateTimeKind.Utc)
+                    },
+                    new DiscordMessage
+                    {
+                        Author = new DiscordAuthor { Id = "222222222222222222", Username = "morgan_qa" },
+                        Content = "I reviewed the auth PR and left some comments. Today I'll finish writing test cases for the profile page. Blocked waiting on the API spec.",
+                        Timestamp = new DateTime(2025, 6, 9, 9, 2, 0, DateTimeKind.Utc)
+                    },
+                    new DiscordMessage
+                    {
+                        Author = new DiscordAuthor { Id = "333333333333333333", Username = "jamie_be" },
+                        Content = "I'll get that API spec to you this morning @morgan_qa. Yesterday I set up the database migrations. Today I'm wiring up the user endpoints.",
+                        Timestamp = new DateTime(2025, 6, 9, 9, 3, 0, DateTimeKind.Utc)
+                    }
+                }
+            };
+
+            context.MessageTranscripts.Add(transcript);
+            var rowsAffected = context.SaveChanges();
+
+            Console.WriteLine($"[SEEDER] Successfully seeded {rowsAffected} message transcript(s).");
         }
     }
 }

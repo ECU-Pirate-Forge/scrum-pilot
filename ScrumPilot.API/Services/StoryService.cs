@@ -1,5 +1,4 @@
-﻿using AutoFixture;
-using ScrumPilot.Data.Repositories;
+﻿using ScrumPilot.Data.Repositories;
 using ScrumPilot.Shared.Models;
 using System.Text;
 using System.Text.Json;
@@ -23,6 +22,11 @@ namespace ScrumPilot.API.Services
         {
             return await _storyRepository.GetAllStoriesAsync();
         }
+
+        //public async Task<IEnumerable<Story>> GetActiveStoriesAsync(int epicId)
+        //{
+        //    return await _storyRepository.GetActiveStoriesAsync(epicId);
+        //}
 
         public async Task<IEnumerable<Story>> GetNonDraftStoriesAsync()
         {

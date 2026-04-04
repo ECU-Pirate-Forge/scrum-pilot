@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
 using ScrumPilot.API.Services;
-using ScrumPilot.Data.Repositories;
 using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.API.Controllers
@@ -16,12 +15,20 @@ namespace ScrumPilot.API.Controllers
             _storyService = storyService;
         }
 
+
         [HttpGet("getAllStories")]
         public async Task<ActionResult<IEnumerable<Story>>> GetAllStories()
         {
             var stories = await _storyService.GetAllStoriesAsync();
             return Ok(stories);
         }
+
+        //[HttpGet("getActiveStories")]
+        //public async Task<ActionResult<IEnumerable<Story>>> GetActiveStories(int epicId)
+        //{
+        //    var stories = await _storyService.GetActiveStoriesAsync(epicId);
+        //    return Ok(stories);
+        //}
 
         [HttpGet("getNonDraftStories")]
         public async Task<ActionResult<IEnumerable<Story>>> GetNonDraftStories()
@@ -138,6 +145,20 @@ namespace ScrumPilot.API.Controllers
             var success = await _storyService.DeleteStoryAsync(id);
             if (!success) return NotFound();
             return NoContent();
+        }
+
+        [HttpPost("addAudioTranscript")]
+        public async Task<ActionResult> AddAudioTranscript([FromBody] AudioTranscript transcript)
+        {
+            //TODO: Implement logic to add transcript to DB
+            return Ok();
+        }
+
+        [HttpPost("addMessageTranscript")]
+        public async Task<ActionResult> AddMessageTranscript([FromBody] MessageTranscript transcript)
+        {
+            //TODO: Implement logic to add transcript to DB
+            return Ok();
         }
     }
 }
