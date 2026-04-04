@@ -80,7 +80,7 @@ namespace ScrumPilot.API.Services
             return story;
         }
 
-        public async Task<List<Story>> GenerateAiStory(List<string> problemStatements)
+        public async Task<List<Story>> GenerateAiStories(List<string> problemStatements)
         {
             var stories = new List<Story>();
 

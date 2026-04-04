@@ -186,7 +186,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
 
             // Act
-            var results = await service.GenerateAiStory(new List<string> { problemStatement });
+            var results = await service.GenerateAiStories(new List<string> { problemStatement });
             var result = results[0];
 
             // Assert
@@ -210,7 +210,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => _storyService.GenerateAiStory(new List<string> { problemStatement }));
+                () => _storyService.GenerateAiStories(new List<string> { problemStatement }));
             Assert.Equal("OllamaBaseUrl is not configured.", exception.Message);
         }
 
@@ -224,7 +224,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => _storyService.GenerateAiStory(new List<string> { problemStatement }));
+                () => _storyService.GenerateAiStories(new List<string> { problemStatement }));
             Assert.Equal("OllamaBaseUrl is not configured.", exception.Message);
         }
 
@@ -242,7 +242,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => service.GenerateAiStory(new List<string> { problemStatement }));
+                () => service.GenerateAiStories(new List<string> { problemStatement }));
             Assert.Contains("An unexpected error occurred while calling the Ollama API", exception.Message);
         }
 
@@ -256,7 +256,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<HttpRequestException>(
-                () => service.GenerateAiStory(new List<string> { problemStatement }));
+                () => service.GenerateAiStories(new List<string> { problemStatement }));
             Assert.Contains("Ollama API request failed with status InternalServerError", exception.Message);
         }
 
@@ -270,7 +270,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<TimeoutException>(
-                () => service.GenerateAiStory(new List<string> { problemStatement }));
+                () => service.GenerateAiStories(new List<string> { problemStatement }));
             Assert.Equal("The request to Ollama timed out", exception.Message);
         }
 
@@ -286,7 +286,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => service.GenerateAiStory(new List<string> { problemStatement }));
+                () => service.GenerateAiStories(new List<string> { problemStatement }));
             Assert.Contains("An unexpected error occurred while parsing the AI story response", exception.Message);
         }
 
@@ -302,7 +302,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => service.GenerateAiStory(new List<string> { problemStatement }));
+                () => service.GenerateAiStories(new List<string> { problemStatement }));
             Assert.Contains("Failed to find a JSON object in the AI response", exception.Message);
         }
 
@@ -325,7 +325,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
 
             // Act
-            var results = await service.GenerateAiStory(new List<string> { problemStatement });
+            var results = await service.GenerateAiStories(new List<string> { problemStatement });
             var result = results[0];
 
             // Assert
@@ -347,7 +347,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => service.GenerateAiStory(new List<string> { problemStatement }));
+                () => service.GenerateAiStories(new List<string> { problemStatement }));
             Assert.Contains("Failed to parse AI response as JSON", exception.Message);
         }
 
@@ -372,7 +372,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
 
             // Act
-            await service.GenerateAiStory(new List<string> { problemStatement });
+            await service.GenerateAiStories(new List<string> { problemStatement });
 
             // Assert - Verify the request was made correctly
             Assert.NotNull(_capturedRequest);
@@ -405,7 +405,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
 
             // Act
-            var result = await service.GenerateAiStory(["Statement 1", "Statement 2", "Statement 3"]);
+            var result = await service.GenerateAiStories(["Statement 1", "Statement 2", "Statement 3"]);
 
             // Assert
             Assert.NotNull(result);
@@ -426,7 +426,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
 
             // Act & Assert
             await Assert.ThrowsAsync<HttpRequestException>(
-                () => service.GenerateAiStory(["Problem 1", "Problem 2"]));
+                () => service.GenerateAiStories(["Problem 1", "Problem 2"]));
         }
 
         private void SetupConfiguration(string baseUrl, string model)
