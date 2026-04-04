@@ -10,6 +10,8 @@ namespace ScrumPilot.Data.Context
         }
 
         public DbSet<Story> Stories { get; set; }
+        public DbSet<AudioTranscript> AudioTranscripts { get; set; }
+        public DbSet<MessageTranscript> MessageTranscripts { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -24,8 +26,28 @@ namespace ScrumPilot.Data.Context
                 entity.Property(e => e.Description).HasMaxLength(2000);
                 entity.Property(e => e.Status).HasConversion<string>();
                 entity.Property(e => e.Priority).HasConversion<string>();
+                entity.Property(e => e.Origin).HasConversion<string>();
                 entity.Property(e => e.DateCreated).IsRequired();
                 entity.Property(e => e.LastUpdated).IsRequired();
+            });
+
+            modelBuilder.Entity<AudioTranscript>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+                entity.Property(e => e.Transcript).IsRequired();
+                entity.Property(e => e.RecordedAt).IsRequired();
+            });
+
+            modelBuilder.Entity<MessageTranscript>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+                entity.OwnsMany(e => e.Messages, messages =>
+                {
+                    messages.ToJson();
+                    messages.OwnsOne(m => m.Author);
+                });
             });
         }
 

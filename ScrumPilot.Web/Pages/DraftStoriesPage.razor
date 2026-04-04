@@ -12,6 +12,20 @@
         </MudStack>
     </MudPaper>
 
+    @if (!string.IsNullOrWhiteSpace(_commitErrorMessage))
+    {
+        <MudAlert Severity="Severity.Error" Icon="@Icons.Material.Filled.ErrorOutline" Class="mb-4">
+            @_commitErrorMessage
+        </MudAlert>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_commitSuccessMessage))
+    {
+        <MudAlert Severity="Severity.Success" Icon="@Icons.Material.Filled.CheckCircle" Class="mb-4">
+            @_commitSuccessMessage
+        </MudAlert>
+    }
+
 @if (draftStories == null)
 {
     <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center" Style="min-height: 400px;">
@@ -56,7 +70,7 @@ else
                 </MudTd>
                 <MudTd DataLabel="Points" Style="text-align: center; vertical-align: top;">
                     <div class="story-points">
-                        @(context.StoryPoints?.ToString() ?? "-")
+                        @((int)context.StoryPoints)
                     </div>
                 </MudTd>
                 <MudTd DataLabel="Created" Style="vertical-align: top;">
@@ -70,8 +84,16 @@ else
                                    Color="Color.Success"
                                    OnClick="@(() => CommitStory(context))"
                                    StartIcon="@Icons.Material.Filled.Check"
+                                   Disabled="@_committingStoryIds.Contains(context.Id)"
                                    Style="width: 85px; min-width: 85px;">
-                            Commit
+                            @if (_committingStoryIds.Contains(context.Id))
+                            {
+                                <span>...</span>
+                            }
+                            else
+                            {
+                                <span>Commit</span>
+                            }
                         </MudButton>
                         <MudButton Variant="Variant.Filled" 
                                    Size="Size.Small" 
@@ -116,7 +138,7 @@ else
             </div>
 
             <div class="modify-content">
-                <StoryCard StoryModel="@modifyingStory" />
+                <StoryCard StoryModel="@modifyingStory" OnSave="HandleModifySave" />
             </div>
         </div>
     </div>
@@ -126,6 +148,9 @@ else
 @code {
     private List<Story>? draftStories;
     private Story? modifyingStory = null; // Track which story is being modified
+    private readonly HashSet<int> _committingStoryIds = new();
+    private string _commitErrorMessage = string.Empty;
+    private string _commitSuccessMessage = string.Empty;
 
     [Inject]
     private HttpClient Http { get; set; } = default!;
@@ -150,23 +175,29 @@ else
         }
     }
 
-    /// Commits a draft story (removes from UI for now)
+    /// Commits a draft story by calling the createStory API endpoint
     private async Task CommitStory(Story story)
     {
-        // TODO: When CRUD endpoints are available, mark story as non-draft
-        // For now, just remove from UI
-        draftStories?.Remove(story);
-        StateHasChanged();
-        await Task.CompletedTask;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/story/commitStory", story);
+            if (response.IsSuccessStatusCode)
+            {
+                draftStories?.Remove(story);
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error committing story: {ex.Message}");
+        }
     }
 
-    /// Opens a modification dialog or redirects to edit page
-    private async Task ModifyStory(Story story)
+    /// Opens the story modification panel
+    private void ModifyStory(Story story)
     {
-        // Set the story to be modified, which will trigger the StoryCard to render
         modifyingStory = story;
         StateHasChanged();
-        await Task.CompletedTask;
     }
 
     /// Closes the modify view
@@ -176,14 +207,45 @@ else
         StateHasChanged();
     }
 
-    /// Rejects and removes a draft story (removes from UI for now)
+    /// Saves the modified story by calling the update API endpoint
+    private async Task HandleModifySave(Story story)
+    {
+        try
+        {
+            var response = await Http.PutAsJsonAsync("api/story", story);
+            if (response.IsSuccessStatusCode)
+            {
+                var index = draftStories?.FindIndex(s => s.Id == story.Id) ?? -1;
+                if (index >= 0)
+                {
+                    draftStories![index] = story;
+                }
+                modifyingStory = null;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating story: {ex.Message}");
+        }
+    }
+
+    /// Rejects and deletes a draft story by calling the delete API endpoint
     private async Task RejectStory(Story story)
     {
-        // TODO: When CRUD endpoints are available, delete story from database
-        // For now, just remove from UI
-        draftStories?.Remove(story);
-        StateHasChanged();
-        await Task.CompletedTask;
+        try
+        {
+            var response = await Http.DeleteAsync($"api/story/{story.Id}");
+            if (response.IsSuccessStatusCode)
+            {
+                draftStories?.Remove(story);
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error rejecting story: {ex.Message}");
+        }
     }
 
 

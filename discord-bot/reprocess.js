@@ -1,117 +1,158 @@
-require('dotenv').config();
-const { Client, GatewayIntentBits } = require('discord.js');
-const { compressAudio, summarize } = require('./recorder');
-const fs = require('fs');
-const path = require('path');
-const OpenAI = require('openai');
+  require('dotenv').config();
+  const { Client, GatewayIntentBits } = require('discord.js');
+  const { compressAudio, summarize, formatDate, getDisplayName, transcribeMultiTrack } = require('./recorder');
+  const fs = require('fs');
+  const path = require('path');
+  const OpenAI = require('openai');
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-const BOT_COMMANDS_CHANNEL = 'bot-commands';
-const RECAP_CHANNEL = 'standup-recap';
+  const BOT_COMMANDS_CHANNEL = 'bot-commands';
+  const RECAP_CHANNEL = 'standup-recap';
 
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-  ]
-});
-
-function getChannel(guild, name) {
-  return guild.channels.cache.find(c => c.name === name && c.isTextBased());
-}
-
-function formatDate(timestamp) {
-  const date = new Date(parseInt(timestamp));
-  return date.toLocaleString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'America/New_York',
-    timeZoneName: 'short',
+  const client = new Client({
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMembers,
+    ]
   });
-}
 
-async function reprocessFile(filePath, recapChannel, controlChannel) {
-  const filename = path.basename(filePath);
-  const timestamp = filename.replace('recording-', '').replace('.ogg', '');
-  const dateString = formatDate(timestamp);
-
-  console.log(`[Reprocess] Processing: ${filename} (recorded ${dateString})`);
-  await controlChannel.send(`🔄 Reprocessing recording from ${dateString}...`);
-
-  const compressedPath = await compressAudio(filePath);
-
-
-  try {
-    console.log('[Whisper] Sending to Whisper...');
-    const transcription = await openai.audio.transcriptions.create({
-      file: fs.createReadStream(compressedPath),
-      model: 'whisper-1',
-    });
-
-    fs.unlinkSync(compressedPath);
-
-    const transcript = transcription.text;
-    console.log('[Whisper] Transcript received.');
-
-    const summary = await summarize(transcript);
-
-    const markdownContent = summary
-      ? `# 📋 Meeting Recap\n*Recorded ${dateString}*\n\n## Summary\n${summary}\n\n## Full Transcript\n${transcript}`
-      : `# 📋 Meeting Transcript\n*Recorded ${dateString}*\n\n${transcript}`;
-
-    const markdownPath = filePath.replace('.ogg', '.md');
-    fs.writeFileSync(markdownPath, markdownContent);
-
-    await recapChannel.send({
-      content: `📋 Meeting recap from ${dateString}`,
-      files: [markdownPath]
-    });
-
-    fs.unlinkSync(filePath);
-    fs.unlinkSync(markdownPath);
-    console.log(`[Reprocess] Done: ${filename}`);
-  } catch (err) {
-    if (fs.existsSync(compressedPath)) fs.unlinkSync(compressedPath);
-    console.error(`[Reprocess] Failed for ${filename}:`, err.message);
-    await controlChannel.send(`⚠️ Failed to reprocess recording from ${dateString}.`);   
-  }
-}
-
-client.once('ready', async () => {
-  console.log(`[Reprocess] Logged in as ${client.user.tag}`);
-
-  const guild = client.guilds.cache.first();
-  const recapChannel = getChannel(guild, RECAP_CHANNEL);
-  const controlChannel = getChannel(guild, BOT_COMMANDS_CHANNEL);
-
-  if (!recapChannel || !controlChannel) {
-    console.error('[Reprocess] Could not find required channels.');
-    process.exit(1);
+  function getChannel(guild, name) {
+    return guild.channels.cache.find(c => c.name === name && c.isTextBased());
   }
 
-  // Find all .ogg files in the discord-bot directory
-  const files = fs.readdirSync(__dirname)
-    .filter(f => f.startsWith('recording-') && f.endsWith('.ogg'))
-    .map(f => path.join(__dirname, f))
-    .sort(); // process in chronological order
+  // Legacy handler for old single-track mixed recordings
+  async function reprocessSingleFile(filePath, recapChannel, controlChannel) {
+    const filename = path.basename(filePath);
+    const timestamp = filename.replace('recording-', '').replace('.ogg', '');
+    const dateString = formatDate(timestamp);
 
-  if (files.length === 0) {
-    console.log('[Reprocess] No recordings found to reprocess.');
+    console.log(`[Reprocess] Processing single-track: ${filename} (recorded ${dateString})`);
+    await controlChannel.send(`🔄 Reprocessing recording from ${dateString}...`);
+
+    let compressedPath;
+    try {
+      compressedPath = await compressAudio(filePath, controlChannel);
+
+      console.log('[Whisper] Sending to Whisper...');
+      const transcription = await openai.audio.transcriptions.create({
+        file: fs.createReadStream(compressedPath),
+        model: 'whisper-1',
+      });
+
+      fs.unlinkSync(compressedPath);
+
+      const transcript = transcription.text;
+      console.log('[Whisper] Transcript received.');
+
+      const summary = await summarize(transcript);
+
+      const markdownContent = summary
+        ? `# 📋 Meeting Recap\n*Recorded ${dateString}*\n\n## Summary\n${summary}\n\n## Full Transcript\n${transcript}`
+        : `# 📋 Meeting Transcript\n*Recorded ${dateString}*\n\n${transcript}`;
+
+      const markdownPath = filePath.replace('.ogg', '.md');
+      fs.writeFileSync(markdownPath, markdownContent);
+
+      await recapChannel.send({
+        content: `📋 Meeting recap from ${dateString}`,
+        files: [markdownPath]
+      });
+
+      fs.unlinkSync(filePath);
+      fs.unlinkSync(markdownPath);
+      console.log(`[Reprocess] Done: ${filename}`);
+    } catch (err) {
+      if (compressedPath && fs.existsSync(compressedPath)) fs.unlinkSync(compressedPath);
+      const isCorrupt = err.message.includes('ffmpeg');
+      console.error(`[Reprocess] Error:`, err);
+      await controlChannel.send(
+        isCorrupt
+          ? `⚠️ Recording from ${dateString} appears to be corrupted and could not be processed.`
+          : `⚠️ Something went wrong processing the recording from ${dateString}.`
+      );
+    }
+  }
+
+  // Multi-track handler for new per-user recordings
+  async function reprocessMultiTrack(guild, timestamp, userFiles, recapChannel, controlChannel) {
+    const dateString = formatDate(timestamp);
+    console.log(`[Reprocess] Processing multi-track session from ${dateString} (${userFiles.length} tracks)`);
+    await controlChannel.send(`🔄 Reprocessing ${userFiles.length}-track recording from ${dateString}...`);
+
+    // Build a userRecordings map in the same shape transcribeMultiTrack expects
+    const userRecordings = new Map();
+    userFiles.forEach(({ userId, filePath }, index) => {
+      userRecordings.set(userId, {
+        process: null,
+        outputPath: filePath,
+        startTime: index, // no real timing info from filenames, preserve sort order
+      });
+    });
+
+    await transcribeMultiTrack(guild, userRecordings, timestamp, recapChannel, controlChannel);
+  }
+
+  client.once('clientReady', async () => {
+    console.log(`[Reprocess] Logged in as ${client.user.tag}`);
+
+    const guild = client.guilds.cache.first();
+
+    // Fetch members so getDisplayName can resolve userIds to names
+    await guild.members.fetch();
+
+    const recapChannel = getChannel(guild, RECAP_CHANNEL);
+    const controlChannel = getChannel(guild, BOT_COMMANDS_CHANNEL);
+
+    if (!recapChannel || !controlChannel) {
+      console.error('[Reprocess] Could not find required channels.');
+      process.exit(1);
+    }
+
+    const allOggs = fs.readdirSync(__dirname)
+      .filter(f => f.endsWith('.ogg'))
+      .map(f => path.join(__dirname, f))
+      .sort();
+
+    if (allOggs.length === 0) {
+      console.log('[Reprocess] No recordings found to reprocess.');
+      process.exit(0);
+    }
+
+    // Separate single-track (recording-<timestamp>.ogg)
+    // from multi-track (recording-<timestamp>-<userId>.ogg)
+    const multiTrackGroups = new Map(); // timestamp -> [{ userId, filePath }]
+    const singleTrackFiles = [];
+
+    for (const filePath of allOggs) {
+      const filename = path.basename(filePath);
+      const multiMatch = filename.match(/^recording-(\d+)-(\d+)\.ogg$/);
+      const singleMatch = filename.match(/^recording-(\d+)\.ogg$/);
+
+      if (multiMatch) {
+        const [, timestamp, userId] = multiMatch;
+        if (!multiTrackGroups.has(timestamp)) multiTrackGroups.set(timestamp, []);
+        multiTrackGroups.get(timestamp).push({ userId, filePath });
+      } else if (singleMatch) {
+        singleTrackFiles.push(filePath);
+      }
+    }
+
+    const totalJobs = singleTrackFiles.length + multiTrackGroups.size;
+    console.log(`[Reprocess] Found ${totalJobs} session(s) to process (${singleTrackFiles.length} single-track, ${multiTrackGroups.size} multi-track).`);
+
+    // Process single-track legacy files
+    for (const file of singleTrackFiles) {
+      await reprocessSingleFile(file, recapChannel, controlChannel);
+    }
+
+    // Process multi-track sessions grouped by timestamp
+    for (const [timestamp, userFiles] of [...multiTrackGroups.entries()].sort()) {
+      await reprocessMultiTrack(guild, timestamp, userFiles, recapChannel, controlChannel);
+    }
+
+    console.log('[Reprocess] All done.');
     process.exit(0);
-  }
+  });
 
-  console.log(`[Reprocess] Found ${files.length} recording(s) to process.`);
-
-  for (const file of files) {
-    await reprocessFile(file, recapChannel, controlChannel);
-  }
-
-  console.log('[Reprocess] All done.');
-  process.exit(0);
-});
-
-client.login(process.env.DISCORD_TOKEN);
+  client.login(process.env.DISCORD_TOKEN);

@@ -4,6 +4,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const prism = require('prism-media');
+const Anthropic = require('@anthropic-ai/sdk');
 const OpenAI = require('openai');
 
 const MEETING_VOICE_CHANNEL = 'voice Scrum Pilot';
@@ -11,13 +12,15 @@ const BOT_COMMANDS_CHANNEL = 'bot-commands';
 const RECAP_CHANNEL = 'standup-recap';
 const QUORUM = 2
 
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 let connection = null;
 let recording = false;
 let starting = false;
-let outputPath = null;
-let ffmpegProcess = null;
+let stopping = false;
+let recordingTimestamp = null;
+let userRecordings = new Map();
 
 function getChannel(guild, name, type = 'text') {
   return guild.channels.cache.find(c =>
@@ -39,20 +42,54 @@ function formatDate(timestamp) {
   });
 }
 
+function getDisplayName(guild, userId) {
+  const member = guild.members.cache.get(userId);
+  return member?.displayName || member?.user?.username || `User-${userId}`;
+}
+
 function subscribeUser(receiver, userId) {
-  if (receiver.subscriptions.has(userId)) return;
-
-  const opusStream = receiver.subscribe(userId, {
-    end: { behavior: EndBehaviorType.AfterSilence, duration: 500 }
+  if (userRecordings.has(userId)) return;
+ 
+  const userOutputPath = path.join(__dirname, `recording-${recordingTimestamp}-${userId}.ogg`);
+ 
+  const userFfmpeg = spawn(ffmpegStatic, [
+    '-f', 's16le',
+    '-ar', '48000',
+    '-ac', '2',
+    '-i', 'pipe:0',
+    userOutputPath
+  ]);
+ 
+  userFfmpeg.stderr.on('data', (data) => {
+    console.log(`[ffmpeg:${userId}]`, data.toString());
   });
-
+ 
+  userRecordings.set(userId, {
+    process: userFfmpeg,
+    outputPath: userOutputPath,
+    startTime: Date.now(),
+  });
+ 
+  console.log(`[Recorder] Subscribed to user ${userId}`);
+ 
+  const opusStream = receiver.subscribe(userId, {
+    end: { behavior: EndBehaviorType.Manual }
+  });
+ 
   const decoder = new prism.opus.Decoder({
     frameSize: 960,
     channels: 2,
     rate: 48000
   });
-
-  opusStream.pipe(decoder).pipe(ffmpegProcess.stdin, { end: false });
+ 
+  decoder.on('error', (err) => {
+    console.warn(`[Recorder] Opus decode error (user ${userId}):`, err.message);
+  });
+  opusStream.on('error', (err) => {
+    console.warn(`[Recorder] Opus stream error (user ${userId}):`, err.message);
+  });
+ 
+  opusStream.pipe(decoder).pipe(userFfmpeg.stdin, { end: false });
 }
 
 async function startRecording(guild) {
@@ -71,35 +108,24 @@ async function startRecording(guild) {
   connection.on(VoiceConnectionStatus.Ready, async () => {
     console.log('[Recorder] Connected to voice channel.');
 
-    outputPath = path.join(__dirname, `recording-${Date.now()}.ogg`);
+    recordingTimestamp = Date.now();
+    userRecordings = new Map();
     const receiver = connection.receiver;
-
-    ffmpegProcess = spawn(ffmpegStatic, [
-      '-f', 's16le',
-      '-ar', '48000',
-      '-ac', '2',
-      '-i', 'pipe:0',
-      outputPath
-    ]);
-
-    ffmpegProcess.stderr.on('data', (data) => {
-      console.log('[ffmpeg]', data.toString());
-    });
-
+ 
     // Subscribe to anyone already in the channel
     voiceChannel.members.forEach(member => {
       if (!member.user.bot) subscribeUser(receiver, member.id);
     });
-
+ 
     // Subscribe to anyone who starts speaking after connection
     receiver.speaking.on('start', (userId) => {
       subscribeUser(receiver, userId);
     });
-
+ 
     starting = false;
     recording = true;
     await controlChannel.send('🔴 Scrumlord is listening.');
-    console.log('[Recorder] Recording started:', outputPath);
+    console.log('[Recorder] Recording started. Timestamp:', recordingTimestamp);
   });
 }
 
@@ -107,9 +133,15 @@ async function stopRecording(guild) {
   const controlChannel = getChannel(guild, BOT_COMMANDS_CHANNEL);
   const recapChannel = getChannel(guild, RECAP_CHANNEL);
 
-  if (ffmpegProcess) {
-    ffmpegProcess.stdin.end();
-    ffmpegProcess = null;
+  if (userRecordings.size > 0) {
+    await Promise.all([...userRecordings.values()].map(({ process }) =>
+      new Promise((resolve) => {
+        process.on('close', resolve);
+        if (process.stdin && !process.stdin.destroyed) {
+          process.stdin.end();
+        }
+      })
+    ));
   }
 
   if (connection) {
@@ -122,76 +154,153 @@ async function stopRecording(guild) {
   await controlChannel.send('⏹️ Meeting ended — processing recording...');
   console.log('[Recorder] Recording stopped. Processing...');
 
-  if (outputPath && fs.existsSync(outputPath)) {
-    await transcribeAndSummarize(outputPath, recapChannel, controlChannel);
+  if (userRecordings.size > 0) {
+    await transcribeMultiTrack(guild, userRecordings, recordingTimestamp, recapChannel, controlChannel);
   }
+ 
+  userRecordings = new Map();
+  recordingTimestamp = null;
+  stopping = false;
 }
 
-async function compressAudio(inputPath) {
+async function compressAudio(inputPath, controlChannel = null) {
   const outputPath = inputPath.replace('.ogg', '.mp3');
-  console.log('[Recorder] Compressing audio...');
-  await new Promise((resolve, reject) => {
-    const ffmpeg = spawn(ffmpegStatic, [
-      '-i', inputPath,
-      '-codec:a', 'libmp3lame',
-      '-q:a', '9',
-      outputPath
-    ]);
+  const silenceRemovedPath = inputPath.replace('.ogg', '-trimmed.ogg');
+  const MAX_WHISPER_BYTES = 25 * 1024 * 1024;
+
+  const runFfmpeg = (args) => new Promise((resolve, reject) => {
+    const ffmpeg = spawn(ffmpegStatic, args);
+    ffmpeg.on('error', (err) => reject(new Error(`ffmpeg spawn error: ${err.message}`)));
     ffmpeg.on('close', (code) => code === 0 ? resolve() : reject(new Error(`ffmpeg exited with code ${code}`)));
   });
+
+  // Step 1: Remove silence
+  console.log('[Recorder] Removing silence...');
+  try {
+    await runFfmpeg([
+      '-i', inputPath,
+      '-af', 'silenceremove=stop_periods=-1:stop_duration=0.5:stop_threshold=-40dB',
+      silenceRemovedPath
+    ]);
+  } catch (err) {
+    // If silence removal fails, fall back to original file
+    if (fs.existsSync(silenceRemovedPath)) fs.unlinkSync(silenceRemovedPath);
+    console.warn('[Recorder] Silence removal failed, proceeding with original file.');
+  }
+
+  const fileToCompress = fs.existsSync(silenceRemovedPath) ? silenceRemovedPath : inputPath;
+
+  // Step 2: Compress to MP3 at 32k
+  console.log('[Recorder] Compressing audio...');
+  try {
+    await runFfmpeg(['-i', fileToCompress, '-codec:a', 'libmp3lame', '-b:a', '32k', outputPath]);
+  } catch (err) {
+    // Corrupted file — retry with error recovery at 16k
+    if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+    console.warn('[Recorder] Compression failed, attempting error recovery at 16kbps...');
+    if (controlChannel) await controlChannel.send('⚠️ Audio appears corrupted — attempting recovery at reduced quality...');
+    await runFfmpeg(['-err_detect', 'ignore_err', '-i', fileToCompress, '-codec:a', 'libmp3lame', '-b:a', '16k', outputPath]);
+  }
+
+  // Clean up silence-removed intermediate file
+  if (fs.existsSync(silenceRemovedPath)) fs.unlinkSync(silenceRemovedPath);
+
+  // Step 3: Size check — if still over 25MB, recompress at 16k
+  const { size } = fs.statSync(outputPath);
+  if (size > MAX_WHISPER_BYTES) {
+    console.warn(`[Recorder] Compressed file is ${(size / 1024 / 1024).toFixed(1)} MB, retrying at 16kbps...`);
+    if (controlChannel) await controlChannel.send('⚠️ Recording is very long — recompressing at 16kbps to fit within transcription limits...');
+    fs.unlinkSync(outputPath);
+    await runFfmpeg(['-i', inputPath, '-codec:a', 'libmp3lame', '-b:a', '16k', outputPath]);
+
+    const { size: newSize } = fs.statSync(outputPath);
+    if (newSize > MAX_WHISPER_BYTES) {
+      fs.unlinkSync(outputPath);
+      throw new Error(`Recording too large even at 16kbps (${(newSize / 1024 / 1024).toFixed(1)} MB)`);
+    }
+  }
+
   return outputPath;
 }
 
-async function transcribeAndSummarize(filePath, recapChannel, controlChannel) {
-  const filename = path.basename(filePath);
-  const timestamp = filename.replace('recording-', '').replace('.ogg', '');
+async function transcribeMultiTrack(guild, userRecordings, timestamp, recapChannel, controlChannel) {
   const dateString = formatDate(timestamp);
+  const sorted = [...userRecordings.entries()].sort((a, b) => a[1].startTime - b[1].startTime);
+  const speakerTranscripts = [];
 
-    // Compress and send to Whisper
-  const compressedPath = await compressAudio(filePath);
+  for (const [userId, { outputPath }] of sorted) {
+    const displayName = getDisplayName(guild, userId);
+ 
+    if (!fs.existsSync(outputPath)) {
+      console.warn(`[Recorder] No file found for ${displayName}, skipping.`);
+      continue;
+    }
 
-  try {
-    console.log('[Whisper] Sending to Whisper...');
-    const transcription = await openai.audio.transcriptions.create({
-      file: fs.createReadStream(compressedPath),
-      model: 'whisper-1',
-    });
+    let compressedPath;
+    try {
+      compressedPath = await compressAudio(outputPath, controlChannel);
 
-    fs.unlinkSync(compressedPath);
+      console.log(`[Whisper] Transcribing ${displayName}...`);
+      const transcription = await openai.audio.transcriptions.create({
+        file: fs.createReadStream(compressedPath),
+        model: 'whisper-1',
+      });
 
-    const transcript = transcription.text;
-    console.log('[Whisper] Transcript received.');
+      fs.unlinkSync(compressedPath);
+      fs.unlinkSync(outputPath);
 
-    const summary = await summarize(transcript);
-
-    const markdownContent = summary
-      ? `# 📋 Meeting Recap\n*Recorded ${dateString}*\n\n## Summary\n${summary}\n\n## Full Transcript\n${transcript}`
-      : `# 📋 Meeting Transcript\n*Recorded ${dateString}*\n\n${transcript}`;
-
-    const markdownPath = filePath.replace('.ogg', '.md');
-    fs.writeFileSync(markdownPath, markdownContent);
-
-    await recapChannel.send({
-      content: `📋 Meeting recap from ${dateString}`,
-      files: [markdownPath]
-    });
-
-    fs.unlinkSync(filePath)
-    fs.unlinkSync(markdownPath);
-
-    console.log('[Recorder] Recap posted.');
-  } catch (err) {
-    console.error('[Recorder] Error during transcription/summary:', err);
-    if (fs.existsSync(compressedPath)) fs.unlinkSync(compressedPath);
-    await controlChannel.send('⚠️ Something went wrong processing the recording.');
+      if (transcription.text.trim()) {
+        speakerTranscripts.push({ displayName, text: transcription.text.trim() });
+        console.log(`[Whisper] Transcribed ${displayName}.`);
+      } else {
+        console.log(`[Whisper] ${displayName} had no speech, skipping.`);
+      }
+    } catch (err) {
+      if (compressedPath && fs.existsSync(compressedPath)) fs.unlinkSync(compressedPath);
+      const isCorrupt = err.message.includes('ffmpeg');
+      console.error(`[Recorder] Failed to process ${displayName}'s track:`, err.message);
+      await controlChannel.send(
+        isCorrupt
+          ? `⚠️ ${displayName}'s audio track appears corrupted and could not be processed.`
+          : `⚠️ Something went wrong processing ${displayName}'s audio track.`
+      );
+    }
   }
+
+  if (speakerTranscripts.length === 0) {
+    await controlChannel.send('⚠️ No usable audio was recorded from this meeting.');
+    return;
+  }
+
+
+
+  const labeledTranscript = speakerTranscripts
+    .map(({ displayName, text }) => `[${displayName}]: ${text}`)
+    .join('\n\n');
+ 
+  const summary = await summarize(labeledTranscript);
+ 
+  const markdownContent = summary
+    ? `# 📋 Meeting Recap\n*Recorded ${dateString}*\n\n## Summary\n${summary}\n\n## Full Transcript\n${labeledTranscript}`
+    : `# 📋 Meeting Transcript\n*Recorded ${dateString}*\n\n${labeledTranscript}`;
+ 
+  const markdownPath = path.join(__dirname, `recording-${timestamp}.md`);
+  fs.writeFileSync(markdownPath, markdownContent);
+ 
+  await recapChannel.send({
+    content: `📋 Meeting recap from ${dateString}`,
+    files: [markdownPath]
+  });
+ 
+  await controlChannel.send(`✅ Recap from ${dateString} has been posted in <#${recapChannel.id}>.`);
+ 
+  fs.unlinkSync(markdownPath);
+  console.log('[Recorder] Recap posted.');
 }
 
 async function summarize(transcript) {
   // Try Anthropic first
   try {
-    const { Anthropic } = require('@anthropic-ai/sdk');
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
     const message = await anthropic.messages.create({
       model: 'claude-opus-4-6',
@@ -199,7 +308,7 @@ async function summarize(transcript) {
       messages: [
         {
           role: 'user',
-          content: `You are a Scrum assistant. Summarize the following standup meeting transcript. Extract and clearly list: blockers, decisions made, and action items with owners if mentioned.\n\nTranscript:\n${transcript}`
+          content: `You are a Scrum assistant. Summarize the following standup meeting transcript. Each speaker is labeled in brackets. Extract and clearly list: blockers, decisions made, and action items with owners if mentioned.\n\nTranscript:\n${transcript}`
         }
       ]
     });
@@ -218,7 +327,7 @@ async function summarize(transcript) {
       messages: [
         {
           role: 'user',
-          content: `You are a Scrum assistant. Summarize the following standup meeting transcript. Extract and clearly list: blockers, decisions made, and action items with owners if mentioned.\n\nTranscript:\n${transcript}`
+          content: `You are a Scrum assistant. Summarize the following standup meeting transcript. Each speaker is labeled in brackets. Extract and clearly list: blockers, decisions made, and action items with owners if mentioned.\n\nTranscript:\n${transcript}`
         }
       ]
     });
@@ -229,7 +338,6 @@ async function summarize(transcript) {
     console.warn('[OpenAI] Failed, falling back to raw transcript:', err.message);
   }
 
-  // Final fallback
   return null;
 }
 
@@ -246,8 +354,9 @@ async function handleVoiceStateUpdate(oldState, newState) {
   }
 
   if (recording && humanCount === 0) {
+    stopping = true;
     await stopRecording(guild);
   }
 }
 
-module.exports = { handleVoiceStateUpdate, compressAudio, summarize };
+module.exports = { handleVoiceStateUpdate, compressAudio, summarize, formatDate, getDisplayName, transcribeMultiTrack };

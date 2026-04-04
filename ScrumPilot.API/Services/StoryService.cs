@@ -1,7 +1,5 @@
-﻿using AutoFixture;
-using ScrumPilot.Data.Repositories;
+﻿using ScrumPilot.Data.Repositories;
 using ScrumPilot.Shared.Models;
-using ScrumPilot.Data.Repositories;
 using System.Text;
 using System.Text.Json;
 
@@ -23,6 +21,16 @@ namespace ScrumPilot.API.Services
         public async Task<IEnumerable<Story>> GetAllStoriesAsync()
         {
             return await _storyRepository.GetAllStoriesAsync();
+        }
+
+        //public async Task<IEnumerable<Story>> GetActiveStoriesAsync(int epicId)
+        //{
+        //    return await _storyRepository.GetActiveStoriesAsync(epicId);
+        //}
+
+        public async Task<IEnumerable<Story>> GetNonDraftStoriesAsync()
+        {
+            return await _storyRepository.GetNonDraftStoriesAsync();
         }
 
         public async Task<IEnumerable<Story>> GetDraftStoriesAsync()
@@ -66,7 +74,7 @@ namespace ScrumPilot.API.Services
                 Description = $"{aiStoryResponse.UserStory}\n\nAcceptance Criteria:\n{string.Join("\n", aiStoryResponse.AcceptanceCriteria.Select(ac => $"• {ac}"))}",
                 Status = StoryStatus.ToDo,
                 Priority = StoryPriority.Low,
-                IsAiGenerated = true,
+                Origin = StoryOrigin.AiGenerated,
                 IsDraft = true,
                 DateCreated = DateTime.UtcNow,
                 LastUpdated = DateTime.UtcNow
@@ -75,7 +83,7 @@ namespace ScrumPilot.API.Services
             return story;
         }
 
-        public async Task<List<Story>> GenerateAiStory(List<string> problemStatements)
+        public async Task<List<Story>> GenerateAiStories(List<string> problemStatements)
         {
             var stories = new List<Story>();
 
@@ -214,18 +222,46 @@ namespace ScrumPilot.API.Services
 
         public async Task<Story> CreateStoryAsync(Story story)
         {
+            story.IsDraft = false;
             return await _storyRepository.AddAsync(story);
+        }
+
+        public async Task<Story> CreateDraftStoryAsync(Story story)
+        {
+            story.IsDraft = true;
+            return await _storyRepository.AddAsync(story);
+        }
+
+        public async Task<Story> CommitDraftStoryAsync(Story draftStory)
+        {
+            var existingDraft = await _storyRepository.GetByIdAsync(draftStory.Id);
+            if (existingDraft is null || !existingDraft.IsDraft)
+            {
+                throw new KeyNotFoundException("Draft story not found.");
+            }
+
+            existingDraft.IsDraft = false;
+            existingDraft.LastUpdated = DateTime.UtcNow;
+
+            return await _storyRepository.UpdateAsync(existingDraft);
         }
 
         public async Task<Story> UpdateStoryAsync(Story story)
         {
+            story.LastUpdated = DateTime.UtcNow;
             return await _storyRepository.UpdateAsync(story);
         }
 
-        public async Task<bool> DeleteStoryAsync(int id)
+        public async Task<bool> DeleteStoryAsync(int id) //Currently a hard delete. Maybe we reconsider this?
         {
             return await _storyRepository.DeleteAsync(id);
         }
 
+        public async Task<Story> CommitStoryAsync(Story story)
+        {
+            story.IsDraft = false;
+            story.LastUpdated = DateTime.UtcNow;
+            return await _storyRepository.UpdateAsync(story);
+        }
     }
 }

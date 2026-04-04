@@ -8,7 +8,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 
-namespace ScrumPilot.UnitTests.Backend.Service_Tests
+namespace ScrumPilot.UnitTests.Backend.ServiceTests
 {
     public class StoryServiceTests : IDisposable
     {
@@ -119,6 +119,105 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
         }
 
         [Fact]
+        public async Task CommitDraftStoryAsync_UpdatesExistingDraft_ToBacklog()
+        {
+            // Arrange
+            var draftStory = new Story
+            {
+                Id = 1,
+                Title = "Draft Story",
+                Description = "Draft Description",
+                Status = StoryStatus.ToDo,
+                Priority = StoryPriority.Medium,
+                StoryPoints = StoryPoints.Five,
+                Origin = StoryOrigin.AiGenerated,
+                IsDraft = true,
+                DateCreated = DateTime.UtcNow.AddDays(-1),
+                LastUpdated = DateTime.UtcNow.AddDays(-1)
+            };
+
+            var updatedStory = new Story
+            {
+                Id = 1,
+                Title = draftStory.Title,
+                Description = draftStory.Description,
+                Status = draftStory.Status,
+                Priority = draftStory.Priority,
+                StoryPoints = draftStory.StoryPoints,
+                Origin = draftStory.Origin,
+                IsDraft = false,
+                DateCreated = draftStory.DateCreated,
+                LastUpdated = DateTime.UtcNow
+            };
+
+            _mockRepository.GetByIdAsync(draftStory.Id).Returns(draftStory);
+            _mockRepository.UpdateAsync(Arg.Is<Story>(s => s.Id == draftStory.Id && !s.IsDraft)).Returns(updatedStory);
+
+            // Act
+            var result = await _storyService.CommitDraftStoryAsync(draftStory);
+
+            // Assert
+            Assert.NotNull(result);
+            Assert.Equal(updatedStory.Id, result.Id);
+            Assert.False(result.IsDraft);
+            await _mockRepository.Received(1).GetByIdAsync(draftStory.Id);
+            await _mockRepository.Received(1).UpdateAsync(Arg.Is<Story>(s => s.Id == draftStory.Id && !s.IsDraft));
+            await _mockRepository.DidNotReceive().AddAsync(Arg.Any<Story>());
+            await _mockRepository.DidNotReceive().DeleteAsync(Arg.Any<int>());
+        }
+
+        [Fact]
+        public async Task CommitDraftStoryAsync_ThrowsKeyNotFoundException_WhenDraftMissing()
+        {
+            // Arrange
+            var draftStory = new Story
+            {
+                Id = 99,
+                Title = "Missing Draft",
+                Description = "Missing",
+                Status = StoryStatus.ToDo,
+                Priority = StoryPriority.Low,
+                IsDraft = true,
+                DateCreated = DateTime.UtcNow,
+                LastUpdated = DateTime.UtcNow
+            };
+
+            _mockRepository.GetByIdAsync(draftStory.Id).Returns((Story?)null);
+
+            // Act & Assert
+            await Assert.ThrowsAsync<KeyNotFoundException>(() => _storyService.CommitDraftStoryAsync(draftStory));
+            await _mockRepository.Received(1).GetByIdAsync(draftStory.Id);
+            await _mockRepository.DidNotReceive().AddAsync(Arg.Any<Story>());
+            await _mockRepository.DidNotReceive().DeleteAsync(Arg.Any<int>());
+        }
+
+        [Fact]
+        public async Task CommitDraftStoryAsync_ThrowsKeyNotFoundException_WhenStoryIsNotDraft()
+        {
+            // Arrange
+            var nonDraftStory = new Story
+            {
+                Id = 4,
+                Title = "Backlog Story",
+                Description = "Backlog Description",
+                Status = StoryStatus.ToDo,
+                Priority = StoryPriority.Low,
+                IsDraft = false,
+                DateCreated = DateTime.UtcNow,
+                LastUpdated = DateTime.UtcNow
+            };
+
+            _mockRepository.GetByIdAsync(nonDraftStory.Id).Returns(nonDraftStory);
+
+            // Act & Assert
+            await Assert.ThrowsAsync<KeyNotFoundException>(() => _storyService.CommitDraftStoryAsync(nonDraftStory));
+            await _mockRepository.Received(1).GetByIdAsync(nonDraftStory.Id);
+            await _mockRepository.DidNotReceive().UpdateAsync(Arg.Any<Story>());
+            await _mockRepository.DidNotReceive().AddAsync(Arg.Any<Story>());
+            await _mockRepository.DidNotReceive().DeleteAsync(Arg.Any<int>());
+        }
+
+        [Fact]
         public async Task UpdateStoryAsync_CallsRepositoryUpdateAsync()
         {
             // Arrange
@@ -186,7 +285,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
             var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
 
             // Act
-            var results = await service.GenerateAiStory(new List<string> { problemStatement });
+            var results = await service.GenerateAiStories(new List<string> { problemStatement });
             var result = results[0];
 
             // Assert
@@ -198,7 +297,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
                 Assert.Contains(criteria, result.Description));
             Assert.Equal(StoryStatus.ToDo, result.Status);
             Assert.Equal(StoryPriority.Low, result.Priority);
-            Assert.True(result.IsAiGenerated);
+            Assert.Equal(StoryOrigin.AiGenerated, result.Origin);
         }
 
         [Fact]
@@ -210,7 +309,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => _storyService.GenerateAiStory(new List<string> { problemStatement }));
+                () => _storyService.GenerateAiStories(new List<string> { problemStatement }));
             Assert.Equal("OllamaBaseUrl is not configured.", exception.Message);
         }
 
@@ -224,7 +323,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => _storyService.GenerateAiStory(new List<string> { problemStatement }));
+                () => _storyService.GenerateAiStories(new List<string> { problemStatement }));
             Assert.Equal("OllamaBaseUrl is not configured.", exception.Message);
         }
 
@@ -242,7 +341,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => service.GenerateAiStory(new List<string> { problemStatement }));
+                () => service.GenerateAiStories(new List<string> { problemStatement }));
             Assert.Contains("An unexpected error occurred while calling the Ollama API", exception.Message);
         }
 
@@ -256,7 +355,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<HttpRequestException>(
-                () => service.GenerateAiStory(new List<string> { problemStatement }));
+                () => service.GenerateAiStories(new List<string> { problemStatement }));
             Assert.Contains("Ollama API request failed with status InternalServerError", exception.Message);
         }
 
@@ -270,7 +369,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<TimeoutException>(
-                () => service.GenerateAiStory(new List<string> { problemStatement }));
+                () => service.GenerateAiStories(new List<string> { problemStatement }));
             Assert.Equal("The request to Ollama timed out", exception.Message);
         }
 
@@ -286,7 +385,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => service.GenerateAiStory(new List<string> { problemStatement }));
+                () => service.GenerateAiStories(new List<string> { problemStatement }));
             Assert.Contains("An unexpected error occurred while parsing the AI story response", exception.Message);
         }
 
@@ -302,7 +401,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => service.GenerateAiStory(new List<string> { problemStatement }));
+                () => service.GenerateAiStories(new List<string> { problemStatement }));
             Assert.Contains("Failed to find a JSON object in the AI response", exception.Message);
         }
 
@@ -325,7 +424,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
             var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
 
             // Act
-            var results = await service.GenerateAiStory(new List<string> { problemStatement });
+            var results = await service.GenerateAiStories(new List<string> { problemStatement });
             var result = results[0];
 
             // Assert
@@ -347,7 +446,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => service.GenerateAiStory(new List<string> { problemStatement }));
+                () => service.GenerateAiStories(new List<string> { problemStatement }));
             Assert.Contains("Failed to parse AI response as JSON", exception.Message);
         }
 
@@ -372,7 +471,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
             var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
 
             // Act
-            await service.GenerateAiStory(new List<string> { problemStatement });
+            await service.GenerateAiStories(new List<string> { problemStatement });
 
             // Assert - Verify the request was made correctly
             Assert.NotNull(_capturedRequest);
@@ -380,7 +479,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
             Assert.Equal(expectedUrl, _capturedRequest.RequestUri?.ToString());
             Assert.Equal(HttpMethod.Post, _capturedRequest.Method);
 
-            var requestContent = await _capturedRequest.Content!.ReadAsStringAsync();
+            var requestContent = await _capturedRequest.Content!.ReadAsStringAsync(Xunit.TestContext.Current.CancellationToken);
             var requestObject = JsonSerializer.Deserialize<JsonElement>(requestContent);
 
             Assert.Equal(model, requestObject.GetProperty("model").GetString());
@@ -405,14 +504,14 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
             var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
 
             // Act
-            var result = await service.GenerateAiStory(["Statement 1", "Statement 2", "Statement 3"]);
+            var result = await service.GenerateAiStories(["Statement 1", "Statement 2", "Statement 3"]);
 
             // Assert
             Assert.NotNull(result);
             Assert.Equal(3, result.Count);
             Assert.All(result, story =>
             {
-                Assert.True(story.IsAiGenerated);
+                Assert.Equal(StoryOrigin.AiGenerated, story.Origin);
                 Assert.Equal(StoryStatus.ToDo, story.Status);
             });
         }
@@ -426,7 +525,7 @@ namespace ScrumPilot.UnitTests.Backend.Service_Tests
 
             // Act & Assert
             await Assert.ThrowsAsync<HttpRequestException>(
-                () => service.GenerateAiStory(["Problem 1", "Problem 2"]));
+                () => service.GenerateAiStories(["Problem 1", "Problem 2"]));
         }
 
         private void SetupConfiguration(string baseUrl, string model)

@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
 using ScrumPilot.API.Services;
-using ScrumPilot.Data.Repositories;
 using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.API.Controllers
@@ -16,10 +15,25 @@ namespace ScrumPilot.API.Controllers
             _storyService = storyService;
         }
 
+
         [HttpGet("getAllStories")]
         public async Task<ActionResult<IEnumerable<Story>>> GetAllStories()
         {
             var stories = await _storyService.GetAllStoriesAsync();
+            return Ok(stories);
+        }
+
+        //[HttpGet("getActiveStories")]
+        //public async Task<ActionResult<IEnumerable<Story>>> GetActiveStories(int epicId)
+        //{
+        //    var stories = await _storyService.GetActiveStoriesAsync(epicId);
+        //    return Ok(stories);
+        //}
+
+        [HttpGet("getNonDraftStories")]
+        public async Task<ActionResult<IEnumerable<Story>>> GetNonDraftStories()
+        {
+            var stories = await _storyService.GetNonDraftStoriesAsync();
             return Ok(stories);
         }
 
@@ -31,7 +45,7 @@ namespace ScrumPilot.API.Controllers
         }
 
         [HttpPost("generateAiStories")]
-        public async Task<ActionResult<List<Story>>> GenerateAiStory([FromBody] List<string> problemStatements)
+        public async Task<ActionResult<List<Story>>> GenerateAiStories([FromBody] List<string> problemStatements)
         {
             if (problemStatements == null || problemStatements.Count == 0)
             {
@@ -45,7 +59,7 @@ namespace ScrumPilot.API.Controllers
 
             try
             {
-                var story = await _storyService.GenerateAiStory(problemStatements);
+                var story = await _storyService.GenerateAiStories(problemStatements);
 
                 return Ok(story);
             }
@@ -68,10 +82,53 @@ namespace ScrumPilot.API.Controllers
             }
         }
 
-        [HttpPost]
+        [HttpPost("createStory")]
         public async Task<ActionResult<Story>> CreateStory([FromBody] Story story)
         {
             var created = await _storyService.CreateStoryAsync(story);
+            return Ok(created);
+        }
+
+        [HttpPost("commitStory")]
+        public async Task<ActionResult<Story>> CommitStory([FromBody] Story story)
+        {
+            try
+            {
+                var committed = await _storyService.CommitStoryAsync(story);
+                return Ok(committed);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+        }
+
+        [HttpPost("createStories")]
+        public async Task<ActionResult<List<Story>>> CreateStories([FromBody] List<Story> stories)
+        {
+            var created = new List<Story>();
+            foreach (var story in stories)
+            {
+                created.Add(await _storyService.CreateStoryAsync(story));
+            }
+            return Ok(created);
+        }
+
+        [HttpPost("createDraftStory")]
+        public async Task<ActionResult<Story>> CreateDraftStory([FromBody] Story story)
+        {
+            var created = await _storyService.CreateDraftStoryAsync(story);
+            return Ok(created);
+        }
+
+        [HttpPost("createDraftStories")]
+        public async Task<ActionResult<List<Story>>> CreateDraftStories([FromBody] List<Story> stories)
+        {
+            var created = new List<Story>();
+            foreach (var story in stories)
+            {
+                created.Add(await _storyService.CreateDraftStoryAsync(story));
+            }
             return Ok(created);
         }
 
@@ -88,6 +145,20 @@ namespace ScrumPilot.API.Controllers
             var success = await _storyService.DeleteStoryAsync(id);
             if (!success) return NotFound();
             return NoContent();
+        }
+
+        [HttpPost("addAudioTranscript")]
+        public async Task<ActionResult> AddAudioTranscript([FromBody] AudioTranscript transcript)
+        {
+            //TODO: Implement logic to add transcript to DB
+            return Ok();
+        }
+
+        [HttpPost("addMessageTranscript")]
+        public async Task<ActionResult> AddMessageTranscript([FromBody] MessageTranscript transcript)
+        {
+            //TODO: Implement logic to add transcript to DB
+            return Ok();
         }
     }
 }

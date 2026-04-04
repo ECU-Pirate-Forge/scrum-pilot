@@ -16,8 +16,16 @@
     }
     else
     {
+        @if (!string.IsNullOrWhiteSpace(_moveStoryErrorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4" Icon="@Icons.Material.Filled.ErrorOutline">
+                @_moveStoryErrorMessage
+            </MudAlert>
+        }
+
         <MudContainer MaxWidth="MaxWidth.False" Class="pa-0">
             <MudDropContainer T="Story"
+                              @ref="_dropContainer"
                               Items="@Items"
                               ItemsSelector="@((item, dropzone) => item.Status.ToString() == dropzone)"
                               ItemDropped="OnItemDropped"
@@ -112,11 +120,19 @@
             <MudCardContent Class="pa-3" Style="padding-bottom: 8px; border-bottom: 1px solid var(--mud-palette-divider);">
                 <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                     <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
-                        @if (context.StoryPoints.HasValue)
+                        @if (context.StoryPoints != StoryPoints.Zero)
                         {
                             <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Filled">
-                                @context.StoryPoints SP
+                                @((int)context.StoryPoints) SP
                             </MudChip>
+                        }
+                        else
+                        {
+                            <MudTooltip Text="Unpointed">
+                                <MudIcon Icon="@Icons.Material.Filled.ErrorOutline"
+                                         Color="Color.Error"
+                                         Size="Size.Small" />
+                            </MudTooltip>
                         }
                     </MudStack>
                     <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
@@ -186,7 +202,7 @@
                     </div>
 
                     <div class="details-content">
-                        <StoryCard StoryModel="SelectedStory" />
+                        <StoryCard StoryModel="SelectedStory" OnSave="HandleStorySave" />
                     </div>
                 </div>
             </div>
@@ -199,34 +215,104 @@
     private List<Story> Items = new();
     private bool _loading = true;
     private Story? SelectedStory;
+    private string _moveStoryErrorMessage = string.Empty;
+    private MudDropContainer<Story>? _dropContainer;
+    private bool _needsRefresh = false;
 
     //Api Intergration for getting stories
     protected override async Task OnInitializedAsync()
-{
-    _loading = true;
-    Items = new();
-
-    try
     {
-        var stories = await Http.GetFromJsonAsync<List<Story>>("api/story/getAllStories");
-        if (stories is not null && stories.Any())
-            Items = stories;
+        await LoadStoriesAsync();
     }
-    catch
+
+    protected override Task OnAfterRenderAsync(bool firstRender)
     {
+        if (_needsRefresh)
+        {
+            _needsRefresh = false;
+            _dropContainer?.Refresh();
+        }
+        return Task.CompletedTask;
     }
-    finally
+
+    private async Task LoadStoriesAsync(bool showLoading = true)
     {
-        _loading = false;
+        if (showLoading)
+        {
+            _loading = true;
+            Items = new();
+        }
+
+        try
+        {
+            var stories = await Http.GetFromJsonAsync<List<Story>>("api/story/GetNonDraftStories");
+            if (stories is not null)
+            {
+                Items = stories;
+            }
+        }
+        catch
+        {
+            _moveStoryErrorMessage = "Unable to load stories from the server.";
+        }
+        finally
+        {
+            _loading = false;
+            _needsRefresh = true;
+        }
     }
-}
 
 
-    private void OnItemDropped(MudItemDropInfo<Story> dropInfo)
+    private async Task OnItemDropped(MudItemDropInfo<Story> dropInfo)
     {
+        if (dropInfo.Item is null)
+            return;
+
         // Dropzone identifiers are: "ToDo", "InProgress", "Done"
-        if (Enum.TryParse<StoryStatus>(dropInfo.DropzoneIdentifier, out var newStatus))
-            dropInfo.Item.Status = newStatus;
+        if (!Enum.TryParse<StoryStatus>(dropInfo.DropzoneIdentifier, out var newStatus))
+        {
+            _moveStoryErrorMessage = "Unable to move story: invalid destination column.";
+            return;
+        }
+
+        var originalStatus = dropInfo.Item.Status;
+        if (originalStatus == newStatus)
+        {
+            _moveStoryErrorMessage = string.Empty;
+            return;
+        }
+
+        _moveStoryErrorMessage = string.Empty;
+
+        // Optimistically move the card, then persist status to the backend.
+        dropInfo.Item.Status = newStatus;
+
+        try
+        {
+            dropInfo.Item.LastUpdated = DateTime.UtcNow;
+
+            var response = await Http.PutAsJsonAsync("api/story", dropInfo.Item);
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new HttpRequestException($"Status update failed with code {(int)response.StatusCode}.");
+            }
+
+            var updatedStory = await response.Content.ReadFromJsonAsync<Story>();
+            if (updatedStory is not null)
+            {
+                var index = Items.FindIndex(i => i.Id == updatedStory.Id);
+                if (index >= 0)
+                {
+                    Items[index] = updatedStory;
+                }
+            }
+        }
+        catch
+        {
+            // Revert local status if backend update fails so UI and data stay consistent.
+            dropInfo.Item.Status = originalStatus;
+            _moveStoryErrorMessage = "Could not save the status change. The card was returned to its previous column.";
+        }
     }
 
     private void OpenStoryDetails(Story story)
@@ -234,9 +320,27 @@
         SelectedStory = story;
     }
 
-    private void CloseStoryDetails()
+    private async Task CloseStoryDetails()
     {
         SelectedStory = null;
+        await LoadStoriesAsync(showLoading: false);
+    }
+
+    private async Task HandleStorySave(Story story)
+    {
+        try
+        {
+            var response = await Http.PutAsJsonAsync("api/story", story);
+            if (response.IsSuccessStatusCode)
+            {
+                SelectedStory = null;
+                await LoadStoriesAsync(showLoading: false);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating story: {ex.Message}");
+        }
     }
 
     private string GetPriorityClass(Story story)
@@ -251,8 +355,12 @@
             _ => Color.Default
         };
 
-    private string GetStoryInitials(Story story)
-        => story.IsAiGenerated ? "AI" : "ST";
+    private string GetStoryInitials(Story story) => story.Origin switch
+    {
+        StoryOrigin.AiGenerated => "AI",
+        StoryOrigin.BotGenerated => "BT",
+        _ => "ST"
+    };
 
     private string GetColumnColor(StoryStatus status)
         => status switch
