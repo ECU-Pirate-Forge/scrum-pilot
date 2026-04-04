@@ -70,7 +70,7 @@ else
                 </MudTd>
                 <MudTd DataLabel="Points" Style="text-align: center; vertical-align: top;">
                     <div class="story-points">
-                        @(context.StoryPoints?.ToString() ?? "-")
+                        @((int)context.StoryPoints)
                     </div>
                 </MudTd>
                 <MudTd DataLabel="Created" Style="vertical-align: top;">
@@ -138,7 +138,7 @@ else
             </div>
 
             <div class="modify-content">
-                <StoryCard StoryModel="@modifyingStory" />
+                <StoryCard StoryModel="@modifyingStory" OnSave="HandleModifySave" />
             </div>
         </div>
     </div>
@@ -175,53 +175,29 @@ else
         }
     }
 
-    /// Commits a draft story to the backlog and removes the draft from this page.
+    /// Commits a draft story by calling the createStory API endpoint
     private async Task CommitStory(Story story)
     {
-        if (_committingStoryIds.Contains(story.Id))
-        {
-            return;
-        }
-
-        _commitErrorMessage = string.Empty;
-        _commitSuccessMessage = string.Empty;
-        _committingStoryIds.Add(story.Id);
-
         try
         {
-            var response = await Http.PostAsJsonAsync("api/story/commitDraft", story);
-
+            var response = await Http.PostAsJsonAsync("api/story/commitStory", story);
             if (response.IsSuccessStatusCode)
             {
-                draftStories?.RemoveAll(s => s.Id == story.Id);
-                _commitSuccessMessage = $"Story '{story.Title}' was committed to the backlog.";
-            }
-            else
-            {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                _commitErrorMessage = string.IsNullOrWhiteSpace(errorContent)
-                    ? "Commit failed. Please try again."
-                    : $"Commit failed: {errorContent}";
+                draftStories?.Remove(story);
+                StateHasChanged();
             }
         }
         catch (Exception ex)
         {
-            _commitErrorMessage = $"Commit failed due to a network or server error: {ex.Message}";
-        }
-        finally
-        {
-            _committingStoryIds.Remove(story.Id);
-            StateHasChanged();
+            Console.WriteLine($"Error committing story: {ex.Message}");
         }
     }
 
-    /// Opens a modification dialog or redirects to edit page
-    private async Task ModifyStory(Story story)
+    /// Opens the story modification panel
+    private void ModifyStory(Story story)
     {
-        // Set the story to be modified, which will trigger the StoryCard to render
         modifyingStory = story;
         StateHasChanged();
-        await Task.CompletedTask;
     }
 
     /// Closes the modify view
@@ -231,14 +207,45 @@ else
         StateHasChanged();
     }
 
-    /// Rejects and removes a draft story (removes from UI for now)
+    /// Saves the modified story by calling the update API endpoint
+    private async Task HandleModifySave(Story story)
+    {
+        try
+        {
+            var response = await Http.PutAsJsonAsync("api/story", story);
+            if (response.IsSuccessStatusCode)
+            {
+                var index = draftStories?.FindIndex(s => s.Id == story.Id) ?? -1;
+                if (index >= 0)
+                {
+                    draftStories![index] = story;
+                }
+                modifyingStory = null;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating story: {ex.Message}");
+        }
+    }
+
+    /// Rejects and deletes a draft story by calling the delete API endpoint
     private async Task RejectStory(Story story)
     {
-        // TODO: When CRUD endpoints are available, delete story from database
-        // For now, just remove from UI
-        draftStories?.Remove(story);
-        StateHasChanged();
-        await Task.CompletedTask;
+        try
+        {
+            var response = await Http.DeleteAsync($"api/story/{story.Id}");
+            if (response.IsSuccessStatusCode)
+            {
+                draftStories?.Remove(story);
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error rejecting story: {ex.Message}");
+        }
     }
 
 

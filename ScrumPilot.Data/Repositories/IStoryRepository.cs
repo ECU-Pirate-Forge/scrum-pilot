@@ -11,5 +11,6 @@ namespace ScrumPilot.Data.Repositories
         Task<bool> DeleteAsync(int id);
         Task<IEnumerable<Story>> GetByStatusAsync(StoryStatus status);
         Task<IEnumerable<Story>> GetDraftStoriesAsync();
+        Task<IEnumerable<Story>> GetNonDraftStoriesAsync();
     }
 }

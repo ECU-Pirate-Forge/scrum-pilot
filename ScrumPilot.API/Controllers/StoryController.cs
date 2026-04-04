@@ -23,6 +23,13 @@ namespace ScrumPilot.API.Controllers
             return Ok(stories);
         }
 
+        [HttpGet("getNonDraftStories")]
+        public async Task<ActionResult<IEnumerable<Story>>> GetNonDraftStories()
+        {
+            var stories = await _storyService.GetNonDraftStoriesAsync();
+            return Ok(stories);
+        }
+
         [HttpGet("getDraftStories")]
         public async Task<ActionResult<IEnumerable<Story>>> GetDraftStories()
         {
@@ -31,7 +38,7 @@ namespace ScrumPilot.API.Controllers
         }
 
         [HttpPost("generateAiStories")]
-        public async Task<ActionResult<List<Story>>> GenerateAiStory([FromBody] List<string> problemStatements)
+        public async Task<ActionResult<List<Story>>> GenerateAiStories([FromBody] List<string> problemStatements)
         {
             if (problemStatements == null || problemStatements.Count == 0)
             {
@@ -45,7 +52,7 @@ namespace ScrumPilot.API.Controllers
 
             try
             {
-                var story = await _storyService.GenerateAiStory(problemStatements);
+                var story = await _storyService.GenerateAiStories(problemStatements);
 
                 return Ok(story);
             }
@@ -68,25 +75,47 @@ namespace ScrumPilot.API.Controllers
             }
         }
 
-        [HttpPost]
+        [HttpPost("createStory")]
         public async Task<ActionResult<Story>> CreateStory([FromBody] Story story)
         {
             var created = await _storyService.CreateStoryAsync(story);
             return Ok(created);
         }
 
-        [HttpPost("commitDraft")]
-        public async Task<ActionResult<Story>> CommitDraftStory([FromBody] Story draftStory)
+        [HttpPost("commitStory")]
+        public async Task<ActionResult<Story>> CommitStory([FromBody] Story story)
         {
-            try
+            var committed = await _storyService.CommitStoryAsync(story);
+            return Ok(committed);
+        }
+
+        [HttpPost("createStories")]
+        public async Task<ActionResult<List<Story>>> CreateStories([FromBody] List<Story> stories)
+        {
+            var created = new List<Story>();
+            foreach (var story in stories)
             {
-                var committed = await _storyService.CommitDraftStoryAsync(draftStory);
-                return Ok(committed);
+                created.Add(await _storyService.CreateStoryAsync(story));
             }
-            catch (KeyNotFoundException)
+            return Ok(created);
+        }
+
+        [HttpPost("createDraftStory")]
+        public async Task<ActionResult<Story>> CreateDraftStory([FromBody] Story story)
+        {
+            var created = await _storyService.CreateDraftStoryAsync(story);
+            return Ok(created);
+        }
+
+        [HttpPost("createDraftStories")]
+        public async Task<ActionResult<List<Story>>> CreateDraftStories([FromBody] List<Story> stories)
+        {
+            var created = new List<Story>();
+            foreach (var story in stories)
             {
-                return NotFound("Draft story not found.");
+                created.Add(await _storyService.CreateDraftStoryAsync(story));
             }
+            return Ok(created);
         }
 
         [HttpPut]
