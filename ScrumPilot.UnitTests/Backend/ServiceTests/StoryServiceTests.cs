@@ -129,8 +129,8 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
                 Description = "Draft Description",
                 Status = StoryStatus.ToDo,
                 Priority = StoryPriority.Medium,
-                StoryPoints = 5,
-                IsAiGenerated = true,
+                StoryPoints = StoryPoints.Five,
+                Origin = StoryOrigin.AiGenerated,
                 IsDraft = true,
                 DateCreated = DateTime.UtcNow.AddDays(-1),
                 LastUpdated = DateTime.UtcNow.AddDays(-1)
@@ -144,7 +144,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
                 Status = draftStory.Status,
                 Priority = draftStory.Priority,
                 StoryPoints = draftStory.StoryPoints,
-                IsAiGenerated = draftStory.IsAiGenerated,
+                Origin = draftStory.Origin,
                 IsDraft = false,
                 DateCreated = draftStory.DateCreated,
                 LastUpdated = DateTime.UtcNow
@@ -479,7 +479,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             Assert.Equal(expectedUrl, _capturedRequest.RequestUri?.ToString());
             Assert.Equal(HttpMethod.Post, _capturedRequest.Method);
 
-            var requestContent = await _capturedRequest.Content!.ReadAsStringAsync();
+            var requestContent = await _capturedRequest.Content!.ReadAsStringAsync(Xunit.TestContext.Current.CancellationToken);
             var requestObject = JsonSerializer.Deserialize<JsonElement>(requestContent);
 
             Assert.Equal(model, requestObject.GetProperty("model").GetString());

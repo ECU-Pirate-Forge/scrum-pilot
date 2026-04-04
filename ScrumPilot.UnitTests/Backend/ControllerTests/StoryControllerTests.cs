@@ -374,17 +374,17 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
                 LastUpdated = DateTime.UtcNow
             };
 
-            _mockStoryService.CommitDraftStoryAsync(draftStory).Returns(committedStory);
+            _mockStoryService.CommitStoryAsync(draftStory).Returns(committedStory);
 
             // Act
-            var result = await _controller.CommitDraftStory(draftStory);
+            var result = await _controller.CommitStory(draftStory);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
             var actualStory = Assert.IsType<Story>(okResult.Value);
             Assert.Equal(committedStory.Id, actualStory.Id);
             Assert.False(actualStory.IsDraft);
-            await _mockStoryService.Received(1).CommitDraftStoryAsync(draftStory);
+            await _mockStoryService.Received(1).CommitStoryAsync(draftStory);
         }
 
         [Fact]
@@ -404,16 +404,16 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             };
 
             _mockStoryService
-                .CommitDraftStoryAsync(draftStory)
+                .CommitStoryAsync(draftStory)
                 .Returns(Task.FromException<Story>(new KeyNotFoundException("Draft story not found.")));
 
             // Act
-            var result = await _controller.CommitDraftStory(draftStory);
+            var result = await _controller.CommitStory(draftStory);
 
             // Assert
             var notFoundResult = Assert.IsType<NotFoundObjectResult>(result.Result);
             Assert.Equal("Draft story not found.", notFoundResult.Value);
-            await _mockStoryService.Received(1).CommitDraftStoryAsync(draftStory);
+            await _mockStoryService.Received(1).CommitStoryAsync(draftStory);
         }
 
 
