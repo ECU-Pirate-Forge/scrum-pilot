@@ -18,6 +18,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 let connection = null;
 let recording = false;
 let starting = false;
+let stopping = false;
 let recordingTimestamp = null;
 let userRecordings = new Map();
 
@@ -159,6 +160,7 @@ async function stopRecording(guild) {
  
   userRecordings = new Map();
   recordingTimestamp = null;
+  stopping = false;
 }
 
 async function compressAudio(inputPath, controlChannel = null) {
@@ -352,6 +354,7 @@ async function handleVoiceStateUpdate(oldState, newState) {
   }
 
   if (recording && humanCount === 0) {
+    stopping = true;
     await stopRecording(guild);
   }
 }
