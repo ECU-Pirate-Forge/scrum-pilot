@@ -2,15 +2,43 @@ using ScrumPilot.API.Services;
 using ScrumPilot.Data.Extensions;
 using ScrumPilot.Data.Context;
 using ScrumPilot.Data.Seeders;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
 using ScrumPilot.Data.Repositories;
+using System.Text;
 
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add Data services (EF Core, repositories)
+// Add Data services (EF Core, Identity, repositories)
 builder.Services.AddDataServices(builder.Configuration);
+
+// Add JWT authentication
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidAudience = builder.Configuration["Jwt:Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
+        };
+    });
+
+// Require authentication on every endpoint by default
+builder.Services.AddAuthorizationBuilder()
+    .SetFallbackPolicy(new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build());
 
 // Add services to the container.
 builder.Services.AddScoped<IStoryService, StoryService>();
@@ -50,6 +78,11 @@ if (app.Environment.IsDevelopment())
 
         // Seed database with initial data
         DatabaseSeeder.SeedDatabase(context);
+
+        // Seed Identity users and roles
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
+        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+        await DatabaseSeeder.SeedUsersAsync(userManager, roleManager);
     }
 }
 
@@ -64,6 +97,7 @@ if (app.Environment.IsDevelopment())
 // Use CORS policy
 app.UseCors("AllowBlazor");
 app.UseHttpsRedirection();
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.Run();

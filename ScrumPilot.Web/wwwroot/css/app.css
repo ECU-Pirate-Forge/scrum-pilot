@@ -2,6 +2,20 @@ html, body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
 
+.dashboard-tile {
+    cursor: pointer;
+    border-radius: 8px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dashboard-tile:hover {
+    transform: translateY(-2px);
+    box-shadow:
+        0 0 0 1px rgba(168, 85, 247, 0.75),
+        0 0 12px rgba(168, 85, 247, 0.4),
+        0 4px 20px rgba(0, 0, 0, 0.35) !important;
+}
+
 .kanban-dropzone {
     min-height: 200px;
     padding: 8px;
