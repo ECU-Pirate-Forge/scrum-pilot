@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Identity;
 using ScrumPilot.Data.Context;
 using ScrumPilot.Shared.Models;
 
@@ -9,6 +10,55 @@ namespace ScrumPilot.Data.Seeders
         {
             SeedStories(context);
             SeedMessageTranscripts(context);
+        }
+
+        public static async Task SeedUsersAsync(UserManager<IdentityUser> userManager, RoleManager<IdentityRole> roleManager)
+        {
+            // Seed roles
+            string[] roles = ["Admin", "Developer"];
+            foreach (var role in roles)
+            {
+                if (!await roleManager.RoleExistsAsync(role))
+                {
+                    await roleManager.CreateAsync(new IdentityRole(role));
+                    Console.WriteLine($"[SEEDER] Created role: {role}");
+                }
+            }
+
+            // Seed users — temporary dev accounts, replace before production
+            var seedUsers = new[]
+            {
+                new { Email = "Tyler@scrumpilot.xyz",   UserName = "Tyler",    Password = "Password1234!",  Role = "Developer"},
+                new { Email = "Nate@scrumpilot.xyz",    UserName = "Nate",     Password = "Password1234!",   Role = "Developer" },
+                new { Email = "Dylan@scrumpilot.xyz",    UserName = "Dylan",     Password = "Password1234!",   Role = "Developer" },
+                new { Email = "James@scrumpilot.xyz",    UserName = "James",     Password = "Password1234!",   Role = "Developer" },
+                new { Email = "Joshua@scrumpilot.xyz",    UserName = "Joshua",     Password = "Password1234!",   Role = "Developer" },
+                new { Email = "Huan@scrumpilot.xyz",    UserName = "Huan",     Password = "Password1234!",   Role = "Developer" },
+                new { Email = "Aden@scrumpilot.xyz",    UserName = "Aden",     Password = "Password1234!",   Role = "Developer" },
+                new { Email = "Anthony@scrumpilot.xyz",    UserName = "Anthony",     Password = "Password1234!",   Role = "Developer" },
+            };
+
+            foreach (var seed in seedUsers)
+            {
+                if (await userManager.FindByEmailAsync(seed.Email) is not null)
+                {
+                    Console.WriteLine($"[SEEDER] User already exists, skipping: {seed.Email}");
+                    continue;
+                }
+
+                var user = new IdentityUser { UserName = seed.UserName, Email = seed.Email, EmailConfirmed = true };
+                var result = await userManager.CreateAsync(user, seed.Password);
+
+                if (result.Succeeded)
+                {
+                    await userManager.AddToRoleAsync(user, seed.Role);
+                    Console.WriteLine($"[SEEDER] Created user: {seed.Email} [{seed.Role}]");
+                }
+                else
+                {
+                    Console.WriteLine($"[SEEDER] Failed to create user {seed.Email}: {string.Join(", ", result.Errors.Select(e => e.Description))}");
+                }
+            }
         }
 
         private static void SeedStories(ScrumPilotContext context)

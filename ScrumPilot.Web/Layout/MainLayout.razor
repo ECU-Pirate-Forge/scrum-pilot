@@ -1,5 +1,7 @@
 ﻿@using ScrumPilot.Web.Services
-@inject IThemeService ThemeService
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+@inject IDialogService DialogService
 @inherits LayoutComponentBase
 @inject IJSRuntime JSRuntime
 @using MudBlazor
@@ -23,10 +25,17 @@
                 </a>
             </div>
 
-            <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
-                           Color="Color.Inherit"
-                           OnClick="@ToggleDarkMode"
-                           Title="Toggle dark mode" />
+            <div style="display: flex; align-items: center; gap: 4px;">
+                <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
+                               Color="Color.Inherit"
+                               OnClick="@ToggleDarkMode"
+                               Title="Toggle dark mode" />
+
+                <MudIconButton Icon="@Icons.Material.Filled.Logout"
+                               Color="Color.Inherit"
+                               OnClick="@HandleLogout"
+                               Title="Sign out" />
+            </div>
         </div>
 
         <article class="content px-4">
@@ -90,5 +99,20 @@
     private async Task ToggleDarkMode()
     {
         _isDarkMode = !_isDarkMode;
+    }
+
+    private async Task HandleLogout()
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            title: "Sign Out",
+            message: "Are you sure you want to sign out?",
+            yesText: "Sign Out",
+            cancelText: "Cancel");
+
+        if (confirmed == true)
+        {
+            await AuthService.LogoutAsync();
+            Navigation.NavigateTo("/login");
+        }
     }
 }

@@ -1,9 +1,11 @@
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.Data.Context
 {
-    public class ScrumPilotContext : DbContext
+    public class ScrumPilotContext : IdentityDbContext<IdentityUser>
     {
         public ScrumPilotContext(DbContextOptions<ScrumPilotContext> options) : base(options)
         {

@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <PackageReference Include="AutoFixture" Version="4.18.1" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.5" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.3" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.5">
       <PrivateAssets>all</PrivateAssets>
@@ -35,7 +36,6 @@
   <ItemGroup>
     <ProjectReference Include="..\ScrumPilot.Data\ScrumPilot.Data.csproj" />
     <ProjectReference Include="..\ScrumPilot.Shared\ScrumPilot.Shared.csproj" />
-    <ProjectReference Include="..\ScrumPilot.Data\ScrumPilot.Data.csproj" />
   </ItemGroup>
 
 </Project>
