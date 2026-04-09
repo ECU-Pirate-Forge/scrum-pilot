@@ -17,7 +17,7 @@ namespace ScrumPilot.API.Controllers
 
 
         [HttpGet("getAllStories")]
-        public async Task<ActionResult<IEnumerable<Story>>> GetAllStories()
+        public async Task<ActionResult<IEnumerable<ProductBacklogItem>>> GetAllStories()
         {
             var stories = await _storyService.GetAllStoriesAsync();
             return Ok(stories);
@@ -31,21 +31,21 @@ namespace ScrumPilot.API.Controllers
         //}
 
         [HttpGet("getNonDraftStories")]
-        public async Task<ActionResult<IEnumerable<Story>>> GetNonDraftStories()
+        public async Task<ActionResult<IEnumerable<ProductBacklogItem>>> GetNonDraftStories()
         {
             var stories = await _storyService.GetNonDraftStoriesAsync();
             return Ok(stories);
         }
 
         [HttpGet("getDraftStories")]
-        public async Task<ActionResult<IEnumerable<Story>>> GetDraftStories()
+        public async Task<ActionResult<IEnumerable<ProductBacklogItem>>> GetDraftStories()
         {
             var draftStories = await _storyService.GetDraftStoriesAsync();
             return Ok(draftStories);
         }
 
         [HttpPost("generateAiStories")]
-        public async Task<ActionResult<List<Story>>> GenerateAiStories([FromBody] List<string> problemStatements)
+        public async Task<ActionResult<List<ProductBacklogItem>>> GenerateAiStories([FromBody] List<string> problemStatements)
         {
             if (problemStatements == null || problemStatements.Count == 0)
             {
@@ -83,14 +83,14 @@ namespace ScrumPilot.API.Controllers
         }
 
         [HttpPost("createStory")]
-        public async Task<ActionResult<Story>> CreateStory([FromBody] Story story)
+        public async Task<ActionResult<ProductBacklogItem>> CreateStory([FromBody] ProductBacklogItem story)
         {
             var created = await _storyService.CreateStoryAsync(story);
             return Ok(created);
         }
 
         [HttpPost("commitStory")]
-        public async Task<ActionResult<Story>> CommitStory([FromBody] Story story)
+        public async Task<ActionResult<ProductBacklogItem>> CommitStory([FromBody] ProductBacklogItem story)
         {
             try
             {
@@ -104,9 +104,9 @@ namespace ScrumPilot.API.Controllers
         }
 
         [HttpPost("createStories")]
-        public async Task<ActionResult<List<Story>>> CreateStories([FromBody] List<Story> stories)
+        public async Task<ActionResult<List<ProductBacklogItem>>> CreateStories([FromBody] List<ProductBacklogItem> stories)
         {
-            var created = new List<Story>();
+            var created = new List<ProductBacklogItem>();
             foreach (var story in stories)
             {
                 created.Add(await _storyService.CreateStoryAsync(story));
@@ -115,16 +115,16 @@ namespace ScrumPilot.API.Controllers
         }
 
         [HttpPost("createDraftStory")]
-        public async Task<ActionResult<Story>> CreateDraftStory([FromBody] Story story)
+        public async Task<ActionResult<ProductBacklogItem>> CreateDraftStory([FromBody] ProductBacklogItem story)
         {
             var created = await _storyService.CreateDraftStoryAsync(story);
             return Ok(created);
         }
 
         [HttpPost("createDraftStories")]
-        public async Task<ActionResult<List<Story>>> CreateDraftStories([FromBody] List<Story> stories)
+        public async Task<ActionResult<List<ProductBacklogItem>>> CreateDraftStories([FromBody] List<ProductBacklogItem> stories)
         {
-            var created = new List<Story>();
+            var created = new List<ProductBacklogItem>();
             foreach (var story in stories)
             {
                 created.Add(await _storyService.CreateDraftStoryAsync(story));
@@ -133,7 +133,7 @@ namespace ScrumPilot.API.Controllers
         }
 
         [HttpPut]
-        public async Task<ActionResult<Story>> UpdateStory([FromBody] Story story)
+        public async Task<ActionResult<ProductBacklogItem>> UpdateStory([FromBody] ProductBacklogItem story)
         {
             var updated = await _storyService.UpdateStoryAsync(story);
             return Ok(updated);

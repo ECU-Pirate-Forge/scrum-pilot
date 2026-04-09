@@ -76,44 +76,44 @@ namespace ScrumPilot.Data.Seeders
 
             var stories = new[]
             {
-                new Story
+                new ProductBacklogItem
                 {
                     Title = "User Authentication",
                     Description = "As a user, I want to be able to log in to the application so that I can access my personalized content.",
-                    Status = StoryStatus.ToDo,
-                    Priority = StoryPriority.High,
-                    StoryPoints = StoryPoints.Five,
-                    Origin = StoryOrigin.WebUserCreated,
+                    Status = PbiStatus.ToDo,
+                    Priority = PbiPriority.High,
+                    StoryPoints = PbiPoints.Five,
+                    Origin = PbiOrigin.WebUserCreated,
                     IsDraft = false
                 },
-                new Story
+                new ProductBacklogItem
                 {
                     Title = "Create User Profile",
                     Description = "As a user, I want to create and manage my profile so that I can personalize my experience.",
-                    Status = StoryStatus.InProgress,
-                    Priority = StoryPriority.Low,
-                    StoryPoints = StoryPoints.Three,
-                    Origin = StoryOrigin.WebUserCreated,
+                    Status = PbiStatus.InProgress,
+                    Priority = PbiPriority.Low,
+                    StoryPoints = PbiPoints.Three,
+                    Origin = PbiOrigin.WebUserCreated,
                     IsDraft = false
                 },
-                new Story
+                new ProductBacklogItem
                 {
                     Title = "Dashboard Analytics",
                     Description = "As an admin, I want to view analytics on the dashboard so that I can monitor system usage.",
-                    Status = StoryStatus.Done,
-                    Priority = StoryPriority.Medium,
-                    StoryPoints = StoryPoints.Eight,
-                    Origin = StoryOrigin.AiGenerated,
+                    Status = PbiStatus.Done,
+                    Priority = PbiPriority.Medium,
+                    StoryPoints = PbiPoints.Eight,
+                    Origin = PbiOrigin.AiGenerated,
                     IsDraft = false
                 },
-                new Story
+                new ProductBacklogItem
                 {
                     Title = "Database Connection",
                     Description = "As an Admin, I need to be able to retrieve data from our Database.",
-                    Status = StoryStatus.ToDo,
-                    Priority = StoryPriority.High,
-                    StoryPoints = StoryPoints.Five,
-                    Origin = StoryOrigin.AiGenerated,
+                    Status = PbiStatus.ToDo,
+                    Priority = PbiPriority.High,
+                    StoryPoints = PbiPoints.Five,
+                    Origin = PbiOrigin.AiGenerated,
                     IsDraft = true
                 }
             };

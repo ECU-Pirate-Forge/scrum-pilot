@@ -121,9 +121,9 @@
     private string _message = string.Empty;
     private bool _isLoading = false;
     private readonly List<string> _problemStatements = new();
-    private List<Story> _generatedStories = new();
+    private List<ProductBacklogItem> _generatedStories = new();
     private int _currentStoryIndex = 0;
-    private Story? CurrentStory => _generatedStories.Count == 0 ? null : _generatedStories[_currentStoryIndex];
+    private ProductBacklogItem? CurrentStory => _generatedStories.Count == 0 ? null : _generatedStories[_currentStoryIndex];
 
     private void AddProblemStatement()
     {
@@ -169,7 +169,7 @@
             if (response.IsSuccessStatusCode)
             {
                 var jsonResponse = await response.Content.ReadAsStringAsync();
-                var stories = JsonSerializer.Deserialize<List<Story>>(jsonResponse, new JsonSerializerOptions
+                var stories = JsonSerializer.Deserialize<List<ProductBacklogItem>>(jsonResponse, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
                 });

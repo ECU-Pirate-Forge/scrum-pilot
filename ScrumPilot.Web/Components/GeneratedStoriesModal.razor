@@ -64,7 +64,7 @@
     private IMudDialogInstance MudDialog { get; set; } = default!;
 
     [Parameter]
-    public List<Story> Stories { get; set; } = new();
+    public List<ProductBacklogItem> Stories { get; set; } = new();
 
     private int _currentStoryIndex = 0;
     private bool _isCommitting = false;

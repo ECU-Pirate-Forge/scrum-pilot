@@ -45,7 +45,7 @@ else if (draftStories.Count == 0)
 else
 {
     <MudPaper Elevation="4">
-        <MudTable T="Story" Items="@draftStories" Dense="false" Hover="true" Bordered="false" Striped="true" Elevation="0">
+        <MudTable T="ProductBacklogItem" Items="@draftStories" Dense="false" Hover="true" Bordered="false" Striped="true" Elevation="0">
             <HeaderContent>
                 <MudTh Style="width: 18%; font-weight: 600;">Title</MudTh>
                 <MudTh Style="width: 32%; font-weight: 600;">Description</MudTh>
@@ -84,9 +84,9 @@ else
                                    Color="Color.Success"
                                    OnClick="@(() => CommitStory(context))"
                                    StartIcon="@Icons.Material.Filled.Check"
-                                   Disabled="@_committingStoryIds.Contains(context.Id)"
+                                   Disabled="@_committingStoryIds.Contains(context.PbiId)"
                                    Style="width: 85px; min-width: 85px;">
-                            @if (_committingStoryIds.Contains(context.Id))
+                            @if (_committingStoryIds.Contains(context.PbiId))
                             {
                                 <span>...</span>
                             }
@@ -146,8 +146,8 @@ else
 </MudContainer>
 
 @code {
-    private List<Story>? draftStories;
-    private Story? modifyingStory = null; // Track which story is being modified
+    private List<ProductBacklogItem>? draftStories;
+    private ProductBacklogItem? modifyingStory = null; // Track which story is being modified
     private readonly HashSet<int> _committingStoryIds = new();
     private string _commitErrorMessage = string.Empty;
     private string _commitSuccessMessage = string.Empty;
@@ -161,22 +161,22 @@ else
         draftStories = await GetDraftStoriesAsync();
     }
 
-    private async Task<List<Story>> GetDraftStoriesAsync()
+    private async Task<List<ProductBacklogItem>> GetDraftStoriesAsync()
     {
         try
         {
-            var response = await Http.GetFromJsonAsync<List<Story>>("api/story/getDraftStories");
-            return response ?? new List<Story>();
+            var response = await Http.GetFromJsonAsync<List<ProductBacklogItem>>("api/story/getDraftStories");
+            return response ?? new List<ProductBacklogItem>();
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error loading draft stories: {ex.Message}");
-            return new List<Story>();
+            return new List<ProductBacklogItem>();
         }
     }
 
     /// Commits a draft story by calling the createStory API endpoint
-    private async Task CommitStory(Story story)
+    private async Task CommitStory(ProductBacklogItem story)
     {
         try
         {
@@ -194,7 +194,7 @@ else
     }
 
     /// Opens the story modification panel
-    private void ModifyStory(Story story)
+    private void ModifyStory(ProductBacklogItem story)
     {
         modifyingStory = story;
         StateHasChanged();
@@ -208,14 +208,14 @@ else
     }
 
     /// Saves the modified story by calling the update API endpoint
-    private async Task HandleModifySave(Story story)
+    private async Task HandleModifySave(ProductBacklogItem story)
     {
         try
         {
             var response = await Http.PutAsJsonAsync("api/story", story);
             if (response.IsSuccessStatusCode)
             {
-                var index = draftStories?.FindIndex(s => s.Id == story.Id) ?? -1;
+                var index = draftStories?.FindIndex(s => s.PbiId == story.PbiId) ?? -1;
                 if (index >= 0)
                 {
                     draftStories![index] = story;
@@ -231,11 +231,11 @@ else
     }
 
     /// Rejects and deletes a draft story by calling the delete API endpoint
-    private async Task RejectStory(Story story)
+    private async Task RejectStory(ProductBacklogItem story)
     {
         try
         {
-            var response = await Http.DeleteAsync($"api/story/{story.Id}");
+            var response = await Http.DeleteAsync($"api/story/{story.PbiId}");
             if (response.IsSuccessStatusCode)
             {
                 draftStories?.Remove(story);
@@ -249,13 +249,13 @@ else
     }
 
 
-    private Color GetPriorityColor(StoryPriority priority)
+    private Color GetPriorityColor(PbiPriority priority)
     {
         return priority switch
         {
-            StoryPriority.High => Color.Error,      // Red
-            StoryPriority.Medium => Color.Warning,  // Orange/Yellow  
-            StoryPriority.Low => Color.Success,     // Green
+            PbiPriority.High => Color.Error,      // Red
+            PbiPriority.Medium => Color.Warning,  // Orange/Yellow  
+            PbiPriority.Low => Color.Success,     // Green
             _ => Color.Default
         };
     }

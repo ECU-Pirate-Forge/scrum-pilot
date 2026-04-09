@@ -2,10 +2,11 @@
 
 namespace ScrumPilot.Shared.Models
 {
-    public enum StoryStatus
+    public enum PbiStatus
     {
         ToDo,
         InProgress,
+        InReview,
         Done
     }
 }

@@ -2,7 +2,7 @@
 
 namespace ScrumPilot.Shared.Models
 {
-    public enum StoryPriority
+    public enum PbiPriority
     {       
         Low,
         Medium,
