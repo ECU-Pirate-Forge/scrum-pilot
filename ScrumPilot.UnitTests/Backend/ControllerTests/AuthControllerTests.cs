@@ -2,13 +2,14 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using ScrumPilot.API.Controllers;
+using ScrumPilot.Data.Models;
 using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.UnitTests.Backend.ControllerTests
 {
     public class AuthControllerTests
     {
-        private readonly UserManager<IdentityUser> _mockUserManager;
+        private readonly UserManager<ApplicationUser> _mockUserManager;
         private readonly IConfiguration _mockConfig;
         private readonly AuthController _controller;
 
@@ -17,8 +18,8 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
 
         public AuthControllerTests()
         {
-            _mockUserManager = Substitute.For<UserManager<IdentityUser>>(
-                Substitute.For<IUserStore<IdentityUser>>(),
+            _mockUserManager = Substitute.For<UserManager<ApplicationUser>>(
+                Substitute.For<IUserStore<ApplicationUser>>(),
                 null, null, null, null, null, null, null, null);
 
             _mockConfig = Substitute.For<IConfiguration>();
@@ -34,7 +35,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         public async Task Login_ValidCredentials_ReturnsOkResult()
         {
             // Arrange
-            var user = new IdentityUser { UserName = "Tyler", Email = "Tyler@scrumpilot.xyz", Id = "user-1" };
+            var user = new ApplicationUser { UserName = "Tyler", Email = "Tyler@scrumpilot.xyz", Id = "user-1" };
             _mockUserManager.FindByNameAsync("Tyler").Returns(user);
             _mockUserManager.CheckPasswordAsync(user, "Password1234!").Returns(true);
             _mockUserManager.GetRolesAsync(user).Returns(new List<string> { "Developer" });
@@ -52,7 +53,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         public async Task Login_ValidCredentials_ReturnsCorrectUserName()
         {
             // Arrange
-            var user = new IdentityUser { UserName = "Tyler", Email = "Tyler@scrumpilot.xyz", Id = "user-1" };
+            var user = new ApplicationUser { UserName = "Tyler", Email = "Tyler@scrumpilot.xyz", Id = "user-1" };
             _mockUserManager.FindByNameAsync("Tyler").Returns(user);
             _mockUserManager.CheckPasswordAsync(user, "Password1234!").Returns(true);
             _mockUserManager.GetRolesAsync(user).Returns(new List<string> { "Developer" });
@@ -72,7 +73,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         public async Task Login_ValidCredentials_ReturnsNonEmptyToken()
         {
             // Arrange
-            var user = new IdentityUser { UserName = "Tyler", Email = "Tyler@scrumpilot.xyz", Id = "user-1" };
+            var user = new ApplicationUser { UserName = "Tyler", Email = "Tyler@scrumpilot.xyz", Id = "user-1" };
             _mockUserManager.FindByNameAsync("Tyler").Returns(user);
             _mockUserManager.CheckPasswordAsync(user, "Password1234!").Returns(true);
             _mockUserManager.GetRolesAsync(user).Returns(new List<string> { "Developer" });
@@ -92,7 +93,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         public async Task Login_UnknownUsername_ReturnsUnauthorized()
         {
             // Arrange
-            _mockUserManager.FindByNameAsync("nobody").Returns((IdentityUser?)null);
+            _mockUserManager.FindByNameAsync("nobody").Returns((ApplicationUser?)null);
 
             var request = new LoginRequest { UserName = "nobody", Password = "anypass" };
 
@@ -107,7 +108,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         public async Task Login_WrongPassword_ReturnsUnauthorized()
         {
             // Arrange
-            var user = new IdentityUser { UserName = "Tyler", Email = "Tyler@scrumpilot.xyz", Id = "user-1" };
+            var user = new ApplicationUser { UserName = "Tyler", Email = "Tyler@scrumpilot.xyz", Id = "user-1" };
             _mockUserManager.FindByNameAsync("Tyler").Returns(user);
             _mockUserManager.CheckPasswordAsync(user, "WrongPassword!").Returns(false);
 
@@ -124,7 +125,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         public async Task Login_ValidCredentials_CallsUserManagerOnce()
         {
             // Arrange
-            var user = new IdentityUser { UserName = "Tyler", Email = "Tyler@scrumpilot.xyz", Id = "user-1" };
+            var user = new ApplicationUser { UserName = "Tyler", Email = "Tyler@scrumpilot.xyz", Id = "user-1" };
             _mockUserManager.FindByNameAsync("Tyler").Returns(user);
             _mockUserManager.CheckPasswordAsync(user, "Password1234!").Returns(true);
             _mockUserManager.GetRolesAsync(user).Returns(new List<string> { "Developer" });

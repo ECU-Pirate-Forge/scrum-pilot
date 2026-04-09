@@ -11,7 +11,7 @@ using ScrumPilot.Data.Context;
 namespace ScrumPilot.Data.Migrations
 {
     [DbContext(typeof(ScrumPilotContext))]
-    [Migration("20260409012955_AddApplicationUserColumns")]
+    [Migration("20260409032355_AddApplicationUserColumns")]
     partial class AddApplicationUserColumns
     {
         /// <inheritdoc />
@@ -253,9 +253,9 @@ namespace ScrumPilot.Data.Migrations
                     b.ToTable("MessageTranscripts");
                 });
 
-            modelBuilder.Entity("ScrumPilot.Shared.Models.Story", b =>
+            modelBuilder.Entity("ScrumPilot.Shared.Models.ProductBacklogItem", b =>
                 {
-                    b.Property<int>("Id")
+                    b.Property<int>("PbiId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
@@ -267,7 +267,13 @@ namespace ScrumPilot.Data.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("EpicId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("IsDraft")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsFlagged")
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("LastUpdated")
@@ -281,6 +287,9 @@ namespace ScrumPilot.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("SprintId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -293,7 +302,11 @@ namespace ScrumPilot.Data.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("PbiId");
 
                     b.ToTable("Stories");
                 });
