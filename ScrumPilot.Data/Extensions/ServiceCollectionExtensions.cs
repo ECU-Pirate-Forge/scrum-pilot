@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ScrumPilot.Data.Context;
+using ScrumPilot.Data.Models;
 using ScrumPilot.Data.Repositories;
 
 namespace ScrumPilot.Data.Extensions
@@ -16,7 +17,7 @@ namespace ScrumPilot.Data.Extensions
                 options.UseSqlite(configuration.GetConnectionString("DefaultConnection")));
 
             // Add ASP.NET Core Identity backed by EF Core / SQLite
-            services.AddIdentityCore<IdentityUser>(options =>
+            services.AddIdentityCore<ApplicationUser>(options =>
             {
                 // Relaxed for development seeding — tighten before production
                 options.Password.RequireDigit = true;
