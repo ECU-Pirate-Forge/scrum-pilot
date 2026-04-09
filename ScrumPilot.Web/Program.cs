@@ -15,6 +15,7 @@ builder.Services.AddMudServices();
 
 // Auth services
 builder.Services.AddAuthorizationCore();
+builder.Services.AddScoped<NavMenuStateService>();
 builder.Services.AddScoped<JwtAuthStateProvider>();
 builder.Services.AddScoped<AuthenticationStateProvider>(
     sp => sp.GetRequiredService<JwtAuthStateProvider>());

@@ -2,6 +2,7 @@
 @inject IAuthService AuthService
 @inject NavigationManager Navigation
 @inject IDialogService DialogService
+@inject NavMenuStateService NavState
 @inherits LayoutComponentBase
 @inject IJSRuntime JSRuntime
 @using MudBlazor
@@ -12,17 +13,26 @@
 <MudSnackbarProvider />
 
 <div class="page">
-    <div class="sidebar">
-        <NavMenu />
+    <div class="sidebar @(NavState.IsExpanded ? "sidebar-expanded" : "sidebar-collapsed")">
+        <NavMenu IsExpanded="@NavState.IsExpanded" />
     </div>
 
-    <main>
+    <main class="@(NavState.IsExpanded ? "main-expanded" : "main-collapsed")">
         <div class="top-row px-4">
-            <!-- Single Logo in Upper Left -->
             <div class="logo-section">
-                <a class="navbar-brand" href="">
-                    <img src="/images/logo.png" alt="ScrumPilot" class="main-logo" />
-                </a>
+                <div style="display:flex; align-items:center; gap:4px;">
+                    <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                                   Color="Color.Inherit"
+                                   OnClick="@ToggleNavMenu"
+                                   Title="Toggle navigation menu" />
+
+                    @if (NavState.IsExpanded)
+                    {
+                        <a class="navbar-brand" href="">
+                            <img src="/images/logo.png" alt="ScrumPilot" class="main-logo" />
+                        </a>
+                    }
+                </div>
             </div>
 
             <div style="display: flex; align-items: center; gap: 4px;">
@@ -46,7 +56,7 @@
 
 @code {
     private bool _isDarkMode = false;
-    private MudThemeProvider _mudThemeProvider;
+    private MudThemeProvider? _mudThemeProvider;
 
     MudTheme currentTheme = new()
     {
@@ -61,44 +71,49 @@
         },
         PaletteDark = new PaletteDark()
         {
-            Primary = "#1b6ec2",           // Same as light mode for better contrast with white text
-            Secondary = "#f48fb1",         // Pink accent for variety
-            AppbarBackground = "#1a1a1a",   
-            Surface = "#2d2d30",           // Slightly lighter than background
-            Background = "#1e1e1e",        // Dark background
-            TextPrimary = "#ffffff",       // Pure white for maximum contrast
-            TextSecondary = "#e0e0e0",     // Very light gray for secondary text
-            TextDisabled = "#9e9e9e",      // Medium gray for disabled
-            ActionDefault = "#e0e0e0",     // Light for clickable elements
-            ActionDisabled = "#757575",    // Darker for disabled actions
-            Divider = "rgba(255, 255, 255, 0.2)", // More visible dividers
-            DividerLight = "rgba(255, 255, 255, 0.1)", 
-            TableLines = "rgba(255, 255, 255, 0.2)", // Visible table lines
-            LinesDefault = "rgba(255, 255, 255, 0.2)", 
-            LinesInputs = "rgba(255, 255, 255, 0.4)", // Clear input borders
-            TableStriped = "rgba(255, 255, 255, 0.05)", // Subtle stripes
-            HoverOpacity = 0.1,           // More pronounced hover effects
-            GrayDefault = "#424242",      // Lighter gray for better contrast
-            GrayLight = "#616161",        // 
-            GrayLighter = "#757575",      // 
-            GrayDark = "#303030",         // 
-            GrayDarker = "#212121"        // 
+            Primary = "#1b6ec2",
+            Secondary = "#f48fb1",
+            AppbarBackground = "#1a1a1a",
+            Surface = "#2d2d30",
+            Background = "#1e1e1e",
+            TextPrimary = "#ffffff",
+            TextSecondary = "#e0e0e0",
+            TextDisabled = "#9e9e9e",
+            ActionDefault = "#e0e0e0",
+            ActionDisabled = "#757575",
+            Divider = "rgba(255, 255, 255, 0.2)",
+            DividerLight = "rgba(255, 255, 255, 0.1)",
+            TableLines = "rgba(255, 255, 255, 0.2)",
+            LinesDefault = "rgba(255, 255, 255, 0.2)",
+            LinesInputs = "rgba(255, 255, 255, 0.4)",
+            TableStriped = "rgba(255, 255, 255, 0.05)",
+            HoverOpacity = 0.1,
+            GrayDefault = "#424242",
+            GrayLight = "#616161",
+            GrayLighter = "#757575",
+            GrayDark = "#303030",
+            GrayDarker = "#212121"
         }
     };
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
+        if (firstRender && _mudThemeProvider is not null)
         {
-            // Check system preference
             _isDarkMode = await _mudThemeProvider.GetSystemDarkModeAsync();
             StateHasChanged();
         }
     }
 
-    private async Task ToggleDarkMode()
+    private void ToggleNavMenu()
+    {
+        NavState.Toggle();
+    }
+
+    private Task ToggleDarkMode()
     {
         _isDarkMode = !_isDarkMode;
+        return Task.CompletedTask;
     }
 
     private async Task HandleLogout()

@@ -1,44 +1,48 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
-    <div class="nav-fluid">
-        <a class="navbar-brand" href="">
-            <img src="/images/logo.png" alt="ScrumPilot" class="navbar-logo" />
-        </a>
-        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-    </div>
-</div>
-
-<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
+﻿<div class="nav-scrollable">
     <nav class="nav flex-column">
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span style="margin-right: 0.75rem; width: 1.25rem; display: inline-block;"></span>Home
+            <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
+                <span class="nav-icon">🏠</span>
+                @if (IsExpanded)
+                {
+                    <span class="nav-label">Home</span>
+                }
             </NavLink>
         </div>
+
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="/storygeneration">
-                <span class="bi bi-lightbulb" aria-hidden="true"></span> Generate
-            </NavLink>
-            <NavLink class="nav-link" href="draft-stories">
-                <span class="bi bi-list-task" aria-hidden="true"></span> Draft Stories
+                <span class="nav-icon">💡</span>
+                @if (IsExpanded)
+                {
+                    <span class="nav-label">Generate</span>
+                }
             </NavLink>
         </div>
+
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="scrum-board">
-                <span class="bi bi-kanban" aria-hidden="true"></span> Scrum Board
+            <NavLink class="nav-link" href="/draft-stories">
+                <span class="nav-icon">📝</span>
+                @if (IsExpanded)
+                {
+                    <span class="nav-label">Draft Stories</span>
+                }
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="/scrum-board">
+                <span class="nav-icon">📋</span>
+                @if (IsExpanded)
+                {
+                    <span class="nav-label">Scrum Board</span>
+                }
             </NavLink>
         </div>
     </nav>
 </div>
 
 @code {
-    private bool collapseNavMenu = true;
-
-    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
-
-    private void ToggleNavMenu()
-    {
-        collapseNavMenu = !collapseNavMenu;
-    }
+    [Parameter]
+    public bool IsExpanded { get; set; }
 }
