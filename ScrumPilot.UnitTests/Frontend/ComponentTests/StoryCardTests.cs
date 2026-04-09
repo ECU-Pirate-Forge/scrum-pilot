@@ -1,4 +1,4 @@
-using Bunit;
+﻿using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using MudBlazor.Services;
 using ScrumPilot.Shared.Models;
@@ -14,15 +14,15 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
             // Base class handles MudServices and JSInterop setup
         }
 
-        private Story CreateTestStory()
+        private ProductBacklogItem CreateTestStory()
         {
-            return new Story
+            return new ProductBacklogItem
             {
-                Id = 1,
+                PbiId = 1,
                 Title = "Test Story",
                 Description = "Test Description",
-                Status = StoryStatus.ToDo,
-                Priority = StoryPriority.Medium,
+                Status = PbiStatus.ToDo,
+                Priority = PbiPriority.Medium,
                 DateCreated = DateTime.UtcNow,
                 LastUpdated = DateTime.UtcNow
             };

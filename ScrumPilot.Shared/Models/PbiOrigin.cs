@@ -2,7 +2,7 @@ using System;
 
 namespace ScrumPilot.Shared.Models
 {
-    public enum StoryOrigin
+    public enum PbiOrigin
     {
         AiGenerated,
         BotGenerated,

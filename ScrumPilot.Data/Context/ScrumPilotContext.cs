@@ -11,7 +11,7 @@ namespace ScrumPilot.Data.Context
         {
         }
 
-        public DbSet<Story> Stories { get; set; }
+        public DbSet<ProductBacklogItem> Stories { get; set; }
         public DbSet<AudioTranscript> AudioTranscripts { get; set; }
         public DbSet<MessageTranscript> MessageTranscripts { get; set; }
 
@@ -20,12 +20,13 @@ namespace ScrumPilot.Data.Context
             base.OnModelCreating(modelBuilder);
 
             // Configure Story entity
-            modelBuilder.Entity<Story>(entity =>
+            modelBuilder.Entity<ProductBacklogItem>(entity =>
             {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Id).ValueGeneratedOnAdd(); // Auto-increment identity column
+                entity.HasKey(e => e.PbiId);
+                entity.Property(e => e.PbiId).ValueGeneratedOnAdd();
                 entity.Property(e => e.Title).IsRequired().HasMaxLength(200);
                 entity.Property(e => e.Description).HasMaxLength(2000);
+                entity.Property(e => e.Type).HasConversion<string>();
                 entity.Property(e => e.Status).HasConversion<string>();
                 entity.Property(e => e.Priority).HasConversion<string>();
                 entity.Property(e => e.Origin).HasConversion<string>();
@@ -72,7 +73,7 @@ namespace ScrumPilot.Data.Context
 
             foreach (var entry in entries)
             {
-                if (entry.Entity is Story story)
+                if (entry.Entity is ProductBacklogItem story)
                 {
                     if (entry.State == EntityState.Added)
                     {

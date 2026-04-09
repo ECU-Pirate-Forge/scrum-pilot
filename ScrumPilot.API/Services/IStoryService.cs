@@ -4,16 +4,16 @@ namespace ScrumPilot.API.Services
 {
     public interface IStoryService
     {
-        Task<IEnumerable<Story>> GetAllStoriesAsync();
-        Task<IEnumerable<Story>> GetDraftStoriesAsync();
+        Task<IEnumerable<ProductBacklogItem>> GetAllStoriesAsync();
+        Task<IEnumerable<ProductBacklogItem>> GetDraftStoriesAsync();
 
-        Task<List<Story>> GenerateAiStories(List<string> problemStatements);
+        Task<List<ProductBacklogItem>> GenerateAiStories(List<string> problemStatements);
 
-        Task<Story> CreateStoryAsync(Story story);
-        Task<Story> CommitStoryAsync(Story story);
-        Task<Story> UpdateStoryAsync(Story story);
+        Task<ProductBacklogItem> CreateStoryAsync(ProductBacklogItem story);
+        Task<ProductBacklogItem> CommitStoryAsync(ProductBacklogItem story);
+        Task<ProductBacklogItem> UpdateStoryAsync(ProductBacklogItem story);
         Task<bool> DeleteStoryAsync(int id);
-        Task<Story> CreateDraftStoryAsync(Story story);
-        Task<IEnumerable<Story>> GetNonDraftStoriesAsync();
+        Task<ProductBacklogItem> CreateDraftStoryAsync(ProductBacklogItem story);
+        Task<IEnumerable<ProductBacklogItem>> GetNonDraftStoriesAsync();
     }
 }

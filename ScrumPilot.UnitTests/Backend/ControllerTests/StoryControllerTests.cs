@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using ScrumPilot.API.Controllers;
 using ScrumPilot.API.Services;
@@ -22,25 +22,25 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         public async Task GetAllStories_ReturnsOkResult_WithListOfStories()
         {
             // Arrange
-            var expectedStories = new List<Story>
+            var expectedStories = new List<ProductBacklogItem>
             {
-                new Story 
+                new ProductBacklogItem 
                 { 
-                    Id = 1, 
+                    PbiId = 1, 
                     Title = "Test Story 1", 
                     Description = "Test Description 1",
-                    Status = StoryStatus.ToDo,
-                    Priority = StoryPriority.Low,
+                    Status = PbiStatus.ToDo,
+                    Priority = PbiPriority.Low,
                     DateCreated = DateTime.UtcNow,
                     LastUpdated = DateTime.UtcNow
                 },
-                new Story 
+                new ProductBacklogItem 
                 { 
-                    Id = 2, 
+                    PbiId = 2, 
                     Title = "Test Story 2", 
                     Description = "Test Description 2",
-                    Status = StoryStatus.InProgress,
-                    Priority = StoryPriority.High,
+                    Status = PbiStatus.InProgress,
+                    Priority = PbiPriority.High,
                     DateCreated = DateTime.UtcNow,
                     LastUpdated = DateTime.UtcNow
                 }
@@ -53,7 +53,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
-            var actualStories = Assert.IsType<List<Story>>(okResult.Value);
+            var actualStories = Assert.IsType<List<ProductBacklogItem>>(okResult.Value);
             Assert.Equal(expectedStories.Count, actualStories.Count);
             Assert.Equal(expectedStories, actualStories);
             await _mockStoryService.Received(1).GetAllStoriesAsync();
@@ -63,7 +63,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         public async Task GetAllStories_ReturnsOkResult_WithEmptyList_WhenNoStories()
         {
             // Arrange
-            var expectedStories = new List<Story>();
+            var expectedStories = new List<ProductBacklogItem>();
             _mockStoryService.GetAllStoriesAsync().Returns(expectedStories);
 
             // Act
@@ -71,7 +71,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
-            var actualStories = Assert.IsType<List<Story>>(okResult.Value);
+            var actualStories = Assert.IsType<List<ProductBacklogItem>>(okResult.Value);
             Assert.Empty(actualStories);
             await _mockStoryService.Received(1).GetAllStoriesAsync();
         }
@@ -84,15 +84,15 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         public async Task GetDraftStories_ReturnsOkResult_WithDraftStories()
         {
             // Arrange
-            var expectedDraftStories = new List<Story>
+            var expectedDraftStories = new List<ProductBacklogItem>
             {
-                new Story 
+                new ProductBacklogItem 
                 { 
-                    Id = 1, 
+                    PbiId = 1, 
                     Title = "Draft Story 1", 
                     Description = "Draft Description 1",
-                    Status = StoryStatus.ToDo,
-                    Priority = StoryPriority.Low,
+                    Status = PbiStatus.ToDo,
+                    Priority = PbiPriority.Low,
                     IsDraft = true,
                     DateCreated = DateTime.UtcNow,
                     LastUpdated = DateTime.UtcNow
@@ -106,7 +106,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
-            var actualStories = Assert.IsType<List<Story>>(okResult.Value);
+            var actualStories = Assert.IsType<List<ProductBacklogItem>>(okResult.Value);
             Assert.Single(actualStories);
             Assert.True(actualStories[0].IsDraft);
             await _mockStoryService.Received(1).GetDraftStoriesAsync();
@@ -116,7 +116,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         public async Task GetDraftStories_ReturnsOkResult_WithEmptyList_WhenNoDraftStories()
         {
             // Arrange
-            var expectedStories = new List<Story>();
+            var expectedStories = new List<ProductBacklogItem>();
             _mockStoryService.GetDraftStoriesAsync().Returns(expectedStories);
 
             // Act
@@ -124,7 +124,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
-            var actualStories = Assert.IsType<List<Story>>(okResult.Value);
+            var actualStories = Assert.IsType<List<ProductBacklogItem>>(okResult.Value);
             Assert.Empty(actualStories);
             await _mockStoryService.Received(1).GetDraftStoriesAsync();
         }
@@ -138,16 +138,16 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         {
             // Arrange
             var problemStatements = new List<string> { "As a user, I want to log in to the system" };
-            var expectedStories = new List<Story>
+            var expectedStories = new List<ProductBacklogItem>
             {
-                new Story
+                new ProductBacklogItem
                 {
-                    Id = 1,
+                    PbiId = 1,
                     Title = "User Login Story",
                     Description = "Generated story description",
-                    Status = StoryStatus.ToDo,
-                    Priority = StoryPriority.Low,
-                    Origin = StoryOrigin.AiGenerated,
+                    Status = PbiStatus.ToDo,
+                    Priority = PbiPriority.Low,
+                    Origin = PbiOrigin.AiGenerated,
                     DateCreated = DateTime.UtcNow,
                     LastUpdated = DateTime.UtcNow
                 }
@@ -160,8 +160,8 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
-            var actualStories = Assert.IsType<List<Story>>(okResult.Value);
-            Assert.Equal(expectedStories[0].Id, actualStories[0].Id);
+            var actualStories = Assert.IsType<List<ProductBacklogItem>>(okResult.Value);
+            Assert.Equal(expectedStories[0].PbiId, actualStories[0].PbiId);
             Assert.Equal(expectedStories[0].Title, actualStories[0].Title);
             Assert.Equal(expectedStories[0].Origin, actualStories[0].Origin);
             await _mockStoryService.Received(1).GenerateAiStories(problemStatements);
@@ -205,7 +205,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             var problemStatements = new List<string> { "Test problem statement" };
             var exceptionMessage = "Invalid operation occurred";
             _mockStoryService.GenerateAiStories(problemStatements)
-                .Returns(Task.FromException<List<Story>>(new InvalidOperationException(exceptionMessage)));
+                .Returns(Task.FromException<List<ProductBacklogItem>>(new InvalidOperationException(exceptionMessage)));
 
             // Act
             var result = await _controller.GenerateAiStories(problemStatements);
@@ -223,7 +223,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             var problemStatements = new List<string> { "Test problem statement" };
             var exceptionMessage = "Network error";
             _mockStoryService.GenerateAiStories(problemStatements)
-                .Returns(Task.FromException<List<Story>>(new HttpRequestException(exceptionMessage)));
+                .Returns(Task.FromException<List<ProductBacklogItem>>(new HttpRequestException(exceptionMessage)));
 
             // Act
             var result = await _controller.GenerateAiStories(problemStatements);
@@ -242,7 +242,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             var problemStatements = new List<string> { "Test problem statement" };
             var exceptionMessage = "Request timed out";
             _mockStoryService.GenerateAiStories(problemStatements)
-                .Returns(Task.FromException<List<Story>>(new TimeoutException(exceptionMessage)));
+                .Returns(Task.FromException<List<ProductBacklogItem>>(new TimeoutException(exceptionMessage)));
 
             // Act
             var result = await _controller.GenerateAiStories(problemStatements);
@@ -261,7 +261,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             var problemStatements = new List<string> { "Test problem statement" };
             var exceptionMessage = "Unexpected error";
             _mockStoryService.GenerateAiStories(problemStatements)
-                .Returns(Task.FromException<List<Story>>(new Exception(exceptionMessage)));
+                .Returns(Task.FromException<List<ProductBacklogItem>>(new Exception(exceptionMessage)));
 
             // Act
             var result = await _controller.GenerateAiStories(problemStatements);
@@ -281,17 +281,17 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         public async Task CreateStory_ReturnsOkResult_WithCreatedStory()
         {
             // Arrange
-            var inputStory = new Story
+            var inputStory = new ProductBacklogItem
             {
                 Title = "New Story",
                 Description = "New Description",
-                Status = StoryStatus.ToDo,
-                Priority = StoryPriority.Medium
+                Status = PbiStatus.ToDo,
+                Priority = PbiPriority.Medium
             };
 
-            var createdStory = new Story
+            var createdStory = new ProductBacklogItem
             {
-                Id = 1,
+                PbiId = 1,
                 Title = inputStory.Title,
                 Description = inputStory.Description,
                 Status = inputStory.Status,
@@ -307,8 +307,8 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
-            var actualStory = Assert.IsType<Story>(okResult.Value);
-            Assert.Equal(createdStory.Id, actualStory.Id);
+            var actualStory = Assert.IsType<ProductBacklogItem>(okResult.Value);
+            Assert.Equal(createdStory.PbiId, actualStory.PbiId);
             Assert.Equal(createdStory.Title, actualStory.Title);
             await _mockStoryService.Received(1).CreateStoryAsync(inputStory);
         }
@@ -321,13 +321,13 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         public async Task UpdateStory_ReturnsOkResult_WithUpdatedStory()
         {
             // Arrange
-            var updatedStory = new Story
+            var updatedStory = new ProductBacklogItem
             {
-                Id = 1,
+                PbiId = 1,
                 Title = "Updated Story",
                 Description = "Updated Description",
-                Status = StoryStatus.InProgress,
-                Priority = StoryPriority.High,
+                Status = PbiStatus.InProgress,
+                Priority = PbiPriority.High,
                 DateCreated = DateTime.UtcNow.AddDays(-1),
                 LastUpdated = DateTime.UtcNow
             };
@@ -339,10 +339,10 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
-            var actualStory = Assert.IsType<Story>(okResult.Value);
-            Assert.Equal(updatedStory.Id, actualStory.Id);
+            var actualStory = Assert.IsType<ProductBacklogItem>(okResult.Value);
+            Assert.Equal(updatedStory.PbiId, actualStory.PbiId);
             Assert.Equal(updatedStory.Title, actualStory.Title);
-            Assert.Equal(StoryStatus.InProgress, actualStory.Status);
+            Assert.Equal(PbiStatus.InProgress, actualStory.Status);
             await _mockStoryService.Received(1).UpdateStoryAsync(updatedStory);
         }
 
@@ -350,21 +350,21 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         public async Task CommitDraftStory_ReturnsOkResult_WithCommittedStory()
         {
             // Arrange
-            var draftStory = new Story
+            var draftStory = new ProductBacklogItem
             {
-                Id = 7,
+                PbiId = 7,
                 Title = "Draft Story",
                 Description = "Draft Description",
-                Status = StoryStatus.ToDo,
-                Priority = StoryPriority.Medium,
+                Status = PbiStatus.ToDo,
+                Priority = PbiPriority.Medium,
                 IsDraft = true,
                 DateCreated = DateTime.UtcNow,
                 LastUpdated = DateTime.UtcNow
             };
 
-            var committedStory = new Story
+            var committedStory = new ProductBacklogItem
             {
-                Id = draftStory.Id,
+                PbiId = draftStory.PbiId,
                 Title = draftStory.Title,
                 Description = draftStory.Description,
                 Status = draftStory.Status,
@@ -381,8 +381,8 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
-            var actualStory = Assert.IsType<Story>(okResult.Value);
-            Assert.Equal(committedStory.Id, actualStory.Id);
+            var actualStory = Assert.IsType<ProductBacklogItem>(okResult.Value);
+            Assert.Equal(committedStory.PbiId, actualStory.PbiId);
             Assert.False(actualStory.IsDraft);
             await _mockStoryService.Received(1).CommitStoryAsync(draftStory);
         }
@@ -391,13 +391,13 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         public async Task CommitDraftStory_ReturnsNotFound_WhenDraftStoryMissing()
         {
             // Arrange
-            var draftStory = new Story
+            var draftStory = new ProductBacklogItem
             {
-                Id = 99,
+                PbiId = 99,
                 Title = "Missing Draft",
                 Description = "Missing",
-                Status = StoryStatus.ToDo,
-                Priority = StoryPriority.Low,
+                Status = PbiStatus.ToDo,
+                Priority = PbiPriority.Low,
                 IsDraft = true,
                 DateCreated = DateTime.UtcNow,
                 LastUpdated = DateTime.UtcNow
@@ -405,7 +405,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
 
             _mockStoryService
                 .CommitStoryAsync(draftStory)
-                .Returns(Task.FromException<Story>(new KeyNotFoundException("Draft story not found.")));
+                .Returns(Task.FromException<ProductBacklogItem>(new KeyNotFoundException("Draft story not found.")));
 
             // Act
             var result = await _controller.CommitStory(draftStory);

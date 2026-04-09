@@ -80,14 +80,14 @@
 
                     @if (isEditMode)
                     {
-                        <MudSelect T="StoryPriority"
+                        <MudSelect T="PbiPriority"
                                    @bind-Value="editPriority"
                                    Label="Priority"
                                    Variant="Variant.Outlined"
                                    Style="min-width: 150px;">
-                            <MudSelectItem Value="StoryPriority.Low">Low</MudSelectItem>
-                            <MudSelectItem Value="StoryPriority.Medium">Medium</MudSelectItem>
-                            <MudSelectItem Value="StoryPriority.High">High</MudSelectItem>
+                            <MudSelectItem Value="PbiPriority.Low">Low</MudSelectItem>
+                            <MudSelectItem Value="PbiPriority.Medium">Medium</MudSelectItem>
+                            <MudSelectItem Value="PbiPriority.High">High</MudSelectItem>
                         </MudSelect>
                     }
                     else
@@ -101,7 +101,7 @@
                         </MudChip>
                     }
 
-                    @if (StoryModel.Origin != StoryOrigin.WebUserCreated)
+                    @if (StoryModel.Origin != PbiOrigin.WebUserCreated)
                     {
                         <MudChip T="string"
                                  Size="Size.Medium"
@@ -179,18 +179,18 @@
                                         </MudText>
                                         @if (isEditMode)
                                         {
-                                            <MudSelect T="StoryPoints"
+                                            <MudSelect T="PbiPoints"
                                                        @bind-Value="editStoryPoints"
                                                        Label="Story Points"
                                                        Variant="Variant.Outlined">
-                                                <MudSelectItem Value="StoryPoints.Zero">0</MudSelectItem>
-                                                <MudSelectItem Value="StoryPoints.One">1</MudSelectItem>
-                                                <MudSelectItem Value="StoryPoints.Two">2</MudSelectItem>
-                                                <MudSelectItem Value="StoryPoints.Three">3</MudSelectItem>
-                                                <MudSelectItem Value="StoryPoints.Five">5</MudSelectItem>
-                                                <MudSelectItem Value="StoryPoints.Eight">8</MudSelectItem>
-                                                <MudSelectItem Value="StoryPoints.Thirteen">13</MudSelectItem>
-                                                <MudSelectItem Value="StoryPoints.TwentyOne">21</MudSelectItem>
+                                                <MudSelectItem Value="PbiPoints.Zero">0</MudSelectItem>
+                                                <MudSelectItem Value="PbiPoints.One">1</MudSelectItem>
+                                                <MudSelectItem Value="PbiPoints.Two">2</MudSelectItem>
+                                                <MudSelectItem Value="PbiPoints.Three">3</MudSelectItem>
+                                                <MudSelectItem Value="PbiPoints.Five">5</MudSelectItem>
+                                                <MudSelectItem Value="PbiPoints.Eight">8</MudSelectItem>
+                                                <MudSelectItem Value="PbiPoints.Thirteen">13</MudSelectItem>
+                                                <MudSelectItem Value="PbiPoints.TwentyOne">21</MudSelectItem>
                                             </MudSelect>
                                         }
                                         else
@@ -269,8 +269,8 @@ else
 }
 
 @code {
-    [Parameter] public ScrumPilot.Shared.Models.Story? StoryModel { get; set; }
-    [Parameter] public EventCallback<ScrumPilot.Shared.Models.Story> OnSave { get; set; }
+    [Parameter] public ScrumPilot.Shared.Models.ProductBacklogItem? StoryModel { get; set; }
+    [Parameter] public EventCallback<ScrumPilot.Shared.Models.ProductBacklogItem> OnSave { get; set; }
 
     private bool isEditMode = false;
     private bool titleError = false;
@@ -278,8 +278,8 @@ else
 
     private string editTitle = "";
     private string editDescription = "";
-    private StoryPriority editPriority;
-    private StoryPoints editStoryPoints;
+    private PbiPriority editPriority;
+    private PbiPoints editStoryPoints;
 
     private void StartEdit()
     {
@@ -324,43 +324,43 @@ else
         isEditMode = false;
     }
 
-    private string GetStatusIcon(ScrumPilot.Shared.Models.StoryStatus status) => status switch
+    private string GetStatusIcon(ScrumPilot.Shared.Models.PbiStatus status) => status switch
     {
-        ScrumPilot.Shared.Models.StoryStatus.ToDo => Icons.Material.Filled.Assignment,
-        ScrumPilot.Shared.Models.StoryStatus.InProgress => Icons.Material.Filled.Refresh,
-        ScrumPilot.Shared.Models.StoryStatus.Done => Icons.Material.Filled.CheckCircle,
+        ScrumPilot.Shared.Models.PbiStatus.ToDo => Icons.Material.Filled.Assignment,
+        ScrumPilot.Shared.Models.PbiStatus.InProgress => Icons.Material.Filled.Refresh,
+        ScrumPilot.Shared.Models.PbiStatus.Done => Icons.Material.Filled.CheckCircle,
         _ => Icons.Material.Filled.Assignment
     };
 
-    private string GetPriorityIcon(ScrumPilot.Shared.Models.StoryPriority priority) => priority switch
+    private string GetPriorityIcon(ScrumPilot.Shared.Models.PbiPriority priority) => priority switch
     {
-        ScrumPilot.Shared.Models.StoryPriority.Low => Icons.Material.Filled.KeyboardArrowDown,
-        ScrumPilot.Shared.Models.StoryPriority.Medium => Icons.Material.Filled.KeyboardArrowRight,
-        ScrumPilot.Shared.Models.StoryPriority.High => Icons.Material.Filled.KeyboardArrowUp,
+        ScrumPilot.Shared.Models.PbiPriority.Low => Icons.Material.Filled.KeyboardArrowDown,
+        ScrumPilot.Shared.Models.PbiPriority.Medium => Icons.Material.Filled.KeyboardArrowRight,
+        ScrumPilot.Shared.Models.PbiPriority.High => Icons.Material.Filled.KeyboardArrowUp,
         _ => Icons.Material.Filled.KeyboardArrowRight
     };
 
-    private Color GetStatusColor(ScrumPilot.Shared.Models.StoryStatus status) => status switch
+    private Color GetStatusColor(ScrumPilot.Shared.Models.PbiStatus status) => status switch
     {
-        ScrumPilot.Shared.Models.StoryStatus.ToDo => Color.Default,
-        ScrumPilot.Shared.Models.StoryStatus.InProgress => Color.Warning,
-        ScrumPilot.Shared.Models.StoryStatus.Done => Color.Success,
+        ScrumPilot.Shared.Models.PbiStatus.ToDo => Color.Default,
+        ScrumPilot.Shared.Models.PbiStatus.InProgress => Color.Warning,
+        ScrumPilot.Shared.Models.PbiStatus.Done => Color.Success,
         _ => Color.Default
     };
 
-    private string GetOriginLabel(ScrumPilot.Shared.Models.StoryOrigin origin) => origin switch
+    private string GetOriginLabel(ScrumPilot.Shared.Models.PbiOrigin origin) => origin switch
     {
-        ScrumPilot.Shared.Models.StoryOrigin.AiGenerated => "AI Generated",
-        ScrumPilot.Shared.Models.StoryOrigin.BotGenerated => "Bot Generated",
-        ScrumPilot.Shared.Models.StoryOrigin.WebUserCreated => "Web User",
+        ScrumPilot.Shared.Models.PbiOrigin.AiGenerated => "AI Generated",
+        ScrumPilot.Shared.Models.PbiOrigin.BotGenerated => "Bot Generated",
+        ScrumPilot.Shared.Models.PbiOrigin.WebUserCreated => "Web User",
         _ => origin.ToString()
     };
 
-    private Color GetPriorityColor(ScrumPilot.Shared.Models.StoryPriority priority) => priority switch
+    private Color GetPriorityColor(ScrumPilot.Shared.Models.PbiPriority priority) => priority switch
     {
-        ScrumPilot.Shared.Models.StoryPriority.Low => Color.Success,      // Green
-        ScrumPilot.Shared.Models.StoryPriority.Medium => Color.Warning,   // Orange/Yellow
-        ScrumPilot.Shared.Models.StoryPriority.High => Color.Error,       // Red
+        ScrumPilot.Shared.Models.PbiPriority.Low => Color.Success,      // Green
+        ScrumPilot.Shared.Models.PbiPriority.Medium => Color.Warning,   // Orange/Yellow
+        ScrumPilot.Shared.Models.PbiPriority.High => Color.Error,       // Red
         _ => Color.Default
     };
 }

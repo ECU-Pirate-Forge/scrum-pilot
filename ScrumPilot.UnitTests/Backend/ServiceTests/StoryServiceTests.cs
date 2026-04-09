@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using ScrumPilot.API.Services;
@@ -47,10 +47,10 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
         public async Task GetAllStoriesAsync_ReturnsStoriesFromRepository()
         {
             // Arrange
-            var expectedStories = new List<Story>
+            var expectedStories = new List<ProductBacklogItem>
             {
-                new Story { Id = 1, Title = "Story 1", Description = "Description 1" },
-                new Story { Id = 2, Title = "Story 2", Description = "Description 2" }
+                new ProductBacklogItem { PbiId = 1, Title = "Story 1", Description = "Description 1" },
+                new ProductBacklogItem { PbiId = 2, Title = "Story 2", Description = "Description 2" }
             };
             _mockRepository.GetAllStoriesAsync().Returns(expectedStories);
 
@@ -68,7 +68,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
         public async Task GetAllStoriesAsync_ReturnsEmptyList_WhenNoStoriesExist()
         {
             // Arrange
-            var expectedStories = new List<Story>();
+            var expectedStories = new List<ProductBacklogItem>();
             _mockRepository.GetAllStoriesAsync().Returns(expectedStories);
 
             // Act
@@ -84,9 +84,9 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
         public async Task GetDraftStoriesAsync_ReturnsDraftStoriesFromRepository()
         {
             // Arrange
-            var expectedDraftStories = new List<Story>
+            var expectedDraftStories = new List<ProductBacklogItem>
             {
-                new Story { Id = 1, Title = "Draft Story", Description = "Draft Description", IsDraft = true }
+                new ProductBacklogItem { PbiId = 1, Title = "Draft Story", Description = "Draft Description", IsDraft = true }
             };
             _mockRepository.GetDraftStoriesAsync().Returns(expectedDraftStories);
 
@@ -104,8 +104,8 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
         public async Task CreateStoryAsync_CallsRepositoryAddAsync()
         {
             // Arrange
-            var inputStory = new Story { Title = "New Story", Description = "New Description" };
-            var createdStory = new Story { Id = 1, Title = inputStory.Title, Description = inputStory.Description };
+            var inputStory = new ProductBacklogItem { Title = "New Story", Description = "New Description" };
+            var createdStory = new ProductBacklogItem { PbiId = 1, Title = inputStory.Title, Description = inputStory.Description };
             _mockRepository.AddAsync(inputStory).Returns(createdStory);
 
             // Act
@@ -113,7 +113,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
 
             // Assert
             Assert.NotNull(result);
-            Assert.Equal(createdStory.Id, result.Id);
+            Assert.Equal(createdStory.PbiId, result.PbiId);
             Assert.Equal(createdStory.Title, result.Title);
             await _mockRepository.Received(1).AddAsync(inputStory);
         }
@@ -122,23 +122,23 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
         public async Task CommitDraftStoryAsync_UpdatesExistingDraft_ToBacklog()
         {
             // Arrange
-            var draftStory = new Story
+            var draftStory = new ProductBacklogItem
             {
-                Id = 1,
+                PbiId = 1,
                 Title = "Draft Story",
                 Description = "Draft Description",
-                Status = StoryStatus.ToDo,
-                Priority = StoryPriority.Medium,
-                StoryPoints = StoryPoints.Five,
-                Origin = StoryOrigin.AiGenerated,
+                Status = PbiStatus.ToDo,
+                Priority = PbiPriority.Medium,
+                StoryPoints = PbiPoints.Five,
+                Origin = PbiOrigin.AiGenerated,
                 IsDraft = true,
                 DateCreated = DateTime.UtcNow.AddDays(-1),
                 LastUpdated = DateTime.UtcNow.AddDays(-1)
             };
 
-            var updatedStory = new Story
+            var updatedStory = new ProductBacklogItem
             {
-                Id = 1,
+                PbiId = 1,
                 Title = draftStory.Title,
                 Description = draftStory.Description,
                 Status = draftStory.Status,
@@ -150,19 +150,19 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
                 LastUpdated = DateTime.UtcNow
             };
 
-            _mockRepository.GetByIdAsync(draftStory.Id).Returns(draftStory);
-            _mockRepository.UpdateAsync(Arg.Is<Story>(s => s.Id == draftStory.Id && !s.IsDraft)).Returns(updatedStory);
+            _mockRepository.GetByIdAsync(draftStory.PbiId).Returns(draftStory);
+            _mockRepository.UpdateAsync(Arg.Is<ProductBacklogItem>(s => s.PbiId == draftStory.PbiId && !s.IsDraft)).Returns(updatedStory);
 
             // Act
             var result = await _storyService.CommitDraftStoryAsync(draftStory);
 
             // Assert
             Assert.NotNull(result);
-            Assert.Equal(updatedStory.Id, result.Id);
+            Assert.Equal(updatedStory.PbiId, result.PbiId);
             Assert.False(result.IsDraft);
-            await _mockRepository.Received(1).GetByIdAsync(draftStory.Id);
-            await _mockRepository.Received(1).UpdateAsync(Arg.Is<Story>(s => s.Id == draftStory.Id && !s.IsDraft));
-            await _mockRepository.DidNotReceive().AddAsync(Arg.Any<Story>());
+            await _mockRepository.Received(1).GetByIdAsync(draftStory.PbiId);
+            await _mockRepository.Received(1).UpdateAsync(Arg.Is<ProductBacklogItem>(s => s.PbiId == draftStory.PbiId && !s.IsDraft));
+            await _mockRepository.DidNotReceive().AddAsync(Arg.Any<ProductBacklogItem>());
             await _mockRepository.DidNotReceive().DeleteAsync(Arg.Any<int>());
         }
 
@@ -170,24 +170,24 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
         public async Task CommitDraftStoryAsync_ThrowsKeyNotFoundException_WhenDraftMissing()
         {
             // Arrange
-            var draftStory = new Story
+            var draftStory = new ProductBacklogItem
             {
-                Id = 99,
+                PbiId = 99,
                 Title = "Missing Draft",
                 Description = "Missing",
-                Status = StoryStatus.ToDo,
-                Priority = StoryPriority.Low,
+                Status = PbiStatus.ToDo,
+                Priority = PbiPriority.Low,
                 IsDraft = true,
                 DateCreated = DateTime.UtcNow,
                 LastUpdated = DateTime.UtcNow
             };
 
-            _mockRepository.GetByIdAsync(draftStory.Id).Returns((Story?)null);
+            _mockRepository.GetByIdAsync(draftStory.PbiId).Returns((ProductBacklogItem?)null);
 
             // Act & Assert
             await Assert.ThrowsAsync<KeyNotFoundException>(() => _storyService.CommitDraftStoryAsync(draftStory));
-            await _mockRepository.Received(1).GetByIdAsync(draftStory.Id);
-            await _mockRepository.DidNotReceive().AddAsync(Arg.Any<Story>());
+            await _mockRepository.Received(1).GetByIdAsync(draftStory.PbiId);
+            await _mockRepository.DidNotReceive().AddAsync(Arg.Any<ProductBacklogItem>());
             await _mockRepository.DidNotReceive().DeleteAsync(Arg.Any<int>());
         }
 
@@ -195,25 +195,25 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
         public async Task CommitDraftStoryAsync_ThrowsKeyNotFoundException_WhenStoryIsNotDraft()
         {
             // Arrange
-            var nonDraftStory = new Story
+            var nonDraftStory = new ProductBacklogItem
             {
-                Id = 4,
+                PbiId = 4,
                 Title = "Backlog Story",
                 Description = "Backlog Description",
-                Status = StoryStatus.ToDo,
-                Priority = StoryPriority.Low,
+                Status = PbiStatus.ToDo,
+                Priority = PbiPriority.Low,
                 IsDraft = false,
                 DateCreated = DateTime.UtcNow,
                 LastUpdated = DateTime.UtcNow
             };
 
-            _mockRepository.GetByIdAsync(nonDraftStory.Id).Returns(nonDraftStory);
+            _mockRepository.GetByIdAsync(nonDraftStory.PbiId).Returns(nonDraftStory);
 
             // Act & Assert
             await Assert.ThrowsAsync<KeyNotFoundException>(() => _storyService.CommitDraftStoryAsync(nonDraftStory));
-            await _mockRepository.Received(1).GetByIdAsync(nonDraftStory.Id);
-            await _mockRepository.DidNotReceive().UpdateAsync(Arg.Any<Story>());
-            await _mockRepository.DidNotReceive().AddAsync(Arg.Any<Story>());
+            await _mockRepository.Received(1).GetByIdAsync(nonDraftStory.PbiId);
+            await _mockRepository.DidNotReceive().UpdateAsync(Arg.Any<ProductBacklogItem>());
+            await _mockRepository.DidNotReceive().AddAsync(Arg.Any<ProductBacklogItem>());
             await _mockRepository.DidNotReceive().DeleteAsync(Arg.Any<int>());
         }
 
@@ -221,7 +221,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
         public async Task UpdateStoryAsync_CallsRepositoryUpdateAsync()
         {
             // Arrange
-            var updatedStory = new Story { Id = 1, Title = "Updated Story", Description = "Updated Description" };
+            var updatedStory = new ProductBacklogItem { PbiId = 1, Title = "Updated Story", Description = "Updated Description" };
             _mockRepository.UpdateAsync(updatedStory).Returns(updatedStory);
 
             // Act
@@ -229,7 +229,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
 
             // Assert
             Assert.NotNull(result);
-            Assert.Equal(updatedStory.Id, result.Id);
+            Assert.Equal(updatedStory.PbiId, result.PbiId);
             Assert.Equal(updatedStory.Title, result.Title);
             await _mockRepository.Received(1).UpdateAsync(updatedStory);
         }
@@ -295,9 +295,9 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             Assert.Contains("Acceptance Criteria:", result.Description);
             Assert.All(aiResponse.AcceptanceCriteria, criteria => 
                 Assert.Contains(criteria, result.Description));
-            Assert.Equal(StoryStatus.ToDo, result.Status);
-            Assert.Equal(StoryPriority.Low, result.Priority);
-            Assert.Equal(StoryOrigin.AiGenerated, result.Origin);
+            Assert.Equal(PbiStatus.ToDo, result.Status);
+            Assert.Equal(PbiPriority.Low, result.Priority);
+            Assert.Equal(PbiOrigin.AiGenerated, result.Origin);
         }
 
         [Fact]
@@ -511,8 +511,8 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             Assert.Equal(3, result.Count);
             Assert.All(result, story =>
             {
-                Assert.Equal(StoryOrigin.AiGenerated, story.Origin);
-                Assert.Equal(StoryStatus.ToDo, story.Status);
+                Assert.Equal(PbiOrigin.AiGenerated, story.Origin);
+                Assert.Equal(PbiStatus.ToDo, story.Status);
             });
         }
 

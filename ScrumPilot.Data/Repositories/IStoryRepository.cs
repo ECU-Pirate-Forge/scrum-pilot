@@ -4,13 +4,13 @@ namespace ScrumPilot.Data.Repositories
 {
     public interface IStoryRepository
     {
-        Task<IEnumerable<Story>> GetAllStoriesAsync();
-        Task<Story?> GetByIdAsync(int id);
-        Task<Story> AddAsync(Story story);
-        Task<Story> UpdateAsync(Story story);
+        Task<IEnumerable<ProductBacklogItem>> GetAllStoriesAsync();
+        Task<ProductBacklogItem?> GetByIdAsync(int id);
+        Task<ProductBacklogItem> AddAsync(ProductBacklogItem story);
+        Task<ProductBacklogItem> UpdateAsync(ProductBacklogItem story);
         Task<bool> DeleteAsync(int id);
-        Task<IEnumerable<Story>> GetByStatusAsync(StoryStatus status);
-        Task<IEnumerable<Story>> GetDraftStoriesAsync();
-        Task<IEnumerable<Story>> GetNonDraftStoriesAsync();
+        Task<IEnumerable<ProductBacklogItem>> GetByStatusAsync(PbiStatus status);
+        Task<IEnumerable<ProductBacklogItem>> GetDraftStoriesAsync();
+        Task<IEnumerable<ProductBacklogItem>> GetNonDraftStoriesAsync();
     }
 }

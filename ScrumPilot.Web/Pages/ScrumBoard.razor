@@ -24,7 +24,7 @@
         }
 
         <MudContainer MaxWidth="MaxWidth.False" Class="pa-0">
-            <MudDropContainer T="Story"
+            <MudDropContainer T="ProductBacklogItem"
                               @ref="_dropContainer"
                               Items="@Items"
                               ItemsSelector="@((item, dropzone) => item.Status.ToString() == dropzone)"
@@ -50,10 +50,10 @@
                                 <MudText Typo="Typo.h5" Class="column-title" Style="font-weight: 700;">TO DO</MudText>
                                 <MudSpacer />
                                 <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Filled">
-                                    @Items.Count(i => i.Status == StoryStatus.ToDo)
+                                    @Items.Count(i => i.Status == PbiStatus.ToDo)
                                 </MudChip>
                             </MudStack>
-                            <MudDropZone T="Story" Identifier="@nameof(StoryStatus.ToDo)" Class="kanban-dropzone" 
+                            <MudDropZone T="ProductBacklogItem" Identifier="@nameof(PbiStatus.ToDo)" Class="kanban-dropzone" 
                                          Style="min-height: 500px; height: 100%; width: 100%; flex: 1; display: flex; flex-direction: column; gap: 16px;" />
                         </MudPaper>
 
@@ -75,10 +75,10 @@
                                 <MudText Typo="Typo.h5" Class="column-title" Style="font-weight: 700;">IN PROGRESS</MudText>
                                 <MudSpacer />
                                 <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled">
-                                    @Items.Count(i => i.Status == StoryStatus.InProgress)
+                                    @Items.Count(i => i.Status == PbiStatus.InProgress)
                                 </MudChip>
                             </MudStack>
-                            <MudDropZone T="Story" Identifier="@nameof(StoryStatus.InProgress)" Class="kanban-dropzone" 
+                            <MudDropZone T="ProductBacklogItem" Identifier="@nameof(PbiStatus.InProgress)" Class="kanban-dropzone" 
                                          Style="min-height: 500px; height: 100%; width: 100%; flex: 1; display: flex; flex-direction: column; gap: 16px;" />
                         </MudPaper>
 
@@ -100,10 +100,10 @@
                                 <MudText Typo="Typo.h5" Class="column-title" Style="font-weight: 700;">DONE</MudText>
                                 <MudSpacer />
                                 <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Filled">
-                                    @Items.Count(i => i.Status == StoryStatus.Done)
+                                    @Items.Count(i => i.Status == PbiStatus.Done)
                                 </MudChip>
                             </MudStack>
-                            <MudDropZone T="Story" Identifier="@nameof(StoryStatus.Done)" Class="kanban-dropzone" 
+                            <MudDropZone T="ProductBacklogItem" Identifier="@nameof(PbiStatus.Done)" Class="kanban-dropzone" 
                                          Style="min-height: 500px; height: 100%; width: 100%; flex: 1; display: flex; flex-direction: column; gap: 16px;" />
                         </MudPaper>
                     </MudStack>
@@ -120,7 +120,7 @@
             <MudCardContent Class="pa-3" Style="padding-bottom: 8px; border-bottom: 1px solid var(--mud-palette-divider);">
                 <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                     <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
-                        @if (context.StoryPoints != StoryPoints.Zero)
+                        @if (context.StoryPoints != PbiPoints.Zero)
                         {
                             <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Filled">
                                 @((int)context.StoryPoints) SP
@@ -156,7 +156,7 @@
                     @context.Title
                 </MudText>
                 <MudText Typo="Typo.body2" Style="opacity: 0.7;">
-                    ID: @context.Id
+                    ID: @context.PbiId
                 </MudText>
             </MudCardContent>
 
@@ -212,11 +212,11 @@
 
 @code {
 
-    private List<Story> Items = new();
+    private List<ProductBacklogItem> Items = new();
     private bool _loading = true;
-    private Story? SelectedStory;
+    private ProductBacklogItem? SelectedStory;
     private string _moveStoryErrorMessage = string.Empty;
-    private MudDropContainer<Story>? _dropContainer;
+    private MudDropContainer<ProductBacklogItem>? _dropContainer;
     private bool _needsRefresh = false;
 
     //Api Intergration for getting stories
@@ -245,7 +245,7 @@
 
         try
         {
-            var stories = await Http.GetFromJsonAsync<List<Story>>("api/story/GetNonDraftStories");
+            var stories = await Http.GetFromJsonAsync<List<ProductBacklogItem>>("api/story/GetNonDraftStories");
             if (stories is not null)
             {
                 Items = stories;
@@ -263,13 +263,13 @@
     }
 
 
-    private async Task OnItemDropped(MudItemDropInfo<Story> dropInfo)
+    private async Task OnItemDropped(MudItemDropInfo<ProductBacklogItem> dropInfo)
     {
         if (dropInfo.Item is null)
             return;
 
         // Dropzone identifiers are: "ToDo", "InProgress", "Done"
-        if (!Enum.TryParse<StoryStatus>(dropInfo.DropzoneIdentifier, out var newStatus))
+        if (!Enum.TryParse<PbiStatus>(dropInfo.DropzoneIdentifier, out var newStatus))
         {
             _moveStoryErrorMessage = "Unable to move story: invalid destination column.";
             return;
@@ -297,10 +297,10 @@
                 throw new HttpRequestException($"Status update failed with code {(int)response.StatusCode}.");
             }
 
-            var updatedStory = await response.Content.ReadFromJsonAsync<Story>();
+            var updatedStory = await response.Content.ReadFromJsonAsync<ProductBacklogItem>();
             if (updatedStory is not null)
             {
-                var index = Items.FindIndex(i => i.Id == updatedStory.Id);
+                var index = Items.FindIndex(i => i.PbiId == updatedStory.PbiId);
                 if (index >= 0)
                 {
                     Items[index] = updatedStory;
@@ -315,7 +315,7 @@
         }
     }
 
-    private void OpenStoryDetails(Story story)
+    private void OpenStoryDetails(ProductBacklogItem story)
     {
         SelectedStory = story;
     }
@@ -326,7 +326,7 @@
         await LoadStoriesAsync(showLoading: false);
     }
 
-    private async Task HandleStorySave(Story story)
+    private async Task HandleStorySave(ProductBacklogItem story)
     {
         try
         {
@@ -343,44 +343,44 @@
         }
     }
 
-    private string GetPriorityClass(Story story)
+    private string GetPriorityClass(ProductBacklogItem story)
         => story.Priority.ToString().ToLower();
 
-    private Color GetPriorityChipColor(StoryPriority priority)
+    private Color GetPriorityChipColor(PbiPriority priority)
         => priority switch
         {
-            StoryPriority.High => Color.Error,        // Red
-            StoryPriority.Medium => Color.Warning,    // Orange/Yellow
-            StoryPriority.Low => Color.Success,       // Green
+            PbiPriority.High => Color.Error,        // Red
+            PbiPriority.Medium => Color.Warning,    // Orange/Yellow
+            PbiPriority.Low => Color.Success,       // Green
             _ => Color.Default
         };
 
-    private string GetStoryInitials(Story story) => story.Origin switch
+    private string GetStoryInitials(ProductBacklogItem story) => story.Origin switch
     {
-        StoryOrigin.AiGenerated => "AI",
-        StoryOrigin.BotGenerated => "BT",
+        PbiOrigin.AiGenerated => "AI",
+        PbiOrigin.BotGenerated => "BT",
         _ => "ST"
     };
 
-    private string GetColumnColor(StoryStatus status)
+    private string GetColumnColor(PbiStatus status)
         => status switch
         {
-            StoryStatus.ToDo => "rgba(220, 38, 38, 0.4)",
-            StoryStatus.InProgress => "rgba(250, 204, 21, 0.4)",
-            StoryStatus.Done => "rgba(22, 163, 74, 0.4)",
+            PbiStatus.ToDo => "rgba(220, 38, 38, 0.4)",
+            PbiStatus.InProgress => "rgba(250, 204, 21, 0.4)",
+            PbiStatus.Done => "rgba(22, 163, 74, 0.4)",
             _ => "rgba(128, 128, 128, 0.4)"
         };
 
-    private string GetColumnColorWithOpacity(StoryStatus status, string opacity)
+    private string GetColumnColorWithOpacity(PbiStatus status, string opacity)
         => status switch
         {
-            StoryStatus.ToDo => $"rgba(220, 38, 38, {opacity})",
-            StoryStatus.InProgress => $"rgba(250, 204, 21, {opacity})",
-            StoryStatus.Done => $"rgba(22, 163, 74, {opacity})",
+            PbiStatus.ToDo => $"rgba(220, 38, 38, {opacity})",
+            PbiStatus.InProgress => $"rgba(250, 204, 21, {opacity})",
+            PbiStatus.Done => $"rgba(22, 163, 74, {opacity})",
             _ => $"rgba(128, 128, 128, {opacity})"
         };
 
-    private string GetCardStyle(StoryStatus status)
+    private string GetCardStyle(PbiStatus status)
     {
         var borderColor = GetColumnColor(status);
         var shadowColor1 = GetColumnColorWithOpacity(status, "0.2");

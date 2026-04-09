@@ -18,7 +18,7 @@ namespace ScrumPilot.API.Services
             _storyRepository = storyRepository;
         }
 
-        public async Task<IEnumerable<Story>> GetAllStoriesAsync()
+        public async Task<IEnumerable<ProductBacklogItem>> GetAllStoriesAsync()
         {
             return await _storyRepository.GetAllStoriesAsync();
         }
@@ -28,12 +28,12 @@ namespace ScrumPilot.API.Services
         //    return await _storyRepository.GetActiveStoriesAsync(epicId);
         //}
 
-        public async Task<IEnumerable<Story>> GetNonDraftStoriesAsync()
+        public async Task<IEnumerable<ProductBacklogItem>> GetNonDraftStoriesAsync()
         {
             return await _storyRepository.GetNonDraftStoriesAsync();
         }
 
-        public async Task<IEnumerable<Story>> GetDraftStoriesAsync()
+        public async Task<IEnumerable<ProductBacklogItem>> GetDraftStoriesAsync()
         {
             return await _storyRepository.GetDraftStoriesAsync();
         }
@@ -43,7 +43,7 @@ namespace ScrumPilot.API.Services
         /// </summary>
         /// <param name="problemStatement">The problem statement to generate the user story from.</param>
         /// <returns>
-        /// A <see cref="Story"/> object containing the generated user story, acceptance criteria, and metadata.
+        /// A <see cref="ProductBacklogItem"/> object containing the generated user story, acceptance criteria, and metadata.
         /// </returns>
         /// <exception cref="InvalidOperationException">
         /// Thrown if the Ollama base URL is not configured or if the AI response cannot be parsed.
@@ -54,7 +54,7 @@ namespace ScrumPilot.API.Services
         /// <exception cref="TimeoutException">
         /// Thrown if the request to the Ollama API times out.
         /// </exception>
-        private async Task<Story> GenerateAiStory(string problemStatement)
+        private async Task<ProductBacklogItem> GenerateAiStory(string problemStatement)
         {
             var ollamaBaseUrl = _configuration["OllamaBaseUrl"];
             var ollamaModel = _configuration["OllamaModel"];
@@ -68,13 +68,13 @@ namespace ScrumPilot.API.Services
             var responseContent = await CallOllamaApiAsync(ollamaBaseUrl, ollamaModel, prompt);
             var aiStoryResponse = ParseAiStoryResponse(responseContent);
 
-            var story = new Story
+            var story = new ProductBacklogItem
             {
                 Title = aiStoryResponse.Title,
                 Description = $"{aiStoryResponse.UserStory}\n\nAcceptance Criteria:\n{string.Join("\n", aiStoryResponse.AcceptanceCriteria.Select(ac => $"• {ac}"))}",
-                Status = StoryStatus.ToDo,
-                Priority = StoryPriority.Low,
-                Origin = StoryOrigin.AiGenerated,
+                Status = PbiStatus.ToDo,
+                Priority = PbiPriority.Low,
+                Origin = PbiOrigin.AiGenerated,
                 IsDraft = true,
                 DateCreated = DateTime.UtcNow,
                 LastUpdated = DateTime.UtcNow
@@ -83,9 +83,9 @@ namespace ScrumPilot.API.Services
             return story;
         }
 
-        public async Task<List<Story>> GenerateAiStories(List<string> problemStatements)
+        public async Task<List<ProductBacklogItem>> GenerateAiStories(List<string> problemStatements)
         {
-            var stories = new List<Story>();
+            var stories = new List<ProductBacklogItem>();
 
             foreach (var problemStatement in problemStatements)
             {
@@ -220,21 +220,21 @@ namespace ScrumPilot.API.Services
             return null;
         }
 
-        public async Task<Story> CreateStoryAsync(Story story)
+        public async Task<ProductBacklogItem> CreateStoryAsync(ProductBacklogItem story)
         {
             story.IsDraft = false;
             return await _storyRepository.AddAsync(story);
         }
 
-        public async Task<Story> CreateDraftStoryAsync(Story story)
+        public async Task<ProductBacklogItem> CreateDraftStoryAsync(ProductBacklogItem story)
         {
             story.IsDraft = true;
             return await _storyRepository.AddAsync(story);
         }
 
-        public async Task<Story> CommitDraftStoryAsync(Story draftStory)
+        public async Task<ProductBacklogItem> CommitDraftStoryAsync(ProductBacklogItem draftStory)
         {
-            var existingDraft = await _storyRepository.GetByIdAsync(draftStory.Id);
+            var existingDraft = await _storyRepository.GetByIdAsync(draftStory.PbiId);
             if (existingDraft is null || !existingDraft.IsDraft)
             {
                 throw new KeyNotFoundException("Draft story not found.");
@@ -246,7 +246,7 @@ namespace ScrumPilot.API.Services
             return await _storyRepository.UpdateAsync(existingDraft);
         }
 
-        public async Task<Story> UpdateStoryAsync(Story story)
+        public async Task<ProductBacklogItem> UpdateStoryAsync(ProductBacklogItem story)
         {
             story.LastUpdated = DateTime.UtcNow;
             return await _storyRepository.UpdateAsync(story);
@@ -257,7 +257,7 @@ namespace ScrumPilot.API.Services
             return await _storyRepository.DeleteAsync(id);
         }
 
-        public async Task<Story> CommitStoryAsync(Story story)
+        public async Task<ProductBacklogItem> CommitStoryAsync(ProductBacklogItem story)
         {
             story.IsDraft = false;
             story.LastUpdated = DateTime.UtcNow;
