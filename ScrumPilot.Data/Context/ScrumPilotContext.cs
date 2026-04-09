@@ -1,11 +1,12 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using ScrumPilot.Data.Models;
 using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.Data.Context
 {
-    public class ScrumPilotContext : IdentityDbContext<IdentityUser>
+    public class ScrumPilotContext : IdentityDbContext<ApplicationUser>
     {
         public ScrumPilotContext(DbContextOptions<ScrumPilotContext> options) : base(options)
         {
@@ -19,7 +20,13 @@ namespace ScrumPilot.Data.Context
         {
             base.OnModelCreating(modelBuilder);
 
-            // Configure Story entity
+            // Configure ApplicationUser entity
+            modelBuilder.Entity<ApplicationUser>(entity =>
+            {
+                entity.Property(e => e.UiPreference).HasConversion<string>().HasDefaultValue(UiPreference.Light);
+            });
+
+            // Configure ProductBacklogItem entity
             modelBuilder.Entity<ProductBacklogItem>(entity =>
             {
                 entity.HasKey(e => e.PbiId);

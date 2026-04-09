@@ -1,6 +1,7 @@
 using ScrumPilot.API.Services;
-using ScrumPilot.Data.Extensions;
 using ScrumPilot.Data.Context;
+using ScrumPilot.Data.Extensions;
+using ScrumPilot.Data.Models;
 using ScrumPilot.Data.Seeders;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -80,7 +81,7 @@ if (app.Environment.IsDevelopment())
         DatabaseSeeder.SeedDatabase(context);
 
         // Seed Identity users and roles
-        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
         await DatabaseSeeder.SeedUsersAsync(userManager, roleManager);
     }

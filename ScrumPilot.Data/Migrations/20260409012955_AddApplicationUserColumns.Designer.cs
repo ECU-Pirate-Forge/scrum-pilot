@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ScrumPilot.Data.Context;
 
@@ -10,9 +11,11 @@ using ScrumPilot.Data.Context;
 namespace ScrumPilot.Data.Migrations
 {
     [DbContext(typeof(ScrumPilotContext))]
-    partial class ScrumPilotContextModelSnapshot : ModelSnapshot
+    [Migration("20260409012955_AddApplicationUserColumns")]
+    partial class AddApplicationUserColumns
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.5");
@@ -250,9 +253,9 @@ namespace ScrumPilot.Data.Migrations
                     b.ToTable("MessageTranscripts");
                 });
 
-            modelBuilder.Entity("ScrumPilot.Shared.Models.ProductBacklogItem", b =>
+            modelBuilder.Entity("ScrumPilot.Shared.Models.Story", b =>
                 {
-                    b.Property<int>("PbiId")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
@@ -264,13 +267,7 @@ namespace ScrumPilot.Data.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("EpicId")
-                        .HasColumnType("INTEGER");
-
                     b.Property<bool>("IsDraft")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("IsFlagged")
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("LastUpdated")
@@ -284,9 +281,6 @@ namespace ScrumPilot.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("SprintId")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -299,11 +293,7 @@ namespace ScrumPilot.Data.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("PbiId");
+                    b.HasKey("Id");
 
                     b.ToTable("Stories");
                 });
