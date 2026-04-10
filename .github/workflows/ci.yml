@@ -26,13 +26,29 @@ jobs:
         run: dotnet restore ./ScrumPilot.UnitTests/ScrumPilot.UnitTests.csproj
       - name: Build
         run: dotnet build ./ScrumPilot.slnx --no-restore --configuration Release
+
+      - name: Format / Lint check
+        run: dotnet format ./ScrumPilot.slnx --verify-no-changes
+
       - name: Test (Unit Tests)
-        run: dotnet test ./ScrumPilot.UnitTests/ScrumPilot.UnitTests.csproj --no-build --configuration Release 
+        run: dotnet test ./ScrumPilot.UnitTests/ScrumPilot.UnitTests.csproj --no-build --configuration Release --logger trx --results-directory ./TestResults
 
+      - name: Publish API
+        run: dotnet publish ./ScrumPilot.API/ScrumPilot.API.csproj --no-build --configuration Release --output ./publish/api
 
-      # - name: Restore dependencies
-      #   run: dotnet restore
-      # - name: Build
-      #   run: dotnet build --no-restore --configuration Release
-      # - name: Test
-      #   run: dotnet test --no-build --configuration Release --verbosity normal
+      - name: Publish Web
+        run: dotnet publish ./ScrumPilot.Web/ScrumPilot.Web.csproj --no-build --configuration Release --output ./publish/web
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ./TestResults/*.trx
+
+      - name: Upload published artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: published-artifacts
+          path: ./publish/
+
