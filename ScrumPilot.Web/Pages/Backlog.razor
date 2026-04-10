@@ -1,4 +1,4 @@
-﻿@page "/scrum-board"
+@page "/backlog"
 @inject HttpClient Http
 
 <div class="kanban-page">
@@ -7,20 +7,21 @@
     {
         <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center" Style="height:60vh;">
             <MudProgressCircular Indeterminate="true" Size="Size.Large" />
-            <MudText Class="mt-4" Typo="Typo.subtitle1">Loading...</MudText>
+            <MudText Class="mt-4" Typo="Typo.subtitle1">Loading…</MudText>
         </MudStack>
     }
     else
     {
-        @if (!string.IsNullOrWhiteSpace(_moveStoryErrorMessage))
+        @if (!string.IsNullOrWhiteSpace(_errorMessage))
         {
             <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4" Icon="@Icons.Material.Filled.ErrorOutline">
-                @_moveStoryErrorMessage
+                @_errorMessage
             </MudAlert>
         }
 
         <MudContainer MaxWidth="MaxWidth.False" Class="pa-0">
             <SwimLanes Items="@Items"
+                       GroupByPriority
                        OnItemDropped="OnItemDropped"
                        OnStorySelected="OpenStoryDetails" />
         </MudContainer>
@@ -58,7 +59,7 @@
     private List<ProductBacklogItem> Items = new();
     private bool _loading = true;
     private ProductBacklogItem? SelectedStory;
-    private string _moveStoryErrorMessage = string.Empty;
+    private string _errorMessage = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
@@ -83,7 +84,7 @@
         }
         catch
         {
-            _moveStoryErrorMessage = "Unable to load stories from the server.";
+            _errorMessage = "Unable to load stories from the server.";
         }
         finally
         {
@@ -96,23 +97,23 @@
         if (dropInfo.Item is null)
             return;
 
-        if (!Enum.TryParse<PbiStatus>(dropInfo.DropzoneIdentifier, out var newStatus))
+        if (!Enum.TryParse<PbiPriority>(dropInfo.DropzoneIdentifier, out var newPriority))
         {
-            _moveStoryErrorMessage = "Unable to move story: invalid destination column.";
+            _errorMessage = "Unable to move story: invalid destination column.";
             return;
         }
 
-        var originalStatus = dropInfo.Item.Status;
-        if (originalStatus == newStatus)
+        var originalPriority = dropInfo.Item.Priority;
+        if (originalPriority == newPriority)
         {
-            _moveStoryErrorMessage = string.Empty;
+            _errorMessage = string.Empty;
             return;
         }
 
-        _moveStoryErrorMessage = string.Empty;
+        _errorMessage = string.Empty;
 
-        // Optimistically move the card, then persist status to the backend.
-        dropInfo.Item.Status = newStatus;
+        // Optimistically move the card, then persist priority to the backend.
+        dropInfo.Item.Priority = newPriority;
 
         try
         {
@@ -121,7 +122,7 @@
             var response = await Http.PutAsJsonAsync("api/story", dropInfo.Item);
             if (!response.IsSuccessStatusCode)
             {
-                throw new HttpRequestException($"Status update failed with code {(int)response.StatusCode}.");
+                throw new HttpRequestException($"Priority update failed with code {(int)response.StatusCode}.");
             }
 
             var updatedStory = await response.Content.ReadFromJsonAsync<ProductBacklogItem>();
@@ -136,9 +137,9 @@
         }
         catch
         {
-            // Revert local status if backend update fails so UI and data stay consistent.
-            dropInfo.Item.Status = originalStatus;
-            _moveStoryErrorMessage = "Could not save the status change. The card was returned to its previous column.";
+            // Revert local priority if backend update fails so UI and data stay consistent.
+            dropInfo.Item.Priority = originalPriority;
+            _errorMessage = "Could not save the priority change. The card was returned to its previous column.";
         }
     }
 
