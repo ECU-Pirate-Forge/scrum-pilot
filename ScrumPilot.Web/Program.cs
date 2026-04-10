@@ -14,8 +14,8 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 builder.Services.AddMudServices();
 
 // Auth services
- builder.Services.AddAuthorizationCore();
- builder.Services.AddScoped<JwtAuthStateProvider>();
+builder.Services.AddAuthorizationCore();
+builder.Services.AddScoped<JwtAuthStateProvider>();
 builder.Services.AddScoped<AuthenticationStateProvider>(
     sp => sp.GetRequiredService<JwtAuthStateProvider>());
 builder.Services.AddScoped<IAuthService, AuthService>();
