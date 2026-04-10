@@ -4,8 +4,8 @@
     {
         public int PbiId { get; set; }
         public PbiType Type { get; set; }
-        public int EpicId { get; set; }
-        public int SprintId { get; set; }
+        public int? EpicId { get; set; }
+        public int? SprintId { get; set; }
         public required string Title { get; set; }
         public string Description { get; set; } = "";
         public PbiStatus Status { get; set; }

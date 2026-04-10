@@ -13,6 +13,8 @@ namespace ScrumPilot.Data.Context
         }
 
         public DbSet<ProductBacklogItem> Stories { get; set; }
+        public DbSet<Epic> Epics { get; set; }
+        public DbSet<Sprint> Sprints { get; set; }
         public DbSet<AudioTranscript> AudioTranscripts { get; set; }
         public DbSet<MessageTranscript> MessageTranscripts { get; set; }
 
@@ -31,6 +33,8 @@ namespace ScrumPilot.Data.Context
             {
                 entity.HasKey(e => e.PbiId);
                 entity.Property(e => e.PbiId).ValueGeneratedOnAdd();
+                entity.Property(e => e.EpicId).IsRequired(false);
+                entity.Property(e => e.SprintId).IsRequired(false);
                 entity.Property(e => e.Title).IsRequired().HasMaxLength(200);
                 entity.Property(e => e.Description).HasMaxLength(2000);
                 entity.Property(e => e.Type).HasConversion<string>();
@@ -39,6 +43,27 @@ namespace ScrumPilot.Data.Context
                 entity.Property(e => e.Origin).HasConversion<string>();
                 entity.Property(e => e.DateCreated).IsRequired();
                 entity.Property(e => e.LastUpdated).IsRequired();
+            });
+
+            modelBuilder.Entity<Epic>(entity =>
+            {
+                entity.ToTable("Epic");
+                entity.HasKey(e => e.EpicId);
+                entity.Property(e => e.EpicId).ValueGeneratedOnAdd();
+                entity.Property(e => e.Name).IsRequired();
+                entity.Property(e => e.DateCreated).IsRequired();
+            });
+
+            modelBuilder.Entity<Sprint>(entity =>
+            {
+                entity.ToTable("Sprint");
+                entity.HasKey(e => e.SprintId);
+                entity.Property(e => e.SprintId).ValueGeneratedOnAdd();
+                entity.Property(e => e.SprintGoal);
+                entity.Property(e => e.StartDate);
+                entity.Property(e => e.EndDate);
+                entity.Property(e => e.IsOpen);
+                entity.Property(e => e.DateClosed);
             });
 
             modelBuilder.Entity<AudioTranscript>(entity =>
