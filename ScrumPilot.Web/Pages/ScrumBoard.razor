@@ -1,4 +1,4 @@
-﻿@page "/scrum-board"
+@page "/scrum-board"
 @inject HttpClient Http
 
 <div class="kanban-page">
@@ -45,7 +45,7 @@
                     </div>
 
                     <div class="details-content">
-                        <StoryCard StoryModel="SelectedStory" OnSave="HandleStorySave" />
+                        <StoryCard StoryModel="SelectedStory" OnSave="HandleStorySave" OnDelete="HandleStoryDelete" />
                     </div>
                 </div>
             </div>
@@ -168,6 +168,12 @@
         {
             Console.WriteLine($"Error updating story: {ex.Message}");
         }
+    }
+
+    private async Task HandleStoryDelete(int storyId)
+    {
+        SelectedStory = null;
+        await LoadStoriesAsync(showLoading: false);
     }
 
 }
