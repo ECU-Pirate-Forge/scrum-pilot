@@ -26,13 +26,10 @@ jobs:
         run: dotnet restore ./ScrumPilot.UnitTests/ScrumPilot.UnitTests.csproj
       - name: Build
         run: dotnet build ./ScrumPilot.slnx --no-restore --configuration Release
+
+      - name: Format / Lint check
+        run: dotnet format ./ScrumPilot.slnx --verify-no-changes
+
       - name: Test (Unit Tests)
         run: dotnet test ./ScrumPilot.UnitTests/ScrumPilot.UnitTests.csproj --no-build --configuration Release 
 
-
-      # - name: Restore dependencies
-      #   run: dotnet restore
-      # - name: Build
-      #   run: dotnet build --no-restore --configuration Release
-      # - name: Test
-      #   run: dotnet test --no-build --configuration Release --verbosity normal
