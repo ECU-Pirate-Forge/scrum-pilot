@@ -347,6 +347,60 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         }
 
         [Fact]
+        public async Task UpdateStory_ReturnsOkResult_WhenStatusIsInReview()
+        {
+            // Arrange - ScrumBoard drag-and-drop can move a card into the InReview lane
+            var story = new ProductBacklogItem
+            {
+                PbiId = 2,
+                Title = "Story Under Review",
+                Description = "In review description",
+                Status = PbiStatus.InReview,
+                Priority = PbiPriority.Medium,
+                DateCreated = DateTime.UtcNow.AddDays(-2),
+                LastUpdated = DateTime.UtcNow
+            };
+
+            _mockStoryService.UpdateStoryAsync(story).Returns(story);
+
+            // Act
+            var result = await _controller.UpdateStory(story);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result.Result);
+            var actualStory = Assert.IsType<ProductBacklogItem>(okResult.Value);
+            Assert.Equal(PbiStatus.InReview, actualStory.Status);
+            await _mockStoryService.Received(1).UpdateStoryAsync(story);
+        }
+
+        [Fact]
+        public async Task UpdateStory_ReturnsOkResult_WhenPriorityIsNone()
+        {
+            // Arrange - Backlog drag-and-drop can move a card into the None priority lane
+            var story = new ProductBacklogItem
+            {
+                PbiId = 3,
+                Title = "Untriaged Story",
+                Description = "Priority not yet assigned",
+                Status = PbiStatus.ToDo,
+                Priority = PbiPriority.None,
+                DateCreated = DateTime.UtcNow.AddDays(-1),
+                LastUpdated = DateTime.UtcNow
+            };
+
+            _mockStoryService.UpdateStoryAsync(story).Returns(story);
+
+            // Act
+            var result = await _controller.UpdateStory(story);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result.Result);
+            var actualStory = Assert.IsType<ProductBacklogItem>(okResult.Value);
+            Assert.Equal(PbiPriority.None, actualStory.Priority);
+            await _mockStoryService.Received(1).UpdateStoryAsync(story);
+        }
+
+        [Fact]
         public async Task CommitDraftStory_ReturnsOkResult_WithCommittedStory()
         {
             // Arrange
