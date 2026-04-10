@@ -293,7 +293,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             Assert.Equal(aiResponse.Title, result.Title);
             Assert.Contains(aiResponse.UserStory, result.Description);
             Assert.Contains("Acceptance Criteria:", result.Description);
-            Assert.All(aiResponse.AcceptanceCriteria, criteria => 
+            Assert.All(aiResponse.AcceptanceCriteria, criteria =>
                 Assert.Contains(criteria, result.Description));
             Assert.Equal(PbiStatus.ToDo, result.Status);
             Assert.Equal(PbiPriority.Low, result.Priority);
