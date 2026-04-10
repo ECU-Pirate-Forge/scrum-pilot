@@ -301,6 +301,33 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
         }
 
         [Fact]
+        public async Task GenerateAiStory_DefaultsToToDoStatus_AndLowPriority()
+        {
+            // Arrange - verifies the initial Status and Priority values assigned to every
+            // AI-generated story before it is triaged in the Backlog.
+            var problemStatement = "As a user, I want to filter results";
+            var aiResponse = new AiStoryResponse
+            {
+                Title = "Filter Results Feature",
+                UserStory = "As a user, I want to filter results, so that I can find items faster.",
+                AcceptanceCriteria = ["Filter dropdown is visible", "Results update on selection"]
+            };
+
+            var ollamaResponse = new { response = JsonSerializer.Serialize(aiResponse) };
+
+            SetupConfiguration("http://localhost:11434/", "llama2");
+            var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
+
+            // Act
+            var results = await service.GenerateAiStories(new List<string> { problemStatement });
+            var result = results[0];
+
+            // Assert
+            Assert.Equal(PbiStatus.ToDo, result.Status);
+            Assert.Equal(PbiPriority.Low, result.Priority);
+        }
+
+        [Fact]
         public async Task GenerateAiStory_ThrowsInvalidOperationException_WhenOllamaBaseUrlNotConfigured()
         {
             // Arrange

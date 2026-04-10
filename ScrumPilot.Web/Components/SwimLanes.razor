@@ -1,0 +1,245 @@
+<MudDropContainer T="ProductBacklogItem"
+                  @ref="_dropContainer"
+                  Items="@Items"
+                  ItemsSelector="@_itemsSelector"
+                  ItemDropped="HandleItemDropped"
+                  Class="d-flex" Style="flex: 1; min-height: calc(100vh - 200px);">
+    <ChildContent>
+        <MudStack Row Spacing="3" Class="mud-width-full" Style="height: 100%; flex: 1;">
+            @foreach (var lane in _lanes)
+            {
+                <MudPaper Class="@($"kanban-column {lane.CssClass}")" Elevation="2"
+                          Style="@GetPaperStyle(lane)">
+                    <MudStack Row AlignItems="AlignItems.Center" Class="column-header"
+                              Style="@GetHeaderStyle(lane)">
+                        <MudIcon Icon="@lane.Icon" Color="@lane.ChipColor" Size="Size.Medium" />
+                        <MudText Typo="Typo.h5" Class="column-title" Style="font-weight: 700;">@lane.Label</MudText>
+                        <MudSpacer />
+                        <MudChip T="string" Size="Size.Small" Color="@lane.ChipColor" Variant="Variant.Filled">
+                            @lane.Count(Items)
+                        </MudChip>
+                    </MudStack>
+                    <MudDropZone T="ProductBacklogItem" Identifier="@lane.Identifier" Class="kanban-dropzone"
+                                 Style="min-height: 500px; height: 100%; width: 100%; flex: 1; display: flex; flex-direction: column; gap: 16px;" />
+                </MudPaper>
+            }
+        </MudStack>
+    </ChildContent>
+
+    <ItemRenderer>
+        <div class="kanban-card-wrapper">
+            <MudCard Elevation="8" Style="@GetCardStyle(context)">
+                <div class="card-priority-stripe @GetPriorityClass(context)"></div>
+
+                <MudCardContent Class="pa-3" Style="padding-bottom: 8px; border-bottom: 1px solid var(--mud-palette-divider);">
+                    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                            @if (context.StoryPoints != PbiPoints.Zero)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Filled">
+                                    @((int)context.StoryPoints) SP
+                                </MudChip>
+                            }
+                            else
+                            {
+                                <MudTooltip Text="Unpointed">
+                                    <MudIcon Icon="@Icons.Material.Filled.ErrorOutline"
+                                             Color="Color.Error"
+                                             Size="Size.Small" />
+                                </MudTooltip>
+                            }
+                        </MudStack>
+                        <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                            <MudButton Variant="Variant.Text"
+                                       Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.Visibility"
+                                       OnClick="@(() => OnStorySelected.InvokeAsync(context))"
+                                       Style="min-height: 24px; padding: 4px 8px;">
+                                View Details
+                            </MudButton>
+                            <MudIcon Icon="Icons.Material.Filled.DragIndicator"
+                                     Size="Size.Small"
+                                     Style="color: var(--mud-palette-text-secondary); cursor: grab;" />
+                        </MudStack>
+                    </MudStack>
+                </MudCardContent>
+
+                <MudCardContent Class="pa-3" Style="padding-top: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--mud-palette-divider);">
+                    <MudText Typo="Typo.subtitle1" Style="font-weight: 600; margin-bottom: 8px; line-height: 1.4;">
+                        @context.Title
+                    </MudText>
+                    <MudText Typo="Typo.body2" Style="opacity: 0.7;">
+                        ID: @context.PbiId
+                    </MudText>
+                </MudCardContent>
+
+                <MudCardActions Class="pa-3" Style="padding-top: 12px;">
+                    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mud-width-full">
+                        <MudChip T="string" Size="Size.Small"
+                                 Color="@GetPriorityChipColor(context.Priority)"
+                                 Variant="Variant.Filled">
+                            @context.Priority
+                        </MudChip>
+
+                        <MudAvatar Size="Size.Small" Color="Color.Info">
+                            <MudText Typo="Typo.caption">
+                                @GetStoryInitials(context)
+                            </MudText>
+                        </MudAvatar>
+                    </MudStack>
+                </MudCardActions>
+            </MudCard>
+        </div>
+    </ItemRenderer>
+</MudDropContainer>
+
+@code {
+    [Parameter] public List<ProductBacklogItem> Items { get; set; } = new();
+    [Parameter] public bool GroupByPriority { get; set; }
+    [Parameter] public EventCallback<MudItemDropInfo<ProductBacklogItem>> OnItemDropped { get; set; }
+    [Parameter] public EventCallback<ProductBacklogItem> OnStorySelected { get; set; }
+
+    private MudDropContainer<ProductBacklogItem>? _dropContainer;
+    private bool _needsRefresh;
+    private Func<ProductBacklogItem, string, bool> _itemsSelector = (item, zone) => item.Status.ToString() == zone;
+    private IReadOnlyList<LaneDefinition> _lanes = StatusLanes();
+
+    protected override void OnParametersSet()
+    {
+        if (GroupByPriority)
+        {
+            _itemsSelector = (item, zone) => item.Priority.ToString() == zone;
+            _lanes = PriorityLanes();
+        }
+        else
+        {
+            _itemsSelector = (item, zone) => item.Status.ToString() == zone;
+            _lanes = StatusLanes();
+        }
+        _needsRefresh = true;
+    }
+
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_needsRefresh)
+        {
+            _needsRefresh = false;
+            _dropContainer?.Refresh();
+        }
+        return Task.CompletedTask;
+    }
+
+    private async Task HandleItemDropped(MudItemDropInfo<ProductBacklogItem> dropInfo)
+    {
+        await OnItemDropped.InvokeAsync(dropInfo);
+        _dropContainer?.Refresh();
+    }
+
+    private static IReadOnlyList<LaneDefinition> StatusLanes() =>
+    [
+        new(nameof(PbiStatus.ToDo), "TO DO", "column-todo", "220, 38, 38",
+            Icons.Material.Filled.Assignment, Color.Error,
+            items => items.Count(i => i.Status == PbiStatus.ToDo)),
+        new(nameof(PbiStatus.InProgress), "IN PROGRESS", "column-inprogress", "250, 204, 21",
+            Icons.Material.Filled.Speed, Color.Warning,
+            items => items.Count(i => i.Status == PbiStatus.InProgress)),
+        new(nameof(PbiStatus.InReview), "IN REVIEW", "column-inreview", "59, 130, 246",
+            Icons.Material.Filled.RateReview, Color.Info,
+            items => items.Count(i => i.Status == PbiStatus.InReview)),
+        new(nameof(PbiStatus.Done), "DONE", "column-done", "22, 163, 74",
+            Icons.Material.Filled.CheckCircle, Color.Success,
+            items => items.Count(i => i.Status == PbiStatus.Done)),
+    ];
+
+    private static IReadOnlyList<LaneDefinition> PriorityLanes() =>
+    [
+        new(nameof(PbiPriority.None), "NONE", "column-none", "125, 211, 252",
+            Icons.Material.Filled.HorizontalRule, Color.Info,
+            items => items.Count(i => i.Priority == PbiPriority.None)),
+        new(nameof(PbiPriority.Low), "LOW", "column-low", "22, 163, 74",
+            Icons.Material.Filled.LowPriority, Color.Success,
+            items => items.Count(i => i.Priority == PbiPriority.Low)),
+        new(nameof(PbiPriority.Medium), "MEDIUM", "column-medium", "250, 204, 21",
+            Icons.Material.Filled.DragHandle, Color.Warning,
+            items => items.Count(i => i.Priority == PbiPriority.Medium)),
+        new(nameof(PbiPriority.High), "HIGH", "column-high", "220, 38, 38",
+            Icons.Material.Filled.PriorityHigh, Color.Error,
+            items => items.Count(i => i.Priority == PbiPriority.High)),
+    ];
+
+    private static string GetPaperStyle(LaneDefinition lane) =>
+        $"flex: 1; min-width: 300px; " +
+        $"border-top: 6px solid rgb({lane.Rgb}) !important; " +
+        $"box-shadow: 0 0 0 1px rgba({lane.Rgb}, 0.1), 0 4px 16px rgba({lane.Rgb}, 0.08) !important; " +
+        $"background: var(--mud-palette-surface) !important; " +
+        $"border: 1px solid var(--mud-palette-lines-default) !important; " +
+        $"border-top: 6px solid rgb({lane.Rgb}) !important; " +
+        $"border-radius: 12px !important; " +
+        $"transition: all 0.3s ease;";
+
+    private static string GetHeaderStyle(LaneDefinition lane) =>
+        $"background: linear-gradient(135deg, rgba({lane.Rgb}, 0.15) 0%, var(--mud-palette-surface) 100%) !important; " +
+        $"border-bottom: 1px solid var(--mud-palette-divider) !important; " +
+        $"border-radius: 8px 8px 0 0 !important; " +
+        $"padding: 12px !important;";
+
+    private string GetCardStyle(ProductBacklogItem item)
+    {
+        var rgb = GroupByPriority
+            ? GetPriorityRgb(item.Priority)
+            : GetStatusRgb(item.Status);
+
+        return $"border-radius: 12px; margin-bottom: 12px; transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); " +
+               $"border: 2px solid rgba({rgb}, 0.4) !important; " +
+               $"box-shadow: 0 0 0 1px rgba({rgb}, 0.2), " +
+               $"            0 2px 8px rgba({rgb}, 0.15), " +
+               $"            0 0 12px rgba({rgb}, 0.08) !important;";
+    }
+
+    private static string GetStatusRgb(PbiStatus status) => status switch
+    {
+        PbiStatus.ToDo => "220, 38, 38",
+        PbiStatus.InProgress => "250, 204, 21",
+        PbiStatus.InReview => "59, 130, 246",
+        PbiStatus.Done => "22, 163, 74",
+        _ => "128, 128, 128"
+    };
+
+    private static string GetPriorityRgb(PbiPriority priority) => priority switch
+    {
+        PbiPriority.None => "125, 211, 252",
+        PbiPriority.Low => "22, 163, 74",
+        PbiPriority.Medium => "250, 204, 21",
+        PbiPriority.High => "220, 38, 38",
+        _ => "128, 128, 128"
+    };
+
+    private static string GetPriorityClass(ProductBacklogItem story) =>
+        $"priority-{story.Priority.ToString().ToLower()}";
+
+    private static Color GetPriorityChipColor(PbiPriority priority) => priority switch
+    {
+        PbiPriority.None => Color.Info,
+        PbiPriority.Low => Color.Success,
+        PbiPriority.Medium => Color.Warning,
+        PbiPriority.High => Color.Error,
+        _ => Color.Default
+    };
+
+    private static string GetStoryInitials(ProductBacklogItem story) => story.Origin switch
+    {
+        PbiOrigin.AiGenerated => "AI",
+        PbiOrigin.BotGenerated => "BT",
+        _ => "ST"
+    };
+
+    private record LaneDefinition(
+        string Identifier,
+        string Label,
+        string CssClass,
+        string Rgb,
+        string Icon,
+        Color ChipColor,
+        Func<List<ProductBacklogItem>, int> Count
+    );
+}
