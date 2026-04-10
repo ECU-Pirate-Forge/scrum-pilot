@@ -9,8 +9,54 @@ namespace ScrumPilot.Data.Seeders
     {
         public static void SeedDatabase(ScrumPilotContext context)
         {
+            SeedEpics(context);
+            SeedSprints(context);
             SeedStories(context);
             SeedMessageTranscripts(context);
+        }
+
+        private static void SeedEpics(ScrumPilotContext context)
+        {
+            if (context.Epics.Any())
+            {
+                Console.WriteLine("[SEEDER] Database already has epics, skipping seed.");
+                return;
+            }
+
+            Console.WriteLine("[SEEDER] Seeding epics...");
+
+            context.Epics.Add(new Epic
+            {
+                Name = "Scrum Board Filtering",
+                DateCreated = DateTime.UtcNow
+            });
+
+            context.SaveChanges();
+            Console.WriteLine("[SEEDER] Successfully seeded epics.");
+        }
+
+        private static void SeedSprints(ScrumPilotContext context)
+        {
+            if (context.Sprints.Any())
+            {
+                Console.WriteLine("[SEEDER] Database already has sprints, skipping seed.");
+                return;
+            }
+
+            Console.WriteLine("[SEEDER] Seeding sprints...");
+
+            var sprintStart = DateTime.UtcNow.Date;
+            context.Sprints.Add(new Sprint
+            {
+                SprintGoal = "Enable scrum board story filtering by sprint and epic",
+                StartDate = sprintStart,
+                EndDate = sprintStart.AddDays(14),
+                IsOpen = true,
+                DateClosed = null
+            });
+
+            context.SaveChanges();
+            Console.WriteLine("[SEEDER] Successfully seeded sprints.");
         }
 
         public static async Task SeedUsersAsync(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager)
@@ -75,10 +121,16 @@ namespace ScrumPilot.Data.Seeders
 
             Console.WriteLine("[SEEDER] Seeding stories...");
 
+            var seedEpicId = context.Epics.OrderBy(e => e.EpicId).Select(e => (int?)e.EpicId).FirstOrDefault();
+            var seedSprintId = context.Sprints.OrderBy(s => s.SprintId).Select(s => (int?)s.SprintId).FirstOrDefault();
+
             var stories = new[]
             {
                 new ProductBacklogItem
                 {
+                    Type = PbiType.Story,
+                    EpicId = seedEpicId,
+                    SprintId = seedSprintId,
                     Title = "User Authentication",
                     Description = "As a user, I want to be able to log in to the application so that I can access my personalized content.",
                     Status = PbiStatus.ToDo,
@@ -89,6 +141,9 @@ namespace ScrumPilot.Data.Seeders
                 },
                 new ProductBacklogItem
                 {
+                    Type = PbiType.Story,
+                    EpicId = seedEpicId,
+                    SprintId = seedSprintId,
                     Title = "Create User Profile",
                     Description = "As a user, I want to create and manage my profile so that I can personalize my experience.",
                     Status = PbiStatus.InProgress,
@@ -99,6 +154,9 @@ namespace ScrumPilot.Data.Seeders
                 },
                 new ProductBacklogItem
                 {
+                    Type = PbiType.Story,
+                    EpicId = null,
+                    SprintId = null,
                     Title = "Dashboard Analytics",
                     Description = "As an admin, I want to view analytics on the dashboard so that I can monitor system usage.",
                     Status = PbiStatus.Done,
@@ -109,6 +167,9 @@ namespace ScrumPilot.Data.Seeders
                 },
                 new ProductBacklogItem
                 {
+                    Type = PbiType.Task,
+                    EpicId = null,
+                    SprintId = seedSprintId,
                     Title = "Database Connection",
                     Description = "As an Admin, I need to be able to retrieve data from our Database.",
                     Status = PbiStatus.ToDo,
