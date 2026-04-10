@@ -1,9 +1,8 @@
-﻿@using ScrumPilot.Web.Services
+@using ScrumPilot.Web.Services
 @inject IAuthService AuthService
 @inject NavigationManager Navigation
 @inject IDialogService DialogService
 @inherits LayoutComponentBase
-@inject IJSRuntime JSRuntime
 @using MudBlazor
 
 <MudThemeProvider @ref="@_mudThemeProvider" Theme="currentTheme" IsDarkMode="@_isDarkMode" />

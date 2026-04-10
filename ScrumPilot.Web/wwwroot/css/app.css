@@ -67,10 +67,6 @@ a {
     color: var(--primary-color);
 }
 
-.content {
-    padding-top: 1.1rem;
-}
-
 #blazor-error-ui {
     color-scheme: light only;
     background: lightyellow;
