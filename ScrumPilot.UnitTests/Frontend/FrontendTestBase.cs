@@ -1,5 +1,6 @@
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
+using MudBlazor;
 using MudBlazor.Services;
 using NSubstitute;
 
@@ -17,6 +18,10 @@ namespace ScrumPilot.UnitTests.Frontend
 
             // Use loose mode to ignore JSInterop issues - focus on component logic instead
             JSInterop.Mode = JSRuntimeMode.Loose;
+
+            // Render MudPopoverProvider so components that use MudTooltip, MudChip, etc.
+            // can register with the shared IPopoverService during initialisation.
+            Render<MudPopoverProvider>();
         }
     }
 }
