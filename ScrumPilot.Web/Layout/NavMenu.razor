@@ -1,48 +1,6 @@
-﻿<div class="nav-scrollable">
-    <nav class="nav flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
-                <span class="nav-icon">🏠</span>
-                @if (IsExpanded)
-                {
-                    <span class="nav-label">Home</span>
-                }
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="/storygeneration">
-                <span class="nav-icon">💡</span>
-                @if (IsExpanded)
-                {
-                    <span class="nav-label">Generate</span>
-                }
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="/draft-stories">
-                <span class="nav-icon">📝</span>
-                @if (IsExpanded)
-                {
-                    <span class="nav-label">Draft Stories</span>
-                }
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="/scrum-board">
-                <span class="nav-icon">📋</span>
-                @if (IsExpanded)
-                {
-                    <span class="nav-label">Scrum Board</span>
-                }
-            </NavLink>
-        </div>
-    </nav>
-</div>
-
-@code {
-    [Parameter]
-    public bool IsExpanded { get; set; }
-}
+﻿<MudNavMenu>
+    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">Home</MudNavLink>
+    <MudNavLink Href="/storygeneration" Icon="@Icons.Material.Filled.Lightbulb">Generate</MudNavLink>
+    <MudNavLink Href="/draft-stories" Icon="@Icons.Material.Filled.Article">Draft Stories</MudNavLink>
+    <MudNavLink Href="/scrum-board" Icon="@Icons.Material.Filled.Dashboard">Scrum Board</MudNavLink>
+</MudNavMenu>

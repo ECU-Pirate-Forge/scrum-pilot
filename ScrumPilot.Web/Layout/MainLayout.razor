@@ -2,7 +2,6 @@
 @inject IAuthService AuthService
 @inject NavigationManager Navigation
 @inject IDialogService DialogService
-@inject NavMenuStateService NavState
 @inherits LayoutComponentBase
 @inject IJSRuntime JSRuntime
 @using MudBlazor
@@ -12,49 +11,43 @@
 <MudDialogProvider />
 <MudSnackbarProvider />
 
-<div class="page">
-    <div class="sidebar @(NavState.IsExpanded ? "sidebar-expanded" : "sidebar-collapsed")">
-        <NavMenu IsExpanded="@NavState.IsExpanded" />
-    </div>
+<MudLayout>
+    <MudAppBar Elevation="1" Fixed="true">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                       Color="Color.Inherit"
+                       Edge="Edge.Start"
+                       OnClick="@ToggleNavMenu"
+                       Title="Toggle navigation menu" />
+        <a href="" class="appbar-logo-link">
+            <img src="/images/logo.png" alt="ScrumPilot" class="main-logo" />
+        </a>
+        <MudSpacer />
+        <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
+                       Color="Color.Inherit"
+                       OnClick="@ToggleDarkMode"
+                       Title="Toggle dark mode" />
+        <MudIconButton Icon="@Icons.Material.Filled.Logout"
+                       Color="Color.Inherit"
+                       OnClick="@HandleLogout"
+                       Title="Sign out" />
+    </MudAppBar>
 
-    <main class="@(NavState.IsExpanded ? "main-expanded" : "main-collapsed")">
-        <div class="top-row px-4">
-            <div class="logo-section">
-                <div style="display:flex; align-items:center; gap:4px;">
-                    <MudIconButton Icon="@Icons.Material.Filled.Menu"
-                                   Color="Color.Inherit"
-                                   OnClick="@ToggleNavMenu"
-                                   Title="Toggle navigation menu" />
+    <MudDrawer @bind-Open="@_drawerOpen"
+               ClipMode="DrawerClipMode.Always"
+               Variant="DrawerVariant.Mini"
+               Elevation="2">
+        <NavMenu />
+    </MudDrawer>
 
-                    @if (NavState.IsExpanded)
-                    {
-                        <a class="navbar-brand" href="">
-                            <img src="/images/logo.png" alt="ScrumPilot" class="main-logo" />
-                        </a>
-                    }
-                </div>
-            </div>
-
-            <div style="display: flex; align-items: center; gap: 4px;">
-                <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
-                               Color="Color.Inherit"
-                               OnClick="@ToggleDarkMode"
-                               Title="Toggle dark mode" />
-
-                <MudIconButton Icon="@Icons.Material.Filled.Logout"
-                               Color="Color.Inherit"
-                               OnClick="@HandleLogout"
-                               Title="Sign out" />
-            </div>
-        </div>
-
-        <article class="content px-4">
+    <MudMainContent>
+        <div class="content px-4">
             @Body
-        </article>
-    </main>
-</div>
+        </div>
+    </MudMainContent>
+</MudLayout>
 
 @code {
+    private bool _drawerOpen = true;
     private bool _isDarkMode = false;
     private MudThemeProvider? _mudThemeProvider;
 
@@ -107,7 +100,7 @@
 
     private void ToggleNavMenu()
     {
-        NavState.Toggle();
+        _drawerOpen = !_drawerOpen;
     }
 
     private Task ToggleDarkMode()

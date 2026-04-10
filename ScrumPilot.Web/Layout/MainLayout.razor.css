@@ -1,77 +1,6 @@
-.page {
-    position: relative;
-    display: flex;
-    min-height: 100vh;
-}
-
-.sidebar {
-    background-image: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%);
-    transition: width 0.3s ease;
-    overflow-x: hidden;
-    position: fixed;
-    top: 0;
-    left: 0;
-    height: 100vh;
-    z-index: 999;
-}
-
-.sidebar-expanded {
-    width: 250px;
-}
-
-.sidebar-collapsed {
-    width: 72px;
-}
-
-main {
-    flex: 1;
-    min-height: 100vh;
-    transition: margin-left 0.3s ease;
-    padding-top: 3.5rem;
-}
-
-.main-expanded {
-    margin-left: 250px;
-}
-
-.main-collapsed {
-    margin-left: 72px;
-}
-
-.top-row {
-    background: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 100%);
-    border-bottom: 1px solid #3a0647;
-    justify-content: space-between;
-    align-items: center;
-    height: 3.5rem;
-    display: flex;
-    margin: 0;
-    box-sizing: border-box;
-    color: #ffffff;
-    position: fixed;
-    top: 0;
-    right: 0;
-    z-index: 1000;
-    transition: left 0.3s ease;
-    padding-right: 1.5rem;
-}
-
-.main-expanded .top-row {
-    left: 250px;
-}
-
-.main-collapsed .top-row {
-    left: 72px;
-}
-
-.content {
-    padding: 1.1rem 2rem !important;
-}
-
-.logo-section {
+.appbar-logo-link {
     display: flex;
     align-items: center;
-    flex: 0 0 auto;
 }
 
 .main-logo {
@@ -79,43 +8,17 @@ main {
     width: auto;
     max-width: 200px;
     object-fit: contain;
-    transition: opacity 0.3s ease;
 }
 
 .main-logo:hover {
     opacity: 0.8;
 }
 
+.content {
+    padding: 1.1rem 2rem !important;
+}
+
 @media (max-width: 640.98px) {
-    .sidebar,
-    .sidebar-expanded,
-    .sidebar-collapsed {
-        width: 100%;
-        height: auto;
-        position: relative;
-    }
-
-    .page {
-        flex-direction: column;
-    }
-
-    main,
-    .main-expanded,
-    .main-collapsed {
-        margin-left: 0;
-        padding-top: 0;
-    }
-
-    .top-row,
-    .main-expanded .top-row,
-    .main-collapsed .top-row {
-        position: relative;
-        left: 0;
-        right: 0;
-        width: 100%;
-        padding-left: 1rem;
-    }
-
     .content {
         padding: 1rem !important;
     }
