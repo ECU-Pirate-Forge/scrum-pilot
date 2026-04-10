@@ -1,4 +1,7 @@
 @using ScrumPilot.Shared.Models
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject IDialogService DialogService
 
 @if (StoryModel != null)
 {
@@ -11,8 +14,8 @@
                              border: 3px solid var(--mud-palette-primary);
                              box-shadow: 0 6px 25px rgba(25, 118, 210, 0.2);">
 
-                <!-- EDIT / SAVE / CANCEL BUTTONS -->
-                <div class="d-flex gap-2 mb-4">
+                <!-- EDIT / SAVE / CANCEL / DELETE BUTTONS -->
+                <div class="d-flex gap-2 mb-4 flex-wrap">
                     @if (isEditMode)
                     {
                         <MudButton Variant="Variant.Filled"
@@ -36,8 +39,40 @@
                                    OnClick="StartEdit">
                             Edit
                         </MudButton>
+
+                        <!-- DELETE BUTTON -->
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Error"
+                                   StartIcon="@Icons.Material.Filled.Delete"
+                                   OnClick="ConfirmDelete">
+                            Delete
+                        </MudButton>
                     }
                 </div>
+
+                <!-- DELETE CONFIRMATION -->
+                @if (showDeleteConfirm)
+                {
+                    <MudAlert Severity="Severity.Warning" Class="mb-3">
+                        <div class="d-flex flex-column gap-2">
+                            <MudText>⚠️ Are you sure you want to delete <strong>@StoryModel.Title</strong>? This cannot be undone.</MudText>
+                            <div class="d-flex gap-2">
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Error"
+                                           Size="Size.Small"
+                                           OnClick="DeleteStory">
+                                    Yes, Delete
+                                </MudButton>
+                                <MudButton Variant="Variant.Outlined"
+                                           Color="Color.Default"
+                                           Size="Size.Small"
+                                           OnClick="CancelDelete">
+                                    Cancel
+                                </MudButton>
+                            </div>
+                        </div>
+                    </MudAlert>
+                }
 
                 <!-- ERROR MESSAGE -->
                 @if (!string.IsNullOrEmpty(errorMessage))
@@ -158,6 +193,65 @@
 
                 <MudDivider Class="mb-4" />
 
+                <!-- EPIC AND SPRINT DROPDOWNS -->
+                <div class="mb-4">
+                    <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">
+                        <MudIcon Icon="Icons.Material.Filled.AccountTree" Class="me-2" />
+                        Assignment
+                    </MudText>
+                    <MudGrid Spacing="3">
+
+                        <!-- EPIC DROPDOWN -->
+                        <MudItem xs="12" sm="6">
+                            <MudSelect T="int?"
+                                       Value="StoryModel.EpicId"
+                                       ValueChanged="OnEpicChanged"
+                                       Label="Epic"
+                                       Variant="Variant.Outlined"
+                                       Disabled="@(epics == null)">
+                                <MudSelectItem T="int?" Value="@((int?)null)">
+                                    — Unassigned —
+                                </MudSelectItem>
+                                @if (epics != null)
+                                {
+                                    @foreach (var epic in epics)
+                                    {
+                                        <MudSelectItem T="int?" Value="@((int?)epic.EpicId)">
+                                            @epic.Name
+                                        </MudSelectItem>
+                                    }
+                                }
+                            </MudSelect>
+                        </MudItem>
+
+                        <!-- SPRINT DROPDOWN -->
+                        <MudItem xs="12" sm="6">
+                            <MudSelect T="int?"
+                                       Value="StoryModel.SprintId"
+                                       ValueChanged="OnSprintChanged"
+                                       Label="Sprint"
+                                       Variant="Variant.Outlined"
+                                       Disabled="@(sprints == null)">
+                                <MudSelectItem T="int?" Value="@((int?)null)">
+                                    — Unassigned —
+                                </MudSelectItem>
+                                @if (sprints != null)
+                                {
+                                    @foreach (var sprint in sprints)
+                                    {
+                                        <MudSelectItem T="int?" Value="@((int?)sprint.SprintId)">
+                                            @(sprint.SprintGoal ?? $"Sprint {sprint.SprintId}")
+                                        </MudSelectItem>
+                                    }
+                                }
+                            </MudSelect>
+                        </MudItem>
+
+                    </MudGrid>
+                </div>
+
+                <MudDivider Class="mb-4" />
+
                 <!-- STORY DETAILS -->
                 <div>
                     <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">
@@ -271,16 +365,127 @@ else
 @code {
     [Parameter] public ScrumPilot.Shared.Models.ProductBacklogItem? StoryModel { get; set; }
     [Parameter] public EventCallback<ScrumPilot.Shared.Models.ProductBacklogItem> OnSave { get; set; }
+    [Parameter] public EventCallback<int> OnDelete { get; set; }
 
+    // Edit mode state
     private bool isEditMode = false;
     private bool titleError = false;
     private string errorMessage = "";
+    private bool showDeleteConfirm = false;
 
+    // Edit field values
     private string editTitle = "";
     private string editDescription = "";
     private PbiPriority editPriority;
     private PbiPoints editStoryPoints;
 
+    // Epic and Sprint data
+    private List<Epic>? epics;
+    private List<Sprint>? sprints;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEpics();
+        await LoadSprints();
+    }
+
+    private async Task LoadEpics()
+    {
+        try
+        {
+            epics = await Http.GetFromJsonAsync<List<Epic>>("api/epics");
+        }
+        catch
+        {
+            // API not available yet — dropdowns will show disabled
+            epics = new List<Epic>();
+        }
+    }
+
+    private async Task LoadSprints()
+    {
+        try
+        {
+            sprints = await Http.GetFromJsonAsync<List<Sprint>>("api/sprints");
+        }
+        catch
+        {
+            // API not available yet — dropdowns will show disabled
+            sprints = new List<Sprint>();
+        }
+    }
+
+    private async Task OnEpicChanged(int? epicId)
+    {
+        if (StoryModel == null) return;
+        StoryModel.EpicId = epicId;
+        await SaveAssignment();
+    }
+
+    private async Task OnSprintChanged(int? sprintId)
+    {
+        if (StoryModel == null) return;
+        StoryModel.SprintId = sprintId;
+        await SaveAssignment();
+    }
+
+    private async Task SaveAssignment()
+    {
+        try
+        {
+            var response = await Http.PutAsJsonAsync("api/story", StoryModel);
+            if (!response.IsSuccessStatusCode)
+            {
+                errorMessage = "Failed to save assignment.";
+            }
+        }
+        catch
+        {
+            errorMessage = "Failed to connect to server.";
+        }
+    }
+
+    // Delete methods
+    private void ConfirmDelete()
+    {
+        showDeleteConfirm = true;
+        errorMessage = "";
+    }
+
+    private void CancelDelete()
+    {
+        showDeleteConfirm = false;
+    }
+
+    private async Task DeleteStory()
+    {
+        if (StoryModel == null) return;
+
+        try
+        {
+            var response = await Http.DeleteAsync($"api/story/{StoryModel.PbiId}");
+            if (response.IsSuccessStatusCode)
+            {
+                showDeleteConfirm = false;
+                if (OnDelete.HasDelegate)
+                {
+                    await OnDelete.InvokeAsync(StoryModel.PbiId);
+                }
+            }
+            else
+            {
+                errorMessage = "Failed to delete story.";
+                showDeleteConfirm = false;
+            }
+        }
+        catch
+        {
+            errorMessage = "Failed to connect to server.";
+            showDeleteConfirm = false;
+        }
+    }
+
+    // Edit methods
     private void StartEdit()
     {
         editTitle = StoryModel!.Title ?? "";
@@ -358,9 +563,9 @@ else
 
     private Color GetPriorityColor(ScrumPilot.Shared.Models.PbiPriority priority) => priority switch
     {
-        ScrumPilot.Shared.Models.PbiPriority.Low => Color.Success,      // Green
-        ScrumPilot.Shared.Models.PbiPriority.Medium => Color.Warning,   // Orange/Yellow
-        ScrumPilot.Shared.Models.PbiPriority.High => Color.Error,       // Red
+        ScrumPilot.Shared.Models.PbiPriority.Low => Color.Success,
+        ScrumPilot.Shared.Models.PbiPriority.Medium => Color.Warning,
+        ScrumPilot.Shared.Models.PbiPriority.High => Color.Error,
         _ => Color.Default
     };
 }
