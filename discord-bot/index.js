@@ -4,7 +4,15 @@ const { Client, GatewayIntentBits, Events, AttachmentBuilder, PermissionsBitFiel
 const READ_CHANNEL_ENV_KEY = 'SCRUMLORD_READ_CHANNEL_ID';
 const SPEAK_CHANNEL_ENV_KEY = 'SCRUMLORD_SPEAK_CHANNEL_ID';
 const { handleVoiceStateUpdate } = require('./recorder');
-//const { handleVoiceStateUpdate, watchForCraigLink, setClient } = require('./craig')
+
+const cron = require('node-cron');
+const {
+  runSummarizer,
+  CHAT_SUMMARY_CRON,
+  summarizeChannel,
+  fetchMessagesInRange,
+  formatMessagesToJson,
+} = require('./chat-summarizer');
 
 const client = new Client({
   intents: [
@@ -46,10 +54,8 @@ function parseTimeRange(rangeStr) {
 
 function extractChannelId(input) {
   if (!input) return null;
-
   const mentionMatch = input.trim().match(/^<#(\d+)>$/);
   if (mentionMatch) return mentionMatch[1];
-
   const normalized = input.trim();
   return /^\d+$/.test(normalized) ? normalized : null;
 }
@@ -90,65 +96,19 @@ async function sendCommandReply(message, content, routingConfig) {
   return message.reply(content);
 }
 
-// Fetch messages from a channel within a time range
-async function fetchMessagesInRange(channel, sinceDate) {
-  const collectedMessages = [];
-  let lastMessageId = null;
-
-  try {
-    while (true) {
-      // Discord max 100 msgs per fetch
-      const options = { limit: 100 };
-      if (lastMessageId) {
-        options.before = lastMessageId;
-      }
-
-      const messages = await channel.messages.fetch(options);
-      if (messages.size === 0) break;
-
-      // Filter messages by timestamp
-      const filteredMessages = messages.filter(
-        (msg) => msg.createdAt >= sinceDate
-      );
-
-      collectedMessages.push(...filteredMessages.values());
-
-      // If we found messages older than our range stop fetching
-      const oldestMessage = messages.last();
-      if (oldestMessage.createdAt < sinceDate) break;
-
-      lastMessageId = oldestMessage.id;
-
-      // Stop if fewer than 100 messages (no more history)
-      if (messages.size < 100) break;
-    }
-
-    // Sort messages by timestamp (oldest first)
-    collectedMessages.sort((a, b) => a.createdAt - b.createdAt);
-    return collectedMessages;
-  } catch (error) {
-    throw new Error(`Failed to fetch messages: ${error.message}`);
-  }
-}
-
-// Format to JSON
-function formatMessagesToJson(messages) {
-  const formattedMessages = messages.map((msg) => ({
-    author: {
-      id: msg.author.id,
-      username: msg.author.username,
-    },
-    content: msg.content,
-    timestamp: msg.createdAt.toISOString(),
-  }));
-
-  return JSON.stringify(formattedMessages, null, 2);
-}
-
 // Confirmation bot has joined server
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`Scrumlord is online. Logged in as ${readyClient.user.tag}`);
   //setClient(readyClient);
+
+  // Schedule daily chat summarization
+  cron.schedule(CHAT_SUMMARY_CRON, () => {
+    console.log('[ChatSummarizer] Cron fired.');
+    runSummarizer(client).catch(err =>
+      console.error('[ChatSummarizer] Cron error:', err)
+    );
+  });
+  console.log(`[ChatSummarizer] Scheduled daily at: ${CHAT_SUMMARY_CRON}`);
 });
 
 client.on(Events.VoiceStateUpdate, (oldState, newState) => {
@@ -249,7 +209,8 @@ client.on(Events.MessageCreate, async (message) => {
           'Examples:\n' +
           '  `!export 7d` - Export last 7 days\n' +
           '  `!export 24h` - Export last 24 hours\n' +
-          '  `!export 30m` - Export last 30 minutes'
+          '  `!export 30m` - Export last 30 minutes',
+        routingConfig
       );
       return;
     }
@@ -345,12 +306,48 @@ client.on(Events.MessageCreate, async (message) => {
       await sendCommandReply(message, errorMsg, routingConfig);
     }
   }
-});
 
-// // Craig voice state trigger
-// client.on(Events.VoiceStateUpdate, (oldState, newState) => {
-//   handleVoiceStateUpdate(oldState, newState);
-// });
+ if (message.content.startsWith('!summarize')) {
+    const args = message.content.split(' ');
+ 
+    if (args.length < 2) {
+      await sendCommandReply(
+        message,
+        '⚠️ Usage: `!summarize <time_range>`\n' +
+        'Examples:\n' +
+        '  `!summarize 7d` - Summarize last 7 days\n' +
+        '  `!summarize 24h` - Summarize last 24 hours\n' +
+        '  `!summarize 30m` - Summarize last 30 minutes',
+        routingConfig
+      );
+      return;
+    }
+ 
+    const timeRange = args[1];
+    const sinceDate = parseTimeRange(timeRange);
+ 
+    if (!sinceDate) {
+      await sendCommandReply(
+        message,
+        '❌ Invalid time range format. Use: `<number><d|h|m>`\n' +
+        'Examples: `7d` (7 days), `24h` (24 hours), `30m` (30 minutes)',
+        routingConfig
+      );
+      return;
+    }
+ 
+    try {
+      const statusMsg = await message.channel.send(`⏳ Running full summarization sweep...`);
+      await runSummarizer(client);
+      await statusMsg.edit(`✅ Summarization sweep complete.`);
+      console.log(`[Summarize] ${message.author.tag} triggered full sweep.`);
+    } catch (error) {
+      console.error('[Summarize Error]', error);
+      await sendCommandReply(message, `❌ Failed to summarize: ${error.message}`, routingConfig);
+    }
+    return;
+  }
+});
 
 // Log in using the token from .env
 client.login(process.env.DISCORD_TOKEN);
