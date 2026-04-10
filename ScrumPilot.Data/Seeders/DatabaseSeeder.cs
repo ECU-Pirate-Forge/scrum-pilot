@@ -12,6 +12,7 @@ namespace ScrumPilot.Data.Seeders
             SeedEpics(context);
             SeedSprints(context);
             SeedStories(context);
+            SeedComments(context);
             SeedMessageTranscripts(context);
         }
 
@@ -185,6 +186,37 @@ namespace ScrumPilot.Data.Seeders
 
             Console.WriteLine($"[SEEDER] Successfully seeded {rowsAffected} stories.");
             Console.WriteLine($"[SEEDER] Draft stories added: {stories.Count(s => s.IsDraft)}");
+        }
+
+        private static void SeedComments(ScrumPilotContext context)
+        {
+            if (context.Comments.Any())
+            {
+                Console.WriteLine("[SEEDER] Database already has comments, skipping seed.");
+                return;
+            }
+
+            var seedPbiId = context.Stories.OrderBy(s => s.PbiId).Select(s => (int?)s.PbiId).FirstOrDefault();
+            var seedUserId = context.Users.OrderBy(u => u.UserName).Select(u => (string?)u.Id).FirstOrDefault();
+
+            if (seedPbiId is null || seedUserId is null)
+            {
+                Console.WriteLine("[SEEDER] No stories or users found, skipping comment seed.");
+                return;
+            }
+
+            Console.WriteLine("[SEEDER] Seeding comments...");
+
+            context.Comments.Add(new Comment
+            {
+                PbiId = seedPbiId.Value,
+                UserId = seedUserId,
+                Body = "This is a seed comment for development and testing purposes.",
+                CreatedDate = DateTime.UtcNow
+            });
+
+            context.SaveChanges();
+            Console.WriteLine("[SEEDER] Successfully seeded comments.");
         }
 
         private static void SeedMessageTranscripts(ScrumPilotContext context)
