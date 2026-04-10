@@ -24,20 +24,20 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             // Arrange
             var expectedStories = new List<ProductBacklogItem>
             {
-                new ProductBacklogItem 
-                { 
-                    PbiId = 1, 
-                    Title = "Test Story 1", 
+                new ProductBacklogItem
+                {
+                    PbiId = 1,
+                    Title = "Test Story 1",
                     Description = "Test Description 1",
                     Status = PbiStatus.ToDo,
                     Priority = PbiPriority.Low,
                     DateCreated = DateTime.UtcNow,
                     LastUpdated = DateTime.UtcNow
                 },
-                new ProductBacklogItem 
-                { 
-                    PbiId = 2, 
-                    Title = "Test Story 2", 
+                new ProductBacklogItem
+                {
+                    PbiId = 2,
+                    Title = "Test Story 2",
                     Description = "Test Description 2",
                     Status = PbiStatus.InProgress,
                     Priority = PbiPriority.High,
@@ -86,10 +86,10 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             // Arrange
             var expectedDraftStories = new List<ProductBacklogItem>
             {
-                new ProductBacklogItem 
-                { 
-                    PbiId = 1, 
-                    Title = "Draft Story 1", 
+                new ProductBacklogItem
+                {
+                    PbiId = 1,
+                    Title = "Draft Story 1",
                     Description = "Draft Description 1",
                     Status = PbiStatus.ToDo,
                     Priority = PbiPriority.Low,
