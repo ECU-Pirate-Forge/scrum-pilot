@@ -12,7 +12,7 @@ const VOICE_CHANNEL_IDS = new Set(
 );
 const BOT_COMMANDS_CHANNEL = 'bot-commands';
 const RECAP_CHANNEL = 'standup-recap';
-const QUORUM = 1
+const QUORUM = 2
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
