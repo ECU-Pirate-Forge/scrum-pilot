@@ -7,20 +7,18 @@ const prism = require('prism-media');
 const Anthropic = require('@anthropic-ai/sdk');
 const OpenAI = require('openai');
 
-const MEETING_VOICE_CHANNEL = 'voice Scrum Pilot';
+const VOICE_CHANNEL_IDS = new Set(
+  (process.env.VOICE_CHANNELS || '').split(',').map(id => id.trim()).filter(Boolean)
+);
 const BOT_COMMANDS_CHANNEL = 'bot-commands';
 const RECAP_CHANNEL = 'standup-recap';
-const QUORUM = 2
+const QUORUM = 1
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-let connection = null;
-let recording = false;
-let starting = false;
-let stopping = false;
-let recordingTimestamp = null;
-let userRecordings = new Map();
+const activeSessions = new Map();
+const warnedChannels = new Set();
 
 function getChannel(guild, name, type = 'text') {
   return guild.channels.cache.find(c =>
@@ -47,11 +45,10 @@ function getDisplayName(guild, userId) {
   return member?.displayName || member?.user?.username || `User-${userId}`;
 }
 
-function subscribeUser(receiver, userId) {
-  if (userRecordings.has(userId)) return;
- 
-  const userOutputPath = path.join(__dirname, `recording-${recordingTimestamp}-${userId}.ogg`);
- 
+function subscribeUser(receiver, userId, session) {
+  if (session.userRecordings.has(userId)) return;
+  const userOutputPath = path.join(__dirname, `recording-${session.recordingTimestamp}-${userId}.ogg`);
+
   const userFfmpeg = spawn(ffmpegStatic, [
     '-f', 's16le',
     '-ar', '48000',
@@ -64,7 +61,7 @@ function subscribeUser(receiver, userId) {
     console.log(`[ffmpeg:${userId}]`, data.toString());
   });
  
-  userRecordings.set(userId, {
+  session.userRecordings.set(userId, {
     process: userFfmpeg,
     outputPath: userOutputPath,
     startTime: Date.now(),
@@ -92,12 +89,12 @@ function subscribeUser(receiver, userId) {
   opusStream.pipe(decoder).pipe(userFfmpeg.stdin, { end: false });
 }
 
-async function startRecording(guild) {
-  const voiceChannel = getChannel(guild, MEETING_VOICE_CHANNEL, 'voice');
+
+async function startRecording(guild, voiceChannel) {
   const controlChannel = getChannel(guild, BOT_COMMANDS_CHANNEL);
   if (!voiceChannel || !controlChannel) return;
 
-  connection = joinVoiceChannel({
+  const connection = joinVoiceChannel({
     channelId: voiceChannel.id,
     guildId: guild.id,
     adapterCreator: guild.voiceAdapterCreator,
@@ -105,36 +102,41 @@ async function startRecording(guild) {
     selfMute: true,
   });
 
-  connection.on(VoiceConnectionStatus.Ready, async () => {
+  connection.once(VoiceConnectionStatus.Ready, async () => {
     console.log('[Recorder] Connected to voice channel.');
 
-    recordingTimestamp = Date.now();
-    userRecordings = new Map();
+    const session = {
+      recordingTimestamp: Date.now(),
+      userRecordings: new Map(),
+      connection,
+    };
+    activeSessions.set(voiceChannel.id, session);
     const receiver = connection.receiver;
  
     // Subscribe to anyone already in the channel
     voiceChannel.members.forEach(member => {
-      if (!member.user.bot) subscribeUser(receiver, member.id);
+      if (!member.user.bot) subscribeUser(receiver, member.id, session);
     });
  
     // Subscribe to anyone who starts speaking after connection
     receiver.speaking.on('start', (userId) => {
-      subscribeUser(receiver, userId);
+      subscribeUser(receiver, userId, session);
     });
- 
-    starting = false;
-    recording = true;
-    await controlChannel.send('🔴 Scrumlord is listening.');
-    console.log('[Recorder] Recording started. Timestamp:', recordingTimestamp);
+
+    await controlChannel.send(`🔴 Scrumlord is listening to **${voiceChannel.name}**.`);
+    console.log('[Recorder] Recording started. Timestamp:', session.recordingTimestamp);
   });
 }
 
-async function stopRecording(guild) {
+async function stopRecording(guild, voiceChannel) {
   const controlChannel = getChannel(guild, BOT_COMMANDS_CHANNEL);
   const recapChannel = getChannel(guild, RECAP_CHANNEL);
+  const session = activeSessions.get(voiceChannel.id);
+  if (!session) return;
+  if (session.pending) return;
 
-  if (userRecordings.size > 0) {
-    await Promise.all([...userRecordings.values()].map(({ process }) =>
+  if (session.userRecordings.size > 0) {
+    await Promise.all([...session.userRecordings.values()].map(({ process }) =>
       new Promise((resolve) => {
         process.on('close', resolve);
         if (process.stdin && !process.stdin.destroyed) {
@@ -144,23 +146,40 @@ async function stopRecording(guild) {
     ));
   }
 
-  if (connection) {
-    connection.destroy();
-    connection = null;
+  if (session.connection) {
+    try {
+      session.connection.destroy();
+    } catch (err) {
+      console.warn('[Recorder] Connection already destroyed:', err.message);
+    }
+    session.connection = null;
   }
 
-  recording = false;
-  starting = false;
-  await controlChannel.send('⏹️ Meeting ended — processing recording...');
+
+  await controlChannel.send(`⏹️ Meeting ended — processing **${voiceChannel.name}** recording...`);
   console.log('[Recorder] Recording stopped. Processing...');
 
-  if (userRecordings.size > 0) {
-    await transcribeMultiTrack(guild, userRecordings, recordingTimestamp, recapChannel, controlChannel);
+  if (session.userRecordings.size > 0) {
+    await transcribeMultiTrack(guild, session.userRecordings, session.recordingTimestamp, recapChannel, controlChannel, voiceChannel);
   }
  
-  userRecordings = new Map();
-  recordingTimestamp = null;
-  stopping = false;
+  session.userRecordings = new Map();
+  session.recordingTimestamp = null;
+  activeSessions.delete(voiceChannel.id);
+  warnedChannels.delete(voiceChannel.id);
+
+  // Check if any watched channel has humans waiting
+  for (const channelId of VOICE_CHANNEL_IDS) {
+    const waitingChannel = guild.channels.cache.get(channelId);
+    if (!waitingChannel) continue;
+    const humanCount = waitingChannel.members.filter(m => !m.user.bot).size;
+    if (humanCount >= QUORUM && !activeSessions.has(channelId)) {
+      warnedChannels.delete(channelId);
+      activeSessions.set(channelId, { pending: true });
+      await startRecording(guild, waitingChannel);
+      break;
+    }
+  }
 }
 
 async function compressAudio(inputPath, controlChannel = null) {
@@ -223,7 +242,7 @@ async function compressAudio(inputPath, controlChannel = null) {
   return outputPath;
 }
 
-async function transcribeMultiTrack(guild, userRecordings, timestamp, recapChannel, controlChannel) {
+async function transcribeMultiTrack(guild, userRecordings, timestamp, recapChannel, controlChannel, voiceChannel) {
   const dateString = formatDate(timestamp);
   const sorted = [...userRecordings.entries()].sort((a, b) => a[1].startTime - b[1].startTime);
   const speakerTranscripts = [];
@@ -268,7 +287,7 @@ async function transcribeMultiTrack(guild, userRecordings, timestamp, recapChann
   }
 
   if (speakerTranscripts.length === 0) {
-    await controlChannel.send('⚠️ No usable audio was recorded from this meeting.');
+    await controlChannel.send(`⚠️ No usable audio was recorded from the meeting in **${voiceChannel.name}**.`);
     return;
   }
 
@@ -284,7 +303,14 @@ async function transcribeMultiTrack(guild, userRecordings, timestamp, recapChann
     ? `# 📋 Meeting Recap\n*Recorded ${dateString}*\n\n## Summary\n${summary}\n\n## Full Transcript\n${labeledTranscript}`
     : `# 📋 Meeting Transcript\n*Recorded ${dateString}*\n\n${labeledTranscript}`;
  
-  const markdownPath = path.join(__dirname, `recording-${timestamp}.md`);
+  const dateStamp = new Date(parseInt(timestamp)).toLocaleString('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  }).replace(/[/,: ]/g, '-').replace(/--+/g, '-');
+  const channelName = voiceChannel?.name?.replace(/\s+/g, '-') || 'unknown-channel';
+  const markdownPath = path.join(__dirname, `recap-${channelName}-${dateStamp}.md`);
   fs.writeFileSync(markdownPath, markdownContent);
  
   await recapChannel.send({
@@ -292,7 +318,7 @@ async function transcribeMultiTrack(guild, userRecordings, timestamp, recapChann
     files: [markdownPath]
   });
  
-  await controlChannel.send(`✅ Recap from ${dateString} has been posted in <#${recapChannel.id}>.`);
+  await controlChannel.send(`✅ Recap of **${voiceChannel.name}**'s ${dateString} meeting has been posted in <#${recapChannel.id}>.`);
  
   fs.unlinkSync(markdownPath);
   console.log('[Recorder] Recap posted.');
@@ -343,19 +369,44 @@ async function summarize(transcript) {
 
 async function handleVoiceStateUpdate(oldState, newState) {
   const guild = newState.guild;
-  const voiceChannel = getChannel(guild, MEETING_VOICE_CHANNEL, 'voice');
-  if (!voiceChannel) return;
 
-  const humanCount = voiceChannel.members.filter(m => !m.user.bot).size;
-
-  if (!recording && !starting && humanCount >= QUORUM) {
-    starting = true;
-    await startRecording(guild);
+  // Handle channel leave
+  if (oldState.channelId && VOICE_CHANNEL_IDS.has(oldState.channelId)) {
+    const leftChannel = guild.channels.cache.get(oldState.channelId);
+    if (leftChannel) {
+      const humanCount = leftChannel.members.filter(m => !m.user.bot).size;
+      const session = activeSessions.get(oldState.channelId);
+      if (session && !session.pending && humanCount === 0) {
+        await stopRecording(guild, leftChannel);
+      }
+    }
   }
 
-  if (recording && humanCount === 0) {
-    stopping = true;
-    await stopRecording(guild);
+  // Handle channel join
+  if (newState.channelId && VOICE_CHANNEL_IDS.has(newState.channelId)) {
+    const joinedChannel = guild.channels.cache.get(newState.channelId);
+    if (joinedChannel) {
+      const session = activeSessions.get(newState.channelId);
+
+      if (!session && newState.member && !newState.member.user.bot) {
+        if (activeSessions.size > 0) {
+          if (!warnedChannels.has(newState.channelId)) {
+            warnedChannels.add(newState.channelId);
+            const controlChannel = getChannel(guild, BOT_COMMANDS_CHANNEL);
+            if (controlChannel) {
+              await controlChannel.send(
+                `⚠️ A meeting in **${joinedChannel.name}** is starting, but Scrumlord is already recording another meeting. **Please take notes manually!**`
+              );
+            }
+          }
+          return;
+        }
+        activeSessions.set(newState.channelId, { pending: true });
+        await startRecording(guild, joinedChannel);
+      } else if (session && !session.pending && newState.member && !newState.member.user.bot) {
+        subscribeUser(session.connection.receiver, newState.member.id, session);
+      }
+    }
   }
 }
 
