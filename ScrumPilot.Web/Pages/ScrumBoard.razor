@@ -20,9 +20,53 @@
         }
 
         <MudContainer MaxWidth="MaxWidth.False" Class="pa-0">
-            <SwimLanes Items="@Items"
-                       OnItemDropped="OnItemDropped"
-                       OnStorySelected="OpenStoryDetails" />
+
+<MudStack Row="true" Spacing="2" Class="mb-4">
+    <MudSelect T="int?"
+               Label="Sprint"
+               Value="@SelectedSprintId"
+               ValueChanged="@(async (int? value) => await OnSprintChanged(value))"
+               Variant="Variant.Outlined"
+               Dense="true"
+               Style="min-width: 220px;">
+
+        <MudSelectItem T="int?" Value="@((int?)null)">All</MudSelectItem>
+
+        @foreach (var sprint in SprintOptions)
+        {
+            <MudSelectItem T="int?" Value="@sprint">Sprint @sprint</MudSelectItem>
+        }
+    </MudSelect>
+
+    <MudSelect T="int?"
+               Label="Epic"
+               Value="@SelectedEpicId"
+               ValueChanged="@(async (int? value) => await OnEpicChanged(value))"
+               Variant="Variant.Outlined"
+               Dense="true"
+               Style="min-width: 220px;">
+
+        <MudSelectItem T="int?" Value="@((int?)null)">All</MudSelectItem>
+
+        @foreach (var epic in EpicOptions)
+        {
+            <MudSelectItem T="int?" Value="@epic">Epic @epic</MudSelectItem>
+        }
+    </MudSelect>
+</MudStack>
+
+            @if (!FilteredItems.Any())
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4" Icon="@Icons.Material.Filled.Info">
+                    No stories match the selected filters.
+                </MudAlert>
+            }
+            else
+            {
+                <SwimLanes Items="@FilteredItems"
+                           OnItemDropped="OnItemDropped"
+                           OnStorySelected="OpenStoryDetails" />
+            }
         </MudContainer>
 
         @* Story Details Modal *@
@@ -55,15 +99,25 @@
 
 @code {
 
+    
     private List<ProductBacklogItem> Items = new();
+    private List<ProductBacklogItem> FilteredItems = new();
+
+    private List<int?> SprintOptions = new();
+    private List<int?> EpicOptions = new();
+
+    private int? SelectedSprintId = null;
+    private int? SelectedEpicId = null;
+
     private bool _loading = true;
     private ProductBacklogItem? SelectedStory;
     private string _moveStoryErrorMessage = string.Empty;
 
     protected override async Task OnInitializedAsync()
-    {
-        await LoadStoriesAsync();
-    }
+{
+    await LoadStoriesAsync();
+    ApplyFilters();
+}
 
     private async Task LoadStoriesAsync(bool showLoading = true)
     {
@@ -71,6 +125,7 @@
         {
             _loading = true;
             Items = new();
+            FilteredItems = new();
         }
 
         try
@@ -79,6 +134,8 @@
             if (stories is not null)
             {
                 Items = stories;
+                BuildFilterOptions();
+                ApplyFilters();
             }
         }
         catch
@@ -91,6 +148,54 @@
         }
     }
 
+
+    private Task OnSprintChanged(int? value)
+{
+    SelectedSprintId = value;
+    ApplyFilters();
+    return Task.CompletedTask;
+}
+
+private Task OnEpicChanged(int? value)
+{
+    SelectedEpicId = value;
+    ApplyFilters();
+    return Task.CompletedTask;
+}
+private void BuildFilterOptions()
+{
+    SprintOptions = Items
+        .Select(i => i.SprintId)
+        .Where(id => id.HasValue)
+        .Distinct()
+        .OrderBy(id => id)
+        .ToList();
+
+    EpicOptions = Items
+        .Select(i => i.EpicId)
+        .Where(id => id.HasValue)
+        .Distinct()
+        .OrderBy(id => id)
+        .ToList();
+}
+    private void ApplyFilters()
+{
+    IEnumerable<ProductBacklogItem> query = Items;
+
+    if (SelectedSprintId.HasValue)
+    {
+        query = query.Where(item => item.SprintId == SelectedSprintId);
+    }
+
+    if (SelectedEpicId.HasValue)
+    {
+        query = query.Where(item => item.EpicId == SelectedEpicId);
+    }
+
+    FilteredItems = query.ToList();
+}
+
+   
     private async Task OnItemDropped(MudItemDropInfo<ProductBacklogItem> dropInfo)
     {
         if (dropInfo.Item is null)
@@ -111,7 +216,6 @@
 
         _moveStoryErrorMessage = string.Empty;
 
-        // Optimistically move the card, then persist status to the backend.
         dropInfo.Item.Status = newStatus;
 
         try
@@ -131,12 +235,12 @@
                 if (index >= 0)
                 {
                     Items[index] = updatedStory;
+                    ApplyFilters();
                 }
             }
         }
         catch
         {
-            // Revert local status if backend update fails so UI and data stay consistent.
             dropInfo.Item.Status = originalStatus;
             _moveStoryErrorMessage = "Could not save the status change. The card was returned to its previous column.";
         }
