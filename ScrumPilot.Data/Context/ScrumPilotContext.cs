@@ -15,6 +15,7 @@ namespace ScrumPilot.Data.Context
         public DbSet<ProductBacklogItem> Stories { get; set; }
         public DbSet<Epic> Epics { get; set; }
         public DbSet<Sprint> Sprints { get; set; }
+        public DbSet<Comment> Comments { get; set; }
         public DbSet<AudioTranscript> AudioTranscripts { get; set; }
         public DbSet<MessageTranscript> MessageTranscripts { get; set; }
 
@@ -64,6 +65,17 @@ namespace ScrumPilot.Data.Context
                 entity.Property(e => e.EndDate);
                 entity.Property(e => e.IsOpen);
                 entity.Property(e => e.DateClosed);
+            });
+
+            modelBuilder.Entity<Comment>(entity =>
+            {
+                entity.ToTable("Comment");
+                entity.HasKey(e => e.CommentId);
+                entity.Property(e => e.CommentId).ValueGeneratedOnAdd();
+                entity.Property(e => e.PbiId).IsRequired();
+                entity.Property(e => e.UserId).IsRequired();
+                entity.Property(e => e.Body).IsRequired().HasColumnName("Comment");
+                entity.Property(e => e.CreatedDate).IsRequired();
             });
 
             modelBuilder.Entity<AudioTranscript>(entity =>

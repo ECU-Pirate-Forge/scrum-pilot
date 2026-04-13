@@ -74,14 +74,14 @@ namespace ScrumPilot.UnitTests.Frontend.PageTests
             var markup = component.Markup;
 
             // Assert - Lanes appear left-to-right: ToDo, InProgress, InReview, Done
-            var todoIdx      = markup.IndexOf("column-todo",      StringComparison.Ordinal);
+            var todoIdx = markup.IndexOf("column-todo", StringComparison.Ordinal);
             var inProgressIdx = markup.IndexOf("column-inprogress", StringComparison.Ordinal);
-            var inReviewIdx  = markup.IndexOf("column-inreview",  StringComparison.Ordinal);
-            var doneIdx      = markup.IndexOf("column-done",      StringComparison.Ordinal);
+            var inReviewIdx = markup.IndexOf("column-inreview", StringComparison.Ordinal);
+            var doneIdx = markup.IndexOf("column-done", StringComparison.Ordinal);
 
-            Assert.True(todoIdx < inProgressIdx,  "ToDo lane should appear before InProgress");
+            Assert.True(todoIdx < inProgressIdx, "ToDo lane should appear before InProgress");
             Assert.True(inProgressIdx < inReviewIdx, "InProgress lane should appear before InReview");
-            Assert.True(inReviewIdx < doneIdx,    "InReview lane should appear before Done");
+            Assert.True(inReviewIdx < doneIdx, "InReview lane should appear before Done");
         }
 
         [Fact]
@@ -92,10 +92,10 @@ namespace ScrumPilot.UnitTests.Frontend.PageTests
             var markup = component.Markup;
 
             // Assert - Priority lane CSS classes must not be present in Status mode
-            Assert.DoesNotContain("column-none",   markup);
-            Assert.DoesNotContain("column-high",   markup);
+            Assert.DoesNotContain("column-none", markup);
+            Assert.DoesNotContain("column-high", markup);
             Assert.DoesNotContain("column-medium", markup);
-            Assert.DoesNotContain("column-low",    markup);
+            Assert.DoesNotContain("column-low", markup);
         }
     }
 }

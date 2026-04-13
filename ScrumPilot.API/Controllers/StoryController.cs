@@ -63,7 +63,7 @@ namespace ScrumPilot.API.Controllers
 
                 return Ok(story);
             }
-            
+
             catch (InvalidOperationException ex)
             {
                 return BadRequest($"Failed to generate AI story: {ex.Message}");

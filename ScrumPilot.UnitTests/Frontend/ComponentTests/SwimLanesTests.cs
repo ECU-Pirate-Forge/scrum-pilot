@@ -34,10 +34,10 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
             var component = Render<SwimLanes>(p => p.Add(x => x.Items, EmptyItems()));
 
             // Assert
-            Assert.Contains("TO DO",       component.Markup);
+            Assert.Contains("TO DO", component.Markup);
             Assert.Contains("IN PROGRESS", component.Markup);
-            Assert.Contains("IN REVIEW",   component.Markup);
-            Assert.Contains("DONE",        component.Markup);
+            Assert.Contains("IN REVIEW", component.Markup);
+            Assert.Contains("DONE", component.Markup);
         }
 
         [Fact]
@@ -47,10 +47,10 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
             var component = Render<SwimLanes>(p => p.Add(x => x.Items, EmptyItems()));
 
             // Assert
-            Assert.Contains("column-todo",       component.Markup);
+            Assert.Contains("column-todo", component.Markup);
             Assert.Contains("column-inprogress", component.Markup);
-            Assert.Contains("column-inreview",   component.Markup);
-            Assert.Contains("column-done",       component.Markup);
+            Assert.Contains("column-inreview", component.Markup);
+            Assert.Contains("column-done", component.Markup);
         }
 
         [Fact]
@@ -60,14 +60,14 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
             var markup = Render<SwimLanes>(p => p.Add(x => x.Items, EmptyItems())).Markup;
 
             // Assert - left-to-right: ToDo → InProgress → InReview → Done
-            var todoIdx       = markup.IndexOf("column-todo",       StringComparison.Ordinal);
+            var todoIdx = markup.IndexOf("column-todo", StringComparison.Ordinal);
             var inProgressIdx = markup.IndexOf("column-inprogress", StringComparison.Ordinal);
-            var inReviewIdx   = markup.IndexOf("column-inreview",   StringComparison.Ordinal);
-            var doneIdx       = markup.IndexOf("column-done",       StringComparison.Ordinal);
+            var inReviewIdx = markup.IndexOf("column-inreview", StringComparison.Ordinal);
+            var doneIdx = markup.IndexOf("column-done", StringComparison.Ordinal);
 
-            Assert.True(todoIdx < inProgressIdx,   "ToDo should appear before InProgress");
+            Assert.True(todoIdx < inProgressIdx, "ToDo should appear before InProgress");
             Assert.True(inProgressIdx < inReviewIdx, "InProgress should appear before InReview");
-            Assert.True(inReviewIdx < doneIdx,     "InReview should appear before Done");
+            Assert.True(inReviewIdx < doneIdx, "InReview should appear before Done");
         }
 
         [Fact]
@@ -76,7 +76,7 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
             // When GroupByPriority is not set it defaults to false (status mode)
             var markup = Render<SwimLanes>(p => p.Add(x => x.Items, EmptyItems())).Markup;
 
-            Assert.Contains("column-todo",  markup);
+            Assert.Contains("column-todo", markup);
             Assert.DoesNotContain("column-none", markup);
             Assert.DoesNotContain("column-high", markup);
         }
@@ -92,10 +92,10 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
                 .Add(x => x.GroupByPriority, true));
 
             // Assert
-            Assert.Contains("NONE",   component.Markup);
-            Assert.Contains("LOW",    component.Markup);
+            Assert.Contains("NONE", component.Markup);
+            Assert.Contains("LOW", component.Markup);
             Assert.Contains("MEDIUM", component.Markup);
-            Assert.Contains("HIGH",   component.Markup);
+            Assert.Contains("HIGH", component.Markup);
         }
 
         [Fact]
@@ -107,10 +107,10 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
                 .Add(x => x.GroupByPriority, true));
 
             // Assert
-            Assert.Contains("column-none",   component.Markup);
-            Assert.Contains("column-low",    component.Markup);
+            Assert.Contains("column-none", component.Markup);
+            Assert.Contains("column-low", component.Markup);
             Assert.Contains("column-medium", component.Markup);
-            Assert.Contains("column-high",   component.Markup);
+            Assert.Contains("column-high", component.Markup);
         }
 
         [Fact]
@@ -122,13 +122,13 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
                 .Add(x => x.GroupByPriority, true)).Markup;
 
             // Assert - left-to-right: None → Low → Medium → High
-            var noneIdx   = markup.IndexOf("column-none",   StringComparison.Ordinal);
-            var lowIdx    = markup.IndexOf("column-low",    StringComparison.Ordinal);
+            var noneIdx = markup.IndexOf("column-none", StringComparison.Ordinal);
+            var lowIdx = markup.IndexOf("column-low", StringComparison.Ordinal);
             var mediumIdx = markup.IndexOf("column-medium", StringComparison.Ordinal);
-            var highIdx   = markup.IndexOf("column-high",   StringComparison.Ordinal);
+            var highIdx = markup.IndexOf("column-high", StringComparison.Ordinal);
 
-            Assert.True(noneIdx < lowIdx,    "None should appear before Low");
-            Assert.True(lowIdx < mediumIdx,  "Low should appear before Medium");
+            Assert.True(noneIdx < lowIdx, "None should appear before Low");
+            Assert.True(lowIdx < mediumIdx, "Low should appear before Medium");
             Assert.True(mediumIdx < highIdx, "Medium should appear before High");
         }
 
@@ -141,10 +141,10 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
                 .Add(x => x.GroupByPriority, true)).Markup;
 
             // Assert
-            Assert.DoesNotContain("column-todo",       markup);
+            Assert.DoesNotContain("column-todo", markup);
             Assert.DoesNotContain("column-inprogress", markup);
-            Assert.DoesNotContain("column-inreview",   markup);
-            Assert.DoesNotContain("column-done",       markup);
+            Assert.DoesNotContain("column-inreview", markup);
+            Assert.DoesNotContain("column-done", markup);
         }
 
         // ── Item rendering ──────────────────────────────────────────────────────
