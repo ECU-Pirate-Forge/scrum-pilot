@@ -44,6 +44,8 @@ namespace ScrumPilot.Data.Context
                 entity.Property(e => e.Origin).HasConversion<string>();
                 entity.Property(e => e.DateCreated).IsRequired();
                 entity.Property(e => e.LastUpdated).IsRequired();
+                entity.HasOne<Epic>().WithMany(e => e.ProductBacklogItems).HasForeignKey(e => e.EpicId).IsRequired(false);
+                entity.HasOne<Sprint>().WithMany(e => e.ProductBacklogItems).HasForeignKey(e => e.SprintId).IsRequired(false);
             });
 
             modelBuilder.Entity<Epic>(entity =>
@@ -76,6 +78,7 @@ namespace ScrumPilot.Data.Context
                 entity.Property(e => e.UserId).IsRequired();
                 entity.Property(e => e.Body).IsRequired().HasColumnName("Comment");
                 entity.Property(e => e.CreatedDate).IsRequired();
+                entity.HasOne<ProductBacklogItem>().WithMany(p => p.Comments).HasForeignKey(e => e.PbiId).IsRequired();
             });
 
             modelBuilder.Entity<AudioTranscript>(entity =>

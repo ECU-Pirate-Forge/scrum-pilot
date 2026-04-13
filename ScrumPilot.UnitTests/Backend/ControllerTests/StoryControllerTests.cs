@@ -10,12 +10,12 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
     public class StoryControllerTests
     {
         private readonly IStoryService _mockStoryService;
-        private readonly StoryController _controller;
+        private readonly PbiController _controller;
 
         public StoryControllerTests()
         {
             _mockStoryService = Substitute.For<IStoryService>();
-            _controller = new StoryController(_mockStoryService);
+            _controller = new PbiController(_mockStoryService);
         }
 
         [Fact]

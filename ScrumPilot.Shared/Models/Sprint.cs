@@ -8,5 +8,6 @@ namespace ScrumPilot.Shared.Models
         public DateTime? EndDate { get; set; }
         public bool IsOpen { get; set; }
         public DateTime? DateClosed { get; set; }
+        public ICollection<ProductBacklogItem>? ProductBacklogItems { get; set; }
     }
 }

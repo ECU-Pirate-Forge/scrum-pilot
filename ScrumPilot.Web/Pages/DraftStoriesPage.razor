@@ -165,7 +165,7 @@ else
     {
         try
         {
-            var response = await Http.GetFromJsonAsync<List<ProductBacklogItem>>("api/story/getDraftStories");
+            var response = await Http.GetFromJsonAsync<List<ProductBacklogItem>>("api/Pbi/getDraftStories");
             return response ?? new List<ProductBacklogItem>();
         }
         catch (Exception ex)
@@ -180,7 +180,7 @@ else
     {
         try
         {
-            var response = await Http.PostAsJsonAsync("api/story/commitStory", story);
+            var response = await Http.PostAsJsonAsync("api/Pbi/commitStory", story);
             if (response.IsSuccessStatusCode)
             {
                 draftStories?.Remove(story);
@@ -212,7 +212,7 @@ else
     {
         try
         {
-            var response = await Http.PutAsJsonAsync("api/story", story);
+            var response = await Http.PutAsJsonAsync("api/Pbi", story);
             if (response.IsSuccessStatusCode)
             {
                 var index = draftStories?.FindIndex(s => s.PbiId == story.PbiId) ?? -1;
@@ -235,7 +235,7 @@ else
     {
         try
         {
-            var response = await Http.DeleteAsync($"api/story/{story.PbiId}");
+            var response = await Http.DeleteAsync($"api/Pbi/{story.PbiId}");
             if (response.IsSuccessStatusCode)
             {
                 draftStories?.Remove(story);

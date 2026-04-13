@@ -75,7 +75,7 @@
 
         try
         {
-            var stories = await Http.GetFromJsonAsync<List<ProductBacklogItem>>("api/story/GetNonDraftStories");
+            var stories = await Http.GetFromJsonAsync<List<ProductBacklogItem>>("api/Pbi/GetNonDraftStories");
             if (stories is not null)
             {
                 Items = stories;
@@ -118,7 +118,7 @@
         {
             dropInfo.Item.LastUpdated = DateTime.UtcNow;
 
-            var response = await Http.PutAsJsonAsync("api/story", dropInfo.Item);
+            var response = await Http.PutAsJsonAsync("api/Pbi", dropInfo.Item);
             if (!response.IsSuccessStatusCode)
             {
                 throw new HttpRequestException($"Status update failed with code {(int)response.StatusCode}.");
@@ -157,7 +157,7 @@
     {
         try
         {
-            var response = await Http.PutAsJsonAsync("api/story", story);
+            var response = await Http.PutAsJsonAsync("api/Pbi", story);
             if (response.IsSuccessStatusCode)
             {
                 SelectedStory = null;

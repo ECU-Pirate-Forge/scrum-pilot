@@ -6,11 +6,11 @@ namespace ScrumPilot.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class StoryController : ControllerBase
+    public class PbiController : ControllerBase
     {
         private readonly IStoryService _storyService;
 
-        public StoryController(IStoryService storyService)
+        public PbiController(IStoryService storyService)
         {
             _storyService = storyService;
         }

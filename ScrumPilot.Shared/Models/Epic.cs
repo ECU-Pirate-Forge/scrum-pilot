@@ -5,5 +5,6 @@ namespace ScrumPilot.Shared.Models
         public int EpicId { get; set; }
         public required string Name { get; set; }
         public DateTime DateCreated { get; set; }
+        public ICollection<ProductBacklogItem>? ProductBacklogItems { get; set; }
     }
 }

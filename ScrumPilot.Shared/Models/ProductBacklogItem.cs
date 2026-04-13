@@ -16,5 +16,6 @@
         public bool IsFlagged { get; set; }
         public DateTime DateCreated { get; set; }
         public DateTime LastUpdated { get; set; }
+        public ICollection<Comment>? Comments { get; set; }
     }
 }
