@@ -12,9 +12,15 @@ namespace ScrumPilot.Data.Extensions
     {
         public static IServiceCollection AddDataServices(this IServiceCollection services, IConfiguration configuration)
         {
-            // Add Entity Framework
+            // Add Entity Framework — use Postgres on Railway (DATABASE_URL), SQLite locally
+            var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
             services.AddDbContext<ScrumPilotContext>(options =>
-                options.UseSqlite(configuration.GetConnectionString("DefaultConnection")));
+            {
+                if (!string.IsNullOrEmpty(databaseUrl))
+                    options.UseNpgsql(databaseUrl);
+                else
+                    options.UseSqlite(configuration.GetConnectionString("DefaultConnection"));
+            });
 
             // Add ASP.NET Core Identity backed by EF Core / SQLite
             services.AddIdentityCore<ApplicationUser>(options =>
