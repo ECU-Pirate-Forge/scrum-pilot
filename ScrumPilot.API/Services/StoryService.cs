@@ -56,16 +56,28 @@ namespace ScrumPilot.API.Services
         /// </exception>
         private async Task<ProductBacklogItem> GenerateAiStory(string problemStatement)
         {
-            var ollamaBaseUrl = _configuration["OllamaBaseUrl"];
-            var ollamaModel = _configuration["OllamaModel"];
+            var groqApiKey = _configuration["GroqApiKey"];
+            var prompt = BuildPrompt(problemStatement);
+            string responseContent;
 
-            if (string.IsNullOrEmpty(ollamaBaseUrl))
+            if (!string.IsNullOrEmpty(groqApiKey))
             {
-                throw new InvalidOperationException("OllamaBaseUrl is not configured.");
+                // Use Groq when API key is configured (e.g. Render production)
+                var groqModel = _configuration["GroqModel"] ?? "llama-3.3-70b-versatile";
+                responseContent = await CallGroqApiAsync(groqApiKey, groqModel, prompt);
+            }
+            else
+            {
+                // Fall back to local Ollama (development)
+                var ollamaBaseUrl = _configuration["OllamaBaseUrl"];
+                var ollamaModel = _configuration["OllamaModel"];
+
+                if (string.IsNullOrEmpty(ollamaBaseUrl))
+                    throw new InvalidOperationException("No AI provider configured. Set GeminiApiKey or OllamaBaseUrl.");
+
+                responseContent = await CallOllamaApiAsync(ollamaBaseUrl, ollamaModel, prompt);
             }
 
-            var prompt = BuildPrompt(problemStatement);
-            var responseContent = await CallOllamaApiAsync(ollamaBaseUrl, ollamaModel, prompt);
             var aiStoryResponse = ParseAiStoryResponse(responseContent);
 
             var story = new ProductBacklogItem
@@ -155,16 +167,84 @@ namespace ScrumPilot.API.Services
             }
         }
 
+        private async Task<string> CallGroqApiAsync(string apiKey, string model, string prompt)
+        {
+            var requestBody = new
+            {
+                model = model,
+                messages = new[]
+                {
+                    new { role = "user", content = prompt }
+                }
+            };
+
+            var json = JsonSerializer.Serialize(requestBody);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            try
+            {
+                var request = new HttpRequestMessage(HttpMethod.Post, "https://api.groq.com/openai/v1/chat/completions");
+                request.Headers.Add("Authorization", $"Bearer {apiKey}");
+                request.Content = content;
+                var response = await _httpClient.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    throw new HttpRequestException($"Groq API request failed with status {response.StatusCode}: {errorContent}");
+                }
+
+                return await response.Content.ReadAsStringAsync();
+            }
+            catch (HttpRequestException)
+            {
+                throw;
+            }
+            catch (TaskCanceledException ex)
+            {
+                throw new TimeoutException("The request to Groq timed out", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"An unexpected error occurred while calling the Groq API: {ex.Message}", ex);
+            }
+        }
+
         private AiStoryResponse ParseAiStoryResponse(string responseContent)
         {
             try
             {
-                var ollamaResponse = JsonSerializer.Deserialize<JsonElement>(responseContent);
-                var aiResponseText = ollamaResponse.GetProperty("response").GetString();
+                var parsedResponse = JsonSerializer.Deserialize<JsonElement>(responseContent);
+
+                string? aiResponseText = null;
+                // OpenAI/OpenRouter format: choices[0].message.content
+                if (parsedResponse.TryGetProperty("choices", out var choices) &&
+                    choices.GetArrayLength() > 0)
+                {
+                    aiResponseText = choices[0]
+                        .GetProperty("message")
+                        .GetProperty("content")
+                        .GetString();
+                }
+                // Native Gemini format: candidates[0].content.parts[0].text
+                else if (parsedResponse.TryGetProperty("candidates", out var candidates) &&
+                    candidates.GetArrayLength() > 0)
+                {
+                    aiResponseText = candidates[0]
+                        .GetProperty("content")
+                        .GetProperty("parts")[0]
+                        .GetProperty("text")
+                        .GetString();
+                }
+                else if (parsedResponse.TryGetProperty("response", out var ollamaResponse))
+                {
+                    // Ollama format: response
+                    aiResponseText = ollamaResponse.GetString();
+                }
 
                 if (string.IsNullOrEmpty(aiResponseText))
                 {
-                    throw new InvalidOperationException("Ollama returned an empty response");
+                    throw new InvalidOperationException("AI provider returned an empty response");
                 }
 
                 // Extract the first valid JSON object from the response string

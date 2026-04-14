@@ -337,7 +337,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
                 () => _storyService.GenerateAiStories(new List<string> { problemStatement }));
-            Assert.Equal("OllamaBaseUrl is not configured.", exception.Message);
+            Assert.Equal("No AI provider configured. Set GeminiApiKey or OllamaBaseUrl.", exception.Message);
         }
 
         [Theory]
@@ -351,7 +351,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
                 () => _storyService.GenerateAiStories(new List<string> { problemStatement }));
-            Assert.Equal("OllamaBaseUrl is not configured.", exception.Message);
+            Assert.Equal("No AI provider configured. Set GeminiApiKey or OllamaBaseUrl.", exception.Message);
         }
 
         [Fact]

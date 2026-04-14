@@ -13,8 +13,27 @@ namespace ScrumPilot.Data.Extensions
         public static IServiceCollection AddDataServices(this IServiceCollection services, IConfiguration configuration)
         {
             // Add Entity Framework
+            // Render provides DATABASE_URL as a postgres:// URI — convert to Npgsql connection string
+            // For local dev, use SQLite via appsettings.json
+            var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
             services.AddDbContext<ScrumPilotContext>(options =>
-                options.UseSqlite(configuration.GetConnectionString("DefaultConnection")));
+            {
+                if (!string.IsNullOrEmpty(databaseUrl))
+                {
+                    var uri = new Uri(databaseUrl);
+                    var userInfo = uri.UserInfo.Split(':');
+                    var port = uri.Port > 0 ? uri.Port : 5432;
+                    var npgsqlConn = $"Host={uri.Host};Port={port};Database={uri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true";
+                    options.UseNpgsql(npgsqlConn);
+                }
+                else
+                {
+                    options.UseSqlite(configuration.GetConnectionString("DefaultConnection"));
+                }
+                // Suppress pending model changes warning — the value converter change is schema-identical
+                // to the previous OwnsMany.ToJson() approach (both use a TEXT column).
+                options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
+            });
 
             // Add ASP.NET Core Identity backed by EF Core / SQLite
             services.AddIdentityCore<ApplicationUser>(options =>
