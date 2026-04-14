@@ -257,7 +257,7 @@ private void BuildFilterOptions()
         await LoadStoriesAsync(showLoading: false);
     }
 
-    private async Task HandleStorySave(ProductBacklogItem story)
+        private async Task HandleStorySave(ProductBacklogItem story)
     {
         try
         {
@@ -274,16 +274,9 @@ private void BuildFilterOptions()
         }
     }
 
-<<<<<<< HEAD
-}
-=======
-        private async Task HandleStoryDelete(int storyId)
+    private async Task HandleStoryDelete(int storyId)
     {
         SelectedStory = null;
         await LoadStoriesAsync(showLoading: false);
     }
-
 }
-
-}
->>>>>>> development
