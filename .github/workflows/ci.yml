@@ -52,3 +52,9 @@ jobs:
           name: published-artifacts
           path: ./publish/
 
+      - name: Docker build check (API)
+        run: docker build -t scrumpilot-api:ci-check -f ScrumPilot.API/Dockerfile .
+
+      - name: Docker build check (Web)
+        run: docker build -t scrumpilot-web:ci-check -f ScrumPilot.Web/Dockerfile .
+
