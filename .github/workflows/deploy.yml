@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - development
+      - feature/109-containerize-docker
   workflow_dispatch:
 
 jobs:
