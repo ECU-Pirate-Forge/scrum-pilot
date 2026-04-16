@@ -21,39 +21,39 @@
 
         <MudContainer MaxWidth="MaxWidth.False" Class="pa-0">
 
-<MudStack Row="true" Spacing="2" Class="mb-4">
-    <MudSelect T="int?"
-               Label="Sprint"
-               Value="@SelectedSprintId"
-               ValueChanged="@(async (int? value) => await OnSprintChanged(value))"
-               Variant="Variant.Outlined"
-               Dense="true"
-               Style="min-width: 220px;">
+            <MudStack Row="true" Spacing="2" Class="mb-4">
+                <MudSelect T="int?"
+                           Label="Sprint"
+                           Value="@SelectedSprintId"
+                           ValueChanged="@(async (int? value) => await OnSprintChanged(value))"
+                           Variant="Variant.Outlined"
+                           Dense="true"
+                           Style="min-width: 220px;">
 
-        <MudSelectItem T="int?" Value="@((int?)null)">All</MudSelectItem>
+                    <MudSelectItem T="int?" Value="@((int?)null)">All</MudSelectItem>
 
-        @foreach (var sprint in SprintOptions)
-        {
-            <MudSelectItem T="int?" Value="@sprint">Sprint @sprint</MudSelectItem>
-        }
-    </MudSelect>
+                    @foreach (var sprint in SprintOptions)
+                    {
+                        <MudSelectItem T="int?" Value="@sprint">Sprint @sprint</MudSelectItem>
+                    }
+                </MudSelect>
 
-    <MudSelect T="int?"
-               Label="Epic"
-               Value="@SelectedEpicId"
-               ValueChanged="@(async (int? value) => await OnEpicChanged(value))"
-               Variant="Variant.Outlined"
-               Dense="true"
-               Style="min-width: 220px;">
+                <MudSelect T="int?"
+                           Label="Epic"
+                           Value="@SelectedEpicId"
+                           ValueChanged="@(async (int? value) => await OnEpicChanged(value))"
+                           Variant="Variant.Outlined"
+                           Dense="true"
+                           Style="min-width: 220px;">
 
-        <MudSelectItem T="int?" Value="@((int?)null)">All</MudSelectItem>
+                    <MudSelectItem T="int?" Value="@((int?)null)">All</MudSelectItem>
 
-        @foreach (var epic in EpicOptions)
-        {
-            <MudSelectItem T="int?" Value="@epic">Epic @epic</MudSelectItem>
-        }
-    </MudSelect>
-</MudStack>
+                    @foreach (var epic in EpicOptions)
+                    {
+                        <MudSelectItem T="int?" Value="@epic">Epic @epic</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudStack>
 
             @if (!FilteredItems.Any())
             {
@@ -61,12 +61,10 @@
                     No stories match the selected filters.
                 </MudAlert>
             }
-            else
-            {
-                <SwimLanes Items="@FilteredItems"
-                           OnItemDropped="OnItemDropped"
-                           OnStorySelected="OpenStoryDetails" />
-            }
+
+            <SwimLanes Items="@FilteredItems"
+                       OnItemDropped="OnItemDropped"
+                       OnStorySelected="OpenStoryDetails" />
         </MudContainer>
 
         @* Story Details Modal *@
@@ -114,10 +112,10 @@
     private string _moveStoryErrorMessage = string.Empty;
 
     protected override async Task OnInitializedAsync()
-{
-    await LoadStoriesAsync();
-    ApplyFilters();
-}
+    {
+        await LoadStoriesAsync();
+        ApplyFilters();
+    }
 
     private async Task LoadStoriesAsync(bool showLoading = true)
     {
@@ -150,50 +148,50 @@
 
 
     private Task OnSprintChanged(int? value)
-{
-    SelectedSprintId = value;
-    ApplyFilters();
-    return Task.CompletedTask;
-}
+    {
+        SelectedSprintId = value;
+        ApplyFilters();
+        return Task.CompletedTask;
+    }
 
-private Task OnEpicChanged(int? value)
-{
-    SelectedEpicId = value;
-    ApplyFilters();
-    return Task.CompletedTask;
-}
-private void BuildFilterOptions()
-{
-    SprintOptions = Items
-        .Select(i => i.SprintId)
-        .Where(id => id.HasValue)
-        .Distinct()
-        .OrderBy(id => id)
-        .ToList();
+    private Task OnEpicChanged(int? value)
+    {
+        SelectedEpicId = value;
+        ApplyFilters();
+        return Task.CompletedTask;
+    }
+    private void BuildFilterOptions()
+    {
+        SprintOptions = Items
+            .Select(i => i.SprintId)
+            .Where(id => id.HasValue)
+            .Distinct()
+            .OrderBy(id => id)
+            .ToList();
 
-    EpicOptions = Items
-        .Select(i => i.EpicId)
-        .Where(id => id.HasValue)
-        .Distinct()
-        .OrderBy(id => id)
-        .ToList();
-}
+        EpicOptions = Items
+            .Select(i => i.EpicId)
+            .Where(id => id.HasValue)
+            .Distinct()
+            .OrderBy(id => id)
+            .ToList();
+    }
     private void ApplyFilters()
-{
-    IEnumerable<ProductBacklogItem> query = Items;
-
-    if (SelectedSprintId.HasValue)
     {
-        query = query.Where(item => item.SprintId == SelectedSprintId);
-    }
+        IEnumerable<ProductBacklogItem> query = Items;
 
-    if (SelectedEpicId.HasValue)
-    {
-        query = query.Where(item => item.EpicId == SelectedEpicId);
-    }
+        if (SelectedSprintId.HasValue)
+        {
+            query = query.Where(item => item.SprintId == SelectedSprintId);
+        }
 
-    FilteredItems = query.ToList();
-}
+        if (SelectedEpicId.HasValue)
+        {
+            query = query.Where(item => item.EpicId == SelectedEpicId);
+        }
+
+        FilteredItems = query.ToList();
+    }
 
    
     private async Task OnItemDropped(MudItemDropInfo<ProductBacklogItem> dropInfo)
@@ -257,7 +255,7 @@ private void BuildFilterOptions()
         await LoadStoriesAsync(showLoading: false);
     }
 
-        private async Task HandleStorySave(ProductBacklogItem story)
+    private async Task HandleStorySave(ProductBacklogItem story)
     {
         try
         {
