@@ -314,7 +314,7 @@ async function transcribeMultiTrack(guild, userRecordings, timestamp, recapChann
   fs.writeFileSync(markdownPath, markdownContent);
  
   await recapChannel.send({
-    content: `📋 Meeting recap from ${dateString}`,
+    content: `📋 Meeting recap from ${dateString} [${voiceChannel.parent?.name || 'uncategorized'}]`,
     files: [markdownPath]
   });
  

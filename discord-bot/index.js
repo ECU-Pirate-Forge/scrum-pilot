@@ -9,9 +9,15 @@ const cron = require('node-cron');
 const {
   runSummarizer,
   CHAT_SUMMARY_CRON,
+  SPRINT_SUMMARY_CRON,
   summarizeChannel,
   fetchMessagesInRange,
   formatMessagesToJson,
+  handleSprintCommand,
+  runSprintSummary,
+  runAllSprintSummaries,
+  SPRINT_SCHEDULE,
+  getTeamNames,
 } = require('./chat-summarizer');
 
 const client = new Client({
@@ -109,6 +115,27 @@ client.once(Events.ClientReady, (readyClient) => {
     );
   });
   console.log(`[ChatSummarizer] Scheduled daily at: ${CHAT_SUMMARY_CRON}`);
+
+  cron.schedule(SPRINT_SUMMARY_CRON, async () => {
+    try {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const dateStr = yesterday.toISOString().slice(0, 10);
+      const sprint = SPRINT_SCHEDULE.find(s => s.end === dateStr);
+      if (!sprint) return;
+
+      console.log(`[SprintSummarizer] Sprint end detected: ${sprint.name} — running summaries.`);
+      const guild = client.guilds.cache.first();
+      const teams = getTeamNames(guild);
+      for (const team of teams) {
+        await runSprintSummary(guild, sprint.start, sprint.end, team);
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    } catch (err) {
+      console.error('[SprintSummarizer] Cron error:', err);
+    }
+  });
+  console.log(`[SprintSummarizer] Scheduled sprint end check at: ${SPRINT_SUMMARY_CRON}`);
 });
 
 client.on(Events.VoiceStateUpdate, (oldState, newState) => {
@@ -119,6 +146,8 @@ client.on(Events.VoiceStateUpdate, (oldState, newState) => {
 client.on(Events.MessageCreate, async (message) => {
   // Ignore messages from bots (including itself)
   if (message.author.bot) return;
+
+  if (await handleSprintCommand(message)) return;
 
   const isCommand = message.content.startsWith('!');
   if (!isCommand) return;
