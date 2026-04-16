@@ -8,7 +8,7 @@
         <MudStack Row Spacing="3" Class="mud-width-full" Style="height: 100%; flex: 1;">
             @foreach (var lane in _lanes)
             {
-                <MudPaper Class="@($"kanban-column {lane.CssClass}")" Elevation="2"
+                <MudPaper Class="@($"swimlane-column {lane.CssClass}")" Elevation="2"
                           Style="@GetPaperStyle(lane)">
                     <MudStack Row AlignItems="AlignItems.Center" Class="column-header"
                               Style="@GetHeaderStyle(lane)">
@@ -19,7 +19,7 @@
                             @lane.Count(Items)
                         </MudChip>
                     </MudStack>
-                    <MudDropZone T="ProductBacklogItem" Identifier="@lane.Identifier" Class="kanban-dropzone"
+                    <MudDropZone T="ProductBacklogItem" Identifier="@lane.Identifier" Class="swimlane-dropzone"
                                  Style="min-height: 500px; height: 100%; width: 100%; flex: 1; display: flex; flex-direction: column; gap: 16px;" />
                 </MudPaper>
             }
@@ -27,7 +27,7 @@
     </ChildContent>
 
     <ItemRenderer>
-        <div class="kanban-card-wrapper">
+        <div class="swimlane-card-wrapper">
             <MudCard Elevation="8" Style="@GetCardStyle(context)">
                 <div class="card-priority-stripe @GetPriorityClass(context)"></div>
 
@@ -53,7 +53,7 @@
                             <MudButton Variant="Variant.Text"
                                        Size="Size.Small"
                                        StartIcon="@Icons.Material.Filled.Visibility"
-                                       OnClick="@(() => OnStorySelected.InvokeAsync(context))"
+                                       OnClick="@(() => OnPbiSelected.InvokeAsync(context))"
                                        Style="min-height: 24px; padding: 4px 8px;">
                                 View Details
                             </MudButton>
@@ -83,7 +83,7 @@
 
                         <MudAvatar Size="Size.Small" Color="Color.Info">
                             <MudText Typo="Typo.caption">
-                                @GetStoryInitials(context)
+                                @GetPbiInitials(context)
                             </MudText>
                         </MudAvatar>
                     </MudStack>
@@ -97,7 +97,7 @@
     [Parameter] public List<ProductBacklogItem> Items { get; set; } = new();
     [Parameter] public bool GroupByPriority { get; set; }
     [Parameter] public EventCallback<MudItemDropInfo<ProductBacklogItem>> OnItemDropped { get; set; }
-    [Parameter] public EventCallback<ProductBacklogItem> OnStorySelected { get; set; }
+    [Parameter] public EventCallback<ProductBacklogItem> OnPbiSelected { get; set; }
 
     private MudDropContainer<ProductBacklogItem>? _dropContainer;
     private bool _needsRefresh;
@@ -226,7 +226,7 @@
         _ => Color.Default
     };
 
-    private static string GetStoryInitials(ProductBacklogItem story) => story.Origin switch
+    private static string GetPbiInitials(ProductBacklogItem story) => story.Origin switch
     {
         PbiOrigin.AiGenerated => "AI",
         PbiOrigin.BotGenerated => "BT",

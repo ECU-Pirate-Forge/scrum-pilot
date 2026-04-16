@@ -42,8 +42,8 @@ builder.Services.AddAuthorizationBuilder()
         .Build());
 
 // Add services to the container.
-builder.Services.AddScoped<IStoryService, StoryService>();
-builder.Services.AddHttpClient<StoryService>(client =>
+builder.Services.AddScoped<IPbiService, PbiService>();
+builder.Services.AddHttpClient<PbiService>(client =>
 {
     client.Timeout = TimeSpan.FromMinutes(5);
 });

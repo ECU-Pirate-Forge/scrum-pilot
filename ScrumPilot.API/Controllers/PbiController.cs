@@ -6,46 +6,46 @@ namespace ScrumPilot.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class StoryController : ControllerBase
+    public class PbiController : ControllerBase
     {
-        private readonly IStoryService _storyService;
+        private readonly IPbiService _pbiService;
 
-        public StoryController(IStoryService storyService)
+        public PbiController(IPbiService pbiService)
         {
-            _storyService = storyService;
+            _pbiService = pbiService;
         }
 
 
-        [HttpGet("getAllStories")]
-        public async Task<ActionResult<IEnumerable<ProductBacklogItem>>> GetAllStories()
+        [HttpGet("getAllPbis")]
+        public async Task<ActionResult<IEnumerable<ProductBacklogItem>>> GetAllPbis()
         {
-            var stories = await _storyService.GetAllStoriesAsync();
-            return Ok(stories);
+            var pbis = await _pbiService.GetAllPbisAsync();
+            return Ok(pbis);
         }
 
-        //[HttpGet("getActiveStories")]
-        //public async Task<ActionResult<IEnumerable<Story>>> GetActiveStories(int epicId)
+        //[HttpGet("getActivePbis")]
+        //public async Task<ActionResult<IEnumerable<ProductBacklogItem>>> GetActivePbis(int epicId)
         //{
-        //    var stories = await _storyService.GetActiveStoriesAsync(epicId);
-        //    return Ok(stories);
+        //    var pbis = await _pbiService.GetActivePbisAsync(epicId);
+        //    return Ok(pbis);
         //}
 
-        [HttpGet("getNonDraftStories")]
-        public async Task<ActionResult<IEnumerable<ProductBacklogItem>>> GetNonDraftStories()
+        [HttpGet("getNonDraftPbis")]
+        public async Task<ActionResult<IEnumerable<ProductBacklogItem>>> GetNonDraftPbis()
         {
-            var stories = await _storyService.GetNonDraftStoriesAsync();
-            return Ok(stories);
+            var pbis = await _pbiService.GetNonDraftPbisAsync();
+            return Ok(pbis);
         }
 
-        [HttpGet("getDraftStories")]
-        public async Task<ActionResult<IEnumerable<ProductBacklogItem>>> GetDraftStories()
+        [HttpGet("getDraftPbis")]
+        public async Task<ActionResult<IEnumerable<ProductBacklogItem>>> GetDraftPbis()
         {
-            var draftStories = await _storyService.GetDraftStoriesAsync();
-            return Ok(draftStories);
+            var draftPbis = await _pbiService.GetDraftPbisAsync();
+            return Ok(draftPbis);
         }
 
-        [HttpPost("generateAiStories")]
-        public async Task<ActionResult<List<ProductBacklogItem>>> GenerateAiStories([FromBody] List<string> problemStatements)
+        [HttpPost("generateAiPbis")]
+        public async Task<ActionResult<List<ProductBacklogItem>>> GenerateAiPbis([FromBody] List<string> problemStatements)
         {
             if (problemStatements == null || problemStatements.Count == 0)
             {
@@ -59,9 +59,9 @@ namespace ScrumPilot.API.Controllers
 
             try
             {
-                var story = await _storyService.GenerateAiStories(problemStatements);
+                var pbi = await _pbiService.GenerateAiPbis(problemStatements);
 
-                return Ok(story);
+                return Ok(pbi);
             }
 
             catch (InvalidOperationException ex)
@@ -83,18 +83,18 @@ namespace ScrumPilot.API.Controllers
         }
 
         [HttpPost("createStory")]
-        public async Task<ActionResult<ProductBacklogItem>> CreateStory([FromBody] ProductBacklogItem story)
+        public async Task<ActionResult<ProductBacklogItem>> CreatePbi([FromBody] ProductBacklogItem pbi)
         {
-            var created = await _storyService.CreateStoryAsync(story);
+            var created = await _pbiService.CreatePbiAsync(pbi);
             return Ok(created);
         }
 
-        [HttpPost("commitStory")]
-        public async Task<ActionResult<ProductBacklogItem>> CommitStory([FromBody] ProductBacklogItem story)
+        [HttpPost("commitPbi")]
+        public async Task<ActionResult<ProductBacklogItem>> CommitPbi([FromBody] ProductBacklogItem pbi)
         {
             try
             {
-                var committed = await _storyService.CommitStoryAsync(story);
+                var committed = await _pbiService.CommitPbiAsync(pbi);
                 return Ok(committed);
             }
             catch (KeyNotFoundException ex)
@@ -107,42 +107,42 @@ namespace ScrumPilot.API.Controllers
         public async Task<ActionResult<List<ProductBacklogItem>>> CreateStories([FromBody] List<ProductBacklogItem> stories)
         {
             var created = new List<ProductBacklogItem>();
-            foreach (var story in stories)
+            foreach (var pbi in stories)
             {
-                created.Add(await _storyService.CreateStoryAsync(story));
+                created.Add(await _pbiService.CreatePbiAsync(pbi));
             }
             return Ok(created);
         }
 
-        [HttpPost("createDraftStory")]
-        public async Task<ActionResult<ProductBacklogItem>> CreateDraftStory([FromBody] ProductBacklogItem story)
+        [HttpPost("createDraftPbi")]
+        public async Task<ActionResult<ProductBacklogItem>> CreateDraftPbi([FromBody] ProductBacklogItem pbi)
         {
-            var created = await _storyService.CreateDraftStoryAsync(story);
+            var created = await _pbiService.CreateDraftPbiAsync(pbi);
             return Ok(created);
         }
 
-        [HttpPost("createDraftStories")]
-        public async Task<ActionResult<List<ProductBacklogItem>>> CreateDraftStories([FromBody] List<ProductBacklogItem> stories)
+        [HttpPost("createDraftPbis")]
+        public async Task<ActionResult<List<ProductBacklogItem>>> CreateDraftPbis([FromBody] List<ProductBacklogItem> pbis)
         {
             var created = new List<ProductBacklogItem>();
-            foreach (var story in stories)
+            foreach (var pbi in pbis)
             {
-                created.Add(await _storyService.CreateDraftStoryAsync(story));
+                created.Add(await _pbiService.CreateDraftPbiAsync(pbi));
             }
             return Ok(created);
         }
 
         [HttpPut]
-        public async Task<ActionResult<ProductBacklogItem>> UpdateStory([FromBody] ProductBacklogItem story)
+        public async Task<ActionResult<ProductBacklogItem>> UpdatePbi([FromBody] ProductBacklogItem pbi)
         {
-            var updated = await _storyService.UpdateStoryAsync(story);
+            var updated = await _pbiService.UpdatePbiAsync(pbi);
             return Ok(updated);
         }
 
         [HttpDelete("{id}")]
-        public async Task<ActionResult> DeleteStory(int id)
+        public async Task<ActionResult> DeletePbi(int id)
         {
-            var success = await _storyService.DeleteStoryAsync(id);
+            var success = await _pbiService.DeletePbiAsync(id);
             if (!success) return NotFound();
             return NoContent();
         }

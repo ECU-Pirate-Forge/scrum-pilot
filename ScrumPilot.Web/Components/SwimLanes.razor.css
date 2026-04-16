@@ -1,49 +1,49 @@
-/* SwimLanes - Kanban column and card styles */
+/* SwimLanes - Swimlane column and card styles */
 
 /* Hover effects for Status columns */
-.mud-paper.kanban-column.column-todo:hover {
+.mud-paper.swimlane-column.column-todo:hover {
     transform: translateY(-2px) !important;
     box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.2), 0 8px 24px rgba(220, 38, 38, 0.15) !important;
 }
 
-.mud-paper.kanban-column.column-inprogress:hover {
+.mud-paper.swimlane-column.column-inprogress:hover {
     transform: translateY(-2px) !important;
     box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.2), 0 8px 24px rgba(250, 204, 21, 0.15) !important;
 }
 
-.mud-paper.kanban-column.column-done:hover {
+.mud-paper.swimlane-column.column-done:hover {
     transform: translateY(-2px) !important;
     box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.2), 0 8px 24px rgba(22, 163, 74, 0.15) !important;
 }
 
-.mud-paper.kanban-column.column-inreview:hover {
+.mud-paper.swimlane-column.column-inreview:hover {
     transform: translateY(-2px) !important;
     box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2), 0 8px 24px rgba(59, 130, 246, 0.15) !important;
 }
 
 /* Hover effects for Priority columns */
-.mud-paper.kanban-column.column-high:hover {
+.mud-paper.swimlane-column.column-high:hover {
     transform: translateY(-2px) !important;
     box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.2), 0 8px 24px rgba(220, 38, 38, 0.15) !important;
 }
 
-.mud-paper.kanban-column.column-medium:hover {
+.mud-paper.swimlane-column.column-medium:hover {
     transform: translateY(-2px) !important;
     box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.2), 0 8px 24px rgba(250, 204, 21, 0.15) !important;
 }
 
-.mud-paper.kanban-column.column-low:hover {
+.mud-paper.swimlane-column.column-low:hover {
     transform: translateY(-2px) !important;
     box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.2), 0 8px 24px rgba(22, 163, 74, 0.15) !important;
 }
 
-.mud-paper.kanban-column.column-none:hover {
+.mud-paper.swimlane-column.column-none:hover {
     transform: translateY(-2px) !important;
     box-shadow: 0 0 0 1px rgba(125, 211, 252, 0.2), 0 8px 24px rgba(125, 211, 252, 0.15) !important;
 }
 
-/* Kanban dropzone styling - FULL AREA COVERAGE */
-.kanban-dropzone {
+/* Swimlane dropzone styling - FULL AREA COVERAGE */
+.swimlane-dropzone {
     min-height: 500px !important;
     height: 100% !important;
     padding: 16px !important;
@@ -59,7 +59,7 @@
 }
 
 /* Enhanced dropzone hover state with visual feedback */
-.kanban-dropzone.mud-drop-zone-drag-over {
+.swimlane-dropzone.mud-drop-zone-drag-over {
     background-color: var(--mud-palette-action-hover) !important;
     border: 2px dashed var(--mud-palette-primary) !important;
     border-radius: 8px !important;
@@ -78,7 +78,7 @@
 }
 
 /* Visual feedback for empty drop zones */
-.kanban-dropzone:empty::before {
+.swimlane-dropzone:empty::before {
     content: "Drop cards here" !important;
     display: flex !important;
     align-items: center !important;
@@ -93,7 +93,7 @@
 }
 
 /* Hide the empty message when dragging over */
-.kanban-dropzone.mud-drop-zone-drag-over:empty::before {
+.swimlane-dropzone.mud-drop-zone-drag-over:empty::before {
     content: "Release to drop here" !important;
     opacity: 0.8 !important;
     color: var(--mud-palette-primary) !important;
@@ -102,18 +102,18 @@
 }
 
 /* Card wrapper styling */
-.kanban-card-wrapper {
+.swimlane-card-wrapper {
     width: 100% !important;
     margin-bottom: 16px !important;
     flex-shrink: 0 !important;
 }
 
-.kanban-card-wrapper:last-child {
+.swimlane-card-wrapper:last-child {
     margin-bottom: 0 !important;
 }
 
 /* Card hover effects */
-.kanban-card-wrapper:hover .mud-card {
+.swimlane-card-wrapper:hover .mud-card {
     transform: translateY(-2px) !important;
     transition: all 0.3s ease !important;
 }
@@ -142,7 +142,7 @@
 }
 
 /* Dragging state */
-.kanban-card-wrapper.mud-dragging {
+.swimlane-card-wrapper.mud-dragging {
     transform: rotate(2deg) scale(1.02) !important;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25) !important;
     z-index: 1000 !important;
@@ -150,10 +150,10 @@
 }
 
 /* Improve dragging cursor */
-.kanban-card-wrapper[draggable="true"] {
+.swimlane-card-wrapper[draggable="true"] {
     cursor: grab !important;
 }
 
-.kanban-card-wrapper[draggable="true"]:active {
+.swimlane-card-wrapper[draggable="true"]:active {
     cursor: grabbing !important;
 }

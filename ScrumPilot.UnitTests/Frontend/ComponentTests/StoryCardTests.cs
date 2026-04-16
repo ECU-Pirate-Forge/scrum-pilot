@@ -1,4 +1,4 @@
-﻿using Bunit;
+using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using MudBlazor.Services;
 using ScrumPilot.Shared.Models;
@@ -7,19 +7,19 @@ using Xunit;
 
 namespace ScrumPilot.UnitTests.Frontend.ComponentTests
 {
-    public class StoryCardTests : FrontendTestBase
+    public class PbiCardTests : FrontendTestBase
     {
-        public StoryCardTests()
+        public PbiCardTests()
         {
             // Base class handles MudServices and JSInterop setup
         }
 
-        private ProductBacklogItem CreateTestStory()
+        private ProductBacklogItem CreateTestPbi()
         {
             return new ProductBacklogItem
             {
                 PbiId = 1,
-                Title = "Test Story",
+                Title = "Test pbi",
                 Description = "Test Description",
                 Status = PbiStatus.ToDo,
                 Priority = PbiPriority.Medium,
@@ -29,44 +29,44 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
         }
 
         [Fact]
-        public void StoryCard_RendersWithValidStory()
+        public void PbiCard_RendersWithValidPbi()
         {
             // Arrange
-            var story = CreateTestStory();
+            var pbi = CreateTestPbi();
 
             // Act
-            var component = Render<StoryCard>(parameters => parameters
-                .Add(p => p.StoryModel, story));
+            var component = Render<PbiCard>(parameters => parameters
+                .Add(p => p.PbiModel, pbi));
 
             // Assert - Focus on content rendering, not interactive elements
-            Assert.Contains("Test Story", component.Markup);
+            Assert.Contains("Test pbi", component.Markup);
             Assert.Contains("Test Description", component.Markup);
             Assert.Contains("mud-paper", component.Markup);
         }
 
         [Fact]
-        public void StoryCard_HasEditButton()
+        public void PbiCard_HasEditButton()
         {
             // Arrange
-            var story = CreateTestStory();
+            var pbi = CreateTestPbi();
 
             // Act
-            var component = Render<StoryCard>(parameters => parameters
-                .Add(p => p.StoryModel, story));
+            var component = Render<PbiCard>(parameters => parameters
+                .Add(p => p.PbiModel, pbi));
 
             // Assert - Check for edit functionality
             Assert.Contains("Edit", component.Markup);
         }
 
         [Fact]
-        public void StoryCard_HasCorrectContainerStructure()
+        public void PbiCard_HasCorrectContainerStructure()
         {
             // Arrange
-            var story = CreateTestStory();
+            var pbi = CreateTestPbi();
 
             // Act
-            var component = Render<StoryCard>(parameters => parameters
-                .Add(p => p.StoryModel, story));
+            var component = Render<PbiCard>(parameters => parameters
+                .Add(p => p.PbiModel, pbi));
 
             // Assert
             Assert.Contains("mud-container", component.Markup);

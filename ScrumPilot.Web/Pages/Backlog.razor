@@ -1,7 +1,7 @@
 @page "/backlog"
 @inject HttpClient Http
 
-<div class="kanban-page">
+<div class="swimlane-page">
 
     @if (_loading)
     {
@@ -23,30 +23,30 @@
             <SwimLanes Items="@Items"
                        GroupByPriority
                        OnItemDropped="OnItemDropped"
-                       OnStorySelected="OpenStoryDetails" />
+                       OnPbiSelected="OpenPbiDetails" />
         </MudContainer>
 
-        @* Story Details Modal *@
-        @if (SelectedStory is not null)
+        @* PBI Details Modal *@
+        @if (SelectedPbi is not null)
         {
             <div class="details-overlay">
                 <div class="details-container">
                     <div class="details-header">
                         <MudText Typo="Typo.h5" Class="details-title">
                             <MudIcon Icon="@Icons.Material.Filled.Visibility" Class="me-2" />
-                            Story Details
+                            PBI Details
                         </MudText>
                         <MudButton Variant="Variant.Text"
                                    Color="Color.Secondary"
                                    StartIcon="@Icons.Material.Filled.Close"
-                                   OnClick="CloseStoryDetails"
+                                   OnClick="ClosePbiDetails"
                                    Class="close-button">
                             Close
                         </MudButton>
                     </div>
 
                     <div class="details-content">
-                        <StoryCard StoryModel="SelectedStory" OnSave="HandleStorySave" OnDelete="HandleStoryDelete" />
+                        <PbiCard PbiModel="SelectedPbi" OnSave="HandlePbiSave" OnDelete="HandlePbiDelete" />
                     </div>
                 </div>
             </div>
@@ -58,15 +58,15 @@
 
     private List<ProductBacklogItem> Items = new();
     private bool _loading = true;
-    private ProductBacklogItem? SelectedStory;
+    private ProductBacklogItem? SelectedPbi;
     private string _errorMessage = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadStoriesAsync();
+        await LoadPbisAsync();
     }
 
-    private async Task LoadStoriesAsync(bool showLoading = true)
+    private async Task LoadPbisAsync(bool showLoading = true)
     {
         if (showLoading)
         {
@@ -76,15 +76,15 @@
 
         try
         {
-            var stories = await Http.GetFromJsonAsync<List<ProductBacklogItem>>("api/story/GetNonDraftStories");
-            if (stories is not null)
+            var pbis = await Http.GetFromJsonAsync<List<ProductBacklogItem>>("api/Pbi/GetNonDraftPBIs");
+            if (pbis is not null)
             {
-                Items = stories;
+                Items = pbis;
             }
         }
         catch
         {
-            _errorMessage = "Unable to load stories from the server.";
+            _errorMessage = "Unable to load pbis from the server.";
         }
         finally
         {
@@ -119,7 +119,7 @@
         {
             dropInfo.Item.LastUpdated = DateTime.UtcNow;
 
-            var response = await Http.PutAsJsonAsync("api/story", dropInfo.Item);
+            var response = await Http.PutAsJsonAsync("api/Pbi", dropInfo.Item);
             if (!response.IsSuccessStatusCode)
             {
                 throw new HttpRequestException($"Priority update failed with code {(int)response.StatusCode}.");
@@ -143,26 +143,26 @@
         }
     }
 
-    private void OpenStoryDetails(ProductBacklogItem story)
+    private void OpenPbiDetails(ProductBacklogItem story)
     {
-        SelectedStory = story;
+        SelectedPbi = story;
     }
 
-    private async Task CloseStoryDetails()
+    private async Task ClosePbiDetails()
     {
-        SelectedStory = null;
-        await LoadStoriesAsync(showLoading: false);
+        SelectedPbi = null;
+        await LoadPbisAsync(showLoading: false);
     }
 
-    private async Task HandleStorySave(ProductBacklogItem story)
+    private async Task HandlePbiSave(ProductBacklogItem pbi)
     {
         try
         {
-            var response = await Http.PutAsJsonAsync("api/story", story);
+            var response = await Http.PutAsJsonAsync("api/Pbi", pbi);
             if (response.IsSuccessStatusCode)
             {
-                SelectedStory = null;
-                await LoadStoriesAsync(showLoading: false);
+                SelectedPbi = null;
+                await LoadPbisAsync(showLoading: false);
             }
         }
         catch (Exception ex)
@@ -171,10 +171,10 @@
         }
     }
 
-    private async Task HandleStoryDelete(int storyId)
+    private async Task HandlePbiDelete(int storyId)
     {
-        SelectedStory = null;
-        await LoadStoriesAsync(showLoading: false);
+        SelectedPbi = null;
+        await LoadPbisAsync(showLoading: false);
     }
 
 }
