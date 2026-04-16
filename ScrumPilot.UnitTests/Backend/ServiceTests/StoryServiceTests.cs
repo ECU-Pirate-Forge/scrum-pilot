@@ -624,5 +624,65 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             var httpClient = new HttpClient(handler);
             return new PbiService(httpClient, _mockConfiguration, _mockRepository);
         }
+
+        [Fact]
+        public async Task GetFilteredPbisAsync_ReturnsFilteredPbisFromRepository()
+        {
+            // Arrange
+            var expectedPbis = new List<ProductBacklogItem>
+            {
+                new ProductBacklogItem { PbiId = 1, Title = "Filtered PBI", SprintId = 1, EpicId = 2 }
+            };
+            _mockRepository.GetFilteredPbisAsync(1, 2).Returns(expectedPbis);
+
+            // Act
+            var result = await _pbiService.GetFilteredPbisAsync(1, 2);
+
+            // Assert
+            var actualPbis = result.ToList();
+            Assert.Single(actualPbis);
+            Assert.Equal(expectedPbis, actualPbis);
+            await _mockRepository.Received(1).GetFilteredPbisAsync(1, 2);
+        }
+
+        [Fact]
+        public async Task GetFilteredPbisAsync_WithSprintIdOnly_CallsRepositoryCorrectly()
+        {
+            // Arrange
+            _mockRepository.GetFilteredPbisAsync(1, null).Returns(new List<ProductBacklogItem>());
+
+            // Act
+            await _pbiService.GetFilteredPbisAsync(1, null);
+
+            // Assert
+            await _mockRepository.Received(1).GetFilteredPbisAsync(1, null);
+        }
+
+        [Fact]
+        public async Task GetFilteredPbisAsync_WithEpicIdOnly_CallsRepositoryCorrectly()
+        {
+            // Arrange
+            _mockRepository.GetFilteredPbisAsync(null, 2).Returns(new List<ProductBacklogItem>());
+
+            // Act
+            await _pbiService.GetFilteredPbisAsync(null, 2);
+
+            // Assert
+            await _mockRepository.Received(1).GetFilteredPbisAsync(null, 2);
+        }
+
+        [Fact]
+        public async Task GetFilteredPbisAsync_ReturnsEmptyList_WhenNoMatch()
+        {
+            // Arrange
+            _mockRepository.GetFilteredPbisAsync(99, 99).Returns(new List<ProductBacklogItem>());
+
+            // Act
+            var result = await _pbiService.GetFilteredPbisAsync(99, 99);
+
+            // Assert
+            Assert.Empty(result);
+            await _mockRepository.Received(1).GetFilteredPbisAsync(99, 99);
+        }
     }
 }

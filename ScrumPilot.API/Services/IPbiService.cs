@@ -14,6 +14,7 @@ namespace ScrumPilot.API.Services
         Task<IEnumerable<ProductBacklogItem>> GetAllPbisAsync();
         Task<IEnumerable<ProductBacklogItem>> GetDraftPbisAsync();
         Task<IEnumerable<ProductBacklogItem>> GetNonDraftPbisAsync();
+        Task<IEnumerable<ProductBacklogItem>> GetFilteredPbisAsync(int? sprintId, int? epicId);
         Task<ProductBacklogItem> UpdatePbiAsync(ProductBacklogItem pbi);
     }
 }

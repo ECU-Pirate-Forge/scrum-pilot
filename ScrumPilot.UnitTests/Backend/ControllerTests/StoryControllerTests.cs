@@ -487,5 +487,108 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             Assert.IsType<NotFoundResult>(result);
             await _mockPbiService.Received(1).DeletePbiAsync(pbiId);
         }
+
+        [Fact]
+        public async Task GetNonDraftPbis_NoFilters_ReturnsAllNonDraftPbis()
+        {
+            // Arrange
+            var expectedPbis = new List<ProductBacklogItem>
+            {
+                new ProductBacklogItem { PbiId = 1, Title = "PBI 1", IsDraft = false },
+                new ProductBacklogItem { PbiId = 2, Title = "PBI 2", IsDraft = false }
+            };
+            _mockPbiService.GetNonDraftPbisAsync().Returns(expectedPbis);
+
+            // Act
+            var result = await _controller.GetNonDraftPbis(null, null);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result.Result);
+            var actualPbis = Assert.IsType<List<ProductBacklogItem>>(okResult.Value);
+            Assert.Equal(2, actualPbis.Count);
+            await _mockPbiService.Received(1).GetNonDraftPbisAsync();
+            await _mockPbiService.DidNotReceive().GetFilteredPbisAsync(Arg.Any<int?>(), Arg.Any<int?>());
+        }
+
+        [Fact]
+        public async Task GetNonDraftPbis_WithSprintId_ReturnsFilteredPbis()
+        {
+            // Arrange
+            var expectedPbis = new List<ProductBacklogItem>
+            {
+                new ProductBacklogItem { PbiId = 1, Title = "PBI 1", SprintId = 1 }
+            };
+            _mockPbiService.GetFilteredPbisAsync(1, null).Returns(expectedPbis);
+
+            // Act
+            var result = await _controller.GetNonDraftPbis(1, null);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result.Result);
+            var actualPbis = Assert.IsType<List<ProductBacklogItem>>(okResult.Value);
+            Assert.Single(actualPbis);
+            await _mockPbiService.Received(1).GetFilteredPbisAsync(1, null);
+            await _mockPbiService.DidNotReceive().GetNonDraftPbisAsync();
+        }
+
+        [Fact]
+        public async Task GetNonDraftPbis_WithEpicId_ReturnsFilteredPbis()
+        {
+            // Arrange
+            var expectedPbis = new List<ProductBacklogItem>
+            {
+                new ProductBacklogItem { PbiId = 1, Title = "PBI 1", EpicId = 2 }
+            };
+            _mockPbiService.GetFilteredPbisAsync(null, 2).Returns(expectedPbis);
+
+            // Act
+            var result = await _controller.GetNonDraftPbis(null, 2);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result.Result);
+            var actualPbis = Assert.IsType<List<ProductBacklogItem>>(okResult.Value);
+            Assert.Single(actualPbis);
+            await _mockPbiService.Received(1).GetFilteredPbisAsync(null, 2);
+            await _mockPbiService.DidNotReceive().GetNonDraftPbisAsync();
+        }
+
+        [Fact]
+        public async Task GetNonDraftPbis_WithBothFilters_ReturnsAndFilteredPbis()
+        {
+            // Arrange
+            var expectedPbis = new List<ProductBacklogItem>
+            {
+                new ProductBacklogItem { PbiId = 1, Title = "PBI 1", SprintId = 1, EpicId = 2 }
+            };
+            _mockPbiService.GetFilteredPbisAsync(1, 2).Returns(expectedPbis);
+
+            // Act
+            var result = await _controller.GetNonDraftPbis(1, 2);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result.Result);
+            var actualPbis = Assert.IsType<List<ProductBacklogItem>>(okResult.Value);
+            Assert.Single(actualPbis);
+            Assert.Equal(1, actualPbis[0].SprintId);
+            Assert.Equal(2, actualPbis[0].EpicId);
+            await _mockPbiService.Received(1).GetFilteredPbisAsync(1, 2);
+        }
+
+        [Fact]
+        public async Task GetNonDraftPbis_WithFilters_ReturnsEmptyList_WhenNoMatch()
+        {
+            // Arrange
+            var expectedPbis = new List<ProductBacklogItem>();
+            _mockPbiService.GetFilteredPbisAsync(99, 99).Returns(expectedPbis);
+
+            // Act
+            var result = await _controller.GetNonDraftPbis(99, 99);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result.Result);
+            var actualPbis = Assert.IsType<List<ProductBacklogItem>>(okResult.Value);
+            Assert.Empty(actualPbis);
+            await _mockPbiService.Received(1).GetFilteredPbisAsync(99, 99);
+        }
     }
 }
