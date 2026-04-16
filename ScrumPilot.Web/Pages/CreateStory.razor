@@ -1,0 +1,332 @@
+@page "/create-story"
+@using MudBlazor
+@using ScrumPilot.Shared.Models
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Create Story</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.False" Class="cs-page">
+
+    @* ── Page Header ── *@
+    <MudPaper Elevation="2" Class="cs-header">
+        <MudStack>
+            <MudText Typo="Typo.h4" Color="Color.Primary">
+                <MudIcon Icon="@Icons.Material.Filled.NoteAdd" Class="me-2" />
+                Create a New Story
+            </MudText>
+            <MudText Typo="Typo.subtitle1">
+                Fill in the fields below to manually create a Product Backlog Item.
+            </MudText>
+        </MudStack>
+    </MudPaper>
+
+    @* ── Form Card ── *@
+    <MudPaper Elevation="2" Class="cs-form-container">
+        <EditForm Model="@_formModel" OnValidSubmit="HandleSubmit">
+            <div class="cs-form-grid">
+
+                @* ── Row 1: Title + Description ── *@
+                <MudTextField T="string"
+                              @bind-Value="_formModel.Title"
+                              Label="Title"
+                              Placeholder="As a… I need… so that…"
+                              Variant="Variant.Outlined"
+                              Lines="3"
+                              Required="true"
+                              RequiredError="Title is required"
+                              id="create-story-title" />
+
+                <MudTextField T="string"
+                              @bind-Value="_formModel.Description"
+                              Label="Description / Background"
+                              Placeholder="Provide context or background for this story"
+                              Variant="Variant.Outlined"
+                              Lines="3"
+                              id="create-story-description" />
+
+                @* ── Row 2: Acceptance Criteria + Assumptions ── *@
+                <div>
+                    <MudText Typo="Typo.subtitle2" Class="cs-section-label">Acceptance Criteria</MudText>
+                    <div class="cs-dynamic-list">
+                        @if (_acceptanceCriteria.Count == 0)
+                        {
+                            <div class="cs-empty-list">No criteria added yet — click "Add" below</div>
+                        }
+                        @for (var i = 0; i < _acceptanceCriteria.Count; i++)
+                        {
+                            var idx = i;
+                            <div class="cs-list-row">
+                                <MudTextField T="string"
+                                              Value="@_acceptanceCriteria[idx]"
+                                              ValueChanged="@(v => _acceptanceCriteria[idx] = v)"
+                                              Placeholder="@($"Criterion {idx + 1}")"
+                                              Variant="Variant.Outlined"
+                                              Margin="Margin.Dense"
+                                              id="@($"ac-row-{idx}")" />
+                                <MudIconButton Icon="@Icons.Material.Filled.RemoveCircleOutline"
+                                               Color="Color.Error"
+                                               Size="Size.Small"
+                                               OnClick="@(() => _acceptanceCriteria.RemoveAt(idx))"
+                                               Title="Remove criterion" />
+                            </div>
+                        }
+                        <div class="cs-add-row">
+                            <MudButton Variant="Variant.Text"
+                                       Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Add"
+                                       Size="Size.Small"
+                                       OnClick="@(() => _acceptanceCriteria.Add(string.Empty))"
+                                       id="add-ac-btn">
+                                Add Criterion
+                            </MudButton>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <MudText Typo="Typo.subtitle2" Class="cs-section-label">Assumptions</MudText>
+                    <div class="cs-dynamic-list">
+                        @if (_assumptions.Count == 0)
+                        {
+                            <div class="cs-empty-list">No assumptions added yet — click "Add" below</div>
+                        }
+                        @for (var i = 0; i < _assumptions.Count; i++)
+                        {
+                            var idx = i;
+                            <div class="cs-list-row">
+                                <MudTextField T="string"
+                                              Value="@_assumptions[idx]"
+                                              ValueChanged="@(v => _assumptions[idx] = v)"
+                                              Placeholder="@($"Assumption {idx + 1}")"
+                                              Variant="Variant.Outlined"
+                                              Margin="Margin.Dense"
+                                              id="@($"assumption-row-{idx}")" />
+                                <MudIconButton Icon="@Icons.Material.Filled.RemoveCircleOutline"
+                                               Color="Color.Error"
+                                               Size="Size.Small"
+                                               OnClick="@(() => _assumptions.RemoveAt(idx))"
+                                               Title="Remove assumption" />
+                            </div>
+                        }
+                        <div class="cs-add-row">
+                            <MudButton Variant="Variant.Text"
+                                       Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Add"
+                                       Size="Size.Small"
+                                       OnClick="@(() => _assumptions.Add(string.Empty))"
+                                       id="add-assumption-btn">
+                                Add Assumption
+                            </MudButton>
+                        </div>
+                    </div>
+                </div>
+
+                @* ── Row 3: Story Points + Priority ── *@
+                <MudSelect T="StoryPoints"
+                           @bind-Value="_formModel.StoryPoints"
+                           Label="Story Points"
+                           Variant="Variant.Outlined"
+                           AnchorOrigin="Origin.BottomCenter"
+                           id="create-story-points">
+                    @foreach (StoryPoints sp in Enum.GetValues(typeof(StoryPoints)))
+                    {
+                        <MudSelectItem T="StoryPoints" Value="@sp">@((int)sp)</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <MudSelect T="StoryPriority"
+                           @bind-Value="_formModel.Priority"
+                           Label="Priority"
+                           Variant="Variant.Outlined"
+                           AnchorOrigin="Origin.BottomCenter"
+                           id="create-story-priority">
+                    @foreach (StoryPriority p in Enum.GetValues(typeof(StoryPriority)))
+                    {
+                        <MudSelectItem T="StoryPriority" Value="@p">@p</MudSelectItem>
+                    }
+                </MudSelect>
+
+                @* ── Row 4: Epic + Sprint (disabled — not yet in model/API) ── *@
+                <div class="cs-coming-soon">
+                    <MudSelect T="string"
+                               Label="Epic"
+                               Variant="Variant.Outlined"
+                               Disabled="true"
+                               Placeholder="Coming soon"
+                               HelperText="Epic support is not yet available"
+                               id="create-story-epic">
+                    </MudSelect>
+                </div>
+
+                <div class="cs-coming-soon">
+                    <MudSelect T="string"
+                               Label="Sprint"
+                               Variant="Variant.Outlined"
+                               Disabled="true"
+                               Placeholder="Coming soon"
+                               HelperText="Sprint support is not yet available"
+                               id="create-story-sprint">
+                    </MudSelect>
+                </div>
+            </div>
+        </EditForm>
+    </MudPaper>
+
+    @* ── Action Buttons ── *@
+    <div class="cs-submit-wrap">
+        <MudButton Class="cs-cancel"
+                   Variant="Variant.Outlined"
+                   Color="Color.Default"
+                   OnClick="HandleCancel"
+                   Disabled="@_isSubmitting"
+                   id="create-story-cancel">
+            Cancel
+        </MudButton>
+
+        <MudButton Class="cs-submit"
+                   Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Save"
+                   OnClick="HandleSubmit"
+                   Disabled="@_isSubmitting"
+                   id="create-story-submit">
+            @if (_isSubmitting)
+            {
+                <MudProgressCircular Color="Color.Default" Size="Size.Small" Indeterminate="true" />
+                <span style="margin-left: 8px;">SAVING…</span>
+            }
+            else
+            {
+                <span>CREATE STORY</span>
+            }
+        </MudButton>
+    </div>
+
+</MudContainer>
+
+@code {
+    // ── Form backing model ──
+    private Story _formModel = new()
+    {
+        Title = string.Empty,
+        Description = string.Empty,
+        Priority = StoryPriority.Medium,
+        StoryPoints = StoryPoints.Zero,
+        Origin = StoryOrigin.WebUserCreated,
+        IsDraft = true,
+        Status = StoryStatus.ToDo
+    };
+
+    // ── Dynamic lists ──
+    private readonly List<string> _acceptanceCriteria = new();
+    private readonly List<string> _assumptions = new();
+
+    private bool _isSubmitting;
+
+    /// <summary>
+    /// Validates the form, builds the Story object, and posts to the API.
+    /// </summary>
+    private async Task HandleSubmit()
+    {
+        // Client-side validation
+        if (string.IsNullOrWhiteSpace(_formModel.Title))
+        {
+            Snackbar.Add("Title is required.", Severity.Warning);
+            return;
+        }
+
+        _isSubmitting = true;
+        StateHasChanged();
+
+        try
+        {
+            // Build structured description
+            _formModel.Description = BuildStructuredDescription();
+            _formModel.Origin = StoryOrigin.WebUserCreated;
+            _formModel.IsDraft = true;
+            _formModel.Status = StoryStatus.ToDo;
+            _formModel.DateCreated = DateTime.UtcNow;
+            _formModel.LastUpdated = DateTime.UtcNow;
+
+            var response = await Http.PostAsJsonAsync("api/story/createStory", _formModel);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Story created successfully!", Severity.Success);
+                Navigation.NavigateTo("/draft-stories");
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"Failed to create story: {error}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"An error occurred: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSubmitting = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Combines Description, Acceptance Criteria, and Assumptions into
+    /// a single structured string for the Story.Description field.
+    /// </summary>
+    private string BuildStructuredDescription()
+    {
+        var sb = new System.Text.StringBuilder();
+
+        // Background / Description
+        if (!string.IsNullOrWhiteSpace(_formModel.Description))
+        {
+            sb.AppendLine("## Background");
+            sb.AppendLine(_formModel.Description.Trim());
+            sb.AppendLine();
+        }
+
+        // Acceptance Criteria
+        var validCriteria = _acceptanceCriteria
+            .Where(c => !string.IsNullOrWhiteSpace(c))
+            .ToList();
+
+        if (validCriteria.Count > 0)
+        {
+            sb.AppendLine("## Acceptance Criteria");
+            foreach (var criterion in validCriteria)
+            {
+                sb.AppendLine($"- {criterion.Trim()}");
+            }
+            sb.AppendLine();
+        }
+
+        // Assumptions
+        var validAssumptions = _assumptions
+            .Where(a => !string.IsNullOrWhiteSpace(a))
+            .ToList();
+
+        if (validAssumptions.Count > 0)
+        {
+            sb.AppendLine("## Assumptions");
+            foreach (var assumption in validAssumptions)
+            {
+                sb.AppendLine($"- {assumption.Trim()}");
+            }
+        }
+
+        return sb.ToString().TrimEnd();
+    }
+
+    /// <summary>
+    /// Navigates back without saving.
+    /// </summary>
+    private void HandleCancel()
+    {
+        Navigation.NavigateTo("/draft-stories");
+    }
+}
