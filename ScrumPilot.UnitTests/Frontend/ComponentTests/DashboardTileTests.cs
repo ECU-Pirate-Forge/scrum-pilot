@@ -168,7 +168,7 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
             // Act & Assert - Should not throw exception
             var component = Render<DashboardTile>(parameters => parameters
                 .Add(p => p.Title, (string)null!));
-            
+
             Assert.NotNull(component);
         }
 

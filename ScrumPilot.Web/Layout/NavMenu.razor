@@ -1,47 +1,8 @@
-<div class="top-row ps-3 navbar navbar-dark">
-    <div class="nav-fluid">
-        <a class="navbar-brand" href="">
-            <img src="/images/logo.png" alt="ScrumPilot" class="navbar-logo" />
-        </a>
-        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-    </div>
-</div>
-
-<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
-    <nav class="nav flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span style="margin-right: 0.75rem; width: 1.25rem; display: inline-block;"></span>Home
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="/storygeneration">
-                <span class="bi bi-lightbulb" aria-hidden="true"></span> Generate
-            </NavLink>
-            <NavLink class="nav-link" href="draft-stories">
-                <span class="bi bi-list-task" aria-hidden="true"></span> Draft Stories
-            </NavLink>
-            <NavLink class="nav-link" href="create-story">
-                <span class="bi bi-plus-circle" aria-hidden="true"></span> Create Story
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="scrum-board">
-                <span class="bi bi-kanban" aria-hidden="true"></span> Scrum Board
-            </NavLink>
-        </div>
-    </nav>
-</div>
-
-@code {
-    private bool collapseNavMenu = true;
-
-    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
-
-    private void ToggleNavMenu()
-    {
-        collapseNavMenu = !collapseNavMenu;
-    }
-}
+﻿<MudNavMenu>
+    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">Home</MudNavLink>
+    <MudNavLink Href="/pbigeneration" Icon="@Icons.Material.Filled.Lightbulb">Generate</MudNavLink>
+    <MudNavLink Href="/draft-stories" Icon="@Icons.Material.Filled.Article">Draft Stories</MudNavLink>
+    <MudNavLink Href="/create-story" Icon="@Icons.Material.Filled.NoteAdd">Create Story</MudNavLink>
+    <MudNavLink Href="/scrum-board" Icon="@Icons.Material.Filled.Dashboard">Scrum Board</MudNavLink>
+    <MudNavLink Href="/backlog" Icon="@Icons.Material.Filled.List">Backlog</MudNavLink>
+</MudNavMenu>

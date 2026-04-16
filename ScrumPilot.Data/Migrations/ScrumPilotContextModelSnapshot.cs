@@ -15,7 +15,208 @@ namespace ScrumPilot.Data.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "9.0.0");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.5");
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NormalizedName")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique()
+                        .HasDatabaseName("RoleNameIndex");
+
+                    b.ToTable("AspNetRoles", (string)null);
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ClaimType")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ClaimValue")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RoleId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RoleId");
+
+                    b.ToTable("AspNetRoleClaims", (string)null);
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<string>", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ClaimType")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ClaimValue")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("AspNetUserClaims", (string)null);
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserLogin<string>", b =>
+                {
+                    b.Property<string>("LoginProvider")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProviderKey")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProviderDisplayName")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("LoginProvider", "ProviderKey");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("AspNetUserLogins", (string)null);
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserRole<string>", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RoleId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("UserId", "RoleId");
+
+                    b.HasIndex("RoleId");
+
+                    b.ToTable("AspNetUserRoles", (string)null);
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<string>", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LoginProvider")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Value")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("UserId", "LoginProvider", "Name");
+
+                    b.ToTable("AspNetUserTokens", (string)null);
+                });
+
+            modelBuilder.Entity("ScrumPilot.Data.Models.ApplicationUser", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("AccessFailedCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DiscordUsername")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("EmailConfirmed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("LockoutEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset?>("LockoutEnd")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NormalizedEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NormalizedUserName")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PasswordHash")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("PhoneNumberConfirmed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SecurityStamp")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("TwoFactorEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("UiPreference")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("Light");
+
+                    b.Property<string>("UserName")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedEmail")
+                        .HasDatabaseName("EmailIndex");
+
+                    b.HasIndex("NormalizedUserName")
+                        .IsUnique()
+                        .HasDatabaseName("UserNameIndex");
+
+                    b.ToTable("AspNetUsers", (string)null);
+                });
 
             modelBuilder.Entity("ScrumPilot.Shared.Models.AudioTranscript", b =>
                 {
@@ -38,6 +239,52 @@ namespace ScrumPilot.Data.Migrations
                     b.ToTable("AudioTranscripts");
                 });
 
+            modelBuilder.Entity("ScrumPilot.Shared.Models.Comment", b =>
+                {
+                    b.Property<int>("CommentId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("Comment");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("PbiId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("CommentId");
+
+                    b.HasIndex("PbiId");
+
+                    b.ToTable("Comment", (string)null);
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.Epic", b =>
+                {
+                    b.Property<int>("EpicId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("EpicId");
+
+                    b.ToTable("Epic", (string)null);
+                });
+
             modelBuilder.Entity("ScrumPilot.Shared.Models.MessageTranscript", b =>
                 {
                     b.Property<int>("Id")
@@ -49,9 +296,9 @@ namespace ScrumPilot.Data.Migrations
                     b.ToTable("MessageTranscripts");
                 });
 
-            modelBuilder.Entity("ScrumPilot.Shared.Models.Story", b =>
+            modelBuilder.Entity("ScrumPilot.Shared.Models.ProductBacklogItem", b =>
                 {
-                    b.Property<int>("Id")
+                    b.Property<int>("PbiId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
@@ -63,7 +310,13 @@ namespace ScrumPilot.Data.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("EpicId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("IsDraft")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsFlagged")
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("LastUpdated")
@@ -77,6 +330,9 @@ namespace ScrumPilot.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("SprintId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -89,52 +345,140 @@ namespace ScrumPilot.Data.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("PbiId");
+
+                    b.HasIndex("EpicId");
+
+                    b.HasIndex("SprintId");
 
                     b.ToTable("Stories");
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.Sprint", b =>
+                {
+                    b.Property<int>("SprintId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("DateClosed")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("EndDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsOpen")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SprintGoal")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("StartDate")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("SprintId");
+
+                    b.ToTable("Sprint", (string)null);
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
+                {
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
+                        .WithMany()
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<string>", b =>
+                {
+                    b.HasOne("ScrumPilot.Data.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserLogin<string>", b =>
+                {
+                    b.HasOne("ScrumPilot.Data.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserRole<string>", b =>
+                {
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
+                        .WithMany()
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ScrumPilot.Data.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<string>", b =>
+                {
+                    b.HasOne("ScrumPilot.Data.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.Comment", b =>
+                {
+                    b.HasOne("ScrumPilot.Shared.Models.ProductBacklogItem", null)
+                        .WithMany("Comments")
+                        .HasForeignKey("PbiId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("ScrumPilot.Shared.Models.MessageTranscript", b =>
                 {
                     b.OwnsMany("ScrumPilot.Shared.Models.DiscordMessage", "Messages", b1 =>
                         {
-                            b1.Property<int>("MessageTranscriptId")
-                                .HasColumnType("INTEGER");
+                            b1.Property<int>("MessageTranscriptId");
 
                             b1.Property<int>("__synthesizedOrdinal")
-                                .ValueGeneratedOnAddOrUpdate()
-                                .HasColumnType("INTEGER");
+                                .ValueGeneratedOnAddOrUpdate();
 
                             b1.Property<string>("Content")
-                                .IsRequired()
-                                .HasColumnType("TEXT");
+                                .IsRequired();
 
-                            b1.Property<DateTime>("Timestamp")
-                                .HasColumnType("TEXT");
+                            b1.Property<DateTime>("Timestamp");
 
                             b1.HasKey("MessageTranscriptId", "__synthesizedOrdinal");
 
                             b1.ToTable("MessageTranscripts");
 
-                            b1.ToJson("Messages");
+                            b1
+                                .ToJson("Messages")
+                                .HasColumnType("TEXT");
 
                             b1.WithOwner()
                                 .HasForeignKey("MessageTranscriptId");
 
                             b1.OwnsOne("ScrumPilot.Shared.Models.DiscordAuthor", "Author", b2 =>
                                 {
-                                    b2.Property<int>("DiscordMessageMessageTranscriptId")
-                                        .HasColumnType("INTEGER");
+                                    b2.Property<int>("DiscordMessageMessageTranscriptId");
 
-                                    b2.Property<int>("DiscordMessage__synthesizedOrdinal")
-                                        .HasColumnType("INTEGER");
+                                    b2.Property<int>("DiscordMessage__synthesizedOrdinal");
 
-                                    b2.Property<string>("Id")
-                                        .HasColumnType("TEXT");
+                                    b2.Property<string>("Id");
 
                                     b2.Property<string>("Username")
-                                        .IsRequired()
-                                        .HasColumnType("TEXT");
+                                        .IsRequired();
 
                                     b2.HasKey("DiscordMessageMessageTranscriptId", "DiscordMessage__synthesizedOrdinal");
 
@@ -149,6 +493,32 @@ namespace ScrumPilot.Data.Migrations
                         });
 
                     b.Navigation("Messages");
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.ProductBacklogItem", b =>
+                {
+                    b.HasOne("ScrumPilot.Shared.Models.Epic", null)
+                        .WithMany("ProductBacklogItems")
+                        .HasForeignKey("EpicId");
+
+                    b.HasOne("ScrumPilot.Shared.Models.Sprint", null)
+                        .WithMany("ProductBacklogItems")
+                        .HasForeignKey("SprintId");
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.Epic", b =>
+                {
+                    b.Navigation("ProductBacklogItems");
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.ProductBacklogItem", b =>
+                {
+                    b.Navigation("Comments");
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.Sprint", b =>
+                {
+                    b.Navigation("ProductBacklogItems");
                 });
 #pragma warning restore 612, 618
         }

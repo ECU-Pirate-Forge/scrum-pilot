@@ -1,0 +1,118 @@
+/* Backlog - Story details modal overlay */
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Story details modal overlay with enhanced floating appearance */
+.details-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: fadeIn 0.3s ease-out;
+    backdrop-filter: blur(6px);
+}
+
+.details-container {
+    background-color: var(--mud-palette-surface);
+    border: 3px solid var(--mud-palette-lines-default);
+    border-radius: 16px;
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.3), 0 12px 24px rgba(0, 0, 0, 0.2);
+    max-width: 90vw;
+    width: 1200px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    animation: slideInUp 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+    overflow: hidden;
+    position: relative;
+}
+
+.details-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px 28px;
+    border-bottom: 2px solid var(--mud-palette-divider);
+    background-color: var(--mud-palette-surface);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.details-title {
+    font-weight: 700;
+    font-size: 1.25rem;
+    margin: 0;
+    color: var(--mud-palette-text-primary);
+    display: flex;
+    align-items: center;
+}
+
+.close-button {
+    min-width: auto !important;
+    width: auto !important;
+    padding: 8px 16px !important;
+    background-color: transparent !important;
+    white-space: nowrap !important;
+}
+
+.details-content {
+    display: flex;
+    flex-direction: row;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+    background-color: var(--mud-palette-background);
+    border-top: 1px solid var(--mud-palette-divider);
+}
+
+.details-card {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+}
+
+/* Responsive design for modal */
+@media (max-width: 768px) {
+    .details-container {
+        width: 95vw;
+        max-height: 95vh;
+        margin: 16px;
+    }
+
+    .details-header {
+        padding: 16px 20px;
+        flex-direction: column;
+        gap: 8px;
+        align-items: flex-start;
+    }
+
+    .details-header .details-title {
+        font-size: 1.1rem;
+    }
+
+    .close-button {
+        align-self: flex-end;
+        position: absolute;
+        top: 16px;
+        right: 16px;
+    }
+}
