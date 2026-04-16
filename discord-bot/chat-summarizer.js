@@ -437,9 +437,9 @@ async function collectRecapSummaries(guild, start, end, teamName) {
   const results  = [];
 
   for (const msg of messages) {
-    const match = msg.content.match(/\[(.+?)\]/);
-    if (!match) continue;
-    if (teamName && match[1].toLowerCase() !== teamName.toLowerCase()) continue;
+    const match    = msg.content.match(/\[(.+?)\]/);
+    const category = match ? match[1] : 'Scrum Pilot'; // untagged = legacy Scrum Pilot recording
+    if (teamName && category.toLowerCase() !== teamName.toLowerCase()) continue;
 
     const attachment = msg.attachments.first();
     if (!attachment) continue;
@@ -531,39 +531,81 @@ async function postSprintSummary(guild, summaryText, start, end, teamName, sprin
   }
 }
 
+async function summarizeChunk(content, label, start, end) {
+  const prompt =
+    `Summarize the following Discord channel messages from ${start} through ${end}.\n` +
+    `Extract: decisions made, tasks mentioned, blockers raised, progress updates, and open questions.\n` +
+    `Be concise. Use bullet points. Ignore casual small talk.\n\n` +
+    `Channel: ${label}\n\n${content}`;
+
+  try {
+    const res = await Promise.race([
+      anthropic.messages.create({
+        model: 'claude-opus-4-6', max_tokens: 1024,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Claude timeout')), 60000))
+    ]);
+    return res.content[0].text;
+  } catch (err) {
+    console.warn(`[SprintSummarizer] Claude chunk failed, trying GPT-4o-mini:`, err.message);
+    const res = await openai.chat.completions.create({
+      model: 'gpt-4o-mini', max_tokens: 1024,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    return res.choices[0].message.content;
+  }
+}
+
+async function sprintSummaryExists(guild, start, end, teamName) {
+  const channel = guild.channels.cache.find(
+    c => c.name === SPRINT_CHANNEL && c.isTextBased()
+  );
+  if (!channel) return false;
+
+  const teamLabel   = teamName  ? ` · ${teamName}`   : '';
+  const sprint      = SPRINT_SCHEDULE.find(s => s.start === start && s.end === end);
+  const sprintLabel = sprint ? `${sprint.name} · ` : '';
+  const headerText  = `## 🏁 ${sprintLabel}Sprint Summary${teamLabel}`;
+
+  const messages = await fetchMessagesInRange(channel, new Date(start));
+  return messages.some(m => m.content.startsWith(headerText));
+}
+
 async function runSprintSummary(guild, start, end, teamName = null) {
   if (teamName && SPRINT_EXCLUDE_TEAMS.has(teamName)) {
     console.log(`[SprintSummarizer] Skipping excluded team: ${teamName}`);
     return;
   }
 
+  if (await sprintSummaryExists(guild, start, end, teamName)) {
+    console.log(`[SprintSummarizer] Already summarized ${start} → ${end}${teamName ? ` (team: ${teamName})` : ''} — skipping.`);
+    return;
+  }
+
   console.log(`[SprintSummarizer] Collecting ${start} → ${end}` + (teamName ? ` (team: ${teamName})` : '') + '...');
 
-  let [chatItems, recapItems] = await Promise.all([
-    collectChatSummaries(guild, start, end, teamName),
+  const [chatItems, recapItems] = await Promise.all([
+    collectRawMessages(guild, start, end, teamName),
     collectRecapSummaries(guild, start, end, teamName),
   ]);
-
-  if (chatItems.length === 0 && teamName) {
-    console.log(`[SprintSummarizer] No summaries found for ${teamName}, falling back to raw messages.`);
-    chatItems = await collectRawMessages(guild, start, end, teamName);
-  }
 
   console.log(`[SprintSummarizer] ${chatItems.length} chat item(s), ${recapItems.length} recap file(s).`);
 
   const outChannel = guild.channels.cache.find(c => c.name === SPRINT_CHANNEL && c.isTextBased());
   if (!outChannel) { console.error(`[SprintSummarizer] #${SPRINT_CHANNEL} not found.`); return; }
 
-  const allItems = [...chatItems, ...recapItems];
+const allItems = [...chatItems, ...recapItems];
   if (allItems.length === 0) {
     await outChannel.send(`_No summary data found for ${start} → ${end}${teamName ? ` (team: ${teamName})` : ''}._`);
     return;
   }
 
   const teamLabel = teamName ? ` for team **${teamName}**` : '';
-  const prompt = [
+
+  const buildPrompt = (items) => [
     `You are producing a Sprint Summary${teamLabel} covering ${start} through ${end}.`,
-    `The following are daily chat summaries and standup meeting recaps from that period.`,
+    `The following are raw channel messages and standup meeting recaps from that period.`,
     `Synthesize them into a concise, well-structured sprint roll-up.`,
     ``,
     `Include these sections (skip any with no data):`,
@@ -578,23 +620,49 @@ async function runSprintSummary(guild, start, end, teamName = null) {
     ``,
     `---`,
     ``,
-    ...allItems.flatMap(({ label, content }) => [`## ${label}`, '', content.trim(), '', '---', '']),
+    ...items.flatMap(({ label, content }) => [`## ${label}`, '', content.trim(), '', '---', '']),
   ].join('\n');
+
+  const callAI = async (prompt) => {
+    try {
+      const res = await Promise.race([
+        anthropic.messages.create({
+          model: 'claude-opus-4-6', max_tokens: 2048,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Claude timeout')), 60000))
+      ]);
+      return res.content[0].text;
+    } catch (err) {
+      console.warn('[SprintSummarizer] Claude failed, falling back to GPT-4o-mini:', err.message);
+      const res = await openai.chat.completions.create({
+        model: 'gpt-4o-mini', max_tokens: 2048,
+        messages: [{ role: 'user', content: prompt }],
+      });
+      return res.choices[0].message.content;
+    }
+  };
 
   let summary;
   try {
-    const res = await anthropic.messages.create({
-      model: 'claude-opus-4-6', max_tokens: 2048,
-      messages: [{ role: 'user', content: prompt }],
-    });
-    summary = res.content[0].text;
+    summary = await callAI(buildPrompt(allItems));
   } catch (err) {
-    console.warn('[SprintSummarizer] Claude failed, falling back to GPT-4o-mini:', err.message);
-    const res = await openai.chat.completions.create({
-      model: 'gpt-4o-mini', max_tokens: 2048,
-      messages: [{ role: 'user', content: prompt }],
-    });
-    summary = res.choices[0].message.content;
+    if (err.status === 429 || err.code === 'rate_limit_exceeded' || err.message?.includes('tokens') || err.message?.includes('too large')) {
+      console.warn('[SprintSummarizer] Token limit hit, switching to chunked pre-summarization...');
+      const chunkedItems = [];
+      for (const item of allItems) {
+        try {
+          const chunked = await summarizeChunk(item.content, item.label, start, end);
+          chunkedItems.push({ label: item.label, content: chunked });
+        } catch (chunkErr) {
+          console.warn(`[SprintSummarizer] Chunk failed for ${item.label}, using truncated raw:`, chunkErr.message);
+          chunkedItems.push({ label: item.label, content: item.content.slice(-8000) });
+        }
+      }
+      summary = await callAI(buildPrompt(chunkedItems));
+    } else {
+      throw err;
+    }
   }
 
   const sprint = SPRINT_SCHEDULE.find(s => s.start === start && s.end === end);
@@ -669,7 +737,10 @@ async function handleSprintCommand(message) {
       await runSprintSummary(message.guild, start, end, teamName);
     } catch (err) {
       console.error('[SprintSummarizer] Error:', err);
-      await message.reply(`❌ ${err.message}`);
+      const safeMsg = err.message?.includes('org-')
+        ? 'API rate limit or token limit exceeded. Check the console for details.'
+        : err.message;
+      await message.reply(`❌ ${safeMsg}`);
     }
     return true;
   }
@@ -681,7 +752,10 @@ async function handleSprintCommand(message) {
       await message.reply('✅ Sprint backfill complete.');
     } catch (err) {
       console.error('[SprintSummarizer] Backfill error:', err);
-      await message.reply(`❌ ${err.message}`);
+      const safeMsg = err.message?.includes('org-') 
+        ? 'API rate limit or token limit exceeded. Check the console for details.'
+        : err.message;
+      await message.reply(`❌ ${safeMsg}`);
     }
     return true;
   }
