@@ -214,6 +214,7 @@
 
         _moveStoryErrorMessage = string.Empty;
 
+        // Optimistically move the card, then persist status to the backend.
         dropInfo.Item.Status = newStatus;
 
         try
@@ -239,6 +240,7 @@
         }
         catch
         {
+            // Revert local status if backend update fails so UI and data stay consistent.
             dropInfo.Item.Status = originalStatus;
             _moveStoryErrorMessage = "Could not save the status change. The card was returned to its previous column.";
         }
