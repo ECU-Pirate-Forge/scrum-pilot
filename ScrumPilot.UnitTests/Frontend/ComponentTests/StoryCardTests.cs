@@ -7,9 +7,9 @@ using Xunit;
 
 namespace ScrumPilot.UnitTests.Frontend.ComponentTests
 {
-    public class StoryCardTests : FrontendTestBase
+    public class PbiCardTests : FrontendTestBase
     {
-        public StoryCardTests()
+        public PbiCardTests()
         {
             // Base class handles MudServices and JSInterop setup
         }
@@ -29,13 +29,13 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
         }
 
         [Fact]
-        public void StoryCard_RendersWithValidStory()
+        public void PbiCard_RendersWithValidPbi()
         {
             // Arrange
             var story = CreateTestStory();
 
             // Act
-            var component = Render<StoryCard>(parameters => parameters
+            var component = Render<PbiCard>(parameters => parameters
                 .Add(p => p.StoryModel, story));
 
             // Assert - Focus on content rendering, not interactive elements
@@ -45,13 +45,13 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
         }
 
         [Fact]
-        public void StoryCard_HasEditButton()
+        public void PbiCard_HasEditButton()
         {
             // Arrange
             var story = CreateTestStory();
 
             // Act
-            var component = Render<StoryCard>(parameters => parameters
+            var component = Render<PbiCard>(parameters => parameters
                 .Add(p => p.StoryModel, story));
 
             // Assert - Check for edit functionality
@@ -59,13 +59,13 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
         }
 
         [Fact]
-        public void StoryCard_HasCorrectContainerStructure()
+        public void PbiCard_HasCorrectContainerStructure()
         {
             // Arrange
             var story = CreateTestStory();
 
             // Act
-            var component = Render<StoryCard>(parameters => parameters
+            var component = Render<PbiCard>(parameters => parameters
                 .Add(p => p.StoryModel, story));
 
             // Assert

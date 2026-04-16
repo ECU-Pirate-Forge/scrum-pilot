@@ -116,8 +116,8 @@ Initial data is seeded through `DatabaseSeeder.SeedDatabase()` which runs at sta
 
 ### Frontend Integration
 - **ScrumBoard**: Uses `getAllStories` to populate Kanban board
-- **DraftStoriesPage**: Uses `getDraftStories` to show draft stories for review
-- **StoryGeneration**: Uses `generateAiStories` to create new AI-generated stories
+- **DraftPbiPage**: Uses `getDraftStories` to show draft stories for review
+- **PbiGeneration**: Uses `generateAiStories` to create new AI-generated stories
 
 ## Development Workflow
 

@@ -5,37 +5,36 @@ using System.Text.Json;
 
 namespace ScrumPilot.API.Services
 {
-    public class StoryService : IStoryService
+    public class PbiService : IPbiService
     {
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _configuration;
-        private readonly IStoryRepository _storyRepository;
-
-        public StoryService(HttpClient httpClient, IConfiguration configuration, IStoryRepository storyRepository)
+        private readonly IPbiRepository _pbiRepository;
+        public PbiService(HttpClient httpClient, IConfiguration configuration, IPbiRepository pbiRepository)
         {
             _httpClient = httpClient;
             _configuration = configuration;
-            _storyRepository = storyRepository;
+            _pbiRepository = pbiRepository;
         }
 
-        public async Task<IEnumerable<ProductBacklogItem>> GetAllStoriesAsync()
+        public async Task<IEnumerable<ProductBacklogItem>> GetAllPbisAsync()
         {
-            return await _storyRepository.GetAllStoriesAsync();
+            return await _pbiRepository.GetAllPbisAsync();
         }
 
-        //public async Task<IEnumerable<Story>> GetActiveStoriesAsync(int epicId)
+        //public async Task<IEnumerable<ProductBacklogItem>> GetActivePbisAsync(int epicId)
         //{
-        //    return await _storyRepository.GetActiveStoriesAsync(epicId);
+        //    return await _pbiRepository.GetActivePbisAsync(epicId);
         //}
 
-        public async Task<IEnumerable<ProductBacklogItem>> GetNonDraftStoriesAsync()
+        public async Task<IEnumerable<ProductBacklogItem>> GetNonDraftPbisAsync()
         {
-            return await _storyRepository.GetNonDraftStoriesAsync();
+            return await _pbiRepository.GetNonDraftPbisAsync();
         }
 
-        public async Task<IEnumerable<ProductBacklogItem>> GetDraftStoriesAsync()
+        public async Task<IEnumerable<ProductBacklogItem>> GetDraftPbisAsync()
         {
-            return await _storyRepository.GetDraftStoriesAsync();
+            return await _pbiRepository.GetDraftPbisAsync();
         }
 
         /// <summary>
@@ -54,7 +53,7 @@ namespace ScrumPilot.API.Services
         /// <exception cref="TimeoutException">
         /// Thrown if the request to the Ollama API times out.
         /// </exception>
-        private async Task<ProductBacklogItem> GenerateAiStory(string problemStatement)
+        private async Task<ProductBacklogItem> GenerateAiPbi(string problemStatement)
         {
             var groqApiKey = _configuration["GroqApiKey"];
             var prompt = BuildPrompt(problemStatement);
@@ -95,17 +94,17 @@ namespace ScrumPilot.API.Services
             return story;
         }
 
-        public async Task<List<ProductBacklogItem>> GenerateAiStories(List<string> problemStatements)
+        public async Task<List<ProductBacklogItem>> GenerateAiPbis(List<string> problemStatements)
         {
-            var stories = new List<ProductBacklogItem>();
+            var pbis = new List<ProductBacklogItem>();
 
             foreach (var problemStatement in problemStatements)
             {
-                var story = await GenerateAiStory(problemStatement);
-                stories.Add(story);
+                var pbi = await GenerateAiPbi(problemStatement);
+                pbis.Add(pbi);
             }
 
-            return stories;
+            return pbis;
         }
 
         private string BuildPrompt(string problemStatement)
@@ -276,7 +275,7 @@ namespace ScrumPilot.API.Services
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException($"An unexpected error occurred while parsing the AI story response: {ex.Message}", ex);
+                throw new InvalidOperationException($"An unexpected error occurred while parsing the AI PBI response: {ex.Message}", ex);
             }
         }
 
@@ -300,48 +299,48 @@ namespace ScrumPilot.API.Services
             return null;
         }
 
-        public async Task<ProductBacklogItem> CreateStoryAsync(ProductBacklogItem story)
+        public async Task<ProductBacklogItem> CreatePbiAsync(ProductBacklogItem story)
         {
             story.IsDraft = false;
-            return await _storyRepository.AddAsync(story);
+            return await _pbiRepository.AddAsync(story);
         }
 
-        public async Task<ProductBacklogItem> CreateDraftStoryAsync(ProductBacklogItem story)
+        public async Task<ProductBacklogItem> CreateDraftPbiAsync(ProductBacklogItem story)
         {
             story.IsDraft = true;
-            return await _storyRepository.AddAsync(story);
+            return await _pbiRepository.AddAsync(story);
         }
 
-        public async Task<ProductBacklogItem> CommitDraftStoryAsync(ProductBacklogItem draftStory)
+        public async Task<ProductBacklogItem> CommitDraftPbiAsync(ProductBacklogItem draftPbi)
         {
-            var existingDraft = await _storyRepository.GetByIdAsync(draftStory.PbiId);
+            var existingDraft = await _pbiRepository.GetByIdAsync(draftPbi.PbiId);
             if (existingDraft is null || !existingDraft.IsDraft)
             {
-                throw new KeyNotFoundException("Draft story not found.");
+                throw new KeyNotFoundException("Draft PBI not found.");
             }
 
             existingDraft.IsDraft = false;
             existingDraft.LastUpdated = DateTime.UtcNow;
 
-            return await _storyRepository.UpdateAsync(existingDraft);
+            return await _pbiRepository.UpdateAsync(existingDraft);
         }
 
-        public async Task<ProductBacklogItem> UpdateStoryAsync(ProductBacklogItem story)
+        public async Task<ProductBacklogItem> UpdatePbiAsync(ProductBacklogItem pbi)
         {
-            story.LastUpdated = DateTime.UtcNow;
-            return await _storyRepository.UpdateAsync(story);
+            pbi.LastUpdated = DateTime.UtcNow;
+            return await _pbiRepository.UpdateAsync(pbi);
         }
 
-        public async Task<bool> DeleteStoryAsync(int id) //Currently a hard delete. Maybe we reconsider this?
+        public async Task<bool> DeletePbiAsync(int id) //Currently a hard delete. Maybe we reconsider this?
         {
-            return await _storyRepository.DeleteAsync(id);
+            return await _pbiRepository.DeleteAsync(id);
         }
 
-        public async Task<ProductBacklogItem> CommitStoryAsync(ProductBacklogItem story)
+        public async Task<ProductBacklogItem> CommitPbiAsync(ProductBacklogItem pbi)
         {
-            story.IsDraft = false;
-            story.LastUpdated = DateTime.UtcNow;
-            return await _storyRepository.UpdateAsync(story);
+            pbi.IsDraft = false;
+            pbi.LastUpdated = DateTime.UtcNow;
+            return await _pbiRepository.UpdateAsync(pbi);
         }
     }
 }

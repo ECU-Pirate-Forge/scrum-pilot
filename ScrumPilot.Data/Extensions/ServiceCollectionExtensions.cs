@@ -50,7 +50,7 @@ namespace ScrumPilot.Data.Extensions
             .AddDefaultTokenProviders();
 
             // Add repositories
-            services.AddScoped<IStoryRepository, StoryRepository>();
+            services.AddScoped<IPbiRepository, PbiRepository>();
 
             return services;
         }

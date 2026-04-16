@@ -4,16 +4,16 @@ using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.Data.Repositories
 {
-    public class StoryRepository : IStoryRepository
+    public class PbiRepository : IPbiRepository
     {
         private readonly ScrumPilotContext _context;
 
-        public StoryRepository(ScrumPilotContext context)
+        public PbiRepository(ScrumPilotContext context)
         {
             _context = context;
         }
 
-        public async Task<IEnumerable<ProductBacklogItem>> GetAllStoriesAsync()
+        public async Task<IEnumerable<ProductBacklogItem>> GetAllPbisAsync()
         {
             return await _context.Stories
                 .OrderByDescending(s => s.DateCreated)
@@ -70,7 +70,7 @@ namespace ScrumPilot.Data.Repositories
                 .ToListAsync();
         }
 
-        public async Task<IEnumerable<ProductBacklogItem>> GetDraftStoriesAsync()
+        public async Task<IEnumerable<ProductBacklogItem>> GetDraftPbisAsync()
         {
             return await _context.Stories
                 .Where(s => s.IsDraft)
@@ -78,7 +78,7 @@ namespace ScrumPilot.Data.Repositories
                 .ToListAsync();
         }
 
-        public async Task<IEnumerable<ProductBacklogItem>> GetNonDraftStoriesAsync()
+        public async Task<IEnumerable<ProductBacklogItem>> GetNonDraftPbisAsync()
         {
             return await _context.Stories
                 .Where(s => !s.IsDraft)

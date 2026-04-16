@@ -44,8 +44,8 @@ namespace ScrumPilot.UnitTests.Frontend.PageTests
 
             // Assert
             Assert.Contains("Scrum Board", component.Markup);
-            Assert.Contains("Generate Stories", component.Markup);
-            Assert.Contains("Draft Stories", component.Markup);
+            Assert.Contains("Generate PBIs", component.Markup);
+            Assert.Contains("Draft PBIs", component.Markup);
         }
 
         [Fact]
@@ -56,8 +56,8 @@ namespace ScrumPilot.UnitTests.Frontend.PageTests
 
             // Assert
             Assert.Contains("View and manage sprint work.", component.Markup);
-            Assert.Contains("Create user stories quickly.", component.Markup);
-            Assert.Contains("Review and refine drafted stories.", component.Markup);
+            Assert.Contains("Create product backlog items quickly.", component.Markup);
+            Assert.Contains("Review and refine drafted product backlog items.", component.Markup);
         }
 
         [Fact]

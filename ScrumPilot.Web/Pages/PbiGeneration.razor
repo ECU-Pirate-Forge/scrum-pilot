@@ -1,4 +1,4 @@
-﻿@page "/storygeneration"
+﻿@page "/pbigeneration"
 @using MudBlazor
 @using Microsoft.AspNetCore.Components.Web
 @using ScrumPilot.Shared.Models
@@ -97,7 +97,7 @@
                 }
                 else
                 {
-                    <span>@($"GENERATE STORIES ({_problemStatements.Count})")</span>
+                    <span>@($"GENERATE PBI's' ({_problemStatements.Count})")</span>
                 }
             </MudButton>
         </div>
@@ -121,9 +121,9 @@
     private string _message = string.Empty;
     private bool _isLoading = false;
     private readonly List<string> _problemStatements = new();
-    private List<ProductBacklogItem> _generatedStories = new();
-    private int _currentStoryIndex = 0;
-    private ProductBacklogItem? CurrentStory => _generatedStories.Count == 0 ? null : _generatedStories[_currentStoryIndex];
+    private List<ProductBacklogItem> _generatedPbis = new();
+    private int _currentPbiIndex = 0;
+    private ProductBacklogItem? CurrentPbi => _generatedPbis.Count == 0 ? null : _generatedPbis[_currentPbiIndex];
 
     private void AddProblemStatement()
     {
@@ -164,17 +164,17 @@
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
             // Call the API
-            var response = await Http.PostAsync("api/story/generateAiStories", content);
+            var response = await Http.PostAsync("api/pbi/generateAiStories", content);
 
             if (response.IsSuccessStatusCode)
             {
                 var jsonResponse = await response.Content.ReadAsStringAsync();
-                var stories = JsonSerializer.Deserialize<List<ProductBacklogItem>>(jsonResponse, new JsonSerializerOptions
+                var productBacklogItems = JsonSerializer.Deserialize<List<ProductBacklogItem>>(jsonResponse, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
                 });
 
-                if (stories is null || stories.Count == 0)
+                if (productBacklogItems is null || productBacklogItems.Count == 0)
 {
     Snackbar.Add("Generation completed but the response did not contain valid stories.", Severity.Error);
     return;
@@ -182,12 +182,12 @@
 
 var dialogParameters = new DialogParameters
 {
-    ["Stories"] = stories
+                    ["PBI's"] = productBacklogItems
 };
 
 
-               _generatedStories = stories;
-_currentStoryIndex = 0;
+                _generatedPbis = productBacklogItems;
+_currentPbiIndex = 0;
 _problemStatements.Clear();
 _message = string.Empty;
 
@@ -200,7 +200,7 @@ var options = new DialogOptions
     BackdropClick = true
 };
 
-await DialogService.ShowAsync<GeneratedStoriesModal>(
+await DialogService.ShowAsync<GeneratedPbiModal>(
     string.Empty,
     dialogParameters,
     options);
