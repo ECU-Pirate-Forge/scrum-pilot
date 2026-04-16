@@ -32,9 +32,11 @@
 
                     <MudSelectItem T="int?" Value="@((int?)null)">All</MudSelectItem>
 
-                    @foreach (var sprint in SprintOptions)
+                    @foreach (var sprint in _sprints)
                     {
-                        <MudSelectItem T="int?" Value="@sprint">Sprint @sprint</MudSelectItem>
+                        <MudSelectItem T="int?" Value="@((int?)sprint.SprintId)">
+                            @(sprint.SprintGoal ?? $"Sprint {sprint.SprintId}")
+                        </MudSelectItem>
                     }
                 </MudSelect>
 
@@ -48,21 +50,23 @@
 
                     <MudSelectItem T="int?" Value="@((int?)null)">All</MudSelectItem>
 
-                    @foreach (var epic in EpicOptions)
+                    @foreach (var epic in _epics)
                     {
-                        <MudSelectItem T="int?" Value="@epic">Epic @epic</MudSelectItem>
+                        <MudSelectItem T="int?" Value="@((int?)epic.EpicId)">
+                            @epic.Name
+                        </MudSelectItem>
                     }
                 </MudSelect>
             </MudStack>
 
-            @if (!FilteredItems.Any())
+            @if (!Items.Any())
             {
                 <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4" Icon="@Icons.Material.Filled.Info">
                     No PBIs match the selected filters.
                 </MudAlert>
             }
 
-            <SwimLanes Items="@FilteredItems"
+            <SwimLanes Items="@Items"
                        OnItemDropped="OnItemDropped"
                        OnPbiSelected="OpenPbiDetails" />
         </MudContainer>
@@ -100,12 +104,10 @@
 
 @code {
 
-    
     private List<ProductBacklogItem> Items = new();
-    private List<ProductBacklogItem> FilteredItems = new();
 
-    private List<int?> SprintOptions = new();
-    private List<int?> EpicOptions = new();
+    private List<Sprint> _sprints = new();
+    private List<Epic> _epics = new();
 
     private int? SelectedSprintId = null;
     private int? SelectedEpicId = null;
@@ -116,8 +118,23 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadDropdownsAsync();
         await LoadPbisAsync();
-        ApplyFilters();
+    }
+
+    private async Task LoadDropdownsAsync()
+    {
+        try
+        {
+            var sprintsTask = Http.GetFromJsonAsync<List<Sprint>>("api/Sprint");
+            var epicsTask = Http.GetFromJsonAsync<List<Epic>>("api/Epic");
+            _sprints = await sprintsTask ?? new();
+            _epics = await epicsTask ?? new();
+        }
+        catch
+        {
+            // Dropdowns will be empty if API is unreachable
+        }
     }
 
     private async Task LoadPbisAsync(bool showLoading = true)
@@ -126,17 +143,15 @@
         {
             _loading = true;
             Items = new();
-            FilteredItems = new();
         }
 
         try
         {
-            var pbis = await Http.GetFromJsonAsync<List<ProductBacklogItem>>("api/Pbi/GetNonDraftPBIs");
+            var url = BuildPbiUrl();
+            var pbis = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(url);
             if (pbis is not null)
             {
                 Items = pbis;
-                BuildFilterOptions();
-                ApplyFilters();
             }
         }
         catch
@@ -149,51 +164,28 @@
         }
     }
 
+    private string BuildPbiUrl()
+    {
+        var query = new List<string>();
+        if (SelectedSprintId.HasValue)
+            query.Add($"sprintId={SelectedSprintId.Value}");
+        if (SelectedEpicId.HasValue)
+            query.Add($"epicId={SelectedEpicId.Value}");
 
-    private Task OnSprintChanged(int? value)
+        var baseUrl = "api/Pbi/getNonDraftPbis";
+        return query.Count > 0 ? $"{baseUrl}?{string.Join("&", query)}" : baseUrl;
+    }
+
+    private async Task OnSprintChanged(int? value)
     {
         SelectedSprintId = value;
-        ApplyFilters();
-        return Task.CompletedTask;
+        await LoadPbisAsync(showLoading: false);
     }
 
-    private Task OnEpicChanged(int? value)
+    private async Task OnEpicChanged(int? value)
     {
         SelectedEpicId = value;
-        ApplyFilters();
-        return Task.CompletedTask;
-    }
-    private void BuildFilterOptions()
-    {
-        SprintOptions = Items
-            .Select(i => i.SprintId)
-            .Where(id => id.HasValue)
-            .Distinct()
-            .OrderBy(id => id)
-            .ToList();
-
-        EpicOptions = Items
-            .Select(i => i.EpicId)
-            .Where(id => id.HasValue)
-            .Distinct()
-            .OrderBy(id => id)
-            .ToList();
-    }
-    private void ApplyFilters()
-    {
-        IEnumerable<ProductBacklogItem> query = Items;
-
-        if (SelectedSprintId.HasValue)
-        {
-            query = query.Where(item => item.SprintId == SelectedSprintId);
-        }
-
-        if (SelectedEpicId.HasValue)
-        {
-            query = query.Where(item => item.EpicId == SelectedEpicId);
-        }
-
-        FilteredItems = query.ToList();
+        await LoadPbisAsync(showLoading: false);
     }
 
    
@@ -237,7 +229,6 @@
                 if (index >= 0)
                 {
                     Items[index] = updatedPbi;
-                    ApplyFilters();
                 }
             }
         }

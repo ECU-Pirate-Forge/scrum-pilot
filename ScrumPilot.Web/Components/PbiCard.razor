@@ -193,7 +193,7 @@
 
                 <MudDivider Class="mb-4" />
 
-                <!-- EPIC AND SPRINT DROPDOWNS -->
+                <!-- EPIC AND SPRINT ASSIGNMENT -->
                 <div class="mb-4">
                     <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">
                         <MudIcon Icon="Icons.Material.Filled.AccountTree" Class="me-2" />
@@ -201,50 +201,72 @@
                     </MudText>
                     <MudGrid Spacing="3">
 
-                        <!-- EPIC DROPDOWN -->
+                        <!-- EPIC -->
                         <MudItem xs="12" sm="6">
-                            <MudSelect T="int?"
-                                       Value="PbiModel.EpicId"
-                                       ValueChanged="OnEpicChanged"
-                                       Label="Epic"
-                                       Variant="Variant.Outlined"
-                                       Disabled="@(epics == null)">
-                                <MudSelectItem T="int?" Value="@((int?)null)">
-                                    — Unassigned —
-                                </MudSelectItem>
-                                @if (epics != null)
-                                {
-                                    @foreach (var epic in epics)
+                            @if (isEditMode)
+                            {
+                                <MudSelect T="int?"
+                                           @bind-Value="editEpicId"
+                                           Label="Epic"
+                                           Variant="Variant.Outlined"
+                                           Disabled="@(epics == null)"
+                                           ToStringFunc="@(id => GetEpicDisplayName(id))">
+                                    <MudSelectItem T="int?" Value="@((int?)null)">
+                                        — Unassigned —
+                                    </MudSelectItem>
+                                    @if (epics != null)
                                     {
-                                        <MudSelectItem T="int?" Value="@((int?)epic.EpicId)">
-                                            @epic.Name
-                                        </MudSelectItem>
+                                        @foreach (var epic in epics)
+                                        {
+                                            <MudSelectItem T="int?" Value="@((int?)epic.EpicId)">
+                                                @epic.Name
+                                            </MudSelectItem>
+                                        }
                                     }
-                                }
-                            </MudSelect>
+                                </MudSelect>
+                            }
+                            else
+                            {
+                                <MudPaper Class="pa-3"
+                                          Style="background-color: var(--mud-palette-action-hover); border-radius: 8px;">
+                                    <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Epic</MudText>
+                                    <MudText Typo="Typo.body1" Style="font-weight: 600;">@GetEpicDisplayName(PbiModel.EpicId)</MudText>
+                                </MudPaper>
+                            }
                         </MudItem>
 
-                        <!-- SPRINT DROPDOWN -->
+                        <!-- SPRINT -->
                         <MudItem xs="12" sm="6">
-                            <MudSelect T="int?"
-                                       Value="PbiModel.SprintId"
-                                       ValueChanged="OnSprintChanged"
-                                       Label="Sprint"
-                                       Variant="Variant.Outlined"
-                                       Disabled="@(sprints == null)">
-                                <MudSelectItem T="int?" Value="@((int?)null)">
-                                    — Unassigned —
-                                </MudSelectItem>
-                                @if (sprints != null)
-                                {
-                                    @foreach (var sprint in sprints)
+                            @if (isEditMode)
+                            {
+                                <MudSelect T="int?"
+                                           @bind-Value="editSprintId"
+                                           Label="Sprint"
+                                           Variant="Variant.Outlined"
+                                           Disabled="@(sprints == null)"
+                                           ToStringFunc="@(id => GetSprintDisplayName(id))">
+                                    <MudSelectItem T="int?" Value="@((int?)null)">
+                                        — Unassigned —
+                                    </MudSelectItem>
+                                    @if (sprints != null)
                                     {
-                                        <MudSelectItem T="int?" Value="@((int?)sprint.SprintId)">
-                                            @(sprint.SprintGoal ?? $"Sprint {sprint.SprintId}")
-                                        </MudSelectItem>
+                                        @foreach (var sprint in sprints)
+                                        {
+                                            <MudSelectItem T="int?" Value="@((int?)sprint.SprintId)">
+                                                @(sprint.SprintGoal ?? $"Sprint {sprint.SprintId}")
+                                            </MudSelectItem>
+                                        }
                                     }
-                                }
-                            </MudSelect>
+                                </MudSelect>
+                            }
+                            else
+                            {
+                                <MudPaper Class="pa-3"
+                                          Style="background-color: var(--mud-palette-action-hover); border-radius: 8px;">
+                                    <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Sprint</MudText>
+                                    <MudText Typo="Typo.body1" Style="font-weight: 600;">@GetSprintDisplayName(PbiModel.SprintId)</MudText>
+                                </MudPaper>
+                            }
                         </MudItem>
 
                     </MudGrid>
@@ -378,6 +400,8 @@ else
     private string editDescription = "";
     private PbiPriority editPriority;
     private PbiPoints editStoryPoints;
+    private int? editEpicId;
+    private int? editSprintId;
 
     // Epic and Sprint data
     private List<Epic>? epics;
@@ -393,7 +417,7 @@ else
     {
         try
         {
-            epics = await Http.GetFromJsonAsync<List<Epic>>("api/epics");
+            epics = await Http.GetFromJsonAsync<List<Epic>>("api/Epic");
         }
         catch
         {
@@ -406,7 +430,7 @@ else
     {
         try
         {
-            sprints = await Http.GetFromJsonAsync<List<Sprint>>("api/sprints");
+            sprints = await Http.GetFromJsonAsync<List<Sprint>>("api/Sprint");
         }
         catch
         {
@@ -415,34 +439,18 @@ else
         }
     }
 
-    private async Task OnEpicChanged(int? epicId)
+    private string GetEpicDisplayName(int? epicId)
     {
-        if (PbiModel == null) return;
-        PbiModel.EpicId = epicId;
-        await SaveAssignment();
+        if (!epicId.HasValue) return "— Unassigned —";
+        var epic = epics?.FirstOrDefault(e => e.EpicId == epicId.Value);
+        return epic?.Name ?? $"Epic {epicId}";
     }
 
-    private async Task OnSprintChanged(int? sprintId)
+    private string GetSprintDisplayName(int? sprintId)
     {
-        if (PbiModel == null) return;
-        PbiModel.SprintId = sprintId;
-        await SaveAssignment();
-    }
-
-    private async Task SaveAssignment()
-    {
-        try
-        {
-            var response = await Http.PutAsJsonAsync("api/story", PbiModel);
-            if (!response.IsSuccessStatusCode)
-            {
-                errorMessage = "Failed to save assignment.";
-            }
-        }
-        catch
-        {
-            errorMessage = "Failed to connect to server.";
-        }
+        if (!sprintId.HasValue) return "— Unassigned —";
+        var sprint = sprints?.FirstOrDefault(s => s.SprintId == sprintId.Value);
+        return sprint?.SprintGoal ?? $"Sprint {sprintId}";
     }
 
     // Delete methods
@@ -463,7 +471,7 @@ else
 
         try
         {
-            var response = await Http.DeleteAsync($"api/story/{PbiModel.PbiId}");
+            var response = await Http.DeleteAsync($"api/Pbi/{PbiModel.PbiId}");
             if (response.IsSuccessStatusCode)
             {
                 showDeleteConfirm = false;
@@ -492,6 +500,8 @@ else
         editDescription = PbiModel.Description ?? "";
         editPriority = PbiModel.Priority;
         editStoryPoints = PbiModel.StoryPoints;
+        editEpicId = PbiModel.EpicId;
+        editSprintId = PbiModel.SprintId;
         titleError = false;
         errorMessage = "";
         isEditMode = true;
@@ -510,6 +520,8 @@ else
         PbiModel.Description = editDescription;
         PbiModel.Priority = editPriority;
         PbiModel.StoryPoints = editStoryPoints;
+        PbiModel.EpicId = editEpicId;
+        PbiModel.SprintId = editSprintId;
         PbiModel.LastUpdated = DateTime.Now;
 
         titleError = false;

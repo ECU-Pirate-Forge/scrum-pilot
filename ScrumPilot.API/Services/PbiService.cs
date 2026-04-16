@@ -37,6 +37,11 @@ namespace ScrumPilot.API.Services
             return await _pbiRepository.GetDraftPbisAsync();
         }
 
+        public async Task<IEnumerable<ProductBacklogItem>> GetFilteredPbisAsync(int? sprintId, int? epicId)
+        {
+            return await _pbiRepository.GetFilteredPbisAsync(sprintId, epicId);
+        }
+
         /// <summary>
         /// Generates a new AI-based Scrum user story from a given problem statement using the configured Ollama API.
         /// </summary>
