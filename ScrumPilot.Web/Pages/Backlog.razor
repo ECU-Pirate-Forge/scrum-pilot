@@ -46,7 +46,10 @@
                     </div>
 
                     <div class="details-content">
-                        <PbiCard PbiModel="SelectedPbi" OnSave="HandlePbiSave" OnDelete="HandlePbiDelete" />
+                        <div class="details-card">
+                            <PbiCard PbiModel="SelectedPbi" OnSave="HandlePbiSave" OnDelete="HandlePbiDelete" />
+                        </div>
+                        <CommentThread PbiId="SelectedPbi.PbiId" />
                     </div>
                 </div>
             </div>
