@@ -12,7 +12,7 @@
             {
                 <MudText Typo="Typo.h5" Align="Align.Center">Generated Stories</MudText>
 
-                <PbiCard StoryModel="@Stories[_currentStoryIndex]" />
+                <PbiCard PbiModel="@Stories[_currentStoryIndex]" />
 
                 <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center" Class="sg-nav-row">
                     <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
@@ -71,12 +71,12 @@
 
     private async Task CommitAllAsDrafts()
     {
-        await CommitStories("api/story/createDraftStories", "Stories saved as drafts.");
+        await CommitStories("api/Pbi/createDraftPbis", "Stories saved as drafts.");
     }
 
     private async Task CommitAllToBacklog()
     {
-        await CommitStories("api/story/createStories", "Stories committed to backlog.");
+        await CommitStories("api/Pbi/createStories", "Stories committed to backlog.");
     }
 
     private async Task CommitStories(string endpoint, string successMessage)

@@ -124,27 +124,27 @@
                 </div>
 
                 @* ── Row 3: Story Points + Priority ── *@
-                <MudSelect T="StoryPoints"
+                <MudSelect T="PbiPoints"
                            @bind-Value="_formModel.StoryPoints"
                            Label="Story Points"
                            Variant="Variant.Outlined"
                            AnchorOrigin="Origin.BottomCenter"
                            id="create-story-points">
-                    @foreach (StoryPoints sp in Enum.GetValues(typeof(StoryPoints)))
+                    @foreach (PbiPoints sp in Enum.GetValues(typeof(PbiPoints)))
                     {
-                        <MudSelectItem T="StoryPoints" Value="@sp">@((int)sp)</MudSelectItem>
+                        <MudSelectItem T="PbiPoints" Value="@sp">@((int)sp)</MudSelectItem>
                     }
                 </MudSelect>
 
-                <MudSelect T="StoryPriority"
+                <MudSelect T="PbiPriority"
                            @bind-Value="_formModel.Priority"
                            Label="Priority"
                            Variant="Variant.Outlined"
                            AnchorOrigin="Origin.BottomCenter"
                            id="create-story-priority">
-                    @foreach (StoryPriority p in Enum.GetValues(typeof(StoryPriority)))
+                    @foreach (PbiPriority p in Enum.GetValues(typeof(PbiPriority)))
                     {
-                        <MudSelectItem T="StoryPriority" Value="@p">@p</MudSelectItem>
+                        <MudSelectItem T="PbiPriority" Value="@p">@p</MudSelectItem>
                     }
                 </MudSelect>
 
@@ -208,15 +208,16 @@
 
 @code {
     // ── Form backing model ──
-    private Story _formModel = new()
+    private ProductBacklogItem _formModel = new()
     {
         Title = string.Empty,
         Description = string.Empty,
-        Priority = StoryPriority.Medium,
-        StoryPoints = StoryPoints.Zero,
-        Origin = StoryOrigin.WebUserCreated,
+        Type = PbiType.Story,
+        Priority = PbiPriority.Medium,
+        StoryPoints = PbiPoints.Zero,
+        Origin = PbiOrigin.WebUserCreated,
         IsDraft = true,
-        Status = StoryStatus.ToDo
+        Status = PbiStatus.ToDo
     };
 
     // ── Dynamic lists ──
@@ -244,13 +245,13 @@
         {
             // Build structured description
             _formModel.Description = BuildStructuredDescription();
-            _formModel.Origin = StoryOrigin.WebUserCreated;
+            _formModel.Origin = PbiOrigin.WebUserCreated;
             _formModel.IsDraft = true;
-            _formModel.Status = StoryStatus.ToDo;
+            _formModel.Status = PbiStatus.ToDo;
             _formModel.DateCreated = DateTime.UtcNow;
             _formModel.LastUpdated = DateTime.UtcNow;
 
-            var response = await Http.PostAsJsonAsync("api/story/createStory", _formModel);
+            var response = await Http.PostAsJsonAsync("api/Pbi/createStory", _formModel);
 
             if (response.IsSuccessStatusCode)
             {

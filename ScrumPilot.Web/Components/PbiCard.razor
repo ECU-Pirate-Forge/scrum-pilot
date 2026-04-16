@@ -433,7 +433,7 @@ else
     {
         try
         {
-            var response = await Http.PutAsJsonAsync("api/story", PbiModel);
+            var response = await Http.PutAsJsonAsync("api/Pbi", PbiModel);
             if (!response.IsSuccessStatusCode)
             {
                 errorMessage = "Failed to save assignment.";
@@ -463,7 +463,7 @@ else
 
         try
         {
-            var response = await Http.DeleteAsync($"api/story/{PbiModel.PbiId}");
+            var response = await Http.DeleteAsync($"api/Pbi/{PbiModel.PbiId}");
             if (response.IsSuccessStatusCode)
             {
                 showDeleteConfirm = false;
