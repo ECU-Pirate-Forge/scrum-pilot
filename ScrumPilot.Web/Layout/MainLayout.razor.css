@@ -1,141 +1,25 @@
-.page {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    min-height: 100vh;
-}
-
-/* Adjust for desktop layout */
-@media (min-width: 641px) {
-    .page {
-        flex-direction: row;
-    }
-
-    .sidebar {
-        width: 250px;
-        height: 100vh;
-        position: fixed;
-        top: 0;
-        left: 0;
-        z-index: 999; /* Below top bar */
-        /* Remove padding-top - let purple bar overlay */
-    }
-
-    main {
-        flex: 1;
-        margin-left: 250px; /* Account for sidebar width */
-    }
-
-    .content {
-        padding: 1.1rem 2rem !important;
-    }
-}
-
-.sidebar {
-    background-image: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%);
-    transition: background-image 0.3s ease;
-}
-
-/* The sidebar keeps the same gradient in both themes since it's the brand identity */
-
-.top-row {
-    background: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 100%);
-    border-bottom: 1px solid #3a0647;
-    justify-content: space-between; /* Space between logo comparison and theme toggle */
-    align-items: center;
-    height: 3.5rem;
-    display: flex;
-    margin: 0;
-    box-sizing: border-box;
-    color: #ffffff;
-    position: relative;
-    /* Extend across full viewport width */
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    width: 100vw;
-    z-index: 1000;
-    padding-left: 250px; /* Account for sidebar width */
-    padding-right: 1.5rem;
-}
-
-/* Logo section - clean single logo */
-.logo-section {
+.appbar-logo-link {
     display: flex;
     align-items: center;
-    flex: 0 0 auto;
 }
 
 .main-logo {
-    height: 2.8rem; /* Fits nicely within the 3.5rem header */
-    width: auto; /* Maintain aspect ratio */
-    max-width: 200px; /* Reasonable max width */
-    object-fit: contain; /* Ensure logo fits within bounds */
-    transition: opacity 0.3s ease;
+    height: 2.8rem;
+    width: auto;
+    max-width: 200px;
+    object-fit: contain;
 }
 
 .main-logo:hover {
     opacity: 0.8;
 }
 
-/* Adjust main content to account for fixed header */
-main {
-    flex: 1;
-    padding-top: 3.5rem; /* Same as top-row height */
+.content {
+    padding: 1.1rem 2rem !important;
 }
 
-/* Responsive adjustments */
 @media (max-width: 640.98px) {
-    .top-row {
-        padding-left: 1rem; /* Reset padding on mobile */
-        position: relative; /* Reset positioning on mobile */
-        width: auto;
-    }
-
-    main {
-        padding-top: 0; /* Reset padding on mobile */
-    }
-}
-
-/* Centered logo container */
-.top-row-logo {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    align-items: center;
-}
-
-/* Centered logo styling */
-.navbar-logo-center {
-    height: 2.2rem;
-    max-width: 250px;
-    width: 250px;
-    transition: opacity 0.3s ease;
-    object-fit: contain;
-    object-position: center center;
-}
-
-.navbar-logo-center:hover {
-    opacity: 0.8;
-}
-
-/* Ensure other elements don't interfere with centered logo */
-.top-row > *:not(.top-row-logo) {
-    z-index: 1;
-    position: relative;
-}
-    }
-
-    .top-row.auth ::deep a:first-child {
-        flex: 1;
-        text-align: right;
-        width: 0;
-    }
-
-    .top-row, article {
-        padding-left: 2rem !important;
-        padding-right: 1.5rem !important;
+    .content {
+        padding: 1rem !important;
     }
 }

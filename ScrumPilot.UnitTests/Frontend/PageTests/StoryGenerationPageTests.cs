@@ -7,107 +7,107 @@ using Xunit;
 
 namespace ScrumPilot.UnitTests.Frontend.PageTests
 {
-    public class StoryGenerationPageTests : FrontendTestBase
+    public class PbiGenerationPageTests : FrontendTestBase
     {
-        public StoryGenerationPageTests()
+        public PbiGenerationPageTests()
         {
             // Base class handles MudServices and JSInterop setup
         }
 
         [Fact]
-        public void StoryGenerationPage_RendersCorrectly()
+        public void PbiGenerationPage_RendersCorrectly()
         {
             // Act
-            var component = Render<StoryGeneration>();
+            var component = Render<PbiGeneration>();
 
             // Assert
             Assert.NotNull(component);
         }
 
         [Fact]
-        public void StoryGenerationPage_HasCorrectPageRoute()
+        public void PbiGenerationPage_HasCorrectPageRoute()
         {
             // This test verifies the page has the correct @page directive
             // Act
-            var component = Render<StoryGeneration>();
+            var component = Render<PbiGeneration>();
 
             // Assert
             Assert.NotNull(component);
         }
 
         [Fact]
-        public void StoryGenerationPage_ContainsInputField()
+        public void PbiGenerationPage_ContainsInputField()
         {
             // Act
-            var component = Render<StoryGeneration>();
+            var component = Render<PbiGeneration>();
 
             // Assert
             Assert.Contains("mud-input", component.Markup);
         }
 
         [Fact]
-        public void StoryGenerationPage_HasPlaceholderText()
+        public void PbiGenerationPage_HasPlaceholderText()
         {
             // Act
-            var component = Render<StoryGeneration>();
+            var component = Render<PbiGeneration>();
 
             // Assert
             Assert.Contains("Enter problem statement", component.Markup);
         }
 
         [Fact]
-        public void StoryGenerationPage_RendersWithoutExceptions()
+        public void PbiGenerationPage_RendersWithoutExceptions()
         {
             // Act & Assert - Should not throw any exceptions during rendering
-            var component = Render<StoryGeneration>();
+            var component = Render<PbiGeneration>();
             Assert.NotNull(component);
         }
 
         [Fact]
-        public void StoryGenerationPage_HasMudContainer()
+        public void PbiGenerationPage_HasMudContainer()
         {
             // Act
-            var component = Render<StoryGeneration>();
+            var component = Render<PbiGeneration>();
 
             // Assert
             Assert.Contains("mud-container", component.Markup);
         }
 
         [Fact]
-        public void StoryGenerationPage_HasMudPaper()
+        public void PbiGenerationPage_HasMudPaper()
         {
             // Act
-            var component = Render<StoryGeneration>();
+            var component = Render<PbiGeneration>();
 
             // Assert
             Assert.Contains("mud-paper", component.Markup);
         }
 
         [Fact]
-        public void StoryGenerationPage_HasInputSection()
+        public void PbiGenerationPage_HasInputSection()
         {
             // Act
-            var component = Render<StoryGeneration>();
+            var component = Render<PbiGeneration>();
 
             // Assert
             Assert.Contains("sg-input-container", component.Markup);
         }
 
         [Fact]
-        public void StoryGenerationPage_HasMainContentSection()
+        public void PbiGenerationPage_HasMainContentSection()
         {
             // Act
-            var component = Render<StoryGeneration>();
+            var component = Render<PbiGeneration>();
 
             // Assert
             Assert.Contains("sg-shell", component.Markup);
         }
 
         [Fact]
-        public void StoryGenerationPage_ShowsEmptyListMessage_Initially()
+        public void PbiGenerationPage_ShowsEmptyListMessage_Initially()
         {
             // Act
-            var component = Render<StoryGeneration>();
+            var component = Render<PbiGeneration>();
 
             // Assert
             Assert.Contains("No problem statements added yet.", component.Markup);

@@ -46,4 +46,8 @@
     <ProjectReference Include="..\ScrumPilot.Shared\ScrumPilot.Shared.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Frontend\ServiceTests\" />
+  </ItemGroup>
+
 </Project>

@@ -115,9 +115,9 @@ Initial data is seeded through `DatabaseSeeder.SeedDatabase()` which runs at sta
 - `POST /api/story/generateAiStories` - Generate AI story and save to database
 
 ### Frontend Integration
-- **ScrumBoard**: Uses `getAllStories` to populate Kanban board
-- **DraftStoriesPage**: Uses `getDraftStories` to show draft stories for review
-- **StoryGeneration**: Uses `generateAiStories` to create new AI-generated stories
+- **ScrumBoard**: Uses `getAllPbis` to populate ScrumBoard
+- **DraftPbiPage**: Uses `getDraftStories` to show draft PBI's for review
+- **PbiGeneration**: Uses `generateAiStories` to create new AI-generated PBI's
 
 ## Development Workflow
 

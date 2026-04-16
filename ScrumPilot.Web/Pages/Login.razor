@@ -1,0 +1,146 @@
+@page "/login"
+@attribute [AllowAnonymous]
+@layout MainLayout
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+@using Microsoft.AspNetCore.Authorization
+@using ScrumPilot.Web.Services
+
+<PageTitle>Sign In — ScrumPilot</PageTitle>
+
+<div class="login-wrapper">
+    <MudPaper Class="pa-8 login-card" Elevation="8"
+              Style="background: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 100%);">
+        <div class="login-logo mb-4">
+            <img src="/images/logo.png" alt="ScrumPilot" style="max-height: 60px;" />
+        </div>
+
+        <MudText Typo="Typo.h5" Align="Align.Center" Class="mb-6" Style="color: white; font-weight: 600;">Sign In</MudText>
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-4" Dense="true">@_errorMessage</MudAlert>
+        }
+
+        <EditForm Model="@_model" OnValidSubmit="HandleLogin">
+            <DataAnnotationsValidator />
+
+            <MudTextField @bind-Value="_model.UserName"
+                          Label="Username"
+                          Variant="Variant.Outlined"
+                          Class="mb-4"
+                          Disabled="_isLoading"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Person" />
+
+            <MudTextField @bind-Value="_model.Password"
+                          Label="Password"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Password"
+                          Class="mb-6"
+                          Disabled="_isLoading"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Lock" />
+
+            <MudButton ButtonType="ButtonType.Submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       FullWidth="true"
+                       Size="Size.Large"
+                       Disabled="_isLoading">
+                @if (_isLoading)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                }
+                Sign In
+            </MudButton>
+        </EditForm>
+    </MudPaper>
+</div>
+
+<style>
+    .login-wrapper {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 80vh;
+    }
+
+    .login-card {
+        width: 100%;
+        max-width: 420px;
+        border-radius: 12px !important;
+        box-shadow:
+            0 0 0 1px rgba(168, 85, 247, 0.75),
+            0 0 12px rgba(168, 85, 247, 0.4),
+            0 4px 20px rgba(0, 0, 0, 0.45) !important;
+        transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+    }
+
+    .login-card:hover {
+        transform: translateY(-2px) !important;
+        box-shadow:
+            0 0 0 1px rgba(168, 85, 247, 0.95),
+            0 0 18px rgba(168, 85, 247, 0.55),
+            0 8px 24px rgba(0, 0, 0, 0.5) !important;
+    }
+
+    .login-logo {
+        display: flex;
+        justify-content: center;
+    }
+
+    /* Input labels */
+    .login-card .mud-input-label {
+        color: rgba(255, 255, 255, 0.75) !important;
+    }
+
+    /* Input text */
+    .login-card .mud-input input {
+        color: white !important;
+    }
+
+    /* Outlined border */
+    .login-card .mud-input-outlined fieldset {
+        border-color: rgba(255, 255, 255, 0.35) !important;
+    }
+
+    .login-card .mud-input-control:hover .mud-input-outlined fieldset {
+        border-color: rgba(255, 255, 255, 0.75) !important;
+    }
+
+    /* Adornment icons */
+    .login-card .mud-input-adornment .mud-icon-root {
+        color: rgba(255, 255, 255, 0.6) !important;
+    }
+
+    /* Override browser autofill yellow background */
+    .login-card input:-webkit-autofill,
+    .login-card input:-webkit-autofill:hover,
+    .login-card input:-webkit-autofill:focus {
+        -webkit-box-shadow: 0 0 0px 1000px rgb(20, 28, 90) inset !important;
+        -webkit-text-fill-color: white !important;
+        transition: background-color 5000s ease-in-out 0s;
+    }
+</style>
+
+@code {
+    private LoginRequest _model = new();
+    private string _errorMessage = string.Empty;
+    private bool _isLoading;
+
+    private async Task HandleLogin()
+    {
+        _isLoading = true;
+        _errorMessage = string.Empty;
+
+        var success = await AuthService.LoginAsync(_model);
+
+        if (success)
+            Navigation.NavigateTo("/");
+        else
+            _errorMessage = "Invalid username or password.";
+
+        _isLoading = false;
+    }
+}

@@ -1,11 +1,2 @@
-.dashboard-tile {
-    cursor: pointer;
-    padding: 20px;
-    border-radius: 8px;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.dashboard-tile:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
-}
+/* Dashboard tile hover styles live in wwwroot/css/app.css (global) to avoid
+   Blazor CSS isolation pseudo-class scoping issues with MudBlazor components. */
