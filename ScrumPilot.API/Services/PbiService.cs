@@ -120,12 +120,12 @@ namespace ScrumPilot.API.Services
 
             var aiPbiResponse = ParseAiStoryResponse(responseContent);
 
-                        pbi.Title = aiPbiResponse.Title;
-                        pbi.Description = $"{aiPbiResponse.UserStory}\n\nAcceptance Criteria:\n{string.Join("\n", aiPbiResponse.AcceptanceCriteria.Select(ac => $"\u2022 {ac}"))}";
+            pbi.Title = aiPbiResponse.Title;
+            pbi.Description = $"{aiPbiResponse.UserStory}\n\nAcceptance Criteria:\n{string.Join("\n", aiPbiResponse.AcceptanceCriteria.Select(ac => $"\u2022 {ac}"))}";
 
-                        // Return without saving — caller decides whether to commit
-                        return pbi;
-                    }
+            // Return without saving — caller decides whether to commit
+            return pbi;
+        }
 
         public async Task<List<ProductBacklogItem>> GenerateAiPbis(List<string> problemStatements)
         {

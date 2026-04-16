@@ -85,8 +85,8 @@ namespace ScrumPilot.API.Controllers
         [HttpPost("ImprovePbi")]
         public async Task<ActionResult<List<ProductBacklogItem>>> ImprovePbi([FromBody] ProductBacklogItem pbi)
         {
-           var improvedPbi = await _pbiService.ImprovePbiAsync(pbi);
-           return Ok(improvedPbi);
+            var improvedPbi = await _pbiService.ImprovePbiAsync(pbi);
+            return Ok(improvedPbi);
         }
 
         [HttpPost("createStory")]
