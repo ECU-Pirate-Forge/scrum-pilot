@@ -1,0 +1,39 @@
+services:
+  ollama:
+    image: ollama/ollama:0.18.3
+    ports:
+      - "11434:11434"
+    restart: unless-stopped
+    # If you run Ollama on the host, remove or comment this service.
+    profiles: ["ollama"]
+    volumes:
+      - ./ollama/models:/root/.ollama/models
+    # Ensure the desired model is present on container start (idempotent)
+    command: /bin/sh -lc "ollama pull llama3.2 || true; exec /bin/ollama serve"
+
+  api:
+    build:
+      context: .
+      dockerfile: ScrumPilot.API/Dockerfile
+    image: scrumpilot-api
+    ports:
+      - "5219:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - OllamaBaseUrl=http://ollama:11434/
+    volumes:
+      - ./ScrumPilot.Data:/ScrumPilot.Data
+
+  web:
+    build:
+      context: .
+      dockerfile: ScrumPilot.Web/Dockerfile
+      args:
+        - API_BASE_URL=http://localhost:5219/
+    image: scrumpilot-web
+    ports:
+      - "5199:80"
+    depends_on:
+      - api
+    # The Blazor client reads ApiBaseUrl from wwwroot/appsettings.json at build time.
+    # To change it, rebuild the web image with a modified appsettings.json or add a start script.

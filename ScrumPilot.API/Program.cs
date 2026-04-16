@@ -60,7 +60,8 @@ builder.Services.AddCors(options =>
                 "http://localhost:5199",
                 "http://127.0.0.1:5199",
                 "https://localhost:7280",
-                "https://127.0.0.1:7280"
+                "https://127.0.0.1:7280",
+                "https://scrumpilot-web.onrender.com"
             )
             .AllowAnyHeader()
             .AllowAnyMethod()
@@ -69,22 +70,22 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Apply pending migrations at startup (development only)
-if (app.Environment.IsDevelopment())
+// Apply schema and seed at startup
+using (var scope = app.Services.CreateScope())
 {
-    using (var scope = app.Services.CreateScope())
-    {
-        var context = scope.ServiceProvider.GetRequiredService<ScrumPilotContext>();
-        context.Database.Migrate();
+    var context = scope.ServiceProvider.GetRequiredService<ScrumPilotContext>();
+    var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 
-        // Seed database with initial data
-        DatabaseSeeder.SeedDatabase(context);
+    // Apply migrations for both Postgres (Render) and SQLite (local dev)
+    context.Database.Migrate();
 
-        // Seed Identity users and roles
-        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-        await DatabaseSeeder.SeedUsersAsync(userManager, roleManager);
-    }
+    // Seed database with initial data (seeders are idempotent)
+    DatabaseSeeder.SeedDatabase(context);
+
+    // Seed Identity users and roles
+    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+    await DatabaseSeeder.SeedUsersAsync(userManager, roleManager);
 }
 
 // Configure the HTTP request pipeline.
