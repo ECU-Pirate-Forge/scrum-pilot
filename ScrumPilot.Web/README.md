@@ -19,7 +19,7 @@ This project is a **Blazor WebAssembly** application that runs entirely in the b
 ### 📊 Pages & Views
 - **PBI Generation** (`/pbigeneration`) - AI-powered story creation from problem statements
 - **Draft Stories** (`/draft-stories`) - Review, modify, and manage AI-generated stories
-- **Scrum Board** (`/scrum-board`) - Interactive Kanban board for story management
+- **Scrum Board** (`/scrum-board`) - Interactive Scrum board for PBI management
 
 ### 🧩 Components
 - **PbiCard** - Reusable component for displaying and editing story details
@@ -101,11 +101,11 @@ Development server configuration is in `Properties/launchSettings.json`:
 ```
 ScrumPilot.Web/
 ├── Pages/                    # Application pages
-│   ├── DraftPbiPage.razor       # Draft story management
-│   ├── PbiGeneration.razor        # AI story generation  
-│   └── ScrumBoard.razor            # Kanban board
+│   ├── DraftPbiPage.razor       # Draft PBI management
+│   ├── PbiGeneration.razor        # AI PBI generation  
+│   └── ScrumBoard.razor            # Scrum board
 ├── Components/               # Reusable components
-│   └── PbiCard.razor             # Story detail component
+│   └── PbiCard.razor             # PBI detail component
 ├── Layout/                  # Application layout
 │   ├── MainLayout.razor            # Main application shell
 │   └── NavMenu.razor              # Navigation menu

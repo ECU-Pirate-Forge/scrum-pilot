@@ -19,17 +19,17 @@ namespace ScrumPilot.UnitTests.Frontend.PageTests
 
             // Assert - Basic smoke test
             Assert.NotNull(component);
-            Assert.Contains("kanban-page", component.Markup);
+            Assert.Contains("swimlane-page", component.Markup);
         }
 
         [Fact]
-        public void BacklogPage_HasKanbanPageClass()
+        public void BacklogPage_HasSwimlanePageClass()
         {
             // Act
             var component = Render<Backlog>();
 
             // Assert
-            Assert.Contains("kanban-page", component.Markup);
+            Assert.Contains("swimlane-page", component.Markup);
         }
 
         [Fact]

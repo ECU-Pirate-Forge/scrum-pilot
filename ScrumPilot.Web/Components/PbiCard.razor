@@ -3,7 +3,7 @@
 @inject HttpClient Http
 @inject IDialogService DialogService
 
-@if (StoryModel != null)
+@if (PbiModel != null)
 {
     <div style="animation: slideInUp 0.6s ease-out;">
         <MudContainer MaxWidth="MaxWidth.Medium" Class="pa-4">
@@ -55,7 +55,7 @@
                 {
                     <MudAlert Severity="Severity.Warning" Class="mb-3">
                         <div class="d-flex flex-column gap-2">
-                            <MudText>⚠️ Are you sure you want to delete <strong>@StoryModel.Title</strong>? This cannot be undone.</MudText>
+                            <MudText>⚠️ Are you sure you want to delete <strong>@PbiModel.Title</strong>? This cannot be undone.</MudText>
                             <div class="d-flex gap-2">
                                 <MudButton Variant="Variant.Filled"
                                            Color="Color.Error"
@@ -98,7 +98,7 @@
                     {
                         <MudText Typo="Typo.h4"
                                  Style="font-weight: 600; color: var(--mud-palette-text-primary);">
-                            @StoryModel.Title
+                            @PbiModel.Title
                         </MudText>
                     }
                 </div>
@@ -107,10 +107,10 @@
                 <div class="d-flex flex-wrap gap-2 mb-4">
                     <MudChip T="string"
                              Size="Size.Medium"
-                             Color="@GetStatusColor(StoryModel.Status)"
-                             Icon="@GetStatusIcon(StoryModel.Status)"
+                             Color="@GetStatusColor(PbiModel.Status)"
+                             Icon="@GetStatusIcon(PbiModel.Status)"
                              Variant="Variant.Filled">
-                        @StoryModel.Status
+                        @PbiModel.Status
                     </MudChip>
 
                     @if (isEditMode)
@@ -129,21 +129,21 @@
                     {
                         <MudChip T="string"
                                  Size="Size.Medium"
-                                 Color="@GetPriorityColor(StoryModel.Priority)"
-                                 Icon="@GetPriorityIcon(StoryModel.Priority)"
+                                 Color="@GetPriorityColor(PbiModel.Priority)"
+                                 Icon="@GetPriorityIcon(PbiModel.Priority)"
                                  Variant="Variant.Filled">
-                            @StoryModel.Priority Priority
+                            @PbiModel.Priority Priority
                         </MudChip>
                     }
 
-                    @if (StoryModel.Origin != PbiOrigin.WebUserCreated)
+                    @if (PbiModel.Origin != PbiOrigin.WebUserCreated)
                     {
                         <MudChip T="string"
                                  Size="Size.Medium"
                                  Color="Color.Info"
                                  Icon="Icons.Material.Filled.SmartToy"
                                  Variant="Variant.Filled">
-                            @GetOriginLabel(StoryModel.Origin)
+                            @GetOriginLabel(PbiModel.Origin)
                         </MudChip>
                     }
                 </div>
@@ -168,13 +168,13 @@
                     }
                     else
                     {
-                        @if (!string.IsNullOrWhiteSpace(StoryModel.Description))
+                        @if (!string.IsNullOrWhiteSpace(PbiModel.Description))
                         {
                             <MudPaper Class="pa-4"
                                       Style="background-color: var(--mud-palette-background-grey);
                                              border-radius: 8px;
                                              border-left: 4px solid var(--mud-palette-primary);">
-                                @foreach (var line in StoryModel.Description.Split('\n'))
+                                @foreach (var line in PbiModel.Description.Split('\n'))
                                 {
                                     <MudText Typo="Typo.body1" Class="mb-2"
                                              Style="line-height: 1.6;">@line</MudText>
@@ -204,7 +204,7 @@
                         <!-- EPIC DROPDOWN -->
                         <MudItem xs="12" sm="6">
                             <MudSelect T="int?"
-                                       Value="StoryModel.EpicId"
+                                       Value="PbiModel.EpicId"
                                        ValueChanged="OnEpicChanged"
                                        Label="Epic"
                                        Variant="Variant.Outlined"
@@ -227,7 +227,7 @@
                         <!-- SPRINT DROPDOWN -->
                         <MudItem xs="12" sm="6">
                             <MudSelect T="int?"
-                                       Value="StoryModel.SprintId"
+                                       Value="PbiModel.SprintId"
                                        ValueChanged="OnSprintChanged"
                                        Label="Sprint"
                                        Variant="Variant.Outlined"
@@ -290,7 +290,7 @@
                                         else
                                         {
                                             <MudText Typo="Typo.h6" Style="font-weight: 600;">
-                                                @((int)StoryModel.StoryPoints)
+                                                @((int)PbiModel.StoryPoints)
                                             </MudText>
                                         }
                                     </div>
@@ -310,7 +310,7 @@
                                             Created
                                         </MudText>
                                         <MudText Typo="Typo.body1" Style="font-weight: 600;">
-                                            @StoryModel.DateCreated.ToString("MMM dd, yyyy")
+                                            @PbiModel.DateCreated.ToString("MMM dd, yyyy")
                                         </MudText>
                                     </div>
                                 </div>
@@ -329,7 +329,7 @@
                                             Last Updated
                                         </MudText>
                                         <MudText Typo="Typo.body1" Style="font-weight: 600;">
-                                            @StoryModel.LastUpdated.ToString("MMM dd, yyyy")
+                                            @PbiModel.LastUpdated.ToString("MMM dd, yyyy")
                                         </MudText>
                                     </div>
                                 </div>
@@ -363,7 +363,7 @@ else
 }
 
 @code {
-    [Parameter] public ScrumPilot.Shared.Models.ProductBacklogItem? StoryModel { get; set; }
+    [Parameter] public ScrumPilot.Shared.Models.ProductBacklogItem? PbiModel { get; set; }
     [Parameter] public EventCallback<ScrumPilot.Shared.Models.ProductBacklogItem> OnSave { get; set; }
     [Parameter] public EventCallback<int> OnDelete { get; set; }
 
@@ -417,15 +417,15 @@ else
 
     private async Task OnEpicChanged(int? epicId)
     {
-        if (StoryModel == null) return;
-        StoryModel.EpicId = epicId;
+        if (PbiModel == null) return;
+        PbiModel.EpicId = epicId;
         await SaveAssignment();
     }
 
     private async Task OnSprintChanged(int? sprintId)
     {
-        if (StoryModel == null) return;
-        StoryModel.SprintId = sprintId;
+        if (PbiModel == null) return;
+        PbiModel.SprintId = sprintId;
         await SaveAssignment();
     }
 
@@ -433,7 +433,7 @@ else
     {
         try
         {
-            var response = await Http.PutAsJsonAsync("api/story", StoryModel);
+            var response = await Http.PutAsJsonAsync("api/story", PbiModel);
             if (!response.IsSuccessStatusCode)
             {
                 errorMessage = "Failed to save assignment.";
@@ -459,17 +459,17 @@ else
 
     private async Task DeleteStory()
     {
-        if (StoryModel == null) return;
+        if (PbiModel == null) return;
 
         try
         {
-            var response = await Http.DeleteAsync($"api/story/{StoryModel.PbiId}");
+            var response = await Http.DeleteAsync($"api/story/{PbiModel.PbiId}");
             if (response.IsSuccessStatusCode)
             {
                 showDeleteConfirm = false;
                 if (OnDelete.HasDelegate)
                 {
-                    await OnDelete.InvokeAsync(StoryModel.PbiId);
+                    await OnDelete.InvokeAsync(PbiModel.PbiId);
                 }
             }
             else
@@ -488,10 +488,10 @@ else
     // Edit methods
     private void StartEdit()
     {
-        editTitle = StoryModel!.Title ?? "";
-        editDescription = StoryModel.Description ?? "";
-        editPriority = StoryModel.Priority;
-        editStoryPoints = StoryModel.StoryPoints;
+        editTitle = PbiModel!.Title ?? "";
+        editDescription = PbiModel.Description ?? "";
+        editPriority = PbiModel.Priority;
+        editStoryPoints = PbiModel.StoryPoints;
         titleError = false;
         errorMessage = "";
         isEditMode = true;
@@ -506,11 +506,11 @@ else
             return;
         }
 
-        StoryModel!.Title = editTitle;
-        StoryModel.Description = editDescription;
-        StoryModel.Priority = editPriority;
-        StoryModel.StoryPoints = editStoryPoints;
-        StoryModel.LastUpdated = DateTime.Now;
+        PbiModel!.Title = editTitle;
+        PbiModel.Description = editDescription;
+        PbiModel.Priority = editPriority;
+        PbiModel.StoryPoints = editStoryPoints;
+        PbiModel.LastUpdated = DateTime.Now;
 
         titleError = false;
         errorMessage = "";
@@ -518,7 +518,7 @@ else
 
         if (OnSave.HasDelegate)
         {
-            await OnSave.InvokeAsync(StoryModel);
+            await OnSave.InvokeAsync(PbiModel);
         }
     }
 
