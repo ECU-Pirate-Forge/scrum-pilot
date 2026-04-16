@@ -38,8 +38,8 @@
     border-radius: 16px;
     box-shadow: 0 24px 48px rgba(0, 0, 0, 0.3), 0 12px 24px rgba(0, 0, 0, 0.2);
     max-width: 90vw;
+    width: 1200px;
     max-height: 90vh;
-    width: 800px;
     display: flex;
     flex-direction: column;
     animation: slideInUp 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
@@ -75,10 +75,19 @@
 }
 
 .details-content {
+    display: flex;
+    flex-direction: row;
     flex: 1;
-    overflow-y: auto;
+    overflow: hidden;
+    min-height: 0;
     background-color: var(--mud-palette-background);
     border-top: 1px solid var(--mud-palette-divider);
+}
+
+.details-card {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
 }
 
 /* Responsive design for modal */
