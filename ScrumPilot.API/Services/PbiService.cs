@@ -94,6 +94,39 @@ namespace ScrumPilot.API.Services
             return story;
         }
 
+        public async Task<ProductBacklogItem> ImprovePbiAsync(ProductBacklogItem pbi)
+        {
+            var groqApiKey = _configuration["GroqApiKey"];
+            var prompt = BuildImprovementPrompt(pbi);
+            string responseContent;
+
+            if (!string.IsNullOrEmpty(groqApiKey))
+            {
+                // Use Groq when API key is configured (e.g. Render production)
+                var groqModel = _configuration["GroqModel"] ?? "llama-3.3-70b-versatile";
+                responseContent = await CallGroqApiAsync(groqApiKey, groqModel, prompt);
+            }
+            else
+            {
+                // Fall back to local Ollama (development)
+                var ollamaBaseUrl = _configuration["OllamaBaseUrl"];
+                var ollamaModel = _configuration["OllamaModel"];
+
+                if (string.IsNullOrEmpty(ollamaBaseUrl))
+                    throw new InvalidOperationException("No AI provider configured. Set GeminiApiKey or OllamaBaseUrl.");
+
+                responseContent = await CallOllamaApiAsync(ollamaBaseUrl, ollamaModel, prompt);
+            }
+
+            var aiPbiResponse = ParseAiStoryResponse(responseContent);
+
+            pbi.Title = aiPbiResponse.Title;
+            pbi.Description = $"{aiPbiResponse.UserStory}\n\nAcceptance Criteria:\n{string.Join("\n", aiPbiResponse.AcceptanceCriteria.Select(ac => $"\u2022 {ac}"))}";
+
+            // Return without saving — caller decides whether to commit
+            return pbi;
+        }
+
         public async Task<List<ProductBacklogItem>> GenerateAiPbis(List<string> problemStatements)
         {
             var pbis = new List<ProductBacklogItem>();
@@ -125,6 +158,26 @@ namespace ScrumPilot.API.Services
 
                     Problem statement:
                     {problemStatement}";
+        }
+
+        private string BuildImprovementPrompt(ProductBacklogItem pbi)
+        {
+            return $@"You are helping improve Scrum user Product Backlog Items.
+
+                    Return ONLY valid JSON matching this schema:
+                    {{
+                    ""title"": ""string"",
+                    ""userStory"": ""string"",
+                    ""acceptanceCriteria"": [""string"", ""string"", ""string""]
+                    }}
+
+                    Rules:
+                    - userStory must be in the format: ""As a <role>, I want <goal>, so that <benefit>.""
+                    - acceptanceCriteria in bulleted list in the format: ""I see...""
+                    - No extra keys. No markdown. JSON only.
+
+                    Current PBI:
+                    {pbi}";
         }
 
         private async Task<string> CallOllamaApiAsync(string baseUrl, string model, string prompt)

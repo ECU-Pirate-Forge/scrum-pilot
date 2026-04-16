@@ -10,6 +10,7 @@ namespace ScrumPilot.API.Services
         Task<ProductBacklogItem> CreatePbiAsync(ProductBacklogItem story);
         Task<bool> DeletePbiAsync(int id);
         Task<List<ProductBacklogItem>> GenerateAiPbis(List<string> problemStatements);
+        Task<ProductBacklogItem> ImprovePbiAsync(ProductBacklogItem pbi);
         Task<IEnumerable<ProductBacklogItem>> GetAllPbisAsync();
         Task<IEnumerable<ProductBacklogItem>> GetDraftPbisAsync();
         Task<IEnumerable<ProductBacklogItem>> GetNonDraftPbisAsync();
