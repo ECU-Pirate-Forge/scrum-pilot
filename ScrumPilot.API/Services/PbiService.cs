@@ -149,17 +149,14 @@ namespace ScrumPilot.API.Services
         {
             return $@"You are helping generate Scrum user stories.
 
-                    Return ONLY valid JSON matching this schema:
-                    {{
-                    ""title"": ""string"",
-                    ""userStory"": ""string"",
-                    ""acceptanceCriteria"": [""string"", ""string"", ""string""]
-                    }}
+                    Generate a Scrum user story for the following problem statement and return it as a JSON object.
 
-                    Rules:
-                    - userStory must be in the format: ""As a <role>, I want <goal>, so that <benefit>.""
-                    - acceptanceCriteria in bulleted list in the format: ""I see""
-                    - No extra keys. No markdown. JSON only.
+                    The JSON must have exactly these three keys:
+                    - title: a short, specific title describing the feature or need
+                    - userStory: written as 'As a [specific role], I want [specific goal], so that [specific benefit].'
+                    - acceptanceCriteria: an array of 3 to 5 strings, each beginning with 'I see' and describing a concrete, observable outcome
+
+                    Do not copy these instructions into the output. Do not use placeholder text. Return only the JSON object with no markdown, no explanation, and no extra keys.
 
                     Problem statement:
                     {problemStatement}";
@@ -167,22 +164,20 @@ namespace ScrumPilot.API.Services
 
         private string BuildImprovementPrompt(ProductBacklogItem pbi)
         {
-            return $@"You are helping improve Scrum user Product Backlog Items.
+            return $@"You are helping improve a Scrum Product Backlog Item.
 
-                    Return ONLY valid JSON matching this schema:
-                    {{
-                    ""title"": ""string"",
-                    ""userStory"": ""string"",
-                    ""acceptanceCriteria"": [""string"", ""string"", ""string""]
-                    }}
+                    Rewrite and improve the following PBI and return it as a JSON object.
 
-                    Rules:
-                    - userStory must be in the format: ""As a <role>, I want <goal>, so that <benefit>.""
-                    - acceptanceCriteria in bulleted list in the format: ""I see...""
-                    - No extra keys. No markdown. JSON only.
+                    The JSON must have exactly these three keys:
+                    - title: a short, specific title describing the feature or need
+                    - userStory: written as 'As a [specific role], I want [specific goal], so that [specific benefit].'
+                    - acceptanceCriteria: an array of 3 to 5 strings, each beginning with 'I see' and describing a concrete, observable outcome
+
+                    Do not copy these instructions into the output. Do not use placeholder text. Return only the JSON object with no markdown, no explanation, and no extra keys.
 
                     Current PBI:
-                    {pbi}";
+                    Title: {pbi.Title}
+                    Description: {pbi.Description}";
         }
 
         private async Task<string> CallOllamaApiAsync(string baseUrl, string model, string prompt)
