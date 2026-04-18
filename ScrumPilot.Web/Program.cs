@@ -29,6 +29,7 @@ builder.Services.AddHttpClient("API", client => client.BaseAddress = new Uri(api
     .AddHttpMessageHandler<AuthHeaderHandler>();
 builder.Services.AddScoped(sp =>
     sp.GetRequiredService<IHttpClientFactory>().CreateClient("API"));
+builder.Services.AddScoped<ScrumPilot.Web.Services.MetricsDashboardService>();
 
 await builder.Build().RunAsync();
 

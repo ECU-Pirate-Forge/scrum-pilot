@@ -1,0 +1,49 @@
+@using ScrumPilot.Shared.Models
+
+<WidgetCard Title="Days Left in Sprint">
+    @if (Sprint is not null && Sprint.StartDate.HasValue && Sprint.EndDate.HasValue)
+    {
+        <div class="stat-card-content" style="align-items: center; text-align: center;">
+            <div class="stat-number" style="color: #1e88e5;">@_daysLeft</div>
+            <div class="stat-label">Days left</div>
+            @if (_totalDays > 0)
+            {
+                <MudProgressLinear Value="@_progressPct" Color="MudBlazor.Color.Primary"
+                    Style="margin-top: 12px; border-radius: 4px;" Size="MudBlazor.Size.Small" />
+                <MudText Typo="Typo.caption" Style="color: #8b949e; margin-top: 4px;">
+                    @(_totalDays - _daysLeft) of @_totalDays days elapsed
+                </MudText>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="widget-empty">No sprint dates set</div>
+    }
+</WidgetCard>
+
+@code {
+    [Parameter] public Sprint? Sprint { get; set; }
+
+    private int _daysLeft;
+    private int _totalDays;
+    private double _progressPct;
+
+    protected override void OnParametersSet()
+    {
+        if (Sprint?.StartDate is null || Sprint.EndDate is null)
+        {
+            _daysLeft = 0;
+            _totalDays = 0;
+            _progressPct = 0;
+            return;
+        }
+
+        var today = DateTime.Today;
+        var start = Sprint.StartDate.Value.Date;
+        var end = Sprint.EndDate.Value.Date;
+        _daysLeft = Math.Max(0, (end - today).Days);
+        _totalDays = Math.Max(1, (end - start).Days);
+        _progressPct = Math.Min(100, (double)(_totalDays - _daysLeft) / _totalDays * 100);
+    }
+}

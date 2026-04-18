@@ -1,0 +1,77 @@
+@using ScrumPilot.Web.Services
+
+<WidgetCard Title="Work In Progress">
+    @if (_loading)
+    {
+        <div class="widget-center"><MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Primary" /></div>
+    }
+    else if (_items.Count > 0)
+    {
+        <div style="overflow: auto; max-height: 220px;">
+            <MudTable Items="_items" Dense="true" Hover="true" Elevation="0"
+                      FixedHeader="true" Height="220px"
+                      Style="background: transparent;">
+                <HeaderContent>
+                    <MudTh Style="@_th">Title</MudTh>
+                    <MudTh Style="@_th">Type</MudTh>
+                    <MudTh Style="@_th">Priority</MudTh>
+                    <MudTh Style="@_th">Status</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd Style="@($"{_td} max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#e6edf3;")">
+                        @context.Title
+                    </MudTd>
+                    <MudTd Style="@_td">
+                        <MudChip T="string" Size="Size.Small" Style="@GetTypeStyle(context.Type)">@context.Type</MudChip>
+                    </MudTd>
+                    <MudTd Style="@_td">
+                        <MudText Typo="Typo.caption" Style="@GetPriorityStyle(context.Priority)">@context.Priority</MudText>
+                    </MudTd>
+                    <MudTd Style="@_td">
+                        <MudChip T="string" Size="Size.Small" Style="background:#1c3557; color:#58a6ff;">@context.Status</MudChip>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        </div>
+    }
+    else
+    {
+        <div class="widget-empty">No items currently in progress</div>
+    }
+</WidgetCard>
+
+@code {
+    [Parameter] public int? SprintId { get; set; }
+    [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
+
+    private List<WipItem> _items = [];
+    private bool _loading = true;
+    private int? _lastSprintId = -1;
+
+    private const string _th = "color:#8b949e; font-size:0.7rem; background:#161b22; border-bottom:1px solid #21262d;";
+    private const string _td = "border-bottom:1px solid #21262d; font-size:0.75rem;";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_lastSprintId == SprintId) return;
+        _lastSprintId = SprintId;
+        _loading = true;
+        try { _items = SprintId.HasValue ? await MetricsSvc.GetWipItemsAsync(SprintId.Value) : []; }
+        catch { _items = []; }
+        _loading = false;
+    }
+
+    private static string GetTypeStyle(string type) => type.ToLower() switch
+    {
+        "bug"   => "background:#3d1a1a; color:#ff6b6b; font-size:0.65rem; height:20px;",
+        "story" => "background:#1a3d1a; color:#66bb6a; font-size:0.65rem; height:20px;",
+        _       => "background:#1a2d3d; color:#42a5f5; font-size:0.65rem; height:20px;"
+    };
+
+    private static string GetPriorityStyle(string priority) => priority.ToLower() switch
+    {
+        "high"   => "color:#ff9800;",
+        "medium" => "color:#ffeb3b;",
+        _        => "color:#8b949e;"
+    };
+}
