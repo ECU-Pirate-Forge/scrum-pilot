@@ -23,11 +23,12 @@
     left: 0;
     right: 0;
     bottom: 0;
+    margin-left: 0 !important;
     background: rgba(0, 0, 0, 0.6);
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    z-index: 1300;
     animation: fadeIn 0.3s ease-out;
     backdrop-filter: blur(6px);
 }
@@ -88,6 +89,7 @@
     flex: 1;
     min-width: 0;
     overflow-y: auto;
+    padding: 20px;
 }
 
 /* Responsive design for modal */

@@ -1,0 +1,79 @@
+@using MudBlazor
+@using ScrumPilot.Shared.Models
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Visibility" Class="me-2" />
+            PBI Details
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <div class="pbi-dialog-content">
+            <div class="pbi-dialog-card">
+                <PbiCard PbiModel="Pbi" OnSave="HandleSave" OnDelete="HandleDelete" />
+            </div>
+            <div class="pbi-dialog-comments">
+                <CommentThread PbiId="Pbi.PbiId" />
+            </div>
+        </div>
+    </DialogContent>
+</MudDialog>
+
+<style>
+    .pbi-dialog-content {
+        display: flex;
+        flex-direction: row;
+        gap: 0;
+        min-height: 400px;
+        max-height: 70vh;
+        overflow: hidden;
+    }
+
+    .pbi-dialog-card {
+        flex: 1;
+        min-width: 0;
+        overflow-y: auto;
+        padding: 8px;
+        border-right: 1px solid var(--mud-palette-divider);
+    }
+
+    .pbi-dialog-comments {
+        width: 360px;
+        min-width: 280px;
+        overflow-y: auto;
+    }
+
+    @@media (max-width: 768px) {
+        .pbi-dialog-content {
+            flex-direction: column;
+            max-height: 80vh;
+        }
+
+        .pbi-dialog-comments {
+            width: 100%;
+            border-right: none;
+            border-top: 1px solid var(--mud-palette-divider);
+        }
+    }
+</style>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public ProductBacklogItem Pbi { get; set; } = default!;
+    [Parameter] public EventCallback<ProductBacklogItem> OnSave { get; set; }
+    [Parameter] public EventCallback<int> OnDelete { get; set; }
+
+    private async Task HandleSave(ProductBacklogItem pbi)
+    {
+        await OnSave.InvokeAsync(pbi);
+        MudDialog.Close(DialogResult.Ok(pbi));
+    }
+
+    private async Task HandleDelete(int pbiId)
+    {
+        await OnDelete.InvokeAsync(pbiId);
+        MudDialog.Close(DialogResult.Ok(pbiId));
+    }
+}

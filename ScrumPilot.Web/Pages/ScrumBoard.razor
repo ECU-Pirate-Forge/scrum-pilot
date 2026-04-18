@@ -1,5 +1,6 @@
 @page "/scrum-board"
 @inject HttpClient Http
+@inject IDialogService DialogService
 
 <div class="swimlane-page">
 
@@ -67,34 +68,6 @@
                        OnPbiSelected="OpenPbiDetails" />
         </MudContainer>
 
-        @* PBI Details Modal *@
-        @if (SelectedPbi is not null)
-        {
-            <div class="details-overlay">
-                <div class="details-container">
-                    <div class="details-header">
-                        <MudText Typo="Typo.h5" Class="details-title">
-                            <MudIcon Icon="@Icons.Material.Filled.Visibility" Class="me-2" />
-                            PBI Details
-                        </MudText>
-                        <MudButton Variant="Variant.Text"
-                                   Color="Color.Secondary"
-                                   StartIcon="@Icons.Material.Filled.Close"
-                                   OnClick="ClosePbiDetails"
-                                   Class="close-button">
-                            Close
-                        </MudButton>
-                    </div>
-
-                    <div class="details-content">
-                        <div class="details-card">
-                            <PbiCard PbiModel="SelectedPbi" OnSave="HandlePbiSave" OnDelete="HandlePbiDelete" />
-                        </div>
-                        <CommentThread PbiId="SelectedPbi.PbiId" />
-                    </div>
-                </div>
-            </div>
-        }
     }
 </div>
 
@@ -111,7 +84,6 @@
     private int? SelectedEpicId = null;
 
     private bool _loading = true;
-    private ProductBacklogItem? SelectedPbi;
     private string _movePbiErrorMessage = string.Empty;
 
     protected override async Task OnInitializedAsync()
@@ -249,14 +221,25 @@
         }
     }
 
-    private void OpenPbiDetails(ProductBacklogItem pbi)
+    private async Task OpenPbiDetails(ProductBacklogItem pbi)
     {
-        SelectedPbi = pbi;
-    }
+        var parameters = new DialogParameters<PbiDetailsDialog>
+        {
+            { x => x.Pbi, pbi },
+            { x => x.OnSave, EventCallback.Factory.Create<ProductBacklogItem>(this, HandlePbiSave) },
+            { x => x.OnDelete, EventCallback.Factory.Create<int>(this, HandlePbiDelete) }
+        };
 
-    private async Task ClosePbiDetails()
-    {
-        SelectedPbi = null;
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Large,
+            FullWidth = true,
+            CloseButton = true,
+            CloseOnEscapeKey = true
+        };
+
+        var dialog = await DialogService.ShowAsync<PbiDetailsDialog>("PBI Details", parameters, options);
+        await dialog.Result;
         await LoadPbisAsync(showLoading: false);
     }
 
@@ -265,11 +248,8 @@
         try
         {
             var response = await Http.PutAsJsonAsync("api/Pbi", pbi);
-            if (response.IsSuccessStatusCode)
-            {
-                SelectedPbi = null;
-                await LoadPbisAsync(showLoading: false);
-            }
+            if (!response.IsSuccessStatusCode)
+                Console.WriteLine($"Error updating PBI: {response.StatusCode}");
         }
         catch (Exception ex)
         {
@@ -277,9 +257,5 @@
         }
     }
 
-    private async Task HandlePbiDelete(int pbiId)
-    {
-        SelectedPbi = null;
-        await LoadPbisAsync(showLoading: false);
-    }
+    private Task HandlePbiDelete(int pbiId) => Task.CompletedTask;
 }

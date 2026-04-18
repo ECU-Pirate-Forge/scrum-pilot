@@ -251,7 +251,7 @@
             _formModel.DateCreated = DateTime.UtcNow;
             _formModel.LastUpdated = DateTime.UtcNow;
 
-            var response = await Http.PostAsJsonAsync("api/Pbi/createStory", _formModel);
+            var response = await Http.PostAsJsonAsync("api/Pbi/createDraftPbi", _formModel);
 
             if (response.IsSuccessStatusCode)
             {
