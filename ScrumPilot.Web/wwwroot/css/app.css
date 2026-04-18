@@ -38,16 +38,40 @@ html, body {
 
 .dashboard-tile {
     cursor: pointer;
-    border-radius: 8px;
+    border-radius: 12px;
+    padding: 28px 24px;
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
+.dashboard-tile-icon {
+    line-height: 1;
+}
+
 .dashboard-tile:hover {
-    transform: translateY(-2px);
+    transform: translateY(-3px);
     box-shadow:
         0 0 0 1px rgba(168, 85, 247, 0.75),
         0 0 12px rgba(168, 85, 247, 0.4),
         0 4px 20px rgba(0, 0, 0, 0.35) !important;
+}
+
+/* Draft PBI table — blue header, readable in light and dark */
+.draft-pbi-table .mud-table-head tr th,
+.draft-pbi-table .mud-table-head tr td {
+    background-color: var(--mud-palette-primary) !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.03em;
+}
+
+.draft-pbi-table .mud-table-head .mud-button-root,
+.draft-pbi-table .mud-table-head .mud-icon-root,
+.draft-pbi-table .mud-table-head span {
+    color: #ffffff !important;
 }
 
 .swimlane-dropzone {

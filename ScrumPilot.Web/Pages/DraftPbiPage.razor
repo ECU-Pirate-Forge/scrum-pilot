@@ -45,7 +45,7 @@ else if (draftPbis.Count == 0)
 else
 {
     <MudPaper Elevation="4">
-        <MudTable T="ProductBacklogItem" Items="@draftPbis" Dense="false" Hover="true" Bordered="false" Striped="true" Elevation="0">
+        <MudTable T="ProductBacklogItem" Items="@draftPbis" Dense="false" Hover="true" Bordered="false" Striped="true" Elevation="0" Class="draft-pbi-table">
             <HeaderContent>
                 <MudTh Style="width: 18%; font-weight: 600;">Title</MudTh>
                 <MudTh Style="width: 32%; font-weight: 600;">Description</MudTh>

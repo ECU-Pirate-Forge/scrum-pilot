@@ -1,4 +1,4 @@
-﻿@page "/"
+@page "/"
 @using MudBlazor
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
@@ -9,41 +9,60 @@
         Quick access to core Scrum Pilot workflows.
     </MudText>
 
-    <MudGrid Spacing="3">
+    <MudGrid Spacing="4">
 
         <MudItem xs="12" sm="6" md="4">
             <DashboardTile
                 Title="Scrum Board"
                 Description="View and manage sprint work."
-                Href="/scrum-board" />
+                Href="/scrum-board"
+                Icon="@Icons.Material.Filled.Dashboard"
+                IconColor="#1976D2" />
         </MudItem>
 
         <MudItem xs="12" sm="6" md="4">
             <DashboardTile
                 Title="Generate PBIs"
                 Description="Create product backlog items quickly."
-                Href="/pbigeneration" />
+                Href="/pbigeneration"
+                Icon="@Icons.Material.Filled.Lightbulb"
+                IconColor="#F9A825" />
         </MudItem>
 
         <MudItem xs="12" sm="6" md="4">
             <DashboardTile
                 Title="Draft PBIs"
                 Description="Review and refine drafted product backlog items."
-                Href="/draft-pbis" />
+                Href="/draft-pbis"
+                Icon="@Icons.Material.Filled.Article"
+                IconColor="#7B1FA2" />
         </MudItem>
 
         <MudItem xs="12" sm="6" md="4">
             <DashboardTile
                 Title="Backlog"
                 Description="View and manage backlog items."
-                Href="/backlog" />
+                Href="/backlog"
+                Icon="@Icons.Material.Filled.List"
+                IconColor="#388E3C" />
         </MudItem>
 
         <MudItem xs="12" sm="6" md="4">
             <DashboardTile
                 Title="Metrics Dashboard"
                 Description="Sprint metrics and PBI analytics."
-                Href="/metrics" />
+                Href="/metrics"
+                Icon="@Icons.Material.Filled.BarChart"
+                IconColor="#E64A19" />
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="4">
+            <DashboardTile
+                Title="Planning Poker"
+                Description="Estimate stories with your team in real time."
+                Href="/planning-poker"
+                Icon="@Icons.Material.Filled.Casino"
+                IconColor="#00838F" />
         </MudItem>
 
     </MudGrid>

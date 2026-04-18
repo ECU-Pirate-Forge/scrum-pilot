@@ -1,3 +1,4 @@
+using ScrumPilot.API.Hubs;
 using ScrumPilot.API.Services;
 using ScrumPilot.Data.Context;
 using ScrumPilot.Data.Extensions;
@@ -33,6 +34,20 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             IssuerSigningKey = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
         };
+        // SignalR passes the token via query string for WebSocket connections
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                {
+                    context.Token = accessToken;
+                }
+                return Task.CompletedTask;
+            }
+        };
     });
 
 // Require authentication on every endpoint by default
@@ -42,6 +57,8 @@ builder.Services.AddAuthorizationBuilder()
         .Build());
 
 // Add services to the container.
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<PlanningPokerSessionService>();
 builder.Services.AddScoped<ISprintService, SprintService>();
 builder.Services.AddScoped<IEpicService, EpicService>();
 builder.Services.AddScoped<IMetricsDashboardService, MetricsDashboardService>();
@@ -68,6 +85,7 @@ builder.Services.AddCors(options =>
             )
             .AllowAnyHeader()
             .AllowAnyMethod()
+            .AllowCredentials()
     );
 });
 
@@ -105,4 +123,5 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<PlanningPokerHub>("/hubs/planning-poker");
 app.Run();
