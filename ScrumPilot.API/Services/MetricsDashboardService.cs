@@ -57,7 +57,7 @@ public class MetricsDashboardService : IMetricsDashboardService
         var history = (await _history.GetHistoryForSprintAsync(sprintId)).ToList();
 
         var start = sprint.StartDate.Value.Date;
-        var end   = sprint.EndDate.Value.Date;
+        var end = sprint.EndDate.Value.Date;
         var today = DateTime.UtcNow.Date;
         var totalPoints = items.Sum(p => (int)p.StoryPoints);
 
@@ -284,7 +284,7 @@ public class MetricsDashboardService : IMetricsDashboardService
         <= 1 => "≤1d",
         <= 3 => "2-3d",
         <= 8 => "4-8d",
-        _    => "9+d"
+        _ => "9+d"
     };
 
     public async Task<TimeInStageData> GetTimeInStageDataAsync(int sprintId)

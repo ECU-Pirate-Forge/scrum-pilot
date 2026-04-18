@@ -68,70 +68,70 @@ namespace ScrumPilot.Data.Seeders
 
             // Upsert Sprint 1 — look up by SprintGoal so dates can be changed freely.
             var sprint1Start = new DateTime(2026, 3, 22, 0, 0, 0, DateTimeKind.Utc);
-            var sprint1End   = new DateTime(2026, 4, 4,  0, 0, 0, DateTimeKind.Utc);
+            var sprint1End = new DateTime(2026, 4, 4, 0, 0, 0, DateTimeKind.Utc);
             var sprint1 = context.Sprints.FirstOrDefault(s => s.SprintGoal == Sprint1Goal);
             if (sprint1 is null)
             {
                 context.Sprints.Add(new Sprint
                 {
-                    SprintGoal  = Sprint1Goal,
-                    StartDate   = sprint1Start,
-                    EndDate     = sprint1End,
-                    IsOpen      = false,
-                    DateClosed  = sprint1End
+                    SprintGoal = Sprint1Goal,
+                    StartDate = sprint1Start,
+                    EndDate = sprint1End,
+                    IsOpen = false,
+                    DateClosed = sprint1End
                 });
             }
             else
             {
-                sprint1.StartDate  = sprint1Start;
-                sprint1.EndDate    = sprint1End;
-                sprint1.IsOpen     = false;
+                sprint1.StartDate = sprint1Start;
+                sprint1.EndDate = sprint1End;
+                sprint1.IsOpen = false;
                 sprint1.DateClosed = sprint1End;
             }
 
             // Upsert Sprint 2
-            var sprint2Start = new DateTime(2026, 4, 5,  0, 0, 0, DateTimeKind.Utc);
-            var sprint2End   = new DateTime(2026, 4, 18, 0, 0, 0, DateTimeKind.Utc);
+            var sprint2Start = new DateTime(2026, 4, 5, 0, 0, 0, DateTimeKind.Utc);
+            var sprint2End = new DateTime(2026, 4, 18, 0, 0, 0, DateTimeKind.Utc);
             var sprint2 = context.Sprints.FirstOrDefault(s => s.SprintGoal == Sprint2Goal);
             if (sprint2 is null)
             {
                 context.Sprints.Add(new Sprint
                 {
                     SprintGoal = Sprint2Goal,
-                    StartDate  = sprint2Start,
-                    EndDate    = sprint2End,
-                    IsOpen     = true,
+                    StartDate = sprint2Start,
+                    EndDate = sprint2End,
+                    IsOpen = true,
                     DateClosed = null
                 });
             }
             else
             {
                 sprint2.StartDate = sprint2Start;
-                sprint2.EndDate   = sprint2End;
-                sprint2.IsOpen    = true;
+                sprint2.EndDate = sprint2End;
+                sprint2.IsOpen = true;
                 sprint2.DateClosed = null;
             }
 
             // Upsert Sprint 3 — future sprint, starts after Sprint 2 ends
             var sprint3Start = new DateTime(2026, 4, 19, 0, 0, 0, DateTimeKind.Utc);
-            var sprint3End   = new DateTime(2026, 5, 2,  0, 0, 0, DateTimeKind.Utc);
+            var sprint3End = new DateTime(2026, 5, 2, 0, 0, 0, DateTimeKind.Utc);
             var sprint3 = context.Sprints.FirstOrDefault(s => s.SprintGoal == Sprint3Goal);
             if (sprint3 is null)
             {
                 context.Sprints.Add(new Sprint
                 {
                     SprintGoal = Sprint3Goal,
-                    StartDate  = sprint3Start,
-                    EndDate    = sprint3End,
-                    IsOpen     = false,
+                    StartDate = sprint3Start,
+                    EndDate = sprint3End,
+                    IsOpen = false,
                     DateClosed = null
                 });
             }
             else
             {
-                sprint3.StartDate  = sprint3Start;
-                sprint3.EndDate    = sprint3End;
-                sprint3.IsOpen     = false;
+                sprint3.StartDate = sprint3Start;
+                sprint3.EndDate = sprint3End;
+                sprint3.IsOpen = false;
                 sprint3.DateClosed = null;
             }
 
