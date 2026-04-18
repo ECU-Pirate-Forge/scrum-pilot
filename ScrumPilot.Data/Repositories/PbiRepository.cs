@@ -91,7 +91,12 @@ namespace ScrumPilot.Data.Repositories
             var query = _context.Stories.Where(s => !s.IsDraft);
 
             if (sprintId.HasValue)
-                query = query.Where(s => s.SprintId == sprintId.Value);
+            {
+                if (sprintId.Value == -1)
+                    query = query.Where(s => s.SprintId == null);
+                else
+                    query = query.Where(s => s.SprintId == sprintId.Value);
+            }
 
             if (epicId.HasValue)
                 query = query.Where(s => s.EpicId == epicId.Value);

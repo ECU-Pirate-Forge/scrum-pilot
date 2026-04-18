@@ -25,6 +25,7 @@ else
                    Dense="true"
                    Style="min-width: 220px;">
             <MudSelectItem T="int?" Value="@((int?)null)">All</MudSelectItem>
+            <MudSelectItem T="int?" Value="@((int?)-1)">Unassigned</MudSelectItem>
             @foreach (var sprint in _sprints)
             {
                 <MudSelectItem T="int?" Value="@((int?)sprint.SprintId)">
@@ -155,7 +156,12 @@ else
 
 @code {
     [Parameter] public bool GroupByPriority { get; set; }
+    [Parameter] public List<ProductBacklogItem>? Items { get; set; }
     [Parameter] public EventCallback<ProductBacklogItem> OnPbiSelected { get; set; }
+    /// <summary>Pins the sprint filter to a specific sprint ID on first load. Use -1 for Unassigned.</summary>
+    [Parameter] public int? InitialSprintId { get; set; }
+    /// <summary>When true, automatically selects the sprint with the most recent start date on first load.</summary>
+    [Parameter] public bool DefaultToLatestSprint { get; set; }
 
     private MudDropContainer<ProductBacklogItem>? _dropContainer;
     private bool _needsRefresh;
@@ -172,12 +178,37 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        if (Items is not null)
+        {
+            _items = Items;
+            _loading = false;
+            return;
+        }
         await LoadDropdownsAsync();
+        ApplyDefaultSprintFilter();
         await LoadItemsAsync();
+    }
+
+    private void ApplyDefaultSprintFilter()
+    {
+        if (DefaultToLatestSprint && _sprints.Count > 0)
+        {
+            _selectedSprintId = _sprints
+                .Where(s => s.StartDate.HasValue)
+                .OrderByDescending(s => s.StartDate)
+                .FirstOrDefault()?.SprintId;
+        }
+        else if (InitialSprintId.HasValue)
+        {
+            _selectedSprintId = InitialSprintId.Value;
+        }
     }
 
     protected override void OnParametersSet()
     {
+        if (Items is not null)
+            _items = Items;
+
         if (GroupByPriority)
         {
             _itemsSelector = (item, zone) => item.Priority.ToString() == zone;
@@ -244,6 +275,8 @@ else
         finally
         {
             _loading = false;
+            _needsRefresh = true;
+            StateHasChanged();
         }
     }
 
