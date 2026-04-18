@@ -15,7 +15,7 @@
                              box-shadow: 0 6px 25px rgba(25, 118, 210, 0.2);">
 
                 <!-- EDIT / SAVE / CANCEL / DELETE BUTTONS -->
-                <div class="d-flex gap-2 mb-4 flex-wrap">
+                <div class="pbi-button-row mb-4">
                     @if (isEditMode)
                     {
                         <MudButton Variant="Variant.Filled"
@@ -33,20 +33,38 @@
                     }
                     else
                     {
-                        <MudButton Variant="Variant.Outlined"
-                                   Color="Color.Primary"
-                                   StartIcon="@Icons.Material.Filled.Edit"
-                                   OnClick="StartEdit">
-                            Edit
-                        </MudButton>
-
-                        <!-- DELETE BUTTON -->
-                        <MudButton Variant="Variant.Outlined"
-                                   Color="Color.Error"
-                                   StartIcon="@Icons.Material.Filled.Delete"
-                                   OnClick="ConfirmDelete">
-                            Delete
-                        </MudButton>
+                        <div class="pbi-button-left">
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Edit"
+                                       OnClick="StartEdit">
+                                Edit
+                            </MudButton>
+                            <!-- DELETE BUTTON -->
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Error"
+                                       StartIcon="@Icons.Material.Filled.Delete"
+                                       OnClick="ConfirmDelete">
+                                Delete
+                            </MudButton>
+                        </div>
+                        <div class="pbi-button-right">
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Tertiary"
+                                       StartIcon="@Icons.Material.Filled.AutoAwesome"
+                                       OnClick="ImproveWithAi"
+                                       Disabled="@isImproving">
+                                @if (isImproving)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
+                                    <span>Improving...</span>
+                                }
+                                else
+                                {
+                                    <span>Improve with AI</span>
+                                }
+                            </MudButton>
+                        </div>
                     }
                 </div>
 
@@ -79,6 +97,14 @@
                 {
                     <MudAlert Severity="Severity.Error" Class="mb-3">
                         @errorMessage
+                    </MudAlert>
+                }
+
+                <!-- AI SUGGESTION BANNER -->
+                @if (isAiSuggestion && isEditMode)
+                {
+                    <MudAlert Severity="Severity.Info" Icon="@Icons.Material.Filled.AutoAwesome" Class="mb-3">
+                        AI suggestions loaded — review the updated title and description, then save or cancel.
                     </MudAlert>
                 }
 
@@ -394,6 +420,8 @@ else
     private bool titleError = false;
     private string errorMessage = "";
     private bool showDeleteConfirm = false;
+    private bool isImproving = false;
+    private bool isAiSuggestion = false;
 
     // Edit field values
     private string editTitle = "";
@@ -527,6 +555,7 @@ else
         titleError = false;
         errorMessage = "";
         isEditMode = false;
+        isAiSuggestion = false;
 
         if (OnSave.HasDelegate)
         {
@@ -539,6 +568,48 @@ else
         titleError = false;
         errorMessage = "";
         isEditMode = false;
+        isAiSuggestion = false;
+    }
+
+    private async Task ImproveWithAi()
+    {
+        if (PbiModel == null) return;
+
+        isImproving = true;
+        errorMessage = "";
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/Pbi/ImprovePbi", PbiModel);
+            if (response.IsSuccessStatusCode)
+            {
+                var improved = await response.Content.ReadFromJsonAsync<ProductBacklogItem>();
+                if (improved != null)
+                {
+                    editTitle = improved.Title;
+                    editDescription = improved.Description ?? "";
+                    editPriority = PbiModel.Priority;
+                    editStoryPoints = PbiModel.StoryPoints;
+                    editEpicId = PbiModel.EpicId;
+                    editSprintId = PbiModel.SprintId;
+                    titleError = false;
+                    isAiSuggestion = true;
+                    isEditMode = true;
+                }
+            }
+            else
+            {
+                errorMessage = "AI improvement failed. Please try again.";
+            }
+        }
+        catch
+        {
+            errorMessage = "Failed to connect to server.";
+        }
+        finally
+        {
+            isImproving = false;
+        }
     }
 
     private string GetStatusIcon(ScrumPilot.Shared.Models.PbiStatus status) => status switch

@@ -97,7 +97,7 @@
                 }
                 else
                 {
-                    <span>@($"GENERATE PBI's' ({_problemStatements.Count})")</span>
+                    <span>@($"GENERATE PBI's ({_problemStatements.Count})")</span>
                 }
             </MudButton>
         </div>
@@ -164,7 +164,7 @@
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
             // Call the API
-            var response = await Http.PostAsync("api/pbi/generateAiStories", content);
+            var response = await Http.PostAsync("api/pbi/generateAiPbis", content);
 
             if (response.IsSuccessStatusCode)
             {
