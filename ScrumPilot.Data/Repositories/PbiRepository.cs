@@ -85,5 +85,25 @@ namespace ScrumPilot.Data.Repositories
                 .OrderByDescending(s => s.DateCreated)
                 .ToListAsync();
         }
+
+        public async Task<IEnumerable<ProductBacklogItem>> GetFilteredPbisAsync(int? sprintId, int? epicId)
+        {
+            var query = _context.Stories.Where(s => !s.IsDraft);
+
+            if (sprintId.HasValue)
+            {
+                if (sprintId.Value == -1)
+                    query = query.Where(s => s.SprintId == null);
+                else
+                    query = query.Where(s => s.SprintId == sprintId.Value);
+            }
+
+            if (epicId.HasValue)
+                query = query.Where(s => s.EpicId == epicId.Value);
+
+            return await query
+                .OrderByDescending(s => s.DateCreated)
+                .ToListAsync();
+        }
     }
 }

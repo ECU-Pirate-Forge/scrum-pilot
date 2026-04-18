@@ -291,9 +291,40 @@ namespace ScrumPilot.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Messages")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.ToTable("MessageTranscripts");
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.PbiStatusHistory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FromStatus")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("PbiId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ToStatus")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PbiId");
+
+                    b.ToTable("PbiStatusHistory", (string)null);
                 });
 
             modelBuilder.Entity("ScrumPilot.Shared.Models.ProductBacklogItem", b =>
@@ -384,6 +415,19 @@ namespace ScrumPilot.Data.Migrations
                     b.ToTable("Sprint", (string)null);
                 });
 
+            modelBuilder.Entity("ScrumPilot.Shared.Models.UserDashboardPreference", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PreferencesJson")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("UserDashboardPreferences", (string)null);
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
@@ -444,55 +488,13 @@ namespace ScrumPilot.Data.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("ScrumPilot.Shared.Models.MessageTranscript", b =>
+            modelBuilder.Entity("ScrumPilot.Shared.Models.PbiStatusHistory", b =>
                 {
-                    b.OwnsMany("ScrumPilot.Shared.Models.DiscordMessage", "Messages", b1 =>
-                        {
-                            b1.Property<int>("MessageTranscriptId");
-
-                            b1.Property<int>("__synthesizedOrdinal")
-                                .ValueGeneratedOnAddOrUpdate();
-
-                            b1.Property<string>("Content")
-                                .IsRequired();
-
-                            b1.Property<DateTime>("Timestamp");
-
-                            b1.HasKey("MessageTranscriptId", "__synthesizedOrdinal");
-
-                            b1.ToTable("MessageTranscripts");
-
-                            b1
-                                .ToJson("Messages")
-                                .HasColumnType("TEXT");
-
-                            b1.WithOwner()
-                                .HasForeignKey("MessageTranscriptId");
-
-                            b1.OwnsOne("ScrumPilot.Shared.Models.DiscordAuthor", "Author", b2 =>
-                                {
-                                    b2.Property<int>("DiscordMessageMessageTranscriptId");
-
-                                    b2.Property<int>("DiscordMessage__synthesizedOrdinal");
-
-                                    b2.Property<string>("Id");
-
-                                    b2.Property<string>("Username")
-                                        .IsRequired();
-
-                                    b2.HasKey("DiscordMessageMessageTranscriptId", "DiscordMessage__synthesizedOrdinal");
-
-                                    b2.ToTable("MessageTranscripts");
-
-                                    b2.WithOwner()
-                                        .HasForeignKey("DiscordMessageMessageTranscriptId", "DiscordMessage__synthesizedOrdinal");
-                                });
-
-                            b1.Navigation("Author")
-                                .IsRequired();
-                        });
-
-                    b.Navigation("Messages");
+                    b.HasOne("ScrumPilot.Shared.Models.ProductBacklogItem", null)
+                        .WithMany()
+                        .HasForeignKey("PbiId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("ScrumPilot.Shared.Models.ProductBacklogItem", b =>

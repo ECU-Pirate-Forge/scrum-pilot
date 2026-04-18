@@ -1,0 +1,63 @@
+@using ApexCharts
+@using ScrumPilot.Web.Services
+
+<WidgetCard Title="Bug Trend">
+    @if (_loading)
+    {
+        <div class="widget-center"><MudProgressCircular Indeterminate="true" Size="MudBlazor.Size.Small" Color="MudBlazor.Color.Primary" /></div>
+    }
+    else if (_points.Count > 0)
+    {
+        <ApexChart TItem="BugTrendPoint" Options="_options" Height="@("100%")">
+            <ApexPointSeries TItem="BugTrendPoint"
+                             Items="_points"
+                             Name="Created"
+                             SeriesType="SeriesType.Line"
+                             XValue="@(p => p.Date.ToString("MMM d"))"
+                             YValue="@(p => (decimal)p.Created)" />
+            <ApexPointSeries TItem="BugTrendPoint"
+                             Items="_points"
+                             Name="Resolved"
+                             SeriesType="SeriesType.Line"
+                             XValue="@(p => p.Date.ToString("MMM d"))"
+                             YValue="@(p => (decimal)p.Resolved)" />
+        </ApexChart>
+    }
+    else
+    {
+        <div class="widget-empty">No bug data for this sprint</div>
+    }
+</WidgetCard>
+
+@code {
+    [Parameter] public int? SprintId { get; set; }
+    [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
+
+    private List<BugTrendPoint> _points = [];
+    private ApexChartOptions<BugTrendPoint> _options = new();
+    private bool _loading = true;
+    private int? _lastSprintId = -1;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_lastSprintId == SprintId) return;
+        _lastSprintId = SprintId;
+        _loading = true;
+        try { _points = SprintId.HasValue ? await MetricsSvc.GetBugTrendAsync(SprintId.Value) : []; }
+        catch { _points = []; }
+        _options = BuildOptions();
+        _loading = false;
+    }
+
+    private static ApexChartOptions<BugTrendPoint> BuildOptions() => new()
+    {
+        Chart = new Chart { Background = "transparent", Toolbar = new Toolbar { Show = false } },
+        Colors = ["#ef5350", "#66bb6a"],
+        Stroke = new Stroke { Curve = [Curve.Smooth, Curve.Smooth], Width = [2, 2] },
+        Xaxis = new XAxis { Labels = new XAxisLabels { Style = new AxisLabelStyle { Colors = "#8b949e", FontSize = "11px" } } },
+        Yaxis = [new YAxis { Labels = new YAxisLabels { Style = new AxisLabelStyle { Colors = "#8b949e", FontSize = "11px" } } }],
+        Grid = new Grid { BorderColor = "#21262d", Row = new GridRow { Colors = ["transparent"] } },
+        Legend = new Legend { Labels = new LegendLabels { Colors = ["#8b949e"] }, Position = LegendPosition.Top },
+        Tooltip = new Tooltip { Theme = ApexCharts.Mode.Dark }
+    };
+}

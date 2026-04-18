@@ -31,9 +31,20 @@ namespace ScrumPilot.API.Controllers
         //}
 
         [HttpGet("getNonDraftPbis")]
-        public async Task<ActionResult<IEnumerable<ProductBacklogItem>>> GetNonDraftPbis()
+        public async Task<ActionResult<IEnumerable<ProductBacklogItem>>> GetNonDraftPbis(
+            [FromQuery] int? sprintId, [FromQuery] int? epicId)
         {
-            var pbis = await _pbiService.GetNonDraftPbisAsync();
+            IEnumerable<ProductBacklogItem> pbis;
+
+            if (sprintId.HasValue || epicId.HasValue)
+            {
+                pbis = await _pbiService.GetFilteredPbisAsync(sprintId, epicId);
+            }
+            else
+            {
+                pbis = await _pbiService.GetNonDraftPbisAsync();
+            }
+
             return Ok(pbis);
         }
 

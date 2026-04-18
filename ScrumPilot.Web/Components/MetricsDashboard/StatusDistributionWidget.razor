@@ -1,0 +1,40 @@
+@if (Items.Count > 0)
+{
+    <MudChart ChartType="ChartType.Bar"
+              ChartSeries="@_series"
+              XAxisLabels="@_labels"
+              Width="100%"
+              Height="160px"
+              ChartOptions="@_options" />
+}
+else
+{
+    <MudText Typo="Typo.body2" Style="color:#8b949e;">No data.</MudText>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<ProductBacklogItem> Items { get; set; } = [];
+
+    private List<ChartSeries> _series = [];
+    private string[] _labels = [];
+    private ChartOptions _options = new() { YAxisTicks = 1 };
+
+    protected override void OnParametersSet()
+    {
+        _labels = ["To Do", "In Progress", "In Review", "Done"];
+        _series =
+        [
+            new ChartSeries
+            {
+                Name = "PBIs",
+                Data = new double[]
+                {
+                    Items.Count(i => i.Status == PbiStatus.ToDo),
+                    Items.Count(i => i.Status == PbiStatus.InProgress),
+                    Items.Count(i => i.Status == PbiStatus.InReview),
+                    Items.Count(i => i.Status == PbiStatus.Done),
+                }
+            }
+        ];
+    }
+}

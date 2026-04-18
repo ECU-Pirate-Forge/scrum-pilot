@@ -1,0 +1,84 @@
+@using ApexCharts
+@using ScrumPilot.Web.Services
+
+<WidgetCard Title="Burndown Chart">
+    @if (_loading)
+    {
+        <div class="widget-center"><MudProgressCircular Indeterminate="true" Size="MudBlazor.Size.Small" Color="MudBlazor.Color.Primary" /></div>
+    }
+    else if (_points.Count > 0)
+    {
+        <ApexChart TItem="BurndownPoint" Options="_options" Height="@("100%")">
+            <ApexPointSeries TItem="BurndownPoint"
+                             Items="_points"
+                             Name="Actual"
+                             SeriesType="SeriesType.Line"
+                             XValue="@(p => p.Date.ToString("MMM d"))"
+                             YValue="@(p => (decimal?)p.Actual)" />
+            <ApexPointSeries TItem="BurndownPoint"
+                             Items="_points"
+                             Name="Ideal"
+                             SeriesType="SeriesType.Line"
+                             XValue="@(p => p.Date.ToString("MMM d"))"
+                             YValue="@(p => (decimal)p.Ideal)" />
+        </ApexChart>
+    }
+    else
+    {
+        <div class="widget-empty">No burndown data — sprint in progress</div>
+    }
+</WidgetCard>
+
+@code {
+    [Parameter] public int? SprintId { get; set; }
+    [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
+
+    private List<BurndownPoint> _points = [];
+    private ApexChartOptions<BurndownPoint> _options = new();
+    private bool _loading = true;
+    private int? _lastSprintId = -1;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_lastSprintId == SprintId) return;
+        _lastSprintId = SprintId;
+        _loading = true;
+        try { _points = SprintId.HasValue ? await MetricsSvc.GetBurndownDataAsync(SprintId.Value) : []; }
+        catch { _points = []; }
+
+        _options = BuildOptions();
+        _loading = false;
+    }
+
+    private static ApexChartOptions<BurndownPoint> BuildOptions() => new()
+    {
+        Chart = new Chart
+        {
+            Background = "transparent",
+            Toolbar = new Toolbar { Show = false },
+            Animations = new Animations { Enabled = true }
+        },
+        Colors = ["#00d4ff", "#616161"],
+        Stroke = new Stroke
+        {
+            Curve = [Curve.Smooth, Curve.Straight],
+            Width = [3, 2],
+            DashArray = [0, 6]
+        },
+        Xaxis = new XAxis { Labels = new XAxisLabels { Style = new AxisLabelStyle { Colors = "#8b949e", FontSize = "11px" } } },
+        Yaxis =
+        [
+            new YAxis
+            {
+                Labels = new YAxisLabels
+                {
+                    Style = new AxisLabelStyle { Colors = "#8b949e", FontSize = "11px" },
+                    Formatter = "function(val) { return val.toFixed(2); }"
+                }
+            }
+        ],
+        Grid = new Grid { BorderColor = "#21262d", Row = new GridRow { Colors = ["transparent"] } },
+        Legend = new Legend { Labels = new LegendLabels { Colors = ["#8b949e"] }, Position = LegendPosition.Top },
+        Tooltip = new Tooltip { Theme = ApexCharts.Mode.Dark, Shared = true }
+    };
+}

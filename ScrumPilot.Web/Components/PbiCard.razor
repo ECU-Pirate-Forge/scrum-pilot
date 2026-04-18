@@ -14,7 +14,7 @@
                              box-shadow: 0 6px 25px rgba(25, 118, 210, 0.2);">
 
                 <!-- EDIT / SAVE / CANCEL / DELETE BUTTONS -->
-                <div class="d-flex gap-2 mb-4 flex-wrap">
+                <div class="pbi-button-row mb-4">
                     @if (isEditMode)
                     {
                         <MudButton Variant="Variant.Filled"
@@ -32,20 +32,38 @@
                     }
                     else
                     {
-                        <MudButton Variant="Variant.Outlined"
-                                   Color="Color.Primary"
-                                   StartIcon="@Icons.Material.Filled.Edit"
-                                   OnClick="StartEdit">
-                            Edit
-                        </MudButton>
-
-                        <!-- DELETE BUTTON -->
-                        <MudButton Variant="Variant.Outlined"
-                                   Color="Color.Error"
-                                   StartIcon="@Icons.Material.Filled.Delete"
-                                   OnClick="ConfirmDelete">
-                            Delete
-                        </MudButton>
+                        <div class="pbi-button-left">
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Edit"
+                                       OnClick="StartEdit">
+                                Edit
+                            </MudButton>
+                            <!-- DELETE BUTTON -->
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Error"
+                                       StartIcon="@Icons.Material.Filled.Delete"
+                                       OnClick="ConfirmDelete">
+                                Delete
+                            </MudButton>
+                        </div>
+                        <div class="pbi-button-right">
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Tertiary"
+                                       StartIcon="@Icons.Material.Filled.AutoAwesome"
+                                       OnClick="ImproveWithAi"
+                                       Disabled="@isImproving">
+                                @if (isImproving)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
+                                    <span>Improving...</span>
+                                }
+                                else
+                                {
+                                    <span>Improve with AI</span>
+                                }
+                            </MudButton>
+                        </div>
                     }
                 </div>
 
@@ -78,6 +96,14 @@
                 {
                     <MudAlert Severity="Severity.Error" Class="mb-3">
                         @errorMessage
+                    </MudAlert>
+                }
+
+                <!-- AI SUGGESTION BANNER -->
+                @if (isAiSuggestion && isEditMode)
+                {
+                    <MudAlert Severity="Severity.Info" Icon="@Icons.Material.Filled.AutoAwesome" Class="mb-3">
+                        AI suggestions loaded — review the updated title and description, then save or cancel.
                     </MudAlert>
                 }
 
@@ -192,7 +218,7 @@
 
                 <MudDivider Class="mb-4" />
 
-                <!-- EPIC AND SPRINT DROPDOWNS -->
+                <!-- EPIC AND SPRINT ASSIGNMENT -->
                 <div class="mb-4">
                     <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">
                         <MudIcon Icon="Icons.Material.Filled.AccountTree" Class="me-2" />
@@ -200,50 +226,72 @@
                     </MudText>
                     <MudGrid Spacing="3">
 
-                        <!-- EPIC DROPDOWN -->
+                        <!-- EPIC -->
                         <MudItem xs="12" sm="6">
-                            <MudSelect T="int?"
-                                       Value="PbiModel.EpicId"
-                                       ValueChanged="OnEpicChanged"
-                                       Label="Epic"
-                                       Variant="Variant.Outlined"
-                                       Disabled="@(epics == null)">
-                                <MudSelectItem T="int?" Value="@((int?)null)">
-                                    — Unassigned —
-                                </MudSelectItem>
-                                @if (epics != null)
-                                {
-                                    @foreach (var epic in epics)
+                            @if (isEditMode)
+                            {
+                                <MudSelect T="int?"
+                                           @bind-Value="editEpicId"
+                                           Label="Epic"
+                                           Variant="Variant.Outlined"
+                                           Disabled="@(epics == null)"
+                                           ToStringFunc="@(id => GetEpicDisplayName(id))">
+                                    <MudSelectItem T="int?" Value="@((int?)null)">
+                                        — Unassigned —
+                                    </MudSelectItem>
+                                    @if (epics != null)
                                     {
-                                        <MudSelectItem T="int?" Value="@((int?)epic.EpicId)">
-                                            @epic.Name
-                                        </MudSelectItem>
+                                        @foreach (var epic in epics)
+                                        {
+                                            <MudSelectItem T="int?" Value="@((int?)epic.EpicId)">
+                                                @epic.Name
+                                            </MudSelectItem>
+                                        }
                                     }
-                                }
-                            </MudSelect>
+                                </MudSelect>
+                            }
+                            else
+                            {
+                                <MudPaper Class="pa-3"
+                                          Style="background-color: var(--mud-palette-action-hover); border-radius: 8px;">
+                                    <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Epic</MudText>
+                                    <MudText Typo="Typo.body1" Style="font-weight: 600;">@GetEpicDisplayName(PbiModel.EpicId)</MudText>
+                                </MudPaper>
+                            }
                         </MudItem>
 
-                        <!-- SPRINT DROPDOWN -->
+                        <!-- SPRINT -->
                         <MudItem xs="12" sm="6">
-                            <MudSelect T="int?"
-                                       Value="PbiModel.SprintId"
-                                       ValueChanged="OnSprintChanged"
-                                       Label="Sprint"
-                                       Variant="Variant.Outlined"
-                                       Disabled="@(sprints == null)">
-                                <MudSelectItem T="int?" Value="@((int?)null)">
-                                    — Unassigned —
-                                </MudSelectItem>
-                                @if (sprints != null)
-                                {
-                                    @foreach (var sprint in sprints)
+                            @if (isEditMode)
+                            {
+                                <MudSelect T="int?"
+                                           @bind-Value="editSprintId"
+                                           Label="Sprint"
+                                           Variant="Variant.Outlined"
+                                           Disabled="@(sprints == null)"
+                                           ToStringFunc="@(id => GetSprintDisplayName(id))">
+                                    <MudSelectItem T="int?" Value="@((int?)null)">
+                                        — Unassigned —
+                                    </MudSelectItem>
+                                    @if (sprints != null)
                                     {
-                                        <MudSelectItem T="int?" Value="@((int?)sprint.SprintId)">
-                                            @(sprint.SprintGoal ?? $"Sprint {sprint.SprintId}")
-                                        </MudSelectItem>
+                                        @foreach (var sprint in sprints)
+                                        {
+                                            <MudSelectItem T="int?" Value="@((int?)sprint.SprintId)">
+                                                @(sprint.SprintGoal ?? $"Sprint {sprint.SprintId}")
+                                            </MudSelectItem>
+                                        }
                                     }
-                                }
-                            </MudSelect>
+                                </MudSelect>
+                            }
+                            else
+                            {
+                                <MudPaper Class="pa-3"
+                                          Style="background-color: var(--mud-palette-action-hover); border-radius: 8px;">
+                                    <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Sprint</MudText>
+                                    <MudText Typo="Typo.body1" Style="font-weight: 600;">@GetSprintDisplayName(PbiModel.SprintId)</MudText>
+                                </MudPaper>
+                            }
                         </MudItem>
 
                     </MudGrid>
@@ -370,12 +418,16 @@ else
     private bool titleError = false;
     private string errorMessage = "";
     private bool showDeleteConfirm = false;
+    private bool isImproving = false;
+    private bool isAiSuggestion = false;
 
     // Edit field values
     private string editTitle = "";
     private string editDescription = "";
     private PbiPriority editPriority;
     private PbiPoints editStoryPoints;
+    private int? editEpicId;
+    private int? editSprintId;
 
     // Epic and Sprint data
     private List<Epic>? epics;
@@ -391,7 +443,7 @@ else
     {
         try
         {
-            epics = await Http.GetFromJsonAsync<List<Epic>>("api/epics");
+            epics = await Http.GetFromJsonAsync<List<Epic>>("api/Epic");
         }
         catch
         {
@@ -404,7 +456,7 @@ else
     {
         try
         {
-            sprints = await Http.GetFromJsonAsync<List<Sprint>>("api/sprints");
+            sprints = await Http.GetFromJsonAsync<List<Sprint>>("api/Sprint");
         }
         catch
         {
@@ -413,18 +465,18 @@ else
         }
     }
 
-    private async Task OnEpicChanged(int? epicId)
+    private string GetEpicDisplayName(int? epicId)
     {
-        if (PbiModel == null) return;
-        PbiModel.EpicId = epicId;
-        await SaveAssignment();
+        if (!epicId.HasValue) return "— Unassigned —";
+        var epic = epics?.FirstOrDefault(e => e.EpicId == epicId.Value);
+        return epic?.Name ?? $"Epic {epicId}";
     }
 
-    private async Task OnSprintChanged(int? sprintId)
+    private string GetSprintDisplayName(int? sprintId)
     {
-        if (PbiModel == null) return;
-        PbiModel.SprintId = sprintId;
-        await SaveAssignment();
+        if (!sprintId.HasValue) return "— Unassigned —";
+        var sprint = sprints?.FirstOrDefault(s => s.SprintId == sprintId.Value);
+        return sprint?.SprintGoal ?? $"Sprint {sprintId}";
     }
 
     private async Task SaveAssignment()
@@ -490,6 +542,8 @@ else
         editDescription = PbiModel.Description ?? "";
         editPriority = PbiModel.Priority;
         editStoryPoints = PbiModel.StoryPoints;
+        editEpicId = PbiModel.EpicId;
+        editSprintId = PbiModel.SprintId;
         titleError = false;
         errorMessage = "";
         isEditMode = true;
@@ -508,11 +562,14 @@ else
         PbiModel.Description = editDescription;
         PbiModel.Priority = editPriority;
         PbiModel.StoryPoints = editStoryPoints;
+        PbiModel.EpicId = editEpicId;
+        PbiModel.SprintId = editSprintId;
         PbiModel.LastUpdated = DateTime.Now;
 
         titleError = false;
         errorMessage = "";
         isEditMode = false;
+        isAiSuggestion = false;
 
         if (OnSave.HasDelegate)
         {
@@ -525,6 +582,48 @@ else
         titleError = false;
         errorMessage = "";
         isEditMode = false;
+        isAiSuggestion = false;
+    }
+
+    private async Task ImproveWithAi()
+    {
+        if (PbiModel == null) return;
+
+        isImproving = true;
+        errorMessage = "";
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/Pbi/ImprovePbi", PbiModel);
+            if (response.IsSuccessStatusCode)
+            {
+                var improved = await response.Content.ReadFromJsonAsync<ProductBacklogItem>();
+                if (improved != null)
+                {
+                    editTitle = improved.Title;
+                    editDescription = improved.Description ?? "";
+                    editPriority = PbiModel.Priority;
+                    editStoryPoints = PbiModel.StoryPoints;
+                    editEpicId = PbiModel.EpicId;
+                    editSprintId = PbiModel.SprintId;
+                    titleError = false;
+                    isAiSuggestion = true;
+                    isEditMode = true;
+                }
+            }
+            else
+            {
+                errorMessage = "AI improvement failed. Please try again.";
+            }
+        }
+        catch
+        {
+            errorMessage = "Failed to connect to server.";
+        }
+        finally
+        {
+            isImproving = false;
+        }
     }
 
     private string GetStatusIcon(ScrumPilot.Shared.Models.PbiStatus status) => status switch

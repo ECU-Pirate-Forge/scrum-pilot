@@ -2,159 +2,53 @@
 @inject HttpClient Http
 
 <div class="swimlane-page">
+    <MudContainer MaxWidth="MaxWidth.False" Class="pa-0">
+        <SwimLanes @ref="_swimLanes"
+                   GroupByPriority
+                   InitialSprintId="-1"
+                   OnPbiSelected="OpenPbiDetails" />
+    </MudContainer>
 
-    @if (_loading)
+    @if (SelectedPbi is not null)
     {
-        <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center" Style="height:60vh;">
-            <MudProgressCircular Indeterminate="true" Size="Size.Large" />
-            <MudText Class="mt-4" Typo="Typo.subtitle1">Loading…</MudText>
-        </MudStack>
-    }
-    else
-    {
-        @if (!string.IsNullOrWhiteSpace(_errorMessage))
-        {
-            <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4" Icon="@Icons.Material.Filled.ErrorOutline">
-                @_errorMessage
-            </MudAlert>
-        }
+        <div class="details-overlay">
+            <div class="details-container">
+                <div class="details-header">
+                    <MudText Typo="Typo.h5" Class="details-title">
+                        <MudIcon Icon="@Icons.Material.Filled.Visibility" Class="me-2" />
+                        PBI Details
+                    </MudText>
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.Close"
+                               OnClick="ClosePbiDetails"
+                               Class="close-button">
+                        Close
+                    </MudButton>
+                </div>
 
-        <MudContainer MaxWidth="MaxWidth.False" Class="pa-0">
-            <SwimLanes Items="@Items"
-                       GroupByPriority
-                       OnItemDropped="OnItemDropped"
-                       OnPbiSelected="OpenPbiDetails" />
-        </MudContainer>
-
-        @* PBI Details Modal *@
-        @if (SelectedPbi is not null)
-        {
-            <div class="details-overlay">
-                <div class="details-container">
-                    <div class="details-header">
-                        <MudText Typo="Typo.h5" Class="details-title">
-                            <MudIcon Icon="@Icons.Material.Filled.Visibility" Class="me-2" />
-                            PBI Details
-                        </MudText>
-                        <MudButton Variant="Variant.Text"
-                                   Color="Color.Secondary"
-                                   StartIcon="@Icons.Material.Filled.Close"
-                                   OnClick="ClosePbiDetails"
-                                   Class="close-button">
-                            Close
-                        </MudButton>
+                <div class="details-content">
+                    <div class="details-card" style="padding: 20px; min-width: 0; overflow-x: hidden;">
+                        <PbiCard PbiModel="SelectedPbi" OnSave="HandlePbiSave" OnDelete="HandlePbiDelete" />
                     </div>
-
-                    <div class="details-content">
-                        <div class="details-card" style="padding: 20px; min-width: 0; overflow-x: hidden;">
-                            <PbiCard PbiModel="SelectedPbi" OnSave="HandlePbiSave" OnDelete="HandlePbiDelete" />
-                        </div>
-                        <CommentThread PbiId="SelectedPbi.PbiId" />
-                    </div>
+                    <CommentThread PbiId="SelectedPbi.PbiId" />
                 </div>
             </div>
-        }
+        </div>
     }
 </div>
 
 @code {
-
-    private List<ProductBacklogItem> Items = new();
-    private bool _loading = true;
+    private SwimLanes? _swimLanes;
     private ProductBacklogItem? SelectedPbi;
-    private string _errorMessage = string.Empty;
 
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadPbisAsync();
-    }
-
-    private async Task LoadPbisAsync(bool showLoading = true)
-    {
-        if (showLoading)
-        {
-            _loading = true;
-            Items = new();
-        }
-
-        try
-        {
-            var pbis = await Http.GetFromJsonAsync<List<ProductBacklogItem>>("api/Pbi/GetNonDraftPBIs");
-            if (pbis is not null)
-            {
-                Items = pbis;
-            }
-        }
-        catch
-        {
-            _errorMessage = "Unable to load pbis from the server.";
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private async Task OnItemDropped(MudItemDropInfo<ProductBacklogItem> dropInfo)
-    {
-        if (dropInfo.Item is null)
-            return;
-
-        if (!Enum.TryParse<PbiPriority>(dropInfo.DropzoneIdentifier, out var newPriority))
-        {
-            _errorMessage = "Unable to move story: invalid destination column.";
-            return;
-        }
-
-        var originalPriority = dropInfo.Item.Priority;
-        if (originalPriority == newPriority)
-        {
-            _errorMessage = string.Empty;
-            return;
-        }
-
-        _errorMessage = string.Empty;
-
-        // Optimistically move the card, then persist priority to the backend.
-        dropInfo.Item.Priority = newPriority;
-
-        try
-        {
-            dropInfo.Item.LastUpdated = DateTime.UtcNow;
-
-            var response = await Http.PutAsJsonAsync("api/Pbi", dropInfo.Item);
-            if (!response.IsSuccessStatusCode)
-            {
-                throw new HttpRequestException($"Priority update failed with code {(int)response.StatusCode}.");
-            }
-
-            var updatedStory = await response.Content.ReadFromJsonAsync<ProductBacklogItem>();
-            if (updatedStory is not null)
-            {
-                var index = Items.FindIndex(i => i.PbiId == updatedStory.PbiId);
-                if (index >= 0)
-                {
-                    Items[index] = updatedStory;
-                }
-            }
-        }
-        catch
-        {
-            // Revert local priority if backend update fails so UI and data stay consistent.
-            dropInfo.Item.Priority = originalPriority;
-            _errorMessage = "Could not save the priority change. The card was returned to its previous column.";
-        }
-    }
-
-    private void OpenPbiDetails(ProductBacklogItem story)
-    {
-        SelectedPbi = story;
-    }
+    private void OpenPbiDetails(ProductBacklogItem pbi) => SelectedPbi = pbi;
 
     private async Task ClosePbiDetails()
     {
         SelectedPbi = null;
-        await LoadPbisAsync(showLoading: false);
+        if (_swimLanes is not null)
+            await _swimLanes.RefreshAsync();
     }
 
     private async Task HandlePbiSave(ProductBacklogItem pbi)
@@ -165,7 +59,8 @@
             if (response.IsSuccessStatusCode)
             {
                 SelectedPbi = null;
-                await LoadPbisAsync(showLoading: false);
+                if (_swimLanes is not null)
+                    await _swimLanes.RefreshAsync();
             }
         }
         catch (Exception ex)
@@ -177,7 +72,7 @@
     private async Task HandlePbiDelete(int storyId)
     {
         SelectedPbi = null;
-        await LoadPbisAsync(showLoading: false);
+        if (_swimLanes is not null)
+            await _swimLanes.RefreshAsync();
     }
-
 }

@@ -1,0 +1,151 @@
+@using ApexCharts
+@using ScrumPilot.Web.Services
+
+<WidgetCard Title="Sprint Velocity">
+    @if (_loading)
+    {
+        <div class="widget-center"><MudProgressCircular Indeterminate="true" Size="MudBlazor.Size.Small" Color="MudBlazor.Color.Primary" /></div>
+    }
+    else if (_points.Count > 0)
+    {
+        <div class="velocity-stats-strip">
+            <div class="velocity-stat">
+                <span class="velocity-stat-value">@_avgVelocity</span>
+                <span class="velocity-stat-label">avg pts / sprint</span>
+            </div>
+            <div class="velocity-stat-sep">→</div>
+            <div class="velocity-stat">
+                <span class="velocity-stat-value" style="color:#00d4ff;">@_recommended</span>
+                <span class="velocity-stat-label">recommended next sprint</span>
+            </div>
+            @if (_points.Count >= 2)
+            {
+                <div class="velocity-stat-sep"></div>
+                <div class="velocity-stat">
+                    <span class="velocity-stat-value @(_trend >= 0 ? "velocity-up" : "velocity-down")">
+                        @(_trend >= 0 ? "+" : "")@_trend%
+                    </span>
+                    <span class="velocity-stat-label">trend vs prior sprint</span>
+                </div>
+            }
+        </div>
+
+        <ApexChart TItem="VelocityPoint" Options="_options" Height="@("100%")">
+            <ApexPointSeries TItem="VelocityPoint"
+                             Items="_points"
+                             Name="Committed"
+                             SeriesType="SeriesType.Bar"
+                             XValue="@(p => p.SprintName)"
+                             YValue="@(p => (decimal)p.Committed)" />
+            <ApexPointSeries TItem="VelocityPoint"
+                             Items="_points"
+                             Name="Completed"
+                             SeriesType="SeriesType.Bar"
+                             XValue="@(p => p.SprintName)"
+                             YValue="@(p => (decimal)p.Completed)" />
+            <ApexPointSeries TItem="VelocityPoint"
+                             Items="_points"
+                             Name="Velocity Trend"
+                             SeriesType="SeriesType.Line"
+                             XValue="@(p => p.SprintName)"
+                             YValue="@(p => (decimal)p.Completed)" />
+        </ApexChart>
+    }
+    else
+    {
+        <div class="widget-empty">No sprint data yet</div>
+    }
+</WidgetCard>
+
+@code {
+    [Parameter] public int? SprintId { get; set; }
+    [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
+
+    private List<VelocityPoint> _points = [];
+    private ApexChartOptions<VelocityPoint> _options = new();
+    private bool _loading = true;
+    private int? _lastSprintId = -1;
+
+    private double _avgVelocity;
+    private double _recommended;
+    private int _trend;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_lastSprintId == SprintId) return;
+        _lastSprintId = SprintId;
+        _loading = true;
+        try { _points = await MetricsSvc.GetVelocityDataAsync(SprintId); }
+        catch { _points = []; }
+        ComputeStats();
+        _options = BuildOptions(_avgVelocity);
+        _loading = false;
+    }
+
+    private void ComputeStats()
+    {
+        if (_points.Count == 0) return;
+
+        _avgVelocity = Math.Round(_points.Average(p => p.Completed), 1);
+
+        // Recommended = average of last 3 completed sprints (standard Scrum guidance)
+        var recent = _points.TakeLast(3).ToList();
+        _recommended = Math.Round(recent.Average(p => p.Completed), 1);
+
+        // Trend: % change from second-to-last sprint to last sprint
+        if (_points.Count >= 2)
+        {
+            var prev = _points[^2].Completed;
+            var last = _points[^1].Completed;
+            _trend = prev > 0 ? (int)Math.Round((last - prev) / prev * 100) : 0;
+        }
+    }
+
+    private static ApexChartOptions<VelocityPoint> BuildOptions(double avg) => new()
+    {
+        Chart = new Chart { Background = "transparent", Toolbar = new Toolbar { Show = false } },
+        Colors = ["#475569", "#1e88e5", "#00d4ff"],
+        PlotOptions = new PlotOptions
+        {
+            Bar = new PlotOptionsBar { ColumnWidth = "55%", BorderRadius = 3 }
+        },
+        Stroke = new Stroke
+        {
+            Width = [0, 0, 3],
+            Curve = [Curve.Straight, Curve.Straight, Curve.Smooth]
+        },
+        Markers = new Markers { Size = 5 },
+        Annotations = new Annotations
+        {
+            Yaxis =
+            [
+                new AnnotationsYAxis
+                {
+                    Y = (decimal)avg,
+                    BorderColor = "#f59e0b",
+                    StrokeDashArray = 5,
+                    Label = new Label
+                    {
+                        Text = $"Avg {avg} pts",
+                        BorderColor = "#f59e0b",
+                        Style = new Style { Color = "#f59e0b", Background = "#161b22", FontSize = "11px" }
+                    }
+                }
+            ]
+        },
+        Xaxis = new XAxis
+        {
+            Labels = new XAxisLabels { Style = new AxisLabelStyle { Colors = "#8b949e", FontSize = "11px" } }
+        },
+        Yaxis =
+        [
+            new YAxis
+            {
+                Labels = new YAxisLabels { Style = new AxisLabelStyle { Colors = "#8b949e", FontSize = "11px" } }
+            }
+        ],
+        Grid = new Grid { BorderColor = "#21262d", Row = new GridRow { Colors = ["transparent"] } },
+        Legend = new Legend { Labels = new LegendLabels { Colors = ["#8b949e"] }, Position = LegendPosition.Top },
+        Tooltip = new Tooltip { Theme = ApexCharts.Mode.Dark }
+    };
+}

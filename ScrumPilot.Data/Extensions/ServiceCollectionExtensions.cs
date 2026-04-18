@@ -52,6 +52,10 @@ namespace ScrumPilot.Data.Extensions
             // Add repositories
             services.AddScoped<IPbiRepository, PbiRepository>();
             services.AddScoped<ICommentRepository, CommentRepository>();
+            services.AddScoped<ISprintRepository, SprintRepository>();
+            services.AddScoped<IEpicRepository, EpicRepository>();
+            services.AddScoped<IPbiHistoryRepository, PbiHistoryRepository>();
+            services.AddScoped<IDashboardPreferenceRepository, DashboardPreferenceRepository>();
 
             return services;
         }

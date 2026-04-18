@@ -38,6 +38,27 @@
     transition: transform 0.2s ease;
 }
 
+/* Button row layout for PbiCard */
+.pbi-button-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.pbi-button-left {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.pbi-button-right {
+    display: flex;
+    align-items: center;
+}
+
 /* Story title styling */
 .story-title {
     background: linear-gradient(45deg, #1b6ec2, #1861ac);

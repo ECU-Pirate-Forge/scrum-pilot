@@ -1,0 +1,56 @@
+@using ScrumPilot.Web.Services
+
+<WidgetCard Title="Remaining Story Points">
+    @if (_loading)
+    {
+        <div class="widget-center"><MudProgressCircular Indeterminate="true" Size="MudBlazor.Size.Small" Color="MudBlazor.Color.Primary" /></div>
+    }
+    else
+    {
+        <div class="stat-card-content" style="align-items: center; text-align: center;">
+            <div class="stat-number" style="color: #ff9800;">@_remaining.ToString("0")</div>
+            <div class="stat-label">Remaining</div>
+            @if (_total > 0)
+            {
+                <MudProgressLinear Value="@_completedPercent" Color="MudBlazor.Color.Warning"
+                    Style="margin-top: 12px; border-radius: 4px;" Size="MudBlazor.Size.Small" />
+                <MudText Typo="Typo.caption" Style="color: #8b949e; margin-top: 4px;">
+                    @((_total - _remaining).ToString("0")) of @_total.ToString("0") points done
+                </MudText>
+            }
+        </div>
+    }
+</WidgetCard>
+
+@code {
+    [Parameter] public int? SprintId { get; set; }
+    [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
+
+    private double _remaining;
+    private double _total;
+    private double _completedPercent;
+    private bool _loading = true;
+    private int? _lastSprintId = -1;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_lastSprintId == SprintId) return;
+        _lastSprintId = SprintId;
+        _loading = true;
+        try
+        {
+            if (SprintId.HasValue)
+            {
+                var progress = await MetricsSvc.GetSprintProgressAsync(SprintId.Value);
+                _total = progress.CommittedPoints;
+                _remaining = Math.Max(0, progress.CommittedPoints - progress.CompletedPoints);
+                _completedPercent = _total > 0
+                    ? Math.Min(100, progress.CompletedPoints / _total * 100)
+                    : 0;
+            }
+            else { _remaining = 0; _total = 0; _completedPercent = 0; }
+        }
+        catch { _remaining = 0; _total = 0; _completedPercent = 0; }
+        _loading = false;
+    }
+}

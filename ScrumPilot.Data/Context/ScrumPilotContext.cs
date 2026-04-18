@@ -18,6 +18,8 @@ namespace ScrumPilot.Data.Context
         public DbSet<Comment> Comments { get; set; }
         public DbSet<AudioTranscript> AudioTranscripts { get; set; }
         public DbSet<MessageTranscript> MessageTranscripts { get; set; }
+        public DbSet<PbiStatusHistory> PbiStatusHistories { get; set; }
+        public DbSet<UserDashboardPreference> UserDashboardPreferences { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -81,6 +83,26 @@ namespace ScrumPilot.Data.Context
                 entity.HasOne<ProductBacklogItem>().WithMany(p => p.Comments).HasForeignKey(e => e.PbiId).IsRequired();
             });
 
+            modelBuilder.Entity<PbiStatusHistory>(entity =>
+            {
+                entity.ToTable("PbiStatusHistory");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+                entity.Property(e => e.PbiId).IsRequired();
+                entity.Property(e => e.FromStatus).HasConversion<string>().IsRequired();
+                entity.Property(e => e.ToStatus).HasConversion<string>().IsRequired();
+                entity.Property(e => e.ChangedAt).IsRequired();
+                entity.HasOne<ProductBacklogItem>().WithMany()
+                    .HasForeignKey(e => e.PbiId).OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<UserDashboardPreference>(entity =>
+            {
+                entity.ToTable("UserDashboardPreferences");
+                entity.HasKey(e => e.UserId);
+                entity.Property(e => e.PreferencesJson).HasColumnType("TEXT");
+            });
+
             modelBuilder.Entity<AudioTranscript>(entity =>
             {
                 entity.HasKey(e => e.Id);
@@ -110,14 +132,39 @@ namespace ScrumPilot.Data.Context
 
         public override int SaveChanges()
         {
+            TrackStatusChanges();
             UpdateTimestamps();
             return base.SaveChanges();
         }
 
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
+            TrackStatusChanges();
             UpdateTimestamps();
             return await base.SaveChangesAsync(cancellationToken);
+        }
+
+        private void TrackStatusChanges()
+        {
+            var modifiedPbis = ChangeTracker.Entries<ProductBacklogItem>()
+                .Where(e => e.State == EntityState.Modified)
+                .ToList();
+
+            foreach (var entry in modifiedPbis)
+            {
+                var originalStatus = entry.Property(p => p.Status).OriginalValue;
+                var currentStatus = entry.Entity.Status;
+                if (originalStatus != currentStatus)
+                {
+                    PbiStatusHistories.Add(new PbiStatusHistory
+                    {
+                        PbiId = entry.Entity.PbiId,
+                        FromStatus = originalStatus,
+                        ToStatus = currentStatus,
+                        ChangedAt = DateTime.UtcNow
+                    });
+                }
+            }
         }
 
         private void UpdateTimestamps()
