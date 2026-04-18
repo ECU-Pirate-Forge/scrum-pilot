@@ -47,7 +47,7 @@ function getDisplayName(guild, userId) {
 
 function subscribeUser(receiver, userId, session) {
   if (session.userRecordings.has(userId)) return;
-  const userOutputPath = path.join(__dirname, `recording-${session.recordingTimestamp}-${userId}.ogg`);
+  const userOutputPath = path.join(__dirname, `recording-${session.recordingTimestamp}-${session.channelName}-${session.categoryName}-${userId}.ogg`);
 
   const userFfmpeg = spawn(ffmpegStatic, [
     '-f', 's16le',
@@ -102,6 +102,10 @@ async function startRecording(guild, voiceChannel) {
     selfMute: true,
   });
 
+  connection.on('error', (err) => {
+    console.warn('[Recorder] Voice connection error:', err.message);
+  });
+
   connection.once(VoiceConnectionStatus.Ready, async () => {
     console.log('[Recorder] Connected to voice channel.');
 
@@ -109,6 +113,8 @@ async function startRecording(guild, voiceChannel) {
       recordingTimestamp: Date.now(),
       userRecordings: new Map(),
       connection,
+      channelName: voiceChannel.name.replace(/\s+/g, '-'),
+      categoryName: (voiceChannel.parent?.name || 'uncategorized').replace(/\s+/g, '-'),
     };
     activeSessions.set(voiceChannel.id, session);
     const receiver = connection.receiver;
@@ -255,6 +261,27 @@ async function transcribeMultiTrack(guild, userRecordings, timestamp, recapChann
       continue;
     }
 
+    // Check if track is entirely silent before processing
+    const isSilent = await new Promise((resolve) => {
+      const probe = spawn(ffmpegStatic, [
+        '-i', outputPath,
+        '-af', 'silencedetect=noise=-40dB:duration=0.5',
+        '-f', 'null', '-'
+      ]);
+      let stderr = '';
+      probe.stderr.on('data', d => { stderr += d.toString(); });
+      probe.on('close', () => {
+        // If silence_end never appears, the whole file is silence
+        resolve(!stderr.includes('silence_end'));
+      });
+    });
+
+    if (isSilent) {
+      console.log(`[Recorder] ${displayName}'s track is silent, skipping.`);
+      fs.unlinkSync(outputPath);
+      continue;
+    }
+
     let compressedPath;
     try {
       compressedPath = await compressAudio(outputPath, controlChannel);
@@ -283,6 +310,10 @@ async function transcribeMultiTrack(guild, userRecordings, timestamp, recapChann
           ? `⚠️ ${displayName}'s audio track appears corrupted and could not be processed.`
           : `⚠️ Something went wrong processing ${displayName}'s audio track.`
       );
+      if (fs.existsSync(outputPath)) {
+        fs.renameSync(outputPath, outputPath + '.corrupted');
+        console.log(`[Recorder] Renamed to ${outputPath}.corrupted`);
+      }
     }
   }
 
