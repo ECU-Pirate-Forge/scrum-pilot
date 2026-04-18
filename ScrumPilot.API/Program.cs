@@ -44,6 +44,8 @@ builder.Services.AddAuthorizationBuilder()
 // Add services to the container.
 builder.Services.AddScoped<ISprintService, SprintService>();
 builder.Services.AddScoped<IEpicService, EpicService>();
+builder.Services.AddScoped<IMetricsDashboardService, MetricsDashboardService>();
+builder.Services.AddScoped<IDashboardPreferenceService, DashboardPreferenceService>();
 builder.Services.AddHttpClient<IPbiService, PbiService>(client =>
 {
     client.Timeout = TimeSpan.FromMinutes(5);

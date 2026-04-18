@@ -1,108 +1,180 @@
-<MudDropContainer T="ProductBacklogItem"
-                  @ref="_dropContainer"
-                  Items="@Items"
-                  ItemsSelector="@_itemsSelector"
-                  ItemDropped="HandleItemDropped"
-                  Class="d-flex" Style="flex: 1; min-height: calc(100vh - 200px);">
-    <ChildContent>
-        <MudStack Row Spacing="3" Class="mud-width-full" Style="height: 100%; flex: 1;">
-            @foreach (var lane in _lanes)
+@inject HttpClient Http
+
+@if (_loading)
+{
+    <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center" Style="height:60vh;">
+        <MudProgressCircular Indeterminate="true" Size="Size.Large" />
+        <MudText Class="mt-4" Typo="Typo.subtitle1">Loading...</MudText>
+    </MudStack>
+}
+else
+{
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4" Icon="@Icons.Material.Filled.ErrorOutline">
+            @_errorMessage
+        </MudAlert>
+    }
+
+    <MudStack Row="true" Spacing="2" Class="mb-4">
+        <MudSelect T="int?"
+                   Label="Sprint"
+                   Value="@_selectedSprintId"
+                   ValueChanged="@(async (int? value) => await OnSprintChanged(value))"
+                   Variant="Variant.Outlined"
+                   Dense="true"
+                   Style="min-width: 220px;">
+            <MudSelectItem T="int?" Value="@((int?)null)">All</MudSelectItem>
+            @foreach (var sprint in _sprints)
             {
-                <MudPaper Class="@($"swimlane-column {lane.CssClass}")" Elevation="2"
-                          Style="@GetPaperStyle(lane)">
-                    <MudStack Row AlignItems="AlignItems.Center" Class="column-header"
-                              Style="@GetHeaderStyle(lane)">
-                        <MudIcon Icon="@lane.Icon" Color="@lane.ChipColor" Size="Size.Medium" />
-                        <MudText Typo="Typo.h5" Class="column-title" Style="font-weight: 700;">@lane.Label</MudText>
-                        <MudSpacer />
-                        <MudChip T="string" Size="Size.Small" Color="@lane.ChipColor" Variant="Variant.Filled">
-                            @lane.Count(Items)
-                        </MudChip>
-                    </MudStack>
-                    <MudDropZone T="ProductBacklogItem" Identifier="@lane.Identifier" Class="swimlane-dropzone"
-                                 Style="min-height: 500px; height: 100%; width: 100%; flex: 1; display: flex; flex-direction: column; gap: 16px;" />
-                </MudPaper>
+                <MudSelectItem T="int?" Value="@((int?)sprint.SprintId)">
+                    @(sprint.SprintGoal ?? $"Sprint {sprint.SprintId}")
+                </MudSelectItem>
             }
-        </MudStack>
-    </ChildContent>
+        </MudSelect>
 
-    <ItemRenderer>
-        <div class="swimlane-card-wrapper">
-            <MudCard Elevation="8" Style="@GetCardStyle(context)">
-                <div class="card-priority-stripe @GetPriorityClass(context)"></div>
+        <MudSelect T="int?"
+                   Label="Epic"
+                   Value="@_selectedEpicId"
+                   ValueChanged="@(async (int? value) => await OnEpicChanged(value))"
+                   Variant="Variant.Outlined"
+                   Dense="true"
+                   Style="min-width: 220px;">
+            <MudSelectItem T="int?" Value="@((int?)null)">All</MudSelectItem>
+            @foreach (var epic in _epics)
+            {
+                <MudSelectItem T="int?" Value="@((int?)epic.EpicId)">
+                    @epic.Name
+                </MudSelectItem>
+            }
+        </MudSelect>
+    </MudStack>
 
-                <MudCardContent Class="pa-3" Style="padding-bottom: 8px; border-bottom: 1px solid var(--mud-palette-divider);">
-                    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-                        <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
-                            @if (context.StoryPoints != PbiPoints.Zero)
-                            {
-                                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Filled">
-                                    @((int)context.StoryPoints) SP
-                                </MudChip>
-                            }
-                            else
-                            {
-                                <MudTooltip Text="Unpointed">
-                                    <MudIcon Icon="@Icons.Material.Filled.ErrorOutline"
-                                             Color="Color.Error"
-                                             Size="Size.Small" />
-                                </MudTooltip>
-                            }
+    @if (!_items.Any())
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4" Icon="@Icons.Material.Filled.Info">
+            No PBIs match the selected filters.
+        </MudAlert>
+    }
+
+    <MudDropContainer T="ProductBacklogItem"
+                      @ref="_dropContainer"
+                      Items="@_items"
+                      ItemsSelector="@_itemsSelector"
+                      ItemDropped="HandleItemDropped"
+                      Class="d-flex" Style="flex: 1; min-height: calc(100vh - 200px);">
+        <ChildContent>
+            <MudStack Row Spacing="3" Class="mud-width-full" Style="height: 100%; flex: 1;">
+                @foreach (var lane in _lanes)
+                {
+                    <MudPaper Class="@($"swimlane-column {lane.CssClass}")" Elevation="2"
+                              Style="@GetPaperStyle(lane)">
+                        <MudStack Row AlignItems="AlignItems.Center" Class="column-header"
+                                  Style="@GetHeaderStyle(lane)">
+                            <MudIcon Icon="@lane.Icon" Color="@lane.ChipColor" Size="Size.Medium" />
+                            <MudText Typo="Typo.h5" Class="column-title" Style="font-weight: 700;">@lane.Label</MudText>
+                            <MudSpacer />
+                            <MudChip T="string" Size="Size.Small" Color="@lane.ChipColor" Variant="Variant.Filled">
+                                @lane.Count(_items)
+                            </MudChip>
                         </MudStack>
-                        <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
-                            <MudButton Variant="Variant.Text"
-                                       Size="Size.Small"
-                                       StartIcon="@Icons.Material.Filled.Visibility"
-                                       OnClick="@(() => OnPbiSelected.InvokeAsync(context))"
-                                       Style="min-height: 24px; padding: 4px 8px;">
-                                View Details
-                            </MudButton>
-                            <MudIcon Icon="Icons.Material.Filled.DragIndicator"
-                                     Size="Size.Small"
-                                     Style="color: var(--mud-palette-text-secondary); cursor: grab;" />
+                        <MudDropZone T="ProductBacklogItem" Identifier="@lane.Identifier" Class="swimlane-dropzone"
+                                     Style="min-height: 500px; height: 100%; width: 100%; flex: 1; display: flex; flex-direction: column; gap: 16px;" />
+                    </MudPaper>
+                }
+            </MudStack>
+        </ChildContent>
+
+        <ItemRenderer>
+            <div class="swimlane-card-wrapper">
+                <MudCard Elevation="8" Style="@GetCardStyle(context)">
+                    <div class="card-priority-stripe @GetPriorityClass(context)"></div>
+
+                    <MudCardContent Class="pa-3" Style="padding-bottom: 8px; border-bottom: 1px solid var(--mud-palette-divider);">
+                        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                                @if (context.StoryPoints != PbiPoints.Zero)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Filled">
+                                        @((int)context.StoryPoints) SP
+                                    </MudChip>
+                                }
+                                else
+                                {
+                                    <MudTooltip Text="Unpointed">
+                                        <MudIcon Icon="@Icons.Material.Filled.ErrorOutline"
+                                                 Color="Color.Error"
+                                                 Size="Size.Small" />
+                                    </MudTooltip>
+                                }
+                            </MudStack>
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                                <MudButton Variant="Variant.Text"
+                                           Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.Visibility"
+                                           OnClick="@(() => OnPbiSelected.InvokeAsync(context))"
+                                           Style="min-height: 24px; padding: 4px 8px;">
+                                    View Details
+                                </MudButton>
+                                <MudIcon Icon="Icons.Material.Filled.DragIndicator"
+                                         Size="Size.Small"
+                                         Style="color: var(--mud-palette-text-secondary); cursor: grab;" />
+                            </MudStack>
                         </MudStack>
-                    </MudStack>
-                </MudCardContent>
+                    </MudCardContent>
 
-                <MudCardContent Class="pa-3" Style="padding-top: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--mud-palette-divider);">
-                    <MudText Typo="Typo.subtitle1" Style="font-weight: 600; margin-bottom: 8px; line-height: 1.4;">
-                        @context.Title
-                    </MudText>
-                    <MudText Typo="Typo.body2" Style="opacity: 0.7;">
-                        ID: @context.PbiId
-                    </MudText>
-                </MudCardContent>
+                    <MudCardContent Class="pa-3" Style="padding-top: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--mud-palette-divider);">
+                        <MudText Typo="Typo.subtitle1" Style="font-weight: 600; margin-bottom: 8px; line-height: 1.4;">
+                            @context.Title
+                        </MudText>
+                        <MudText Typo="Typo.body2" Style="opacity: 0.7;">
+                            ID: @context.PbiId
+                        </MudText>
+                    </MudCardContent>
 
-                <MudCardActions Class="pa-3" Style="padding-top: 12px;">
-                    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mud-width-full">
-                        <MudChip T="string" Size="Size.Small"
-                                 Color="@GetPriorityChipColor(context.Priority)"
-                                 Variant="Variant.Filled">
-                            @context.Priority
-                        </MudChip>
+                    <MudCardActions Class="pa-3" Style="padding-top: 12px;">
+                        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mud-width-full">
+                            <MudChip T="string" Size="Size.Small"
+                                     Color="@GetPriorityChipColor(context.Priority)"
+                                     Variant="Variant.Filled">
+                                @context.Priority
+                            </MudChip>
 
-                        <MudAvatar Size="Size.Small" Color="Color.Info">
-                            <MudText Typo="Typo.caption">
-                                @GetPbiInitials(context)
-                            </MudText>
-                        </MudAvatar>
-                    </MudStack>
-                </MudCardActions>
-            </MudCard>
-        </div>
-    </ItemRenderer>
-</MudDropContainer>
+                            <MudAvatar Size="Size.Small" Color="Color.Info">
+                                <MudText Typo="Typo.caption">
+                                    @GetPbiInitials(context)
+                                </MudText>
+                            </MudAvatar>
+                        </MudStack>
+                    </MudCardActions>
+                </MudCard>
+            </div>
+        </ItemRenderer>
+    </MudDropContainer>
+}
 
 @code {
-    [Parameter] public List<ProductBacklogItem> Items { get; set; } = new();
     [Parameter] public bool GroupByPriority { get; set; }
-    [Parameter] public EventCallback<MudItemDropInfo<ProductBacklogItem>> OnItemDropped { get; set; }
     [Parameter] public EventCallback<ProductBacklogItem> OnPbiSelected { get; set; }
 
     private MudDropContainer<ProductBacklogItem>? _dropContainer;
     private bool _needsRefresh;
     private Func<ProductBacklogItem, string, bool> _itemsSelector = (item, zone) => item.Status.ToString() == zone;
     private IReadOnlyList<LaneDefinition> _lanes = StatusLanes();
+
+    private List<ProductBacklogItem> _items = new();
+    private List<Sprint> _sprints = new();
+    private List<Epic> _epics = new();
+    private int? _selectedSprintId;
+    private int? _selectedEpicId;
+    private bool _loading = true;
+    private string _errorMessage = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDropdownsAsync();
+        await LoadItemsAsync();
+    }
 
     protected override void OnParametersSet()
     {
@@ -129,10 +201,133 @@
         return Task.CompletedTask;
     }
 
+    public async Task RefreshAsync()
+    {
+        await LoadItemsAsync(showLoading: false);
+        StateHasChanged();
+    }
+
+    private async Task LoadDropdownsAsync()
+    {
+        try
+        {
+            var sprintsTask = Http.GetFromJsonAsync<List<Sprint>>("api/Sprint");
+            var epicsTask = Http.GetFromJsonAsync<List<Epic>>("api/Epic");
+            _sprints = await sprintsTask ?? new();
+            _epics = await epicsTask ?? new();
+        }
+        catch
+        {
+            // Dropdowns will be empty if API is unreachable
+        }
+    }
+
+    private async Task LoadItemsAsync(bool showLoading = true)
+    {
+        if (showLoading)
+        {
+            _loading = true;
+            _items = new();
+        }
+
+        try
+        {
+            var url = BuildItemUrl();
+            var items = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(url);
+            if (items is not null)
+                _items = items;
+        }
+        catch
+        {
+            _errorMessage = "Unable to load PBIs from the server.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private string BuildItemUrl()
+    {
+        var query = new List<string>();
+        if (_selectedSprintId.HasValue)
+            query.Add($"sprintId={_selectedSprintId.Value}");
+        if (_selectedEpicId.HasValue)
+            query.Add($"epicId={_selectedEpicId.Value}");
+
+        var baseUrl = "api/Pbi/getNonDraftPbis";
+        return query.Count > 0 ? $"{baseUrl}?{string.Join("&", query)}" : baseUrl;
+    }
+
+    private async Task OnSprintChanged(int? value)
+    {
+        _selectedSprintId = value;
+        await LoadItemsAsync(showLoading: false);
+    }
+
+    private async Task OnEpicChanged(int? value)
+    {
+        _selectedEpicId = value;
+        await LoadItemsAsync(showLoading: false);
+    }
+
     private async Task HandleItemDropped(MudItemDropInfo<ProductBacklogItem> dropInfo)
     {
-        await OnItemDropped.InvokeAsync(dropInfo);
+        if (dropInfo.Item is null) return;
+
+        _errorMessage = string.Empty;
+
+        if (GroupByPriority)
+        {
+            if (!Enum.TryParse<PbiPriority>(dropInfo.DropzoneIdentifier, out var newPriority))
+            {
+                _errorMessage = "Unable to move PBI: invalid destination column.";
+                return;
+            }
+            var original = dropInfo.Item.Priority;
+            if (original == newPriority) return;
+            dropInfo.Item.Priority = newPriority;
+            await PersistItemAsync(dropInfo.Item, () => dropInfo.Item.Priority = original,
+                "Could not save the priority change. The card was returned to its previous column.");
+        }
+        else
+        {
+            if (!Enum.TryParse<PbiStatus>(dropInfo.DropzoneIdentifier, out var newStatus))
+            {
+                _errorMessage = "Unable to move PBI: invalid destination column.";
+                return;
+            }
+            var original = dropInfo.Item.Status;
+            if (original == newStatus) return;
+            dropInfo.Item.Status = newStatus;
+            await PersistItemAsync(dropInfo.Item, () => dropInfo.Item.Status = original,
+                "Could not save the status change. The card was returned to its previous column.");
+        }
+
         _dropContainer?.Refresh();
+    }
+
+    private async Task PersistItemAsync(ProductBacklogItem item, Action revert, string errorMessage)
+    {
+        try
+        {
+            item.LastUpdated = DateTime.UtcNow;
+            var response = await Http.PutAsJsonAsync("api/Pbi", item);
+            if (!response.IsSuccessStatusCode)
+                throw new HttpRequestException($"Update failed with code {(int)response.StatusCode}.");
+
+            var updated = await response.Content.ReadFromJsonAsync<ProductBacklogItem>();
+            if (updated is not null)
+            {
+                var index = _items.FindIndex(i => i.PbiId == updated.PbiId);
+                if (index >= 0) _items[index] = updated;
+            }
+        }
+        catch
+        {
+            revert();
+            _errorMessage = errorMessage;
+        }
     }
 
     private static IReadOnlyList<LaneDefinition> StatusLanes() =>

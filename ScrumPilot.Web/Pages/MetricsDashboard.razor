@@ -1,0 +1,426 @@
+@page "/metrics"
+@implements IAsyncDisposable
+@using ScrumPilot.Web.Services
+@using ScrumPilot.Web.Components.MetricsDashboard
+@using ScrumPilot.Shared.Models
+@using Microsoft.JSInterop
+
+<div class="metrics-root">
+
+    <div class="metrics-topbar">
+        <div class="topbar-left">
+            <MudText Typo="Typo.h6" Style="color:#e6edf3; font-weight:600; white-space:nowrap;">Metrics Dashboard</MudText>
+            @if (_selectedSprint?.SprintGoal is { Length: > 0 } goal)
+            {
+                <MudText Typo="Typo.caption" Style="color:#8b949e; white-space:nowrap; margin-left:8px;">@goal</MudText>
+            }
+        </div>
+        <div class="topbar-right">
+            <MudSelect T="int?"
+                       Value="_selectedSprintId"
+                       ValueChanged="OnSprintChangedAsync"
+                       Label="Sprint"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Style="min-width:240px;"
+                       Disabled="_sprints.Count == 0">
+                <MudSelectItem T="int?" Value="@((int?)null)">All Sprints</MudSelectItem>
+                @{
+                    // Number all sprints chronologically (asc), then display started ones descending.
+                    var allByDate   = _sprints.OrderBy(s => s.StartDate).ToList();
+                    var today       = DateTime.UtcNow.Date;
+                    var started     = allByDate
+                        .Where(s => s.StartDate.HasValue && s.StartDate.Value.Date <= today)
+                        .ToList();
+                    var startedDesc = ((IEnumerable<Sprint>)started).Reverse().ToList();
+                }
+                @foreach (var sprint in startedDesc)
+                {
+                    var num = allByDate.IndexOf(sprint) + 1;
+                    <MudSelectItem T="int?" Value="@((int?)sprint.SprintId)">
+                        Sprint @num@(sprint.IsOpen ? " ●" : "")
+                    </MudSelectItem>
+                }
+            </MudSelect>
+
+            <div class="settings-dropdown-container">
+                <MudTooltip Text="Dashboard Settings">
+                    <MudIconButton Icon="@Icons.Material.Filled.Settings"
+                                   Size="Size.Medium"
+                                   Style="color:#8b949e;"
+                                   @onclick="ToggleSettings" />
+                </MudTooltip>
+
+                @if (_settingsOpen)
+                {
+                    <MudOverlay Visible="true" OnClick="CloseSettings" ZIndex="998" />
+                    <div class="settings-panel" style="z-index:999;">
+                        <div class="settings-header">
+                            <span class="settings-title">Widgets</span>
+                            <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                           Size="Size.Small"
+                                           Style="color:#8b949e; margin:-4px;"
+                                           @onclick="CloseSettings" />
+                        </div>
+                        <div class="settings-list">
+                            @foreach (var w in _widgetPrefs)
+                            {
+                                <label class="settings-row">
+                                    <MudSwitch T="bool"
+                                               Value="w.Visible"
+                                               ValueChanged="(v) => OnWidgetToggled(w.Id, v)"
+                                               Color="Color.Primary"
+                                               Size="Size.Small" />
+                                    <span class="settings-label">@GetWidgetName(w.Id)</span>
+                                </label>
+                            }
+                        </div>
+                        <div class="settings-footer">
+                            <MudButton Variant="Variant.Text"
+                                       Size="Size.Small"
+                                       Style="color:#8b949e; font-size:0.75rem;"
+                                       @onclick="ResetPreferences">Reset to defaults</MudButton>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center" Style="height:60vh;">
+            <MudProgressCircular Indeterminate="true" Size="Size.Large" />
+            <MudText Class="mt-4" Typo="Typo.subtitle1" Style="color:#8b949e;">Loading metrics…</MudText>
+        </MudStack>
+    }
+    else
+    {
+        <div class="grid-stack metrics-grid">
+
+            @if (IsVisible("days-left"))
+            {
+                <div class="grid-stack-item" gs-id="days-left" gs-x="0" gs-y="0" gs-w="3" gs-h="3">
+                    <div class="grid-stack-item-content">
+                        <DaysLeftWidget Sprint="_selectedSprint" />
+                    </div>
+                </div>
+            }
+
+            @if (IsVisible("committed-points"))
+            {
+                <div class="grid-stack-item" gs-id="committed-points" gs-x="3" gs-y="0" gs-w="3" gs-h="3">
+                    <div class="grid-stack-item-content">
+                        <CommittedPointsWidget SprintId="_selectedSprintId" />
+                    </div>
+                </div>
+            }
+
+            @if (IsVisible("remaining-points"))
+            {
+                <div class="grid-stack-item" gs-id="remaining-points" gs-x="6" gs-y="0" gs-w="3" gs-h="3">
+                    <div class="grid-stack-item-content">
+                        <RemainingPointsWidget SprintId="_selectedSprintId" />
+                    </div>
+                </div>
+            }
+
+            @if (IsVisible("sprint-progress"))
+            {
+                <div class="grid-stack-item" gs-id="sprint-progress" gs-x="9" gs-y="0" gs-w="3" gs-h="3">
+                    <div class="grid-stack-item-content">
+                        <SprintProgressWidget SprintId="_selectedSprintId" />
+                    </div>
+                </div>
+            }
+
+            @if (IsVisible("burndown"))
+            {
+                <div class="grid-stack-item" gs-id="burndown" gs-x="0" gs-y="3" gs-w="6" gs-h="4">
+                    <div class="grid-stack-item-content">
+                        <BurndownWidget SprintId="_selectedSprintId" />
+                    </div>
+                </div>
+            }
+
+            @if (IsVisible("wip-table"))
+            {
+                <div class="grid-stack-item" gs-id="wip-table" gs-x="6" gs-y="3" gs-w="6" gs-h="4">
+                    <div class="grid-stack-item-content">
+                        <WipTableWidget SprintId="_selectedSprintId" />
+                    </div>
+                </div>
+            }
+
+            @if (IsVisible("velocity"))
+            {
+                <div class="grid-stack-item" gs-id="velocity" gs-x="0" gs-y="7" gs-w="6" gs-h="4">
+                    <div class="grid-stack-item-content">
+                        <VelocityWidget SprintId="_selectedSprintId" />
+                    </div>
+                </div>
+            }
+
+            @if (IsVisible("status-distribution"))
+            {
+                <div class="grid-stack-item" gs-id="status-distribution" gs-x="6" gs-y="7" gs-w="6" gs-h="4">
+                    <div class="grid-stack-item-content">
+                        <WidgetCard Title="Status Distribution">
+                            <StatusDistributionWidget Items="_pbis" />
+                        </WidgetCard>
+                    </div>
+                </div>
+            }
+
+            @if (IsVisible("bug-trend"))
+            {
+                <div class="grid-stack-item" gs-id="bug-trend" gs-x="0" gs-y="11" gs-w="4" gs-h="4">
+                    <div class="grid-stack-item-content">
+                        <BugTrendWidget SprintId="_selectedSprintId" />
+                    </div>
+                </div>
+            }
+
+            @if (IsVisible("cycle-time"))
+            {
+                <div class="grid-stack-item" gs-id="cycle-time" gs-x="4" gs-y="11" gs-w="4" gs-h="4">
+                    <div class="grid-stack-item-content">
+                        <CycleTimeWidget SprintId="_selectedSprintId" />
+                    </div>
+                </div>
+            }
+
+            @if (IsVisible("work-by-status"))
+            {
+                <div class="grid-stack-item" gs-id="work-by-status" gs-x="8" gs-y="11" gs-w="4" gs-h="4">
+                    <div class="grid-stack-item-content">
+                        <WorkByStatusWidget SprintId="_selectedSprintId" />
+                    </div>
+                </div>
+            }
+
+            @if (IsVisible("time-in-stage"))
+            {
+                <div class="grid-stack-item" gs-id="time-in-stage" gs-x="0" gs-y="15" gs-w="12" gs-h="5">
+                    <div class="grid-stack-item-content">
+                        <TimeInStageWidget SprintId="_selectedSprintId" />
+                    </div>
+                </div>
+            }
+
+            @if (IsVisible("pbi-type"))
+            {
+                <div class="grid-stack-item" gs-id="pbi-type" gs-x="0" gs-y="20" gs-w="6" gs-h="4">
+                    <div class="grid-stack-item-content">
+                        <WidgetCard Title="PBI by Type">
+                            <PbiTypeWidget Items="_pbis" />
+                        </WidgetCard>
+                    </div>
+                </div>
+            }
+
+            @if (IsVisible("pbi-priority"))
+            {
+                <div class="grid-stack-item" gs-id="pbi-priority" gs-x="6" gs-y="20" gs-w="6" gs-h="4">
+                    <div class="grid-stack-item-content">
+                        <WidgetCard Title="PBI by Priority">
+                            <PriorityWidget Items="_pbis" />
+                        </WidgetCard>
+                    </div>
+                </div>
+            }
+
+        </div>
+    }
+
+</div>
+
+@code {
+    [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private List<Sprint> _sprints = [];
+    private IReadOnlyList<ProductBacklogItem> _pbis = [];
+    private int? _selectedSprintId;
+    private Sprint? _selectedSprint;
+    private bool _loading = true;
+    private bool _gridInitialized;
+    private bool _gridNeedsReinit;
+    private bool _settingsOpen;
+    private DotNetObjectReference<MetricsDashboard>? _dotnetRef;
+
+    private List<DashboardWidgetConfig> _widgetPrefs = DefaultLayout();
+
+    private static List<DashboardWidgetConfig> DefaultLayout() =>
+    [
+        new() { Id = "days-left",            Visible = true, X = 0,  Y = 0,  W = 3,  H = 3 },
+        new() { Id = "committed-points",     Visible = true, X = 3,  Y = 0,  W = 3,  H = 3 },
+        new() { Id = "remaining-points",     Visible = true, X = 6,  Y = 0,  W = 3,  H = 3 },
+        new() { Id = "sprint-progress",      Visible = true, X = 9,  Y = 0,  W = 3,  H = 3 },
+        new() { Id = "burndown",             Visible = true, X = 0,  Y = 3,  W = 6,  H = 4 },
+        new() { Id = "wip-table",            Visible = true, X = 6,  Y = 3,  W = 6,  H = 4 },
+        new() { Id = "velocity",             Visible = true, X = 0,  Y = 7,  W = 6,  H = 4 },
+        new() { Id = "status-distribution",  Visible = true, X = 6,  Y = 7,  W = 6,  H = 4 },
+        new() { Id = "bug-trend",            Visible = true, X = 0,  Y = 11, W = 4,  H = 4 },
+        new() { Id = "cycle-time",           Visible = true, X = 4,  Y = 11, W = 4,  H = 4 },
+        new() { Id = "work-by-status",       Visible = true, X = 8,  Y = 11, W = 4,  H = 4 },
+        new() { Id = "time-in-stage",        Visible = true, X = 0,  Y = 15, W = 12, H = 5 },
+        new() { Id = "pbi-type",             Visible = true, X = 0,  Y = 20, W = 6,  H = 4 },
+        new() { Id = "pbi-priority",         Visible = true, X = 6,  Y = 20, W = 6,  H = 4 },
+    ];
+
+    private static readonly Dictionary<string, string> WidgetNames = new()
+    {
+        ["days-left"]           = "Days Left",
+        ["committed-points"]    = "Committed Points",
+        ["remaining-points"]    = "Remaining Points",
+        ["sprint-progress"]     = "Sprint Progress",
+        ["burndown"]            = "Burndown Chart",
+        ["wip-table"]           = "WIP Table",
+        ["velocity"]            = "Velocity",
+        ["status-distribution"] = "Status Distribution",
+        ["bug-trend"]           = "Bug Trend",
+        ["cycle-time"]          = "Cycle Time",
+        ["work-by-status"]      = "Work by Status",
+        ["time-in-stage"]       = "Time in Stage",
+        ["pbi-type"]            = "PBI by Type",
+        ["pbi-priority"]        = "PBI by Priority",
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _sprints = await MetricsSvc.GetSprintsAsync();
+            var now = DateTime.UtcNow.Date;
+            var mostRecent = _sprints
+                .Where(s => s.StartDate.HasValue && s.StartDate.Value.Date <= now)
+                .OrderByDescending(s => s.StartDate)
+                .FirstOrDefault();
+            _selectedSprintId = mostRecent?.SprintId;
+            _selectedSprint = mostRecent;
+            _pbis = await MetricsSvc.GetPbisForSprintAsync(_selectedSprintId);
+
+            var saved = await MetricsSvc.GetDashboardPreferencesAsync();
+            if (saved?.Widgets?.Count > 0)
+                MergePreferences(saved.Widgets);
+        }
+        catch { }
+        _loading = false;
+    }
+
+    private void MergePreferences(List<DashboardWidgetConfig> saved)
+    {
+        foreach (var pref in _widgetPrefs)
+        {
+            var match = saved.FirstOrDefault(s => s.Id == pref.Id);
+            if (match is null) continue;
+            pref.Visible = match.Visible;
+            pref.X = match.X;
+            pref.Y = match.Y;
+            pref.W = match.W > 0 ? match.W : pref.W;
+            pref.H = match.H > 0 ? match.H : pref.H;
+        }
+    }
+
+    private bool IsVisible(string id) =>
+        _widgetPrefs.FirstOrDefault(w => w.Id == id)?.Visible ?? true;
+
+    private string GetWidgetName(string id) =>
+        WidgetNames.TryGetValue(id, out var name) ? name : id;
+
+    private async Task OnSprintChangedAsync(int? sprintId)
+    {
+        _selectedSprintId = sprintId;
+        _selectedSprint = sprintId.HasValue
+            ? _sprints.FirstOrDefault(s => s.SprintId == sprintId.Value)
+            : null;
+        try { _pbis = await MetricsSvc.GetPbisForSprintAsync(sprintId); } catch { _pbis = []; }
+    }
+
+    private void ToggleSettings() => _settingsOpen = !_settingsOpen;
+    private void CloseSettings() => _settingsOpen = false;
+
+    private async void OnWidgetToggled(string id, bool visible)
+    {
+        // Capture current layout positions before re-render removes DOM nodes
+        try
+        {
+            var currentLayout = await JS.InvokeAsync<List<DashboardWidgetConfig>>("metricsGridstack.getLayout");
+            foreach (var item in currentLayout)
+            {
+                var pref = _widgetPrefs.FirstOrDefault(w => w.Id == item.Id);
+                if (pref is not null)
+                {
+                    pref.X = item.X; pref.Y = item.Y;
+                    pref.W = item.W; pref.H = item.H;
+                }
+            }
+        }
+        catch { }
+
+        var widget = _widgetPrefs.FirstOrDefault(w => w.Id == id);
+        if (widget is not null) widget.Visible = visible;
+
+        _gridNeedsReinit = true;
+        _ = SavePreferencesAsync();
+        StateHasChanged();
+    }
+
+    private async Task ResetPreferences()
+    {
+        _widgetPrefs = DefaultLayout();
+        _gridNeedsReinit = true;
+        _settingsOpen = false;
+        await SavePreferencesAsync();
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public async Task OnLayoutChanged(List<DashboardWidgetConfig> layout)
+    {
+        foreach (var item in layout)
+        {
+            var pref = _widgetPrefs.FirstOrDefault(w => w.Id == item.Id);
+            if (pref is not null)
+            {
+                pref.X = item.X; pref.Y = item.Y;
+                pref.W = item.W; pref.H = item.H;
+            }
+        }
+        await SavePreferencesAsync();
+    }
+
+    private async Task SavePreferencesAsync()
+    {
+        await MetricsSvc.SaveDashboardPreferencesAsync(new DashboardPreferenceDto
+        {
+            Widgets = _widgetPrefs
+        });
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_loading && (!_gridInitialized || _gridNeedsReinit))
+        {
+            _gridInitialized = true;
+            _gridNeedsReinit = false;
+
+            _dotnetRef?.Dispose();
+            _dotnetRef = DotNetObjectReference.Create(this);
+
+            var visibleLayout = _widgetPrefs
+                .Where(w => w.Visible)
+                .Select(w => new { id = w.Id, x = w.X, y = w.Y, w = w.W, h = w.H })
+                .ToList();
+
+            try { await JS.InvokeVoidAsync("metricsGridstack.init", _dotnetRef, visibleLayout); } catch { }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("metricsGridstack.destroy"); } catch { }
+        _dotnetRef?.Dispose();
+    }
+}

@@ -1,0 +1,50 @@
+@using ScrumPilot.Web.Services
+
+<WidgetCard Title="Committed Points">
+    @if (_loading)
+    {
+        <div class="widget-center"><MudProgressCircular Indeterminate="true" Size="MudBlazor.Size.Small" Color="MudBlazor.Color.Primary" /></div>
+    }
+    else
+    {
+        <div class="stat-card-content" style="align-items: center; text-align: center;">
+            <div class="stat-number" style="color: #00acc1;">@_committed.ToString("0.##")</div>
+            <div class="stat-label">Committed</div>
+            @if (_issueCount > 0)
+            {
+                <MudText Typo="Typo.caption" Style="color: #8b949e; margin-top: 8px;">
+                    across @_issueCount issue@(_issueCount == 1 ? "" : "s")
+                </MudText>
+            }
+        </div>
+    }
+</WidgetCard>
+
+@code {
+    [Parameter] public int? SprintId { get; set; }
+    [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
+
+    private double _committed;
+    private int _issueCount;
+    private bool _loading = true;
+    private int? _lastSprintId = -1;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_lastSprintId == SprintId) return;
+        _lastSprintId = SprintId;
+        _loading = true;
+        try
+        {
+            if (SprintId.HasValue)
+            {
+                var progress = await MetricsSvc.GetSprintProgressAsync(SprintId.Value);
+                _committed = progress.CommittedPoints;
+                _issueCount = progress.CommittedCount;
+            }
+            else { _committed = 0; _issueCount = 0; }
+        }
+        catch { _committed = 0; _issueCount = 0; }
+        _loading = false;
+    }
+}

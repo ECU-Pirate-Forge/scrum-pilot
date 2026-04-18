@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ScrumPilot.Data.Context;
 
@@ -10,9 +11,11 @@ using ScrumPilot.Data.Context;
 namespace ScrumPilot.Data.Migrations
 {
     [DbContext(typeof(ScrumPilotContext))]
-    partial class ScrumPilotContextModelSnapshot : ModelSnapshot
+    [Migration("20260417050551_AddPbiStatusHistory")]
+    partial class AddPbiStatusHistory
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.5");
@@ -413,19 +416,6 @@ namespace ScrumPilot.Data.Migrations
                     b.HasKey("SprintId");
 
                     b.ToTable("Sprint", (string)null);
-                });
-
-            modelBuilder.Entity("ScrumPilot.Shared.Models.UserDashboardPreference", b =>
-                {
-                    b.Property<string>("UserId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("PreferencesJson")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("UserId");
-
-                    b.ToTable("UserDashboardPreferences", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>

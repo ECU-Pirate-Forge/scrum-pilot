@@ -1,0 +1,67 @@
+@using ApexCharts
+@using ScrumPilot.Web.Services
+
+<WidgetCard Title="Time in Stage">
+    @if (_loading)
+    {
+        <div class="widget-center"><MudProgressCircular Indeterminate="true" Size="MudBlazor.Size.Small" Color="MudBlazor.Color.Primary" /></div>
+    }
+    else if (_data.Stages.Count > 0)
+    {
+        @foreach (var stage in _data.Stages)
+        {
+            var stagePoints = _data.Points.Where(p => p.Stage == stage).ToList();
+            <ApexChart TItem="TimeInStagePoint" Options="_options" Height="80">
+                @foreach (var bucket in _buckets)
+                {
+                    var b = bucket;
+                    <ApexPointSeries TItem="TimeInStagePoint"
+                                     Items="stagePoints.Where(p => p.Bucket == b).ToList()"
+                                     Name="@b"
+                                     SeriesType="SeriesType.Bar"
+                                     XValue="@(p => p.Stage)"
+                                     YValue="@(p => (decimal)p.Count)" />
+                }
+            </ApexChart>
+        }
+    }
+    else
+    {
+        <div class="widget-empty">No stage data yet — requires status transition history</div>
+    }
+</WidgetCard>
+
+@code {
+    [Parameter] public int? SprintId { get; set; }
+    [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
+
+    private TimeInStageData _data = new();
+    private ApexChartOptions<TimeInStagePoint> _options = new();
+    private bool _loading = true;
+    private int? _lastSprintId = -1;
+
+    private static readonly string[] _buckets = ["≤1d", "2-3d", "4-8d", "9+d"];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_lastSprintId == SprintId) return;
+        _lastSprintId = SprintId;
+        _loading = true;
+        try { _data = SprintId.HasValue ? await MetricsSvc.GetTimeInStageDataAsync(SprintId.Value) : new(); }
+        catch { _data = new(); }
+        _options = BuildOptions();
+        _loading = false;
+    }
+
+    private static ApexChartOptions<TimeInStagePoint> BuildOptions() => new()
+    {
+        Chart = new Chart { Background = "transparent", Toolbar = new Toolbar { Show = false }, Stacked = true },
+        Colors = ["#1e88e5", "#43a047", "#ff9800", "#ef5350"],
+        PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { Horizontal = true, BorderRadius = 3 } },
+        Xaxis = new XAxis { Labels = new XAxisLabels { Style = new AxisLabelStyle { Colors = "#8b949e", FontSize = "11px" } } },
+        Yaxis = [new YAxis { Labels = new YAxisLabels { Style = new AxisLabelStyle { Colors = "#8b949e", FontSize = "11px" } } }],
+        Grid = new Grid { BorderColor = "#21262d", Row = new GridRow { Colors = ["transparent"] } },
+        Legend = new Legend { Labels = new LegendLabels { Colors = ["#8b949e"] }, Position = LegendPosition.Top },
+        Tooltip = new Tooltip { Theme = ApexCharts.Mode.Dark }
+    };
+}

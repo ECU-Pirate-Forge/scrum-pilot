@@ -1,0 +1,65 @@
+@using ApexCharts
+@using ScrumPilot.Web.Services
+
+<WidgetCard Title="Cycle Time">
+    @if (_loading)
+    {
+        <div class="widget-center"><MudProgressCircular Indeterminate="true" Size="MudBlazor.Size.Small" Color="MudBlazor.Color.Primary" /></div>
+    }
+    else if (_points.Count > 0)
+    {
+        <ApexChart TItem="CycleTimePoint" Options="_options" Height="@("100%")">
+            <ApexPointSeries TItem="CycleTimePoint"
+                             Items="_points"
+                             Name="Avg Days"
+                             SeriesType="SeriesType.Line"
+                             XValue="@(p => p.Date.ToString("MMM d"))"
+                             YValue="@(p => (decimal)Math.Round(p.AverageDays, 1))" />
+        </ApexChart>
+    }
+    else
+    {
+        <div class="widget-empty">No cycle time data yet</div>
+    }
+</WidgetCard>
+
+@code {
+    [Parameter] public int? SprintId { get; set; }
+    [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
+
+    private List<CycleTimePoint> _points = [];
+    private ApexChartOptions<CycleTimePoint> _options = new();
+    private bool _loading = true;
+    private int? _lastSprintId = -1;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_lastSprintId == SprintId) return;
+        _lastSprintId = SprintId;
+        _loading = true;
+        try { _points = SprintId.HasValue ? await MetricsSvc.GetCycleTimeDataAsync(SprintId.Value) : []; }
+        catch { _points = []; }
+        _options = BuildOptions();
+        _loading = false;
+    }
+
+    private static ApexChartOptions<CycleTimePoint> BuildOptions() => new()
+    {
+        Chart = new Chart { Background = "transparent", Toolbar = new Toolbar { Show = false } },
+        Colors = ["#ab47bc"],
+        Stroke = new Stroke { Curve = [Curve.Smooth], Width = [3] },
+        Markers = new Markers { Size = 4 },
+        Xaxis = new XAxis { Labels = new XAxisLabels { Style = new AxisLabelStyle { Colors = "#8b949e", FontSize = "11px" } } },
+        Yaxis = [new YAxis
+        {
+            Labels = new YAxisLabels
+            {
+                Style = new AxisLabelStyle { Colors = "#8b949e", FontSize = "11px" },
+                Formatter = "function(val) { return val.toFixed(1) + 'd'; }"
+            }
+        }],
+        Grid = new Grid { BorderColor = "#21262d", Row = new GridRow { Colors = ["transparent"] } },
+        Legend = new Legend { Labels = new LegendLabels { Colors = ["#8b949e"] }, Position = LegendPosition.Top },
+        Tooltip = new Tooltip { Theme = ApexCharts.Mode.Dark }
+    };
+}
