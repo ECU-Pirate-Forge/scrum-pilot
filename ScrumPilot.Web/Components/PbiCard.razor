@@ -40,13 +40,15 @@
                                        OnClick="StartEdit">
                                 Edit
                             </MudButton>
-                            <!-- DELETE BUTTON -->
-                            <MudButton Variant="Variant.Outlined"
-                                       Color="Color.Error"
-                                       StartIcon="@Icons.Material.Filled.Delete"
-                                       OnClick="ConfirmDelete">
-                                Delete
-                            </MudButton>
+                            @if (PbiModel?.PbiId > 0)
+                            {
+                                <MudButton Variant="Variant.Outlined"
+                                           Color="Color.Error"
+                                           StartIcon="@Icons.Material.Filled.Delete"
+                                           OnClick="ConfirmDelete">
+                                    Delete
+                                </MudButton>
+                            }
                         </div>
                         <div class="pbi-button-right">
                             <MudButton Variant="Variant.Filled"
@@ -279,7 +281,7 @@
                                         @foreach (var sprint in sprints)
                                         {
                                             <MudSelectItem T="int?" Value="@((int?)sprint.SprintId)">
-                                                @(sprint.SprintGoal ?? $"Sprint {sprint.SprintId}")
+                                                @(sprint.SprintTitle ?? sprint.SprintGoal ?? $"Sprint {sprint.SprintId}")
                                             </MudSelectItem>
                                         }
                                     }
@@ -414,6 +416,9 @@ else
     [Parameter] public ScrumPilot.Shared.Models.ProductBacklogItem? PbiModel { get; set; }
     [Parameter] public EventCallback<ScrumPilot.Shared.Models.ProductBacklogItem> OnSave { get; set; }
     [Parameter] public EventCallback<int> OnDelete { get; set; }
+    [Parameter] public bool StartInEditMode { get; set; } = false;
+    [Parameter] public EventCallback OnCancelNew { get; set; }
+    [Parameter] public int? ProjectId { get; set; }
 
     // Edit mode state
     private bool isEditMode = false;
@@ -439,17 +444,21 @@ else
     {
         await LoadEpics();
         await LoadSprints();
+        if (StartInEditMode && PbiModel != null)
+        {
+            StartEdit();
+        }
     }
 
     private async Task LoadEpics()
     {
         try
         {
-            epics = await Http.GetFromJsonAsync<List<Epic>>("api/Epic");
+            var url = ProjectId.HasValue ? $"api/Epic?projectId={ProjectId.Value}" : "api/Epic";
+            epics = await Http.GetFromJsonAsync<List<Epic>>(url);
         }
         catch
         {
-            // API not available yet — dropdowns will show disabled
             epics = new List<Epic>();
         }
     }
@@ -458,11 +467,11 @@ else
     {
         try
         {
-            sprints = await Http.GetFromJsonAsync<List<Sprint>>("api/Sprint");
+            var url = ProjectId.HasValue ? $"api/Sprint?projectId={ProjectId.Value}" : "api/Sprint";
+            sprints = await Http.GetFromJsonAsync<List<Sprint>>(url);
         }
         catch
         {
-            // API not available yet — dropdowns will show disabled
             sprints = new List<Sprint>();
         }
     }
@@ -478,7 +487,7 @@ else
     {
         if (!sprintId.HasValue) return "— Unassigned —";
         var sprint = sprints?.FirstOrDefault(s => s.SprintId == sprintId.Value);
-        return sprint?.SprintGoal ?? $"Sprint {sprintId}";
+        return sprint?.SprintTitle ?? sprint?.SprintGoal ?? $"Sprint {sprintId}";
     }
 
     // Delete methods
@@ -563,12 +572,16 @@ else
         }
     }
 
-    private void CancelEdit()
+    private async Task CancelEdit()
     {
         titleError = false;
         errorMessage = "";
         isEditMode = false;
         isAiSuggestion = false;
+        if (PbiModel?.PbiId == 0 && OnCancelNew.HasDelegate)
+        {
+            await OnCancelNew.InvokeAsync();
+        }
     }
 
     private async Task ImproveWithAi()

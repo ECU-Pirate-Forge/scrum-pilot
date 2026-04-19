@@ -6,5 +6,8 @@ namespace ScrumPilot.Data.Repositories
     {
         Task<IEnumerable<Sprint>> GetAllSprintsAsync();
         Task<IEnumerable<Sprint>> GetSprintsByProjectAsync(int projectId);
+        Task<Sprint> CreateAsync(Sprint sprint);
+        Task<Sprint> UpdateAsync(Sprint sprint);
+        Task DeleteAsync(int id);
     }
 }

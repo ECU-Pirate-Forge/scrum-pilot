@@ -21,5 +21,9 @@ namespace ScrumPilot.API.Services
         {
             return await _sprintRepository.GetSprintsByProjectAsync(projectId);
         }
+
+        public Task<Sprint> CreateAsync(Sprint sprint) => _sprintRepository.CreateAsync(sprint);
+        public Task<Sprint> UpdateAsync(Sprint sprint) => _sprintRepository.UpdateAsync(sprint);
+        public Task DeleteAsync(int id) => _sprintRepository.DeleteAsync(id);
     }
 }

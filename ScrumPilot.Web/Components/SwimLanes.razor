@@ -1,4 +1,6 @@
 @inject HttpClient Http
+@inject ScrumPilot.Web.Services.ProjectStateService ProjectState
+@implements IDisposable
 
 @if (_loading)
 {
@@ -18,23 +20,6 @@ else
 
     <MudStack Row="true" Spacing="2" Class="mb-4">
         <MudSelect T="int?"
-                   Label="Project"
-                   Value="@_selectedProjectId"
-                   ValueChanged="@(async (int? value) => await OnProjectChanged(value))"
-                   Variant="Variant.Outlined"
-                   Dense="true"
-                   Style="min-width: 200px;"
-                   Disabled="_projects.Count == 0">
-            <MudSelectItem T="int?" Value="@((int?)null)">All</MudSelectItem>
-            @foreach (var project in _projects)
-            {
-                <MudSelectItem T="int?" Value="@((int?)project.ProjectId)">
-                    @project.ProjectName
-                </MudSelectItem>
-            }
-        </MudSelect>
-
-        <MudSelect T="int?"
                    Label="Sprint"
                    Value="@_selectedSprintId"
                    ValueChanged="@(async (int? value) => await OnSprintChanged(value))"
@@ -46,7 +31,7 @@ else
             @foreach (var sprint in _sprints)
             {
                 <MudSelectItem T="int?" Value="@((int?)sprint.SprintId)">
-                    @(sprint.SprintGoal ?? $"Sprint {sprint.SprintId}")
+                    @(sprint.SprintTitle ?? sprint.SprintGoal ?? $"Sprint {sprint.SprintId}")
                 </MudSelectItem>
             }
         </MudSelect>
@@ -186,7 +171,6 @@ else
     private IReadOnlyList<LaneDefinition> _lanes = StatusLanes();
 
     private List<ProductBacklogItem> _items = new();
-    private List<Project> _projects = new();
     private List<Sprint> _sprints = new();
     private List<Epic> _epics = new();
     private int? _selectedProjectId;
@@ -203,19 +187,39 @@ else
             _loading = false;
             return;
         }
+        _selectedProjectId = ProjectState.SelectedProjectId;
+        ProjectState.OnChange += HandleProjectStateChanged;
         await LoadDropdownsAsync();
         ApplyDefaultSprintFilter();
         await LoadItemsAsync();
+    }
+
+    private void HandleProjectStateChanged()
+    {
+        InvokeAsync(async () =>
+        {
+            await OnProjectChanged(ProjectState.SelectedProjectId);
+        });
+    }
+
+    public void Dispose()
+    {
+        ProjectState.OnChange -= HandleProjectStateChanged;
     }
 
     private void ApplyDefaultSprintFilter()
     {
         if (DefaultToLatestSprint && _sprints.Count > 0)
         {
-            _selectedSprintId = _sprints
-                .Where(s => s.StartDate.HasValue)
-                .OrderByDescending(s => s.StartDate)
-                .FirstOrDefault()?.SprintId;
+            var today = DateTime.UtcNow.Date;
+            _selectedSprintId = (_sprints
+                .FirstOrDefault(s => s.IsOpen && s.StartDate.HasValue && s.EndDate.HasValue
+                    && today >= s.StartDate.Value.Date && today <= s.EndDate.Value.Date)
+                ?? _sprints
+                    .Where(s => s.IsOpen && s.StartDate.HasValue)
+                    .OrderByDescending(s => s.StartDate)
+                    .FirstOrDefault())
+                ?.SprintId;
         }
         else if (InitialSprintId.HasValue)
         {
@@ -261,8 +265,6 @@ else
     {
         try
         {
-            _projects = await Http.GetFromJsonAsync<List<Project>>("api/Project") ?? new();
-
             var sprintUrl = _selectedProjectId.HasValue ? $"api/Sprint?projectId={_selectedProjectId.Value}" : "api/Sprint";
             var epicUrl   = _selectedProjectId.HasValue ? $"api/Epic?projectId={_selectedProjectId.Value}"   : "api/Epic";
 
@@ -280,7 +282,7 @@ else
     private async Task OnProjectChanged(int? value)
     {
         _selectedProjectId = value;
-        _selectedSprintId  = null;
+        _selectedSprintId  = InitialSprintId ?? null;
         _selectedEpicId    = null;
 
         try
@@ -300,6 +302,8 @@ else
         }
 
         await LoadItemsAsync(showLoading: false);
+        ApplyDefaultSprintFilter();
+        StateHasChanged();
     }
 
     private async Task LoadItemsAsync(bool showLoading = true)
@@ -315,7 +319,7 @@ else
             var url = BuildItemUrl();
             var items = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(url);
             if (items is not null)
-                _items = items;
+                _items = items.OrderBy(i => i.PbiId).ToList();
         }
         catch
         {

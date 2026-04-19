@@ -27,5 +27,33 @@ namespace ScrumPilot.Data.Repositories
                 .OrderByDescending(s => s.StartDate)
                 .ToListAsync();
         }
+
+        public async Task<Sprint> CreateAsync(Sprint sprint)
+        {
+            _context.Sprints.Add(sprint);
+            await _context.SaveChangesAsync();
+            return sprint;
+        }
+
+        public async Task<Sprint> UpdateAsync(Sprint sprint)
+        {
+            _context.Sprints.Update(sprint);
+            await _context.SaveChangesAsync();
+            return sprint;
+        }
+
+        public async Task DeleteAsync(int id)
+        {
+            await _context.Stories
+                .Where(p => p.SprintId == id)
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.SprintId, (int?)null));
+
+            var sprint = await _context.Sprints.FindAsync(id);
+            if (sprint != null)
+            {
+                _context.Sprints.Remove(sprint);
+                await _context.SaveChangesAsync();
+            }
+        }
     }
 }

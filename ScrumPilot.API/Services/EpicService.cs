@@ -21,5 +21,9 @@ namespace ScrumPilot.API.Services
         {
             return await _epicRepository.GetEpicsByProjectAsync(projectId);
         }
+
+        public Task<Epic> CreateAsync(Epic epic) => _epicRepository.CreateAsync(epic);
+        public Task<Epic> UpdateAsync(Epic epic) => _epicRepository.UpdateAsync(epic);
+        public Task DeleteAsync(int id) => _epicRepository.DeleteAsync(id);
     }
 }

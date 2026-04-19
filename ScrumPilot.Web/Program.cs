@@ -30,6 +30,7 @@ builder.Services.AddHttpClient("API", client => client.BaseAddress = new Uri(api
 builder.Services.AddScoped(sp =>
     sp.GetRequiredService<IHttpClientFactory>().CreateClient("API"));
 builder.Services.AddScoped<ScrumPilot.Web.Services.MetricsDashboardService>();
+builder.Services.AddSingleton<ScrumPilot.Web.Services.ProjectStateService>();
 
 await builder.Build().RunAsync();
 

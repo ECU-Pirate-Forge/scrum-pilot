@@ -1,8 +1,14 @@
 @using ScrumPilot.Web.Services
+@using ScrumPilot.Shared.Models
+@using System.Net.Http.Json
 @inject IAuthService AuthService
 @inject NavigationManager Navigation
 @inject IDialogService DialogService
+@inject HttpClient Http
+@inject ProjectStateService ProjectState
+@inject AuthenticationStateProvider AuthStateProvider
 @inherits LayoutComponentBase
+@implements IDisposable
 @using MudBlazor
 
 <MudThemeProvider @ref="@_mudThemeProvider" Theme="currentTheme" IsDarkMode="@_isDarkMode" />
@@ -20,6 +26,31 @@
         <a href="" class="appbar-logo-link">
             <img src="/images/logo.png" alt="ScrumPilot" class="main-logo" />
         </a>
+        <MudSpacer />
+        @if (_appBarProjects.Any())
+        {
+            <MudMenu Dense="true" ActivationEvent="MouseEvent.LeftClick" AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter">
+                <ActivatorContent>
+                    <MudButton Color="Color.Inherit"
+                               EndIcon="@Icons.Material.Filled.KeyboardArrowDown"
+                               StartIcon="@Icons.Material.Filled.Folder"
+                               Style="text-transform: none; font-size: 1rem; font-weight: 600; border: 2px solid rgba(255,255,255,0.55); border-radius: 8px; padding: 4px 14px; letter-spacing: 0.01em;">
+                        @(ProjectState.SelectedProject?.ProjectName ?? "Select Project")
+                    </MudButton>
+                </ActivatorContent>
+                <ChildContent>
+                    @foreach (var project in _appBarProjects)
+                    {
+                        var p = project;
+                        var isActive = ProjectState.SelectedProjectId == p.ProjectId;
+                        <MudMenuItem OnClick="@(() => SetGlobalProject(p))"
+                                     Style="@(isActive ? "font-weight: 600;" : "")">
+                            @p.ProjectName
+                        </MudMenuItem>
+                    }
+                </ChildContent>
+            </MudMenu>
+        }
         <MudSpacer />
         <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
                        Color="Color.Inherit"
@@ -49,6 +80,7 @@
     private bool _drawerOpen = true;
     private bool _isDarkMode = false;
     private MudThemeProvider? _mudThemeProvider;
+    private List<Project> _appBarProjects = new();
 
     MudTheme currentTheme = new()
     {
@@ -88,6 +120,13 @@
         }
     };
 
+    protected override async Task OnInitializedAsync()
+    {
+        AuthStateProvider.AuthenticationStateChanged += OnAuthStateChanged;
+        ProjectState.OnProjectListChanged += OnProjectListChanged;
+        await TryLoadProjectsAsync();
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender && _mudThemeProvider is not null)
@@ -95,6 +134,48 @@
             _isDarkMode = await _mudThemeProvider.GetSystemDarkModeAsync();
             StateHasChanged();
         }
+    }
+
+    private async void OnAuthStateChanged(Task<AuthenticationState> task)
+    {
+        var state = await task;
+        if (state.User.Identity?.IsAuthenticated == true)
+            await TryLoadProjectsAsync();
+        else
+        {
+            _appBarProjects.Clear();
+            ProjectState.SetProject(null);
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async void OnProjectListChanged()
+    {
+        await TryLoadProjectsAsync();
+    }
+
+    private async Task TryLoadProjectsAsync()
+    {
+        try
+        {
+            _appBarProjects = await Http.GetFromJsonAsync<List<Project>>("api/project") ?? new();
+            if (ProjectState.SelectedProject == null && _appBarProjects.Count > 0)
+                ProjectState.SetProject(_appBarProjects[0]);
+            else if (ProjectState.SelectedProject != null)
+            {
+                // Sync in case the selected project was renamed/updated
+                var refreshed = _appBarProjects.FirstOrDefault(p => p.ProjectId == ProjectState.SelectedProjectId);
+                if (refreshed != null)
+                    ProjectState.SetProject(refreshed);
+            }
+            await InvokeAsync(StateHasChanged);
+        }
+        catch { }
+    }
+
+    private void SetGlobalProject(Project project)
+    {
+        ProjectState.SetProject(project);
     }
 
     private void ToggleNavMenu()
@@ -118,8 +199,16 @@
 
         if (confirmed == true)
         {
+            ProjectState.SetProject(null);
+            _appBarProjects.Clear();
             await AuthService.LogoutAsync();
             Navigation.NavigateTo("/login");
         }
+    }
+
+    public void Dispose()
+    {
+        AuthStateProvider.AuthenticationStateChanged -= OnAuthStateChanged;
+        ProjectState.OnProjectListChanged -= OnProjectListChanged;
     }
 }

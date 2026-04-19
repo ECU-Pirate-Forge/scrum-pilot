@@ -23,5 +23,27 @@ namespace ScrumPilot.API.Controllers
                 : await _epicService.GetAllEpicsAsync();
             return Ok(epics);
         }
+
+        [HttpPost]
+        public async Task<ActionResult<Epic>> Create([FromBody] Epic epic)
+        {
+            var created = await _epicService.CreateAsync(epic);
+            return Ok(created);
+        }
+
+        [HttpPut("{id:int}")]
+        public async Task<ActionResult<Epic>> Update(int id, [FromBody] Epic epic)
+        {
+            if (id != epic.EpicId) return BadRequest();
+            var updated = await _epicService.UpdateAsync(epic);
+            return Ok(updated);
+        }
+
+        [HttpDelete("{id:int}")]
+        public async Task<ActionResult> Delete(int id)
+        {
+            await _epicService.DeleteAsync(id);
+            return NoContent();
+        }
     }
 }

@@ -1,5 +1,6 @@
 @page "/backlog"
 @inject HttpClient Http
+@inject ScrumPilot.Web.Services.ProjectStateService ProjectState
 
 <div class="swimlane-page">
     <MudContainer MaxWidth="MaxWidth.False" Class="pa-0">
@@ -29,7 +30,7 @@
 
                 <div class="details-content">
                     <div class="details-card">
-                        <PbiCard PbiModel="SelectedPbi" OnSave="HandlePbiSave" OnDelete="HandlePbiDelete" />
+                        <PbiCard PbiModel="SelectedPbi" ProjectId="@ProjectState.SelectedProjectId" OnSave="HandlePbiSave" OnDelete="HandlePbiDelete" />
                     </div>
                     <CommentThread PbiId="SelectedPbi.PbiId" />
                 </div>

@@ -29,4 +29,19 @@ public class ProjectController : ControllerBase
         var created = await _svc.CreateAsync(project);
         return CreatedAtAction(nameof(GetById), new { id = created.ProjectId }, created);
     }
+
+    [HttpPut("{id:int}")]
+    public async Task<ActionResult<Project>> Update(int id, [FromBody] Project project)
+    {
+        if (id != project.ProjectId) return BadRequest();
+        var updated = await _svc.UpdateAsync(project);
+        return Ok(updated);
+    }
+
+    [HttpDelete("{id:int}")]
+    public async Task<ActionResult> Delete(int id)
+    {
+        await _svc.DeleteAsync(id);
+        return NoContent();
+    }
 }

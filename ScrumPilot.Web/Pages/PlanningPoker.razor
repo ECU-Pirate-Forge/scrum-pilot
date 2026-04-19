@@ -9,6 +9,7 @@
 @inject IJSRuntime JS
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IConfiguration Configuration
+@inject ScrumPilot.Web.Services.ProjectStateService ProjectState
 @implements IAsyncDisposable
 
 <div class="pp-page">
@@ -49,7 +50,7 @@
         <div class="pp-center">
             @if (_selectedPbi != null)
             {
-                <PbiCard PbiModel="_selectedPbi" OnSave="HandlePbiSave" OnDelete="HandlePbiDelete" />
+                <PbiCard PbiModel="_selectedPbi" ProjectId="@ProjectState.SelectedProjectId" OnSave="HandlePbiSave" OnDelete="HandlePbiDelete" />
             }
             else
             {
@@ -208,15 +209,28 @@
 
     protected override async Task OnInitializedAsync()
     {
+        ProjectState.OnChange += HandleProjectStateChanged;
         await LoadUnassignedPbisAsync();
         await InitHubAsync();
+    }
+
+    private void HandleProjectStateChanged()
+    {
+        InvokeAsync(async () =>
+        {
+            await LoadUnassignedPbisAsync();
+            StateHasChanged();
+        });
     }
 
     private async Task LoadUnassignedPbisAsync()
     {
         try
         {
-            var all = await Http.GetFromJsonAsync<List<ProductBacklogItem>>("api/Pbi/getNonDraftPbis");
+            var url = "api/Pbi/getNonDraftPbis";
+            if (ProjectState.SelectedProjectId.HasValue)
+                url += $"?projectId={ProjectState.SelectedProjectId.Value}";
+            var all = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(url);
             _unassignedPbis = all?.Where(p => p.SprintId == null).ToList() ?? [];
         }
         catch
@@ -400,6 +414,7 @@
 
     public async ValueTask DisposeAsync()
     {
+        ProjectState.OnChange -= HandleProjectStateChanged;
         if (_hub is not null)
             await _hub.DisposeAsync();
     }

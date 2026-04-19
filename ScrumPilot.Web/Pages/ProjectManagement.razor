@@ -1,0 +1,1013 @@
+@page "/project-management"
+@using ScrumPilot.Shared.Models
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject ScrumPilot.Web.Services.ProjectStateService ProjectState
+
+<PageTitle>Project Management</PageTitle>
+
+<MudGrid Spacing="3" Class="pa-4">
+
+    <!-- LEFT: Project List -->
+    <MudItem xs="12" md="3">
+        <MudPaper Class="pa-4" Elevation="2" Style="min-height: 80vh;">
+            <div class="d-flex align-center justify-space-between mb-4">
+                <MudText Typo="Typo.h6" Style="font-weight: 600;">Projects</MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.AddCircle"
+                               Color="Color.Primary"
+                               Title="Add Project"
+                               OnClick="@(() => _showAddProject = true)" />
+            </div>
+
+            @if (_showAddProject)
+            {
+                <MudPaper Class="pa-3 mb-3" Elevation="1" Style="border: 1px solid var(--mud-palette-primary);">
+                    <MudTextField @bind-Value="_newProjectName"
+                                  Label="Project Name"
+                                  Variant="Variant.Outlined"
+                                  Dense="true"
+                                  Class="mb-2" />
+                    <MudTextField @bind-Value="_newProjectDescription"
+                                  Label="Description"
+                                  Variant="Variant.Outlined"
+                                  Dense="true"
+                                  Lines="2"
+                                  Class="mb-2" />
+                    <div class="d-flex gap-2">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                   OnClick="SaveNewProject" Disabled="@_saving">Save</MudButton>
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                   OnClick="@(() => { _showAddProject = false; _newProjectName = ""; _newProjectDescription = ""; })">Cancel</MudButton>
+                    </div>
+                </MudPaper>
+            }
+
+            @if (_projects.Count == 0 && !_showAddProject)
+            {
+                <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary);">
+                    No projects yet. Click + to create one.
+                </MudText>
+            }
+
+            <MudStack Spacing="2">
+                @foreach (var project in _projects)
+                {
+                    var isProjSelected = _selectedProject?.ProjectId == project.ProjectId;
+                    var isProjHovered = _hoveredProjectId == project.ProjectId;
+                    var projStyle = isProjSelected
+                        ? "border-radius: 8px; border: 2px solid var(--mud-palette-primary); background: var(--mud-palette-primary-lighten); cursor: pointer; transition: all 0.15s ease;"
+                        : isProjHovered
+                            ? "border-radius: 8px; border: 2px solid var(--mud-palette-primary-lighten); background: var(--mud-palette-background-grey); cursor: pointer; transition: all 0.15s ease;"
+                            : "border-radius: 8px; border: 2px solid var(--mud-palette-divider); cursor: pointer; transition: all 0.15s ease;";
+                    <MudPaper Class="pa-2" Elevation="@(isProjSelected ? 3 : 1)"
+                              Style="@projStyle"
+                              @onclick="@(() => SelectProject(project))"
+                              @onmouseenter="@(() => _hoveredProjectId = project.ProjectId)"
+                              @onmouseleave="@(() => _hoveredProjectId = null)">
+                        <div class="d-flex align-center justify-space-between">
+                            @if (_editingProjectId == project.ProjectId)
+                            {
+                                <div style="flex: 1;" @onclick:stopPropagation="true">
+                                    <MudTextField @bind-Value="_editingProjectName"
+                                                  Label="Project Name"
+                                                  Variant="Variant.Outlined"
+                                                  Dense="true"
+                                                  Class="mb-1" />
+                                    <MudTextField @bind-Value="_editingProjectDescription"
+                                                  Label="Description"
+                                                  Variant="Variant.Outlined"
+                                                  Dense="true"
+                                                  Lines="2" />
+                                </div>
+                                <MudIconButton Icon="@Icons.Material.Filled.Check"
+                                               Size="Size.Small"
+                                               Color="Color.Success"
+                                               OnClick="@(async () => await SaveRenameProject(project))"
+                                               Title="Save" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                               Size="Size.Small"
+                                               OnClick="@(() => _editingProjectId = null)"
+                                               Title="Cancel" />
+                            }
+                            else
+                            {
+                                <div>
+                                    <MudText Typo="Typo.body1" Style="@(isProjSelected ? "font-weight: 600;" : "")">@project.ProjectName</MudText>
+                                    @if (!string.IsNullOrWhiteSpace(project.Description))
+                                    {
+                                        <MudText Typo="Typo.caption" Style="opacity: 0.7;">@project.Description</MudText>
+                                    }
+                                </div>
+                                <div @onclick:stopPropagation="true">
+                                    <MudMenu Icon="@Icons.Material.Filled.Settings"
+                                             Size="Size.Small"
+                                             Dense="true">
+                                        <MudMenuItem Icon="@Icons.Material.Filled.Edit"
+                                                     OnClick="@(() => StartRenameProject(project))">
+                                            Edit
+                                        </MudMenuItem>
+                                        <MudMenuItem Icon="@Icons.Material.Filled.Delete"
+                                                     IconColor="Color.Error"
+                                                     OnClick="@(async () => await ConfirmDeleteProject(project))">
+                                            <MudText Color="Color.Error">Delete</MudText>
+                                        </MudMenuItem>
+                                    </MudMenu>
+                                </div>
+                            }
+                        </div>
+                    </MudPaper>
+                }
+            </MudStack>
+        </MudPaper>
+    </MudItem>
+
+    <!-- RIGHT: Project Details -->
+    <MudItem xs="12" md="9">
+        @if (_selectedProject == null)
+        {
+            <MudPaper Class="pa-8" Elevation="2"
+                      Style="min-height: 80vh; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                <MudIcon Icon="@Icons.Material.Filled.FolderOpen" Size="Size.Large" Color="Color.Primary" Class="mb-3" />
+                <MudText Typo="Typo.h6" Style="color: var(--mud-palette-text-secondary);">
+                    Select a project to manage it
+                </MudText>
+            </MudPaper>
+        }
+        else
+        {
+            <MudPaper Class="pa-4" Elevation="2" Style="min-height: 80vh;">
+                <MudText Typo="Typo.h5" Class="mb-1" Style="font-weight: 600;">
+                    <MudIcon Icon="@Icons.Material.Filled.Folder" Class="me-2" Color="Color.Primary" />
+                    @_selectedProject.ProjectName
+                </MudText>
+                <MudDivider Class="mb-4" />
+
+                <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pt-4">
+
+                    <!-- SPRINTS TAB -->
+                    <MudTabPanel Text="Sprints" Icon="@Icons.Material.Filled.DirectionsRun">
+                        <div class="d-flex justify-end mb-3">
+                            <MudButton StartIcon="@Icons.Material.Filled.Add"
+                                       Variant="Variant.Outlined"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       OnClick="@(() => _showAddSprint = true)"
+                                       Disabled="_showAddSprint">
+                                Add Sprint
+                            </MudButton>
+                        </div>
+
+                        @if (_showAddSprint)
+                        {
+                            <MudPaper Class="pa-4 mb-3" Elevation="1"
+                                      Style="border: 2px solid var(--mud-palette-primary); border-radius: 8px;">
+                                <MudText Typo="Typo.subtitle1" Class="mb-3" Style="font-weight: 600;">New Sprint</MudText>
+                                <MudTextField @bind-Value="_newSprint.SprintTitle"
+                                              Label="Sprint Title (e.g. Sprint 1)"
+                                              Variant="Variant.Outlined"
+                                              Required="true"
+                                              Class="mb-2" />
+                                <MudTextField @bind-Value="_newSprint.SprintGoal"
+                                              Label="Sprint Goal"
+                                              Variant="Variant.Outlined"
+                                              Class="mb-2" />
+                                <MudGrid Spacing="2" Class="mb-2">
+                                    <MudItem xs="6">
+                                        <MudDatePicker @bind-Date="_newSprint.StartDate"
+                                                       Label="Start Date"
+                                                       Variant="Variant.Outlined" />
+                                    </MudItem>
+                                    <MudItem xs="6">
+                                        <MudDatePicker @bind-Date="_newSprint.EndDate"
+                                                       Label="End Date"
+                                                       Variant="Variant.Outlined" />
+                                    </MudItem>
+                                </MudGrid>
+                                <MudSwitch @bind-Value="_newSprint.IsOpen" Label="Open Sprint" Color="Color.Success" />
+                                <div class="d-flex gap-2 mt-3">
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                               OnClick="SaveNewSprint" Disabled="@_saving">Save</MudButton>
+                                    <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                               OnClick="CancelAddSprint">Cancel</MudButton>
+                                </div>
+                            </MudPaper>
+                        }
+
+                        @if (_sprints.Count == 0 && !_showAddSprint)
+                        {
+                            <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary);">
+                                No sprints yet. Add one above.
+                            </MudText>
+                        }
+
+                        <MudStack Spacing="2">
+                            @foreach (var sprint in _sprints)
+                            {
+                                var isSelected = _selectedSprintId == sprint.SprintId;
+                                var isHovered = _hoveredSprintId == sprint.SprintId;
+                                var sprintStyle = isSelected
+                                    ? "border-radius: 8px; border: 2px solid var(--mud-palette-primary); background: var(--mud-palette-primary-lighten); cursor: pointer; transition: all 0.15s ease;"
+                                    : isHovered
+                                        ? "border-radius: 8px; border: 2px solid var(--mud-palette-primary-lighten); background: var(--mud-palette-background-grey); cursor: pointer; transition: all 0.15s ease;"
+                                        : "border-radius: 8px; border: 2px solid var(--mud-palette-divider); cursor: pointer; transition: all 0.15s ease;";
+                                <MudPaper Class="pa-3" Elevation="@(isSelected ? 3 : 1)"
+                                          Style="@sprintStyle"
+                                          @onclick="@(() => _selectedSprintId = isSelected ? null : sprint.SprintId)"
+                                          @onmouseenter="@(() => _hoveredSprintId = sprint.SprintId)"
+                                          @onmouseleave="@(() => _hoveredSprintId = null)">
+                                    @if (_editingSprintId == sprint.SprintId)
+                                    {
+                                        <MudTextField @bind-Value="_editingSprint!.SprintTitle"
+                                                      Label="Sprint Title (e.g. Sprint 1)"
+                                                      Variant="Variant.Outlined"
+                                                      Dense="true"
+                                                      Required="true"
+                                                      Class="mb-2" />
+                                        <MudTextField @bind-Value="_editingSprint!.SprintGoal"
+                                                      Label="Sprint Goal"
+                                                      Variant="Variant.Outlined"
+                                                      Dense="true"
+                                                      Class="mb-2" />
+                                        <MudGrid Spacing="2" Class="mb-2">
+                                            <MudItem xs="6">
+                                                <MudDatePicker @bind-Date="_editingSprint.StartDate"
+                                                               Label="Start Date"
+                                                               Variant="Variant.Outlined" />
+                                            </MudItem>
+                                            <MudItem xs="6">
+                                                <MudDatePicker @bind-Date="_editingSprint.EndDate"
+                                                               Label="End Date"
+                                                               Variant="Variant.Outlined" />
+                                            </MudItem>
+                                        </MudGrid>
+                                        <MudSwitch @bind-Value="_editingSprint.IsOpen" Label="Open Sprint" Color="Color.Success" />
+                                        <div class="d-flex gap-2 mt-2">
+                                            <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                                       OnClick="SaveEditSprint" Disabled="@_saving">Save</MudButton>
+                                            <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                                       OnClick="CancelEditSprint">Cancel</MudButton>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="d-flex align-center justify-space-between">
+                                            <div>
+                                                    <MudText Typo="Typo.subtitle1" Style="font-weight: 600;">
+                                                        @(sprint.SprintTitle ?? $"Sprint {sprint.SprintId}")
+                                                    </MudText>
+                                                    @if (!string.IsNullOrWhiteSpace(sprint.SprintGoal))
+                                                    {
+                                                        <MudText Typo="Typo.body2" Style="opacity: 0.8; font-style: italic;">
+                                                            @sprint.SprintGoal
+                                                        </MudText>
+                                                    }
+                                                    <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary);">
+                                                        @FormatDateRange(sprint.StartDate, sprint.EndDate)
+                                                    </MudText>
+                                                </div>
+                                            <div class="d-flex align-center gap-2" @onclick:stopPropagation="true">
+                                                <MudChip T="string"
+                                                         Size="Size.Small"
+                                                         Color="@(sprint.IsOpen ? Color.Success : Color.Default)"
+                                                         Variant="Variant.Filled">
+                                                    @(sprint.IsOpen ? "Open" : "Closed")
+                                                </MudChip>
+                                                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                               Size="Size.Small"
+                                                               OnClick="@(() => StartEditSprint(sprint))" />
+                                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                               Size="Size.Small"
+                                                               Color="Color.Error"
+                                                               OnClick="@(async () => await DeleteSprint(sprint))" />
+                                            </div>
+                                        </div>
+                                    }
+                                </MudPaper>
+                            }
+                        </MudStack>
+                    </MudTabPanel>
+
+                    <!-- EPICS TAB -->
+                    <MudTabPanel Text="Epics" Icon="@Icons.Material.Filled.Bookmark">
+                        <div class="d-flex justify-end mb-3">
+                            <MudButton StartIcon="@Icons.Material.Filled.Add"
+                                       Variant="Variant.Outlined"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       OnClick="@(() => _showAddEpic = true)"
+                                       Disabled="_showAddEpic">
+                                Add Epic
+                            </MudButton>
+                        </div>
+
+                        @if (_showAddEpic)
+                        {
+                            <MudPaper Class="pa-4 mb-3" Elevation="1"
+                                      Style="border: 2px solid var(--mud-palette-primary); border-radius: 8px;">
+                                <MudText Typo="Typo.subtitle1" Class="mb-3" Style="font-weight: 600;">New Epic</MudText>
+                                <MudTextField @bind-Value="_newEpicName"
+                                              Label="Epic Name"
+                                              Variant="Variant.Outlined"
+                                              Required="true"
+                                              Class="mb-2" />
+                                <div class="d-flex gap-2">
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                               OnClick="SaveNewEpic" Disabled="@_saving">Save</MudButton>
+                                    <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                               OnClick="@(() => { _showAddEpic = false; _newEpicName = ""; })">Cancel</MudButton>
+                                </div>
+                            </MudPaper>
+                        }
+
+                        @if (_epics.Count == 0 && !_showAddEpic)
+                        {
+                            <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary);">
+                                No epics yet. Add one above.
+                            </MudText>
+                        }
+
+                        <MudStack Spacing="2">
+                            @foreach (var epic in _epics)
+                            {
+                                <MudPaper Class="pa-3" Elevation="1" Style="border-radius: 8px;">
+                                    @if (_editingEpicId == epic.EpicId)
+                                    {
+                                        <MudTextField @bind-Value="_editingEpicName"
+                                                      Label="Epic Name"
+                                                      Variant="Variant.Outlined"
+                                                      Dense="true"
+                                                      Class="mb-2" />
+                                        <div class="d-flex gap-2">
+                                            <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                                       OnClick="SaveEditEpic" Disabled="@_saving">Save</MudButton>
+                                            <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                                       OnClick="CancelEditEpic">Cancel</MudButton>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="d-flex align-center justify-space-between">
+                                            <MudText Typo="Typo.subtitle1" Style="font-weight: 600;">@epic.Name</MudText>
+                                            <div class="d-flex gap-2">
+                                                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                               Size="Size.Small"
+                                                               OnClick="@(() => StartEditEpic(epic))" />
+                                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                               Size="Size.Small"
+                                                               Color="Color.Error"
+                                                               OnClick="@(async () => await DeleteEpic(epic))" />
+                                            </div>
+                                        </div>
+                                    }
+                                </MudPaper>
+                            }
+                        </MudStack>
+                    </MudTabPanel>
+
+                    <!-- PBIS TAB -->
+                    <MudTabPanel Text="PBIs" Icon="@Icons.Material.Filled.AutoStories">
+                        <!-- Filter row -->
+                        <div class="d-flex flex-wrap gap-3 align-center mb-4">
+                            <MudSelect T="int?"
+                                       Label="Sprint"
+                                       Value="@_storyFilterSprintId"
+                                       ValueChanged="@(async (int? v) => await OnStorySprintFilterChanged(v))"
+                                       Variant="Variant.Outlined"
+                                       Dense="true"
+                                       Style="min-width: 180px;">
+                                <MudSelectItem T="int?" Value="@((int?)null)">All Sprints</MudSelectItem>
+                                @foreach (var s in _sprints)
+                                {
+                                    <MudSelectItem T="int?" Value="@((int?)s.SprintId)">
+                                        @(s.SprintTitle ?? s.SprintGoal ?? $"Sprint {s.SprintId}")
+                                    </MudSelectItem>
+                                }
+                            </MudSelect>
+                            <MudSelect T="int?"
+                                       Label="Epic"
+                                       Value="@_storyFilterEpicId"
+                                       ValueChanged="@(async (int? v) => await OnStoryEpicFilterChanged(v))"
+                                       Variant="Variant.Outlined"
+                                       Dense="true"
+                                       Style="min-width: 180px;">
+                                <MudSelectItem T="int?" Value="@((int?)null)">All Epics</MudSelectItem>
+                                @foreach (var e in _epics)
+                                {
+                                    <MudSelectItem T="int?" Value="@((int?)e.EpicId)">@e.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+                            <MudButton StartIcon="@Icons.Material.Filled.Add"
+                                       Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       OnClick="AddNewStory">
+                                New PBI
+                            </MudButton>
+                        </div>
+
+                        @if (_loadingStories)
+                        {
+                            <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+                        }
+
+                        @if (!_pbis.Any() && !_loadingStories)
+                        {
+                            <MudPaper Class="pa-6 text-center" Elevation="1" Style="border-radius: 8px;">
+                                <MudIcon Icon="@Icons.Material.Filled.AutoStories" Color="Color.Primary" Class="mb-2" />
+                                <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary);">
+                                    No PBIs yet. Click "New PBI" to create one.
+                                </MudText>
+                            </MudPaper>
+                        }
+
+                        <div style="overflow-y: auto; max-height: 55vh;">
+                            <MudStack Spacing="2">
+                                @foreach (var pbi in _pbis)
+                                {
+                                    var p = pbi;
+                                    var isPbiHovered = _hoveredPbiId == p.PbiId;
+                                    var isPbiEditing = _pbiDialogVisible && _dialogPbi?.PbiId == p.PbiId;
+                                    var pbiStyle = isPbiEditing
+                                        ? "border-radius: 8px; border: 2px solid var(--mud-palette-primary); background: var(--mud-palette-primary-lighten); cursor: pointer; transition: all 0.15s ease;"
+                                        : isPbiHovered
+                                            ? "border-radius: 8px; border: 2px solid var(--mud-palette-primary-lighten); background: var(--mud-palette-background-grey); cursor: pointer; transition: all 0.15s ease;"
+                                            : "border-radius: 8px; border: 2px solid var(--mud-palette-divider); cursor: pointer; transition: all 0.15s ease;";
+                                    var sprintName = p.SprintId.HasValue
+                                        ? (_sprints.FirstOrDefault(s => s.SprintId == p.SprintId) is { } sp
+                                            ? sp.SprintTitle ?? sp.SprintGoal ?? $"Sprint {sp.SprintId}"
+                                            : null)
+                                        : null;
+                                    var epicName = p.EpicId.HasValue
+                                        ? _epics.FirstOrDefault(e => e.EpicId == p.EpicId)?.Name
+                                        : null;
+                                    <MudPaper Class="pa-3" Elevation="@(isPbiEditing ? 3 : 1)"
+                                              Style="@pbiStyle"
+                                              @onmouseenter="@(() => _hoveredPbiId = p.PbiId)"
+                                              @onmouseleave="@(() => _hoveredPbiId = null)">
+                                        <div class="d-flex align-center gap-3">
+                                            <div style="flex: 1; min-width: 0;">
+                                                <MudText Typo="Typo.subtitle2" Style="font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                                    @p.Title
+                                                </MudText>
+                                                <div class="d-flex flex-wrap gap-1 mt-1">
+                                                    <MudChip T="string" Size="Size.Small" Color="@GetPbiPriorityColor(p.Priority)" Variant="Variant.Filled">@p.Priority</MudChip>
+                                                    <MudChip T="string" Size="Size.Small" Color="@GetPbiStatusColor(p.Status)" Variant="Variant.Outlined">@p.Status</MudChip>
+                                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@((int)p.StoryPoints) pts</MudChip>
+                                                    @if (sprintName != null)
+                                                    {
+                                                        <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">@sprintName</MudChip>
+                                                    }
+                                                    @if (epicName != null)
+                                                    {
+                                                        <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Outlined">@epicName</MudChip>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <div class="d-flex gap-1" style="flex-shrink: 0;" @onclick:stopPropagation="true">
+                                                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                               Size="Size.Small"
+                                                               Title="Edit"
+                                                               OnClick="@(() => OpenEditPbiDialog(p))" />
+                                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                               Size="Size.Small"
+                                                               Color="Color.Error"
+                                                               Title="Delete"
+                                                               OnClick="@(async () => await DeletePbiDirect(p))" />
+                                            </div>
+                                        </div>
+                                    </MudPaper>
+                                }
+                            </MudStack>
+                        </div>
+                    </MudTabPanel>
+
+                </MudTabs>
+            </MudPaper>
+        }
+    </MudItem>
+</MudGrid>
+
+@if (_pbiDialogVisible && _dialogPbi != null)
+{
+    <MudOverlay Visible="true" DarkBackground="true" ZIndex="1300" />
+    <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1400; width: min(900px, 95vw); max-height: 90vh; overflow-y: auto; border-radius: 12px;">
+        <MudPaper Elevation="24" Style="border-radius: 12px; overflow: hidden;">
+            <div class="d-flex align-center justify-space-between px-4 py-3" style="border-bottom: 1px solid var(--mud-palette-divider); background: var(--mud-palette-surface);">
+                <MudText Typo="Typo.h6" Style="font-weight: 600;">
+                    @(_dialogPbi.PbiId == 0 ? "New Story" : "Edit Story")
+                </MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="ClosePbiDialog" />
+            </div>
+            <PbiCard PbiModel="_dialogPbi"
+                     ProjectId="@_selectedProject?.ProjectId"
+                     StartInEditMode="@(_dialogPbi.PbiId == 0)"
+                     OnSave="HandlePbiSaveFromDialog"
+                     OnCancelNew="ClosePbiDialog"
+                     OnDelete="HandlePbiDeleteFromDialog" />
+        </MudPaper>
+    </div>
+}
+
+@code {
+    private List<Project> _projects = new();
+    private Project? _selectedProject;
+    private bool _saving;
+
+    // Project add state
+    private bool _showAddProject;
+    private string _newProjectName = "";
+    private string _newProjectDescription = "";
+
+    // Project rename state
+    private int? _editingProjectId;
+    private string _editingProjectName = "";
+    private string _editingProjectDescription = "";
+    private int? _hoveredProjectId;
+
+    // Sprint state
+    private List<Sprint> _sprints = new();
+    private bool _showAddSprint;
+    private Sprint _newSprint = new();
+    private int? _editingSprintId;
+    private Sprint? _editingSprint;
+    private int? _selectedSprintId;
+    private int? _hoveredSprintId;
+
+    // Epic state
+    private List<Epic> _epics = new();
+    private bool _showAddEpic;
+    private string _newEpicName = "";
+    private int? _editingEpicId;
+    private string _editingEpicName = "";
+
+    // Story state
+    private List<ProductBacklogItem> _pbis = new();
+    private bool _loadingStories;
+    private int? _storyFilterSprintId;
+    private int? _storyFilterEpicId;
+    private int? _hoveredPbiId;
+
+    // PBI dialog state
+    private bool _pbiDialogVisible;
+    private ProductBacklogItem? _dialogPbi;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _projects = await Http.GetFromJsonAsync<List<Project>>("api/project") ?? new();
+            if (ProjectState.SelectedProjectId.HasValue)
+            {
+                var match = _projects.FirstOrDefault(p => p.ProjectId == ProjectState.SelectedProjectId);
+                if (match != null)
+                    await SelectProject(match);
+            }
+        }
+        catch
+        {
+            _projects = new();
+        }
+    }
+
+    private async Task SelectProject(Project project)
+    {
+        _selectedProject = project;
+        ProjectState.SetProject(project);
+        _showAddSprint = false;
+        _showAddEpic = false;
+        _editingSprintId = null;
+        _editingEpicId = null;
+        _selectedSprintId = null;
+        _hoveredSprintId = null;
+        _storyFilterSprintId = null;
+        _storyFilterEpicId = null;
+        _pbis = new();
+        await LoadSprints();
+        await LoadEpics();
+        await LoadStories();
+    }
+
+    private async Task LoadSprints()
+    {
+        if (_selectedProject == null) return;
+        try
+        {
+            _sprints = await Http.GetFromJsonAsync<List<Sprint>>($"api/sprint?projectId={_selectedProject.ProjectId}") ?? new();
+        }
+        catch { _sprints = new(); }
+    }
+
+    private async Task LoadEpics()
+    {
+        if (_selectedProject == null) return;
+        try
+        {
+            _epics = await Http.GetFromJsonAsync<List<Epic>>($"api/epic?projectId={_selectedProject.ProjectId}") ?? new();
+        }
+        catch { _epics = new(); }
+    }
+
+    private async Task LoadStories()
+    {
+        if (_selectedProject == null) return;
+        _loadingStories = true;
+        try
+        {
+            var url = $"api/pbi/getNonDraftPbis?projectId={_selectedProject.ProjectId}";
+            if (_storyFilterSprintId.HasValue) url += $"&sprintId={_storyFilterSprintId}";
+            if (_storyFilterEpicId.HasValue) url += $"&epicId={_storyFilterEpicId}";
+            _pbis = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(url) ?? new();
+        }
+        catch { _pbis = new(); }
+        _loadingStories = false;
+    }
+
+    // --- Project CRUD ---
+
+    private async Task SaveNewProject()
+    {
+        if (string.IsNullOrWhiteSpace(_newProjectName)) return;
+        _saving = true;
+        try
+        {
+            var created = await Http.PostAsJsonAsync("api/project", new Project { ProjectName = _newProjectName, Description = _newProjectDescription });
+            if (created.IsSuccessStatusCode)
+            {
+                var project = await created.Content.ReadFromJsonAsync<Project>();
+                if (project != null) _projects.Add(project);
+                _newProjectName = "";
+                _newProjectDescription = "";
+                _showAddProject = false;
+                ProjectState.NotifyProjectListChanged();
+                Snackbar.Add("Project created.", Severity.Success);
+            }
+        }
+        catch { Snackbar.Add("Failed to create project.", Severity.Error); }
+        _saving = false;
+    }
+
+    private async Task ConfirmDeleteProject(Project project)
+    {
+        bool? confirmed = await DialogService.ShowMessageBox(
+            "Delete Project",
+            $"Are you sure you want to delete \"{project.ProjectName}\"? This cannot be undone.",
+            yesText: "Delete",
+            cancelText: "Cancel");
+
+        if (confirmed != true) return;
+
+        try
+        {
+            var response = await Http.DeleteAsync($"api/project/{project.ProjectId}");
+            if (response.IsSuccessStatusCode)
+            {
+                _projects.Remove(project);
+                if (_selectedProject?.ProjectId == project.ProjectId)
+                {
+                    _selectedProject = null;
+                    _sprints = new();
+                    _epics = new();
+                    _pbis = new();
+                    if (ProjectState.SelectedProjectId == project.ProjectId)
+                        ProjectState.SetProject(null);
+                }
+                ProjectState.NotifyProjectListChanged();
+                Snackbar.Add("Project deleted.", Severity.Info);
+            }
+        }
+        catch { Snackbar.Add("Failed to delete project.", Severity.Error); }
+    }
+
+    private void StartRenameProject(Project project)
+    {
+        _editingProjectId = project.ProjectId;
+        _editingProjectName = project.ProjectName;
+        _editingProjectDescription = project.Description ?? "";
+    }
+
+    private async Task SaveRenameProject(Project project)
+    {
+        if (string.IsNullOrWhiteSpace(_editingProjectName)) return;
+        _saving = true;
+        try
+        {
+            project.ProjectName = _editingProjectName;
+            project.Description = string.IsNullOrWhiteSpace(_editingProjectDescription) ? null : _editingProjectDescription;
+            var response = await Http.PutAsJsonAsync($"api/project/{project.ProjectId}", project);
+            if (response.IsSuccessStatusCode)
+            {
+                _editingProjectId = null;
+                if (_selectedProject?.ProjectId == project.ProjectId)
+                    _selectedProject.ProjectName = project.ProjectName;
+                ProjectState.NotifyProjectListChanged();
+                Snackbar.Add("Project renamed.", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to rename project.", Severity.Error);
+            }
+        }
+        catch { Snackbar.Add("Failed to rename project.", Severity.Error); }
+        _saving = false;
+    }
+
+    // --- Sprint CRUD ---
+
+    private async Task SaveNewSprint()
+    {
+        if (_selectedProject == null) return;
+        if (string.IsNullOrWhiteSpace(_newSprint.SprintTitle))
+        {
+            Snackbar.Add("Sprint Title is required.", Severity.Warning);
+            return;
+        }
+        _saving = true;
+        try
+        {
+            _newSprint.ProjectId = _selectedProject.ProjectId;
+            var response = await Http.PostAsJsonAsync("api/sprint", _newSprint);
+            if (response.IsSuccessStatusCode)
+            {
+                var sprint = await response.Content.ReadFromJsonAsync<Sprint>();
+                if (sprint != null) _sprints.Insert(0, sprint);
+                _newSprint = new();
+                _showAddSprint = false;
+                Snackbar.Add("Sprint created.", Severity.Success);
+            }
+        }
+        catch { Snackbar.Add("Failed to create sprint.", Severity.Error); }
+        _saving = false;
+    }
+
+    private void CancelAddSprint()
+    {
+        _showAddSprint = false;
+        _newSprint = new();
+    }
+
+    private void StartEditSprint(Sprint sprint)
+    {
+        _editingSprintId = sprint.SprintId;
+        _editingSprint = new Sprint
+        {
+            SprintId = sprint.SprintId,
+            ProjectId = sprint.ProjectId,
+            SprintTitle = sprint.SprintTitle,
+            SprintGoal = sprint.SprintGoal,
+            StartDate = sprint.StartDate,
+            EndDate = sprint.EndDate,
+            IsOpen = sprint.IsOpen,
+            DateClosed = sprint.DateClosed
+        };
+    }
+
+    private async Task SaveEditSprint()
+    {
+        if (_editingSprint == null) return;
+        if (string.IsNullOrWhiteSpace(_editingSprint.SprintTitle))
+        {
+            Snackbar.Add("Sprint Title is required.", Severity.Warning);
+            return;
+        }
+        _saving = true;
+        try
+        {
+            var response = await Http.PutAsJsonAsync($"api/sprint/{_editingSprint.SprintId}", _editingSprint);
+            if (response.IsSuccessStatusCode)
+            {
+                var updated = await response.Content.ReadFromJsonAsync<Sprint>();
+                if (updated != null)
+                {
+                    var idx = _sprints.FindIndex(s => s.SprintId == updated.SprintId);
+                    if (idx >= 0) _sprints[idx] = updated;
+                }
+                _editingSprintId = null;
+                _editingSprint = null;
+                Snackbar.Add("Sprint updated.", Severity.Success);
+            }
+        }
+        catch { Snackbar.Add("Failed to update sprint.", Severity.Error); }
+        _saving = false;
+    }
+
+    private void CancelEditSprint()
+    {
+        _editingSprintId = null;
+        _editingSprint = null;
+    }
+
+    private async Task DeleteSprint(Sprint sprint)
+    {
+        try
+        {
+            var response = await Http.DeleteAsync($"api/sprint/{sprint.SprintId}");
+            if (response.IsSuccessStatusCode)
+            {
+                _sprints.Remove(sprint);
+                Snackbar.Add("Sprint deleted. Stories were unassigned.", Severity.Info);
+                await LoadStories();
+            }
+        }
+        catch { Snackbar.Add("Failed to delete sprint.", Severity.Error); }
+    }
+
+    // --- Epic CRUD ---
+
+    private async Task SaveNewEpic()
+    {
+        if (_selectedProject == null || string.IsNullOrWhiteSpace(_newEpicName)) return;
+        _saving = true;
+        try
+        {
+            var epic = new Epic
+            {
+                ProjectId = _selectedProject.ProjectId,
+                Name = _newEpicName,
+                DateCreated = DateTime.UtcNow
+            };
+            var response = await Http.PostAsJsonAsync("api/epic", epic);
+            if (response.IsSuccessStatusCode)
+            {
+                var created = await response.Content.ReadFromJsonAsync<Epic>();
+                if (created != null) _epics.Add(created);
+                _newEpicName = "";
+                _showAddEpic = false;
+                Snackbar.Add("Epic created.", Severity.Success);
+            }
+        }
+        catch { Snackbar.Add("Failed to create epic.", Severity.Error); }
+        _saving = false;
+    }
+
+    private void StartEditEpic(Epic epic)
+    {
+        _editingEpicId = epic.EpicId;
+        _editingEpicName = epic.Name;
+    }
+
+    private async Task SaveEditEpic()
+    {
+        var epic = _epics.FirstOrDefault(e => e.EpicId == _editingEpicId);
+        if (epic == null || string.IsNullOrWhiteSpace(_editingEpicName)) return;
+        _saving = true;
+        try
+        {
+            epic.Name = _editingEpicName;
+            var response = await Http.PutAsJsonAsync($"api/epic/{epic.EpicId}", epic);
+            if (response.IsSuccessStatusCode)
+            {
+                _editingEpicId = null;
+                _editingEpicName = "";
+                Snackbar.Add("Epic updated.", Severity.Success);
+            }
+        }
+        catch { Snackbar.Add("Failed to update epic.", Severity.Error); }
+        _saving = false;
+    }
+
+    private void CancelEditEpic()
+    {
+        _editingEpicId = null;
+        _editingEpicName = "";
+    }
+
+    private async Task DeleteEpic(Epic epic)
+    {
+        try
+        {
+            var response = await Http.DeleteAsync($"api/epic/{epic.EpicId}");
+            if (response.IsSuccessStatusCode)
+            {
+                _epics.Remove(epic);
+                Snackbar.Add("Epic deleted. Stories were unassigned.", Severity.Info);
+                await LoadStories();
+            }
+        }
+        catch { Snackbar.Add("Failed to delete epic.", Severity.Error); }
+    }
+
+    // --- Story CRUD ---
+
+    private void AddNewStory()
+    {
+        if (_selectedProject == null) return;
+        _dialogPbi = new ProductBacklogItem
+        {
+            PbiId = 0,
+            ProjectId = _selectedProject.ProjectId,
+            Title = "",
+            Status = PbiStatus.ToDo,
+            Priority = PbiPriority.Medium,
+            Origin = PbiOrigin.WebUserCreated,
+            DateCreated = DateTime.UtcNow,
+            LastUpdated = DateTime.UtcNow
+        };
+        _pbiDialogVisible = true;
+    }
+
+    private void OpenEditPbiDialog(ProductBacklogItem pbi)
+    {
+        _dialogPbi = pbi;
+        _pbiDialogVisible = true;
+    }
+
+    private void ClosePbiDialog()
+    {
+        _pbiDialogVisible = false;
+        _dialogPbi = null;
+    }
+
+    private async Task HandlePbiSaveFromDialog(ProductBacklogItem pbi)
+    {
+        try
+        {
+            if (pbi.PbiId == 0)
+            {
+                var response = await Http.PostAsJsonAsync("api/pbi/createStory", pbi);
+                if (response.IsSuccessStatusCode)
+                {
+                    var created = await response.Content.ReadFromJsonAsync<ProductBacklogItem>();
+                    if (created != null) _pbis.Insert(0, created);
+                    Snackbar.Add("Story created.", Severity.Success);
+                    ClosePbiDialog();
+                }
+            }
+            else
+            {
+                var response = await Http.PutAsJsonAsync("api/pbi", pbi);
+                if (response.IsSuccessStatusCode)
+                {
+                    var idx = _pbis.FindIndex(p => p.PbiId == pbi.PbiId);
+                    if (idx >= 0) _pbis[idx] = pbi;
+                    Snackbar.Add("Story updated.", Severity.Success);
+                    ClosePbiDialog();
+                }
+            }
+        }
+        catch { Snackbar.Add("Failed to save story.", Severity.Error); }
+    }
+
+    private Task HandlePbiDeleteFromDialog(int id)
+    {
+        var pbi = _pbis.FirstOrDefault(p => p.PbiId == id);
+        if (pbi != null) _pbis.Remove(pbi);
+        ClosePbiDialog();
+        return Task.CompletedTask;
+    }
+
+    private async Task DeletePbiDirect(ProductBacklogItem pbi)
+    {
+        bool? confirmed = await DialogService.ShowMessageBox(
+            "Delete Story",
+            $"Delete \"{pbi.Title}\"? This cannot be undone.",
+            yesText: "Delete", cancelText: "Cancel");
+        if (confirmed != true) return;
+        try
+        {
+            var response = await Http.DeleteAsync($"api/pbi/{pbi.PbiId}");
+            if (response.IsSuccessStatusCode)
+            {
+                _pbis.Remove(pbi);
+                Snackbar.Add("Story deleted.", Severity.Info);
+            }
+        }
+        catch { Snackbar.Add("Failed to delete story.", Severity.Error); }
+    }
+
+    private static Color GetPbiPriorityColor(PbiPriority priority) => priority switch
+    {
+        PbiPriority.High => Color.Error,
+        PbiPriority.Medium => Color.Warning,
+        PbiPriority.Low => Color.Success,
+        _ => Color.Default
+    };
+
+    private static Color GetPbiStatusColor(PbiStatus status) => status switch
+    {
+        PbiStatus.InProgress => Color.Warning,
+        PbiStatus.Done => Color.Success,
+        _ => Color.Default
+    };
+
+    private async Task OnStorySprintFilterChanged(int? sprintId)
+    {
+        _storyFilterSprintId = sprintId;
+        await LoadStories();
+    }
+
+    private async Task OnStoryEpicFilterChanged(int? epicId)
+    {
+        _storyFilterEpicId = epicId;
+        await LoadStories();
+    }
+
+    private string FormatDateRange(DateTime? start, DateTime? end)
+    {
+        if (start == null && end == null) return "No dates set";
+        if (start == null) return $"Until {end:MMM dd, yyyy}";
+        if (end == null) return $"From {start:MMM dd, yyyy}";
+        return $"{start:MMM dd} – {end:MMM dd, yyyy}";
+    }
+}
