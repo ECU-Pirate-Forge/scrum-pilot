@@ -1,0 +1,248 @@
+﻿@page "/pbigeneration"
+@using MudBlazor
+@using Microsoft.AspNetCore.Components.Web
+@using ScrumPilot.Shared.Models
+@using ScrumPilot.Web.Components
+@using System.Text.Json
+@using System.Text
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudContainer MaxWidth="MaxWidth.False" Class="sg-page">
+    <!-- Input Section Container -->
+    <MudPaper Elevation="2" Class="sg-input-container mb-4">
+        <div class="sg-input-wrap">
+            <MudStack Row="true" Class="sg-input-row">
+                <MudTextField T="string"
+                              @bind-Value="_message"
+                              Placeholder="Enter problem statement"
+                              Variant="Variant.Filled"
+                              Margin="Margin.Dense"
+                              Immediate="true"
+                              FullWidth="true"
+                              Class="@($"sg-search sg-floating {(!string.IsNullOrWhiteSpace(_message) ? "sg-has-text" : "")}")"
+                              OnKeyDown="HandleInputKeyDown"
+                              Disabled="@_isLoading" />
+
+                @if (!string.IsNullOrWhiteSpace(_message))
+                {
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Success"
+                               StartIcon="@Icons.Material.Filled.Add"
+                               OnClick="AddProblemStatement"
+                               Disabled="@_isLoading">
+                        Add
+                    </MudButton>
+                }
+            </MudStack>
+        </div>
+    </MudPaper>
+
+    <!-- Main Content Container -->
+    <MudPaper Elevation="0" Class="sg-shell">
+        <div class="sg-list-wrap">
+            <MudPaper Outlined="true" Class="sg-list-shell">
+                @if (_problemStatements.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="sg-empty-list">
+                        No problem statements added yet.
+                    </MudText>
+                }
+                else
+                {
+                    <MudStack Spacing="1">
+                        @for (var index = 0; index < _problemStatements.Count; index++)
+                        {
+                            var currentIndex = index;
+                            var itemNumber = currentIndex + 1;
+                            var currentStatement = _problemStatements[currentIndex];
+
+                            <MudPaper Outlined="true" Class="sg-list-item" @key="@($"statement-{itemNumber}-{currentStatement}")">
+                                <div class="sg-list-content">
+                                    <MudChip T="string"
+                                             Size="Size.Small"
+                                             Variant="Variant.Filled"
+                                             Color="Color.Primary"
+                                             Class="sg-list-index">
+                                        @itemNumber
+                                    </MudChip>
+                                    <MudText Typo="Typo.body1" Class="sg-list-text">@currentStatement</MudText>
+                                </div>
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                               Color="Color.Error"
+                                               Size="Size.Small"
+                                               Class="sg-list-delete"
+                                               OnClick="@(() => RemoveProblemStatement(currentIndex))"
+                                               Disabled="@_isLoading"
+                                               AriaLabel="Remove problem statement" />
+                            </MudPaper>
+                        }
+                    </MudStack>
+                }
+            </MudPaper>
+        </div>
+
+        <div class="sg-submit-wrap">
+            <MudButton Class="sg-submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       EndIcon="@Icons.Material.Filled.ArrowForward"
+                       OnClick="SendMessage"
+                       Disabled="@(_isLoading || _problemStatements.Count == 0)">
+                @if (_isLoading)
+                {
+                    <MudProgressCircular Color="Color.Primary" Size="Size.Small" Indeterminate="true" />
+                    <span style="margin-left: 8px;">WRITING YOUR STORIES...</span>
+                }
+                else
+                {
+                    <span>@($"GENERATE PBI's ({_problemStatements.Count})")</span>
+                }
+            </MudButton>
+        </div>
+
+    </MudPaper>
+
+    @* Story Component area - shows loading or actual story *@
+    <MudStack Justify="Justify.Center" Class="mt-6">
+    @if (_isLoading)
+    {
+        <MudStack AlignItems="AlignItems.Center">
+            <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+            <MudText Class="mt-4" Typo="Typo.subtitle1">Writing your stories...</MudText>
+        </MudStack>
+    }
+    </MudStack>
+
+</MudContainer>
+
+@code {
+    private string _message = string.Empty;
+    private bool _isLoading = false;
+    private readonly List<string> _problemStatements = new();
+    private List<ProductBacklogItem> _generatedPbis = new();
+    private int _currentPbiIndex = 0;
+    private ProductBacklogItem? CurrentPbi => _generatedPbis.Count == 0 ? null : _generatedPbis[_currentPbiIndex];
+
+    private void AddProblemStatement()
+    {
+        if (string.IsNullOrWhiteSpace(_message))
+        {
+            Snackbar.Add("Please enter a problem statement.", Severity.Warning);
+            return;
+        }
+
+        _problemStatements.Add(_message.Trim());
+        _message = string.Empty;
+    }
+
+    private void RemoveProblemStatement(int index)
+    {
+        if (index < 0 || index >= _problemStatements.Count)
+        {
+            return;
+        }
+
+        _problemStatements.RemoveAt(index);
+    }
+
+    private async Task SendMessage()
+    {
+        if (_problemStatements.Count == 0)
+        {
+            Snackbar.Add("Add at least one problem statement before generating stories.", Severity.Warning);
+            return;
+        }
+
+        _isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var jsonContent = JsonSerializer.Serialize(_problemStatements);
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+            // Call the API
+            var response = await Http.PostAsync("api/pbi/generateAiPbis", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var jsonResponse = await response.Content.ReadAsStringAsync();
+                var productBacklogItems = JsonSerializer.Deserialize<List<ProductBacklogItem>>(jsonResponse, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                if (productBacklogItems is null || productBacklogItems.Count == 0)
+{
+    Snackbar.Add("Generation completed but the response did not contain valid stories.", Severity.Error);
+    return;
+}
+
+var dialogParameters = new DialogParameters
+{
+                    ["PBI's"] = productBacklogItems
+};
+
+
+                _generatedPbis = productBacklogItems;
+_currentPbiIndex = 0;
+_problemStatements.Clear();
+_message = string.Empty;
+
+
+var options = new DialogOptions
+{
+    CloseButton = true,
+    MaxWidth = MaxWidth.Large,
+    FullWidth = true,
+    BackdropClick = true
+};
+
+await DialogService.ShowAsync<GeneratedPbiModal>(
+    string.Empty,
+    dialogParameters,
+    options);
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"Failed to generate story: {errorContent}", Severity.Error);
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            Snackbar.Add($"Network error: {ex.Message}", Severity.Error);
+        }
+        catch (TaskCanceledException)
+        {
+            Snackbar.Add("Request timed out. Please try again.", Severity.Error);
+        }
+        catch (JsonException)
+        {
+            Snackbar.Add("Failed to parse response from server.", Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"An unexpected error occurred: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private Task HandleInputKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            AddProblemStatement();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    
+}

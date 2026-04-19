@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using ScrumPilot.API.Services;
@@ -15,8 +15,8 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
         private readonly TestHttpMessageHandler _testHandler;
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _mockConfiguration;
-        private readonly IStoryRepository _mockRepository;
-        private readonly StoryService _storyService;
+        private readonly IPbiRepository _mockRepository;
+        private readonly PbiService _pbiService;
         private HttpRequestMessage? _capturedRequest;
 
         public StoryServiceTests()
@@ -33,8 +33,8 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
 
             _httpClient = new HttpClient(_testHandler);
             _mockConfiguration = Substitute.For<IConfiguration>();
-            _mockRepository = Substitute.For<IStoryRepository>();
-            _storyService = new StoryService(_httpClient, _mockConfiguration, _mockRepository);
+            _mockRepository = Substitute.For<IPbiRepository>();
+            _pbiService = new PbiService(_httpClient, _mockConfiguration, _mockRepository);
         }
 
         public void Dispose()
@@ -44,228 +44,225 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
         }
 
         [Fact]
-        public async Task GetAllStoriesAsync_ReturnsStoriesFromRepository()
+        public async Task GetAllPbisAsync_ReturnsPbisFromRepository()
         {
             // Arrange
-            var expectedStories = new List<Story>
+            var expectedStories = new List<ProductBacklogItem>
             {
-                new Story { Id = 1, Title = "Story 1", Description = "Description 1" },
-                new Story { Id = 2, Title = "Story 2", Description = "Description 2" }
+                new ProductBacklogItem { PbiId = 1, Title = "Story 1", Description = "Description 1" },
+                new ProductBacklogItem { PbiId = 2, Title = "Story 2", Description = "Description 2" }
             };
-            _mockRepository.GetAllStoriesAsync().Returns(expectedStories);
+            _mockRepository.GetAllPbisAsync().Returns(expectedStories);
 
             // Act
-            var result = await _storyService.GetAllStoriesAsync();
+            var result = await _pbiService.GetAllPbisAsync();
 
             // Assert
             Assert.NotNull(result);
             Assert.Equal(expectedStories.Count, result.Count());
             Assert.Equal(expectedStories, result);
-            await _mockRepository.Received(1).GetAllStoriesAsync();
+            await _mockRepository.Received(1).GetAllPbisAsync();
         }
 
         [Fact]
-        public async Task GetAllStoriesAsync_ReturnsEmptyList_WhenNoStoriesExist()
+        public async Task GetAllPbisAsync_ReturnsEmptyList_WhenNoPbisExist()
         {
             // Arrange
-            var expectedStories = new List<Story>();
-            _mockRepository.GetAllStoriesAsync().Returns(expectedStories);
-
+            var expectedPbis = new List<ProductBacklogItem>();
+            _mockRepository.GetAllPbisAsync().Returns(expectedPbis);
             // Act
-            var result = await _storyService.GetAllStoriesAsync();
+            var result = await _pbiService.GetAllPbisAsync();
 
             // Assert
             Assert.NotNull(result);
             Assert.Empty(result);
-            await _mockRepository.Received(1).GetAllStoriesAsync();
+            await _mockRepository.Received(1).GetAllPbisAsync();
         }
 
         [Fact]
-        public async Task GetDraftStoriesAsync_ReturnsDraftStoriesFromRepository()
+        public async Task GetDraftPbisAsync_ReturnsDraftPbisFromRepository()
         {
             // Arrange
-            var expectedDraftStories = new List<Story>
+            var expectedDraftStories = new List<ProductBacklogItem>
             {
-                new Story { Id = 1, Title = "Draft Story", Description = "Draft Description", IsDraft = true }
+                new ProductBacklogItem { PbiId = 1, Title = "Draft PBI", Description = "Draft Description", IsDraft = true }
             };
-            _mockRepository.GetDraftStoriesAsync().Returns(expectedDraftStories);
+            _mockRepository.GetDraftPbisAsync().Returns(expectedDraftStories);
 
             // Act
-            var result = await _storyService.GetDraftStoriesAsync();
+            var result = await _pbiService.GetDraftPbisAsync();
 
             // Assert
             Assert.NotNull(result);
             Assert.Single(result);
             Assert.True(result.First().IsDraft);
-            await _mockRepository.Received(1).GetDraftStoriesAsync();
+            await _mockRepository.Received(1).GetDraftPbisAsync();
         }
 
         [Fact]
-        public async Task CreateStoryAsync_CallsRepositoryAddAsync()
+        public async Task CreatePbiAsync_CallsRepositoryAddAsync()
         {
             // Arrange
-            var inputStory = new Story { Title = "New Story", Description = "New Description" };
-            var createdStory = new Story { Id = 1, Title = inputStory.Title, Description = inputStory.Description };
-            _mockRepository.AddAsync(inputStory).Returns(createdStory);
+            var inputPbi = new ProductBacklogItem { Title = "New PBI", Description = "New Description" };
+            var createdPbi = new ProductBacklogItem { PbiId = 1, Title = inputPbi.Title, Description = inputPbi.Description };
+            _mockRepository.AddAsync(inputPbi).Returns(createdPbi);
 
             // Act
-            var result = await _storyService.CreateStoryAsync(inputStory);
+            var result = await _pbiService.CreatePbiAsync(inputPbi);
 
             // Assert
             Assert.NotNull(result);
-            Assert.Equal(createdStory.Id, result.Id);
-            Assert.Equal(createdStory.Title, result.Title);
-            await _mockRepository.Received(1).AddAsync(inputStory);
+            Assert.Equal(createdPbi.PbiId, result.PbiId);
+            Assert.Equal(createdPbi.Title, result.Title);
+            await _mockRepository.Received(1).AddAsync(inputPbi);
         }
 
         [Fact]
-        public async Task CommitDraftStoryAsync_UpdatesExistingDraft_ToBacklog()
+        public async Task CommitDraftPbiAsync_UpdatesExistingDraft_ToBacklog()
         {
             // Arrange
-            var draftStory = new Story
+            var draftPbi = new ProductBacklogItem
             {
-                Id = 1,
+                PbiId = 1,
                 Title = "Draft Story",
                 Description = "Draft Description",
-                Status = StoryStatus.ToDo,
-                Priority = StoryPriority.Medium,
-                StoryPoints = StoryPoints.Five,
-                Origin = StoryOrigin.AiGenerated,
+                Status = PbiStatus.ToDo,
+                Priority = PbiPriority.Medium,
+                StoryPoints = PbiPoints.Five,
+                Origin = PbiOrigin.AiGenerated,
                 IsDraft = true,
                 DateCreated = DateTime.UtcNow.AddDays(-1),
                 LastUpdated = DateTime.UtcNow.AddDays(-1)
             };
 
-            var updatedStory = new Story
+            var updatedPbi = new ProductBacklogItem
             {
-                Id = 1,
-                Title = draftStory.Title,
-                Description = draftStory.Description,
-                Status = draftStory.Status,
-                Priority = draftStory.Priority,
-                StoryPoints = draftStory.StoryPoints,
-                Origin = draftStory.Origin,
+                PbiId = 1,
+                Title = draftPbi.Title,
+                Description = draftPbi.Description,
+                Status = draftPbi.Status,
+                Priority = draftPbi.Priority,
+                StoryPoints = draftPbi.StoryPoints,
+                Origin = draftPbi.Origin,
                 IsDraft = false,
-                DateCreated = draftStory.DateCreated,
+                DateCreated = draftPbi.DateCreated,
                 LastUpdated = DateTime.UtcNow
             };
 
-            _mockRepository.GetByIdAsync(draftStory.Id).Returns(draftStory);
-            _mockRepository.UpdateAsync(Arg.Is<Story>(s => s.Id == draftStory.Id && !s.IsDraft)).Returns(updatedStory);
+            _mockRepository.GetByIdAsync(draftPbi.PbiId).Returns(draftPbi);
+            _mockRepository.UpdateAsync(Arg.Is<ProductBacklogItem>(s => s.PbiId == draftPbi.PbiId && !s.IsDraft)).Returns(updatedPbi);
 
             // Act
-            var result = await _storyService.CommitDraftStoryAsync(draftStory);
+            var result = await _pbiService.CommitDraftPbiAsync(draftPbi);
 
             // Assert
             Assert.NotNull(result);
-            Assert.Equal(updatedStory.Id, result.Id);
+            Assert.Equal(updatedPbi.PbiId, result.PbiId);
             Assert.False(result.IsDraft);
-            await _mockRepository.Received(1).GetByIdAsync(draftStory.Id);
-            await _mockRepository.Received(1).UpdateAsync(Arg.Is<Story>(s => s.Id == draftStory.Id && !s.IsDraft));
-            await _mockRepository.DidNotReceive().AddAsync(Arg.Any<Story>());
+            await _mockRepository.Received(1).GetByIdAsync(draftPbi.PbiId);
+            await _mockRepository.Received(1).UpdateAsync(Arg.Is<ProductBacklogItem>(s => s.PbiId == draftPbi.PbiId && !s.IsDraft));
+            await _mockRepository.DidNotReceive().AddAsync(Arg.Any<ProductBacklogItem>());
             await _mockRepository.DidNotReceive().DeleteAsync(Arg.Any<int>());
         }
 
         [Fact]
-        public async Task CommitDraftStoryAsync_ThrowsKeyNotFoundException_WhenDraftMissing()
+        public async Task CommitDraftPbiAsync_ThrowsKeyNotFoundException_WhenDraftMissing()
         {
             // Arrange
-            var draftStory = new Story
+            var draftPbi = new ProductBacklogItem
             {
-                Id = 99,
+                PbiId = 99,
                 Title = "Missing Draft",
                 Description = "Missing",
-                Status = StoryStatus.ToDo,
-                Priority = StoryPriority.Low,
+                Status = PbiStatus.ToDo,
+                Priority = PbiPriority.Low,
                 IsDraft = true,
                 DateCreated = DateTime.UtcNow,
                 LastUpdated = DateTime.UtcNow
             };
 
-            _mockRepository.GetByIdAsync(draftStory.Id).Returns((Story?)null);
+            _mockRepository.GetByIdAsync(draftPbi.PbiId).Returns((ProductBacklogItem?)null);
 
             // Act & Assert
-            await Assert.ThrowsAsync<KeyNotFoundException>(() => _storyService.CommitDraftStoryAsync(draftStory));
-            await _mockRepository.Received(1).GetByIdAsync(draftStory.Id);
-            await _mockRepository.DidNotReceive().AddAsync(Arg.Any<Story>());
+            await Assert.ThrowsAsync<KeyNotFoundException>(() => _pbiService.CommitDraftPbiAsync(draftPbi));
+            await _mockRepository.Received(1).GetByIdAsync(draftPbi.PbiId);
+            await _mockRepository.DidNotReceive().AddAsync(Arg.Any<ProductBacklogItem>());
             await _mockRepository.DidNotReceive().DeleteAsync(Arg.Any<int>());
         }
 
         [Fact]
-        public async Task CommitDraftStoryAsync_ThrowsKeyNotFoundException_WhenStoryIsNotDraft()
+        public async Task CommitDraftPbiAsync_ThrowsKeyNotFoundException_WhenPbiIsNotDraft()
         {
             // Arrange
-            var nonDraftStory = new Story
+            var nonDraftPbi = new ProductBacklogItem
             {
-                Id = 4,
-                Title = "Backlog Story",
+                PbiId = 4,
+                Title = "Backlog PBI",
                 Description = "Backlog Description",
-                Status = StoryStatus.ToDo,
-                Priority = StoryPriority.Low,
+                Status = PbiStatus.ToDo,
+                Priority = PbiPriority.Low,
                 IsDraft = false,
                 DateCreated = DateTime.UtcNow,
                 LastUpdated = DateTime.UtcNow
             };
 
-            _mockRepository.GetByIdAsync(nonDraftStory.Id).Returns(nonDraftStory);
+            _mockRepository.GetByIdAsync(nonDraftPbi.PbiId).Returns(nonDraftPbi);
 
             // Act & Assert
-            await Assert.ThrowsAsync<KeyNotFoundException>(() => _storyService.CommitDraftStoryAsync(nonDraftStory));
-            await _mockRepository.Received(1).GetByIdAsync(nonDraftStory.Id);
-            await _mockRepository.DidNotReceive().UpdateAsync(Arg.Any<Story>());
-            await _mockRepository.DidNotReceive().AddAsync(Arg.Any<Story>());
+            await Assert.ThrowsAsync<KeyNotFoundException>(() => _pbiService.CommitDraftPbiAsync(nonDraftPbi));
+            await _mockRepository.Received(1).GetByIdAsync(nonDraftPbi.PbiId);
+            await _mockRepository.DidNotReceive().UpdateAsync(Arg.Any<ProductBacklogItem>());
+            await _mockRepository.DidNotReceive().AddAsync(Arg.Any<ProductBacklogItem>());
             await _mockRepository.DidNotReceive().DeleteAsync(Arg.Any<int>());
         }
 
         [Fact]
-        public async Task UpdateStoryAsync_CallsRepositoryUpdateAsync()
+        public async Task UpdatePbiAsync_CallsRepositoryUpdateAsync()
         {
             // Arrange
-            var updatedStory = new Story { Id = 1, Title = "Updated Story", Description = "Updated Description" };
-            _mockRepository.UpdateAsync(updatedStory).Returns(updatedStory);
+            var updatedPbi = new ProductBacklogItem { PbiId = 1, Title = "Updated PBI", Description = "Updated Description" };
+            _mockRepository.UpdateAsync(updatedPbi).Returns(updatedPbi);
 
             // Act
-            var result = await _storyService.UpdateStoryAsync(updatedStory);
+            var result = await _pbiService.UpdatePbiAsync(updatedPbi);
 
             // Assert
             Assert.NotNull(result);
-            Assert.Equal(updatedStory.Id, result.Id);
-            Assert.Equal(updatedStory.Title, result.Title);
-            await _mockRepository.Received(1).UpdateAsync(updatedStory);
+            Assert.Equal(updatedPbi.PbiId, result.PbiId);
+            Assert.Equal(updatedPbi.Title, result.Title);
+            await _mockRepository.Received(1).UpdateAsync(updatedPbi);
         }
 
         [Fact]
-        public async Task DeleteStoryAsync_ReturnsTrueWhenSuccessfullyDeleted()
+        public async Task DeletePbiAsync_ReturnsTrueWhenSuccessfullyDeleted()
         {
             // Arrange
-            var storyId = 1;
-            _mockRepository.DeleteAsync(storyId).Returns(true);
-
+            var pbiId = 1;
+            _mockRepository.DeleteAsync(pbiId).Returns(true);
             // Act
-            var result = await _storyService.DeleteStoryAsync(storyId);
+            var result = await _pbiService.DeletePbiAsync(pbiId);
 
             // Assert
             Assert.True(result);
-            await _mockRepository.Received(1).DeleteAsync(storyId);
+            await _mockRepository.Received(1).DeleteAsync(pbiId);
         }
 
         [Fact]
-        public async Task DeleteStoryAsync_ReturnsFalseWhenStoryNotFound()
+        public async Task DeletePbiAsync_ReturnsFalseWhenPbiNotFound()
         {
             // Arrange
-            var storyId = 999;
-            _mockRepository.DeleteAsync(storyId).Returns(false);
-
+            var pbiId = 999;
+            _mockRepository.DeleteAsync(pbiId).Returns(false);
             // Act
-            var result = await _storyService.DeleteStoryAsync(storyId);
+            var result = await _pbiService.DeletePbiAsync(pbiId);
 
             // Assert
             Assert.False(result);
-            await _mockRepository.Received(1).DeleteAsync(storyId);
+            await _mockRepository.Received(1).DeleteAsync(pbiId);
         }
 
         [Fact]
-        public async Task GenerateAiStory_ReturnsStory_WhenValidResponse()
+        public async Task GenerateAiPbi_ReturnsPbi_WhenValidResponse()
         {
             // Arrange
             var problemStatement = "As a user, I want to login";
@@ -285,7 +282,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
 
             // Act
-            var results = await service.GenerateAiStories(new List<string> { problemStatement });
+            var results = await service.GenerateAiPbis(new List<string> { problemStatement });
             var result = results[0];
 
             // Assert
@@ -293,15 +290,42 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             Assert.Equal(aiResponse.Title, result.Title);
             Assert.Contains(aiResponse.UserStory, result.Description);
             Assert.Contains("Acceptance Criteria:", result.Description);
-            Assert.All(aiResponse.AcceptanceCriteria, criteria => 
+            Assert.All(aiResponse.AcceptanceCriteria, criteria =>
                 Assert.Contains(criteria, result.Description));
-            Assert.Equal(StoryStatus.ToDo, result.Status);
-            Assert.Equal(StoryPriority.Low, result.Priority);
-            Assert.Equal(StoryOrigin.AiGenerated, result.Origin);
+            Assert.Equal(PbiStatus.ToDo, result.Status);
+            Assert.Equal(PbiPriority.Low, result.Priority);
+            Assert.Equal(PbiOrigin.AiGenerated, result.Origin);
         }
 
         [Fact]
-        public async Task GenerateAiStory_ThrowsInvalidOperationException_WhenOllamaBaseUrlNotConfigured()
+        public async Task GenerateAiPbi_DefaultsToToDoStatus_AndLowPriority()
+        {
+            // Arrange - verifies the initial Status and Priority values assigned to every
+            // AI-generated story before it is triaged in the Backlog.
+            var problemStatement = "As a user, I want to filter results";
+            var aiResponse = new AiStoryResponse
+            {
+                Title = "Filter Results Feature",
+                UserStory = "As a user, I want to filter results, so that I can find items faster.",
+                AcceptanceCriteria = ["Filter dropdown is visible", "Results update on selection"]
+            };
+
+            var ollamaResponse = new { response = JsonSerializer.Serialize(aiResponse) };
+
+            SetupConfiguration("http://localhost:11434/", "llama2");
+            var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
+
+            // Act
+            var results = await service.GenerateAiPbis(new List<string> { problemStatement });
+            var result = results[0];
+
+            // Assert
+            Assert.Equal(PbiStatus.ToDo, result.Status);
+            Assert.Equal(PbiPriority.Low, result.Priority);
+        }
+
+        [Fact]
+        public async Task GenerateAiPbi_ThrowsInvalidOperationException_WhenOllamaBaseUrlNotConfigured()
         {
             // Arrange
             var problemStatement = "Test problem";
@@ -309,13 +333,13 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => _storyService.GenerateAiStories(new List<string> { problemStatement }));
-            Assert.Equal("OllamaBaseUrl is not configured.", exception.Message);
+                () => _pbiService.GenerateAiPbis(new List<string> { problemStatement }));
+            Assert.Equal("No AI provider configured. Set GeminiApiKey or OllamaBaseUrl.", exception.Message);
         }
 
         [Theory]
         [InlineData("")]
-        public async Task GenerateAiStory_ThrowsInvalidOperationException_WhenOllamaBaseUrlEmpty(string baseUrl)
+        public async Task GenerateAiPbi_ThrowsInvalidOperationException_WhenOllamaBaseUrlEmpty(string baseUrl)
         {
             // Arrange
             var problemStatement = "Test problem";
@@ -323,12 +347,12 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => _storyService.GenerateAiStories(new List<string> { problemStatement }));
-            Assert.Equal("OllamaBaseUrl is not configured.", exception.Message);
+                () => _pbiService.GenerateAiPbis(new List<string> { problemStatement }));
+            Assert.Equal("No AI provider configured. Set GeminiApiKey or OllamaBaseUrl.", exception.Message);
         }
 
         [Fact]
-        public async Task GenerateAiStory_ThrowsInvalidOperationException_WhenOllamaBaseUrlIsWhitespace()
+        public async Task GenerateAiPbi_ThrowsInvalidOperationException_WhenOllamaBaseUrlIsWhitespace()
         {
             // Arrange
             var problemStatement = "Test problem";
@@ -341,12 +365,12 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => service.GenerateAiStories(new List<string> { problemStatement }));
+                () => service.GenerateAiPbis(new List<string> { problemStatement }));
             Assert.Contains("An unexpected error occurred while calling the Ollama API", exception.Message);
         }
 
         [Fact]
-        public async Task GenerateAiStory_ThrowsHttpRequestException_WhenApiReturnsError()
+        public async Task GenerateAiPbi_ThrowsHttpRequestException_WhenApiReturnsError()
         {
             // Arrange
             var problemStatement = "Test problem";
@@ -355,12 +379,12 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<HttpRequestException>(
-                () => service.GenerateAiStories(new List<string> { problemStatement }));
+                () => service.GenerateAiPbis(new List<string> { problemStatement }));
             Assert.Contains("Ollama API request failed with status InternalServerError", exception.Message);
         }
 
         [Fact]
-        public async Task GenerateAiStory_ThrowsTimeoutException_WhenRequestTimesOut()
+        public async Task GenerateAiPbi_ThrowsTimeoutException_WhenRequestTimesOut()
         {
             // Arrange
             var problemStatement = "Test problem";
@@ -369,12 +393,12 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<TimeoutException>(
-                () => service.GenerateAiStories(new List<string> { problemStatement }));
+                () => service.GenerateAiPbis(new List<string> { problemStatement }));
             Assert.Equal("The request to Ollama timed out", exception.Message);
         }
 
         [Fact]
-        public async Task GenerateAiStory_ThrowsInvalidOperationException_WhenResponseIsEmpty()
+        public async Task GenerateAiPbi_ThrowsInvalidOperationException_WhenResponseIsEmpty()
         {
             // Arrange
             var problemStatement = "Test problem";
@@ -385,12 +409,12 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => service.GenerateAiStories(new List<string> { problemStatement }));
-            Assert.Contains("An unexpected error occurred while parsing the AI story response", exception.Message);
+                () => service.GenerateAiPbis(new List<string> { problemStatement }));
+            Assert.Contains("An unexpected error occurred while parsing the AI PBI response", exception.Message);
         }
 
         [Fact]
-        public async Task GenerateAiStory_ThrowsInvalidOperationException_WhenResponseIsNotValidJson()
+        public async Task GenerateAiPbi_ThrowsInvalidOperationException_WhenResponseIsNotValidJson()
         {
             // Arrange
             var problemStatement = "Test problem";
@@ -401,12 +425,12 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => service.GenerateAiStories(new List<string> { problemStatement }));
+                () => service.GenerateAiPbis(new List<string> { problemStatement }));
             Assert.Contains("Failed to find a JSON object in the AI response", exception.Message);
         }
 
         [Fact]
-        public async Task GenerateAiStory_HandlesJsonWithExtraText_ExtractsValidJson()
+        public async Task GenerateAiPbi_HandlesJsonWithExtraText_ExtractsValidJson()
         {
             // Arrange
             var problemStatement = "Test problem";
@@ -424,7 +448,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
 
             // Act
-            var results = await service.GenerateAiStories(new List<string> { problemStatement });
+            var results = await service.GenerateAiPbis(new List<string> { problemStatement });
             var result = results[0];
 
             // Assert
@@ -434,7 +458,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
         }
 
         [Fact]
-        public async Task GenerateAiStory_ThrowsInvalidOperationException_WhenJsonHasInvalidSchema()
+        public async Task GenerateAiPbi_ThrowsInvalidOperationException_WhenJsonHasInvalidSchema()
         {
             // Arrange
             var problemStatement = "Test problem";
@@ -446,12 +470,12 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => service.GenerateAiStories(new List<string> { problemStatement }));
+                () => service.GenerateAiPbis(new List<string> { problemStatement }));
             Assert.Contains("Failed to parse AI response as JSON", exception.Message);
         }
 
         [Fact]
-        public async Task GenerateAiStory_SendsCorrectRequestToOllamaApi()
+        public async Task GenerateAiPbi_SendsCorrectRequestToOllamaApi()
         {
             // Arrange
             var problemStatement = "As a user, I want to test the system";
@@ -471,7 +495,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
 
             // Act
-            await service.GenerateAiStories(new List<string> { problemStatement });
+            await service.GenerateAiPbis(new List<string> { problemStatement });
 
             // Assert - Verify the request was made correctly
             Assert.NotNull(_capturedRequest);
@@ -488,7 +512,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
         }
 
         [Fact]
-        public async Task GenerateAiStory_ReturnsCorrectCountAndProperties_WhenMultipleStatements()
+        public async Task GenerateAiPbi_ReturnsCorrectCountAndProperties_WhenMultipleStatements()
         {
             // Arrange
             var aiResponse = new AiStoryResponse
@@ -504,20 +528,20 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
 
             // Act
-            var result = await service.GenerateAiStories(["Statement 1", "Statement 2", "Statement 3"]);
+            var result = await service.GenerateAiPbis(new List<string> { "Statement 1", "Statement 2", "Statement 3" });
 
             // Assert
             Assert.NotNull(result);
             Assert.Equal(3, result.Count);
             Assert.All(result, story =>
             {
-                Assert.Equal(StoryOrigin.AiGenerated, story.Origin);
-                Assert.Equal(StoryStatus.ToDo, story.Status);
+                Assert.Equal(PbiOrigin.AiGenerated, story.Origin);
+                Assert.Equal(PbiStatus.ToDo, story.Status);
             });
         }
 
         [Fact]
-        public async Task GenerateAiStory_PropagatesException_WhenAnyStoryGenerationFails()
+        public async Task GenerateAiPbi_PropagatesException_WhenAnyPbiGenerationFails()
         {
             // Arrange
             SetupConfiguration("http://localhost:11434/", "llama2");
@@ -525,7 +549,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
 
             // Act & Assert
             await Assert.ThrowsAsync<HttpRequestException>(
-                () => service.GenerateAiStories(["Problem 1", "Problem 2"]));
+                () => service.GenerateAiPbis(new List<string> { "Problem 1", "Problem 2" }));
         }
 
         private void SetupConfiguration(string baseUrl, string model)
@@ -554,7 +578,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             var newHttpClient = new HttpClient(newHandler);
 
             // We need to recreate the service with the new client
-            var newService = new StoryService(newHttpClient, _mockConfiguration, _mockRepository);
+            var newService = new PbiService(newHttpClient, _mockConfiguration, _mockRepository);
 
             // Update the field reference (this is a limitation of this approach)
             // For a production test, consider using dependency injection or factory pattern
@@ -572,7 +596,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             var newHttpClient = new HttpClient(newHandler);
         }
 
-        private StoryService CreateServiceWithResponse(string responseContent, HttpStatusCode statusCode)
+        private PbiService CreateServiceWithResponse(string responseContent, HttpStatusCode statusCode)
         {
             var response = new HttpResponseMessage(statusCode)
             {
@@ -586,10 +610,10 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             });
 
             var httpClient = new HttpClient(handler);
-            return new StoryService(httpClient, _mockConfiguration, _mockRepository);
+            return new PbiService(httpClient, _mockConfiguration, _mockRepository);
         }
 
-        private StoryService CreateServiceWithTimeout()
+        private PbiService CreateServiceWithTimeout()
         {
             var handler = new TestHttpMessageHandler((request, cancellation) =>
             {
@@ -598,7 +622,67 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             });
 
             var httpClient = new HttpClient(handler);
-            return new StoryService(httpClient, _mockConfiguration, _mockRepository);
+            return new PbiService(httpClient, _mockConfiguration, _mockRepository);
+        }
+
+        [Fact]
+        public async Task GetFilteredPbisAsync_ReturnsFilteredPbisFromRepository()
+        {
+            // Arrange
+            var expectedPbis = new List<ProductBacklogItem>
+            {
+                new ProductBacklogItem { PbiId = 1, Title = "Filtered PBI", SprintId = 1, EpicId = 2 }
+            };
+            _mockRepository.GetFilteredPbisAsync(1, 2).Returns(expectedPbis);
+
+            // Act
+            var result = await _pbiService.GetFilteredPbisAsync(1, 2);
+
+            // Assert
+            var actualPbis = result.ToList();
+            Assert.Single(actualPbis);
+            Assert.Equal(expectedPbis, actualPbis);
+            await _mockRepository.Received(1).GetFilteredPbisAsync(1, 2);
+        }
+
+        [Fact]
+        public async Task GetFilteredPbisAsync_WithSprintIdOnly_CallsRepositoryCorrectly()
+        {
+            // Arrange
+            _mockRepository.GetFilteredPbisAsync(1, null).Returns(new List<ProductBacklogItem>());
+
+            // Act
+            await _pbiService.GetFilteredPbisAsync(1, null);
+
+            // Assert
+            await _mockRepository.Received(1).GetFilteredPbisAsync(1, null);
+        }
+
+        [Fact]
+        public async Task GetFilteredPbisAsync_WithEpicIdOnly_CallsRepositoryCorrectly()
+        {
+            // Arrange
+            _mockRepository.GetFilteredPbisAsync(null, 2).Returns(new List<ProductBacklogItem>());
+
+            // Act
+            await _pbiService.GetFilteredPbisAsync(null, 2);
+
+            // Assert
+            await _mockRepository.Received(1).GetFilteredPbisAsync(null, 2);
+        }
+
+        [Fact]
+        public async Task GetFilteredPbisAsync_ReturnsEmptyList_WhenNoMatch()
+        {
+            // Arrange
+            _mockRepository.GetFilteredPbisAsync(99, 99).Returns(new List<ProductBacklogItem>());
+
+            // Act
+            var result = await _pbiService.GetFilteredPbisAsync(99, 99);
+
+            // Assert
+            Assert.Empty(result);
+            await _mockRepository.Received(1).GetFilteredPbisAsync(99, 99);
         }
     }
 }

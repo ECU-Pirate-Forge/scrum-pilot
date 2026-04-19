@@ -1,5 +1,8 @@
 {
   "devDependencies": {
     "jest": "^30.2.0"
+  },
+  "dependencies": {
+    "node-cron": "^4.2.1"
   }
 }

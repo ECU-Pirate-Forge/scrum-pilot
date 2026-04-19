@@ -1,397 +1,77 @@
 @page "/scrum-board"
-@using MudBlazor
-@using ScrumPilot.Shared.Models
-@using System.Net.Http.Json
 @inject HttpClient Http
 
-<div class="kanban-page">
+<div class="swimlane-page">
+    <MudContainer MaxWidth="MaxWidth.False" Class="pa-0">
+        <SwimLanes @ref="_swimLanes"
+                   DefaultToLatestSprint
+                   OnPbiSelected="OpenPbiDetails" />
+    </MudContainer>
 
-    <!-- If loading stories, show spinner. Else loads the rest of the page with the generated stories -->
-    @if (_loading)
+    @if (SelectedPbi is not null)
     {
-        <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center" Style="height:60vh;">
-            <MudProgressCircular Indeterminate="true" Size="Size.Large" />
-            <MudText Class="mt-4" Typo="Typo.subtitle1">Loading…</MudText>
-        </MudStack>
-    }
-    else
-    {
-        @if (!string.IsNullOrWhiteSpace(_moveStoryErrorMessage))
-        {
-            <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4" Icon="@Icons.Material.Filled.ErrorOutline">
-                @_moveStoryErrorMessage
-            </MudAlert>
-        }
+        <div class="details-overlay">
+            <div class="details-container">
+                <div class="details-header">
+                    <MudText Typo="Typo.h5" Class="details-title">
+                        <MudIcon Icon="@Icons.Material.Filled.Visibility" Class="me-2" />
+                        PBI Details
+                    </MudText>
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.Close"
+                               OnClick="ClosePbiDetails"
+                               Class="close-button">
+                        Close
+                    </MudButton>
+                </div>
 
-        <MudContainer MaxWidth="MaxWidth.False" Class="pa-0">
-            <MudDropContainer T="Story"
-                              @ref="_dropContainer"
-                              Items="@Items"
-                              ItemsSelector="@((item, dropzone) => item.Status.ToString() == dropzone)"
-                              ItemDropped="OnItemDropped"
-                              Class="d-flex" Style="flex: 1; min-height: calc(100vh - 200px);">
-                <ChildContent>
-                    <MudStack Row Spacing="3" Class="mud-width-full" Style="height: 100%; flex: 1;">
-                        <MudPaper Class="kanban-column column-todo" Elevation="2" 
-                                  Style="flex: 1; min-width: 300px; 
-                                         border-top: 6px solid #dc2626 !important; 
-                                         box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.1), 0 4px 16px rgba(220, 38, 38, 0.08) !important;
-                                         background: var(--mud-palette-surface) !important;
-                                         border: 1px solid var(--mud-palette-lines-default) !important;
-                                         border-top: 6px solid #dc2626 !important;
-                                         border-radius: 12px !important;
-                                         transition: all 0.3s ease;">
-                            <MudStack Row AlignItems="AlignItems.Center" Class="column-header" 
-                                      Style="background: linear-gradient(135deg, rgba(220, 38, 38, 0.15) 0%, var(--mud-palette-surface) 100%) !important;
-                                             border-bottom: 1px solid var(--mud-palette-divider) !important;
-                                             border-radius: 8px 8px 0 0 !important;
-                                             padding: 12px !important;">
-                                <MudIcon Icon="Icons.Material.Filled.Assignment" Color="Color.Error" Size="Size.Medium" />
-                                <MudText Typo="Typo.h5" Class="column-title" Style="font-weight: 700;">TO DO</MudText>
-                                <MudSpacer />
-                                <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Filled">
-                                    @Items.Count(i => i.Status == StoryStatus.ToDo)
-                                </MudChip>
-                            </MudStack>
-                            <MudDropZone T="Story" Identifier="@nameof(StoryStatus.ToDo)" Class="kanban-dropzone" 
-                                         Style="min-height: 500px; height: 100%; width: 100%; flex: 1; display: flex; flex-direction: column; gap: 16px;" />
-                        </MudPaper>
-
-                        <MudPaper Class="kanban-column column-inprogress" Elevation="2" 
-                                  Style="flex: 1; min-width: 300px; 
-                                         border-top: 6px solid #facc15 !important; 
-                                         box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.1), 0 4px 16px rgba(250, 204, 21, 0.08) !important;
-                                         background: var(--mud-palette-surface) !important;
-                                         border: 1px solid var(--mud-palette-lines-default) !important;
-                                         border-top: 6px solid #facc15 !important;
-                                         border-radius: 12px !important;
-                                         transition: all 0.3s ease;">
-                            <MudStack Row AlignItems="AlignItems.Center" Class="column-header" 
-                                      Style="background: linear-gradient(135deg, rgba(250, 204, 21, 0.15) 0%, var(--mud-palette-surface) 100%) !important;
-                                             border-bottom: 1px solid var(--mud-palette-divider) !important;
-                                             border-radius: 8px 8px 0 0 !important;
-                                             padding: 12px !important;">
-                                <MudIcon Icon="Icons.Material.Filled.Speed" Color="Color.Warning" Size="Size.Medium" />
-                                <MudText Typo="Typo.h5" Class="column-title" Style="font-weight: 700;">IN PROGRESS</MudText>
-                                <MudSpacer />
-                                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled">
-                                    @Items.Count(i => i.Status == StoryStatus.InProgress)
-                                </MudChip>
-                            </MudStack>
-                            <MudDropZone T="Story" Identifier="@nameof(StoryStatus.InProgress)" Class="kanban-dropzone" 
-                                         Style="min-height: 500px; height: 100%; width: 100%; flex: 1; display: flex; flex-direction: column; gap: 16px;" />
-                        </MudPaper>
-
-                        <MudPaper Class="kanban-column column-done" Elevation="2" 
-                                  Style="flex: 1; min-width: 300px; 
-                                         border-top: 6px solid #16a34a !important; 
-                                         box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.1), 0 4px 16px rgba(22, 163, 74, 0.08) !important;
-                                         background: var(--mud-palette-surface) !important;
-                                         border: 1px solid var(--mud-palette-lines-default) !important;
-                                         border-top: 6px solid #16a34a !important;
-                                         border-radius: 12px !important;
-                                         transition: all 0.3s ease;">
-                            <MudStack Row AlignItems="AlignItems.Center" Class="column-header" 
-                                      Style="background: linear-gradient(135deg, rgba(22, 163, 74, 0.15) 0%, var(--mud-palette-surface) 100%) !important;
-                                             border-bottom: 1px solid var(--mud-palette-divider) !important;
-                                             border-radius: 8px 8px 0 0 !important;
-                                             padding: 12px !important;">
-                                <MudIcon Icon="Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Medium" />
-                                <MudText Typo="Typo.h5" Class="column-title" Style="font-weight: 700;">DONE</MudText>
-                                <MudSpacer />
-                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Filled">
-                                    @Items.Count(i => i.Status == StoryStatus.Done)
-                                </MudChip>
-                            </MudStack>
-                            <MudDropZone T="Story" Identifier="@nameof(StoryStatus.Done)" Class="kanban-dropzone" 
-                                         Style="min-height: 500px; height: 100%; width: 100%; flex: 1; display: flex; flex-direction: column; gap: 16px;" />
-                        </MudPaper>
-                    </MudStack>
-                </ChildContent>
-
-<ItemRenderer>
-    <div class="kanban-card-wrapper">
-        <MudCard Elevation="8"
-                 Style="@GetCardStyle(context.Status)">
-            <!-- Priority stripe -->
-            <div class="card-priority-stripe @GetPriorityClass(context)"></div>
-
-            <!-- Card Header -->
-            <MudCardContent Class="pa-3" Style="padding-bottom: 8px; border-bottom: 1px solid var(--mud-palette-divider);">
-                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-                    <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
-                        @if (context.StoryPoints != StoryPoints.Zero)
-                        {
-                            <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Filled">
-                                @((int)context.StoryPoints) SP
-                            </MudChip>
-                        }
-                        else
-                        {
-                            <MudTooltip Text="Unpointed">
-                                <MudIcon Icon="@Icons.Material.Filled.ErrorOutline"
-                                         Color="Color.Error"
-                                         Size="Size.Small" />
-                            </MudTooltip>
-                        }
-                    </MudStack>
-                    <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
-                        <MudButton Variant="Variant.Text"
-                                   Size="Size.Small"
-                                   StartIcon="@Icons.Material.Filled.Visibility"
-                                   OnClick="@(() => OpenStoryDetails(context))"
-                                   Style="min-height: 24px; padding: 4px 8px;">
-                            View Details
-                        </MudButton>
-                        <MudIcon Icon="Icons.Material.Filled.DragIndicator"
-                                 Size="Size.Small"
-                                 Style="color: var(--mud-palette-text-secondary); cursor: grab;" />
-                    </MudStack>
-                </MudStack>
-            </MudCardContent>
-
-            <!-- Card Content -->
-            <MudCardContent Class="pa-3" Style="padding-top: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--mud-palette-divider);">
-                <MudText Typo="Typo.subtitle1" Style="font-weight: 600; margin-bottom: 8px; line-height: 1.4;">
-                    @context.Title
-                </MudText>
-                <MudText Typo="Typo.body2" Style="opacity: 0.7;">
-                    ID: @context.Id
-                </MudText>
-            </MudCardContent>
-
-            <!-- Card Footer -->
-            <MudCardActions Class="pa-3" Style="padding-top: 12px;">
-                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mud-width-full">
-                    <MudChip T="string" Size="Size.Small"
-                             Color="@GetPriorityChipColor(context.Priority)"
-                             Variant="Variant.Filled">
-                        @context.Priority
-                    </MudChip>
-
-                    <MudAvatar Size="Size.Small" Color="Color.Info">
-                        <MudText Typo="Typo.caption">
-                            @GetStoryInitials(context)
-                        </MudText>
-                    </MudAvatar>
-                </MudStack>
-            </MudCardActions>
-        </MudCard>
-    </div>
-</ItemRenderer>
-            </MudDropContainer>
-        </MudContainer>
-
-        @* Story Details Modal *@
-        @if (SelectedStory is not null)
-        {
-            <div class="details-overlay">
-                <div class="details-container">
-                    <div class="details-header">
-                        <MudText Typo="Typo.h5" Class="details-title">
-                            <MudIcon Icon="@Icons.Material.Filled.Visibility" Class="me-2" />
-                            Story Details
-                        </MudText>
-                        <MudButton Variant="Variant.Text"
-                                   Color="Color.Secondary"
-                                   StartIcon="@Icons.Material.Filled.Close"
-                                   OnClick="CloseStoryDetails"
-                                   Class="close-button">
-                            Close
-                        </MudButton>
+                <div class="details-content">
+                    <div class="details-card">
+                        <PbiCard PbiModel="SelectedPbi" OnSave="HandlePbiSave" OnDelete="HandlePbiDelete" />
                     </div>
-
-                    <div class="details-content">
-                        <StoryCard StoryModel="SelectedStory" OnSave="HandleStorySave" />
-                    </div>
+                    <CommentThread PbiId="SelectedPbi.PbiId" />
                 </div>
             </div>
-        }
+        </div>
     }
 </div>
 
 @code {
+    private SwimLanes? _swimLanes;
+    private ProductBacklogItem? SelectedPbi;
 
-    private List<Story> Items = new();
-    private bool _loading = true;
-    private Story? SelectedStory;
-    private string _moveStoryErrorMessage = string.Empty;
-    private MudDropContainer<Story>? _dropContainer;
-    private bool _needsRefresh = false;
+    private void OpenPbiDetails(ProductBacklogItem pbi) => SelectedPbi = pbi;
 
-    //Api Intergration for getting stories
-    protected override async Task OnInitializedAsync()
+    private async Task ClosePbiDetails()
     {
-        await LoadStoriesAsync();
+        SelectedPbi = null;
+        if (_swimLanes is not null)
+            await _swimLanes.RefreshAsync();
     }
 
-    protected override Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (_needsRefresh)
-        {
-            _needsRefresh = false;
-            _dropContainer?.Refresh();
-        }
-        return Task.CompletedTask;
-    }
-
-    private async Task LoadStoriesAsync(bool showLoading = true)
-    {
-        if (showLoading)
-        {
-            _loading = true;
-            Items = new();
-        }
-
-        try
-        {
-            var stories = await Http.GetFromJsonAsync<List<Story>>("api/story/GetNonDraftStories");
-            if (stories is not null)
-            {
-                Items = stories;
-            }
-        }
-        catch
-        {
-            _moveStoryErrorMessage = "Unable to load stories from the server.";
-        }
-        finally
-        {
-            _loading = false;
-            _needsRefresh = true;
-        }
-    }
-
-
-    private async Task OnItemDropped(MudItemDropInfo<Story> dropInfo)
-    {
-        if (dropInfo.Item is null)
-            return;
-
-        // Dropzone identifiers are: "ToDo", "InProgress", "Done"
-        if (!Enum.TryParse<StoryStatus>(dropInfo.DropzoneIdentifier, out var newStatus))
-        {
-            _moveStoryErrorMessage = "Unable to move story: invalid destination column.";
-            return;
-        }
-
-        var originalStatus = dropInfo.Item.Status;
-        if (originalStatus == newStatus)
-        {
-            _moveStoryErrorMessage = string.Empty;
-            return;
-        }
-
-        _moveStoryErrorMessage = string.Empty;
-
-        // Optimistically move the card, then persist status to the backend.
-        dropInfo.Item.Status = newStatus;
-
-        try
-        {
-            dropInfo.Item.LastUpdated = DateTime.UtcNow;
-
-            var response = await Http.PutAsJsonAsync("api/story", dropInfo.Item);
-            if (!response.IsSuccessStatusCode)
-            {
-                throw new HttpRequestException($"Status update failed with code {(int)response.StatusCode}.");
-            }
-
-            var updatedStory = await response.Content.ReadFromJsonAsync<Story>();
-            if (updatedStory is not null)
-            {
-                var index = Items.FindIndex(i => i.Id == updatedStory.Id);
-                if (index >= 0)
-                {
-                    Items[index] = updatedStory;
-                }
-            }
-        }
-        catch
-        {
-            // Revert local status if backend update fails so UI and data stay consistent.
-            dropInfo.Item.Status = originalStatus;
-            _moveStoryErrorMessage = "Could not save the status change. The card was returned to its previous column.";
-        }
-    }
-
-    private void OpenStoryDetails(Story story)
-    {
-        SelectedStory = story;
-    }
-
-    private async Task CloseStoryDetails()
-    {
-        SelectedStory = null;
-        await LoadStoriesAsync(showLoading: false);
-    }
-
-    private async Task HandleStorySave(Story story)
+    private async Task HandlePbiSave(ProductBacklogItem pbi)
     {
         try
         {
-            var response = await Http.PutAsJsonAsync("api/story", story);
+            var response = await Http.PutAsJsonAsync("api/Pbi", pbi);
             if (response.IsSuccessStatusCode)
             {
-                SelectedStory = null;
-                await LoadStoriesAsync(showLoading: false);
+                SelectedPbi = null;
+                if (_swimLanes is not null)
+                    await _swimLanes.RefreshAsync();
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error updating story: {ex.Message}");
+            Console.WriteLine($"Error updating PBI: {ex.Message}");
         }
     }
 
-    private string GetPriorityClass(Story story)
-        => story.Priority.ToString().ToLower();
-
-    private Color GetPriorityChipColor(StoryPriority priority)
-        => priority switch
-        {
-            StoryPriority.High => Color.Error,        // Red
-            StoryPriority.Medium => Color.Warning,    // Orange/Yellow
-            StoryPriority.Low => Color.Success,       // Green
-            _ => Color.Default
-        };
-
-    private string GetStoryInitials(Story story) => story.Origin switch
+    private async Task HandlePbiDelete(int pbiId)
     {
-        StoryOrigin.AiGenerated => "AI",
-        StoryOrigin.BotGenerated => "BT",
-        _ => "ST"
-    };
-
-    private string GetColumnColor(StoryStatus status)
-        => status switch
-        {
-            StoryStatus.ToDo => "rgba(220, 38, 38, 0.4)",
-            StoryStatus.InProgress => "rgba(250, 204, 21, 0.4)",
-            StoryStatus.Done => "rgba(22, 163, 74, 0.4)",
-            _ => "rgba(128, 128, 128, 0.4)"
-        };
-
-    private string GetColumnColorWithOpacity(StoryStatus status, string opacity)
-        => status switch
-        {
-            StoryStatus.ToDo => $"rgba(220, 38, 38, {opacity})",
-            StoryStatus.InProgress => $"rgba(250, 204, 21, {opacity})",
-            StoryStatus.Done => $"rgba(22, 163, 74, {opacity})",
-            _ => $"rgba(128, 128, 128, {opacity})"
-        };
-
-    private string GetCardStyle(StoryStatus status)
-    {
-        var borderColor = GetColumnColor(status);
-        var shadowColor1 = GetColumnColorWithOpacity(status, "0.2");
-        var shadowColor2 = GetColumnColorWithOpacity(status, "0.15");
-        var shadowColor3 = GetColumnColorWithOpacity(status, "0.08");
-
-        return $@"border-radius: 12px; margin-bottom: 12px; transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); 
-                  border: 2px solid {borderColor} !important;
-                  box-shadow: 0 0 0 1px {shadowColor1}, 
-                              0 2px 8px {shadowColor2},
-                              0 0 12px {shadowColor3} !important;";
+        SelectedPbi = null;
+        if (_swimLanes is not null)
+            await _swimLanes.RefreshAsync();
     }
-
 }

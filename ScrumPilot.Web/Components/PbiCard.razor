@@ -1,0 +1,654 @@
+@using ScrumPilot.Shared.Models
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject IDialogService DialogService
+
+@if (PbiModel != null)
+{
+    <div style="animation: slideInUp 0.6s ease-out;">
+        <MudContainer MaxWidth="MaxWidth.Medium" Class="pa-4">
+            <MudPaper Class="pa-6"
+                      Elevation="4"
+                      Style="border-radius: 12px;
+                             background: linear-gradient(135deg, var(--mud-palette-surface) 0%, var(--mud-palette-background) 100%);
+                             border: 3px solid var(--mud-palette-primary);
+                             box-shadow: 0 6px 25px rgba(25, 118, 210, 0.2);">
+
+                <!-- EDIT / SAVE / CANCEL / DELETE BUTTONS -->
+                <div class="pbi-button-row mb-4">
+                    @if (isEditMode)
+                    {
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Success"
+                                   StartIcon="@Icons.Material.Filled.Save"
+                                   OnClick="SaveChanges">
+                            Save
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Default"
+                                   StartIcon="@Icons.Material.Filled.Cancel"
+                                   OnClick="CancelEdit">
+                            Cancel
+                        </MudButton>
+                    }
+                    else
+                    {
+                        <div class="pbi-button-left">
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Edit"
+                                       OnClick="StartEdit">
+                                Edit
+                            </MudButton>
+                            <!-- DELETE BUTTON -->
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Error"
+                                       StartIcon="@Icons.Material.Filled.Delete"
+                                       OnClick="ConfirmDelete">
+                                Delete
+                            </MudButton>
+                        </div>
+                        <div class="pbi-button-right">
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Tertiary"
+                                       StartIcon="@Icons.Material.Filled.AutoAwesome"
+                                       OnClick="ImproveWithAi"
+                                       Disabled="@isImproving">
+                                @if (isImproving)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
+                                    <span>Improving...</span>
+                                }
+                                else
+                                {
+                                    <span>Improve with AI</span>
+                                }
+                            </MudButton>
+                        </div>
+                    }
+                </div>
+
+                <!-- DELETE CONFIRMATION -->
+                @if (showDeleteConfirm)
+                {
+                    <MudAlert Severity="Severity.Warning" Class="mb-3">
+                        <div class="d-flex flex-column gap-2">
+                            <MudText>⚠️ Are you sure you want to delete <strong>@PbiModel.Title</strong>? This cannot be undone.</MudText>
+                            <div class="d-flex gap-2">
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Error"
+                                           Size="Size.Small"
+                                           OnClick="DeleteStory">
+                                    Yes, Delete
+                                </MudButton>
+                                <MudButton Variant="Variant.Outlined"
+                                           Color="Color.Default"
+                                           Size="Size.Small"
+                                           OnClick="CancelDelete">
+                                    Cancel
+                                </MudButton>
+                            </div>
+                        </div>
+                    </MudAlert>
+                }
+
+                <!-- ERROR MESSAGE -->
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <MudAlert Severity="Severity.Error" Class="mb-3">
+                        @errorMessage
+                    </MudAlert>
+                }
+
+                <!-- AI SUGGESTION BANNER -->
+                @if (isAiSuggestion && isEditMode)
+                {
+                    <MudAlert Severity="Severity.Info" Icon="@Icons.Material.Filled.AutoAwesome" Class="mb-3">
+                        AI suggestions loaded — review the updated title and description, then save or cancel.
+                    </MudAlert>
+                }
+
+                <!-- TITLE -->
+                <div class="story-header mb-3">
+                    @if (isEditMode)
+                    {
+                        <MudTextField @bind-Value="editTitle"
+                                      Label="Title"
+                                      Variant="Variant.Outlined"
+                                      Required="true"
+                                      Error="@titleError"
+                                      ErrorText="Title is required"
+                                      Style="font-weight: 600;" />
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.h4"
+                                 Style="font-weight: 600; color: var(--mud-palette-text-primary);">
+                            @PbiModel.Title
+                        </MudText>
+                    }
+                </div>
+
+                <!-- BADGES -->
+                <div class="d-flex flex-wrap gap-2 mb-4">
+                    <MudChip T="string"
+                             Size="Size.Medium"
+                             Color="@GetStatusColor(PbiModel.Status)"
+                             Icon="@GetStatusIcon(PbiModel.Status)"
+                             Variant="Variant.Filled">
+                        @PbiModel.Status
+                    </MudChip>
+
+                    @if (isEditMode)
+                    {
+                        <MudSelect T="PbiPriority"
+                                   @bind-Value="editPriority"
+                                   Label="Priority"
+                                   Variant="Variant.Outlined"
+                                   Style="min-width: 150px;">
+                            <MudSelectItem Value="PbiPriority.Low">Low</MudSelectItem>
+                            <MudSelectItem Value="PbiPriority.Medium">Medium</MudSelectItem>
+                            <MudSelectItem Value="PbiPriority.High">High</MudSelectItem>
+                        </MudSelect>
+                    }
+                    else
+                    {
+                        <MudChip T="string"
+                                 Size="Size.Medium"
+                                 Color="@GetPriorityColor(PbiModel.Priority)"
+                                 Icon="@GetPriorityIcon(PbiModel.Priority)"
+                                 Variant="Variant.Filled">
+                            @PbiModel.Priority Priority
+                        </MudChip>
+                    }
+
+                    @if (PbiModel.Origin != PbiOrigin.WebUserCreated)
+                    {
+                        <MudChip T="string"
+                                 Size="Size.Medium"
+                                 Color="Color.Info"
+                                 Icon="Icons.Material.Filled.SmartToy"
+                                 Variant="Variant.Filled">
+                            @GetOriginLabel(PbiModel.Origin)
+                        </MudChip>
+                    }
+                </div>
+
+                <MudDivider Class="mb-4" />
+
+                <!-- DESCRIPTION -->
+                <div class="mb-4">
+                    <MudText Typo="Typo.h6" Class="mb-3"
+                             Style="font-weight: 600;">
+                        <MudIcon Icon="Icons.Material.Filled.Description" Class="me-2" />
+                        Description
+                    </MudText>
+
+                    @if (isEditMode)
+                    {
+                        <MudTextField @bind-Value="editDescription"
+                                      Label="Description"
+                                      Variant="Variant.Outlined"
+                                      Lines="5"
+                                      Class="mb-3" />
+                    }
+                    else
+                    {
+                        @if (!string.IsNullOrWhiteSpace(PbiModel.Description))
+                        {
+                            <MudPaper Class="pa-4"
+                                      Style="background-color: var(--mud-palette-background-grey);
+                                             border-radius: 8px;
+                                             border-left: 4px solid var(--mud-palette-primary);">
+                                @foreach (var line in PbiModel.Description.Split('\n'))
+                                {
+                                    <MudText Typo="Typo.body1" Class="mb-2"
+                                             Style="line-height: 1.6;">@line</MudText>
+                                }
+                            </MudPaper>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2"
+                                     Style="font-style: italic; color: var(--mud-palette-text-secondary);">
+                                No description provided
+                            </MudText>
+                        }
+                    }
+                </div>
+
+                <MudDivider Class="mb-4" />
+
+                <!-- EPIC AND SPRINT ASSIGNMENT -->
+                <div class="mb-4">
+                    <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">
+                        <MudIcon Icon="Icons.Material.Filled.AccountTree" Class="me-2" />
+                        Assignment
+                    </MudText>
+                    <MudGrid Spacing="3">
+
+                        <!-- EPIC -->
+                        <MudItem xs="12" sm="6">
+                            @if (isEditMode)
+                            {
+                                <MudSelect T="int?"
+                                           @bind-Value="editEpicId"
+                                           Label="Epic"
+                                           Variant="Variant.Outlined"
+                                           Disabled="@(epics == null)"
+                                           ToStringFunc="@(id => GetEpicDisplayName(id))">
+                                    <MudSelectItem T="int?" Value="@((int?)null)">
+                                        — Unassigned —
+                                    </MudSelectItem>
+                                    @if (epics != null)
+                                    {
+                                        @foreach (var epic in epics)
+                                        {
+                                            <MudSelectItem T="int?" Value="@((int?)epic.EpicId)">
+                                                @epic.Name
+                                            </MudSelectItem>
+                                        }
+                                    }
+                                </MudSelect>
+                            }
+                            else
+                            {
+                                <MudPaper Class="pa-3"
+                                          Style="background-color: var(--mud-palette-action-hover); border-radius: 8px;">
+                                    <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Epic</MudText>
+                                    <MudText Typo="Typo.body1" Style="font-weight: 600;">@GetEpicDisplayName(PbiModel.EpicId)</MudText>
+                                </MudPaper>
+                            }
+                        </MudItem>
+
+                        <!-- SPRINT -->
+                        <MudItem xs="12" sm="6">
+                            @if (isEditMode)
+                            {
+                                <MudSelect T="int?"
+                                           @bind-Value="editSprintId"
+                                           Label="Sprint"
+                                           Variant="Variant.Outlined"
+                                           Disabled="@(sprints == null)"
+                                           ToStringFunc="@(id => GetSprintDisplayName(id))">
+                                    <MudSelectItem T="int?" Value="@((int?)null)">
+                                        — Unassigned —
+                                    </MudSelectItem>
+                                    @if (sprints != null)
+                                    {
+                                        @foreach (var sprint in sprints)
+                                        {
+                                            <MudSelectItem T="int?" Value="@((int?)sprint.SprintId)">
+                                                @(sprint.SprintGoal ?? $"Sprint {sprint.SprintId}")
+                                            </MudSelectItem>
+                                        }
+                                    }
+                                </MudSelect>
+                            }
+                            else
+                            {
+                                <MudPaper Class="pa-3"
+                                          Style="background-color: var(--mud-palette-action-hover); border-radius: 8px;">
+                                    <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Sprint</MudText>
+                                    <MudText Typo="Typo.body1" Style="font-weight: 600;">@GetSprintDisplayName(PbiModel.SprintId)</MudText>
+                                </MudPaper>
+                            }
+                        </MudItem>
+
+                    </MudGrid>
+                </div>
+
+                <MudDivider Class="mb-4" />
+
+                <!-- STORY DETAILS -->
+                <div>
+                    <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">
+                        <MudIcon Icon="Icons.Material.Filled.Info" Class="me-2" />
+                        Story Details
+                    </MudText>
+                    <MudGrid AlignItems="Center" Spacing="3">
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudPaper Class="pa-3"
+                                      Style="background-color: var(--mud-palette-action-hover);
+                                             border-radius: 8px;">
+                                <div class="d-flex align-center">
+                                    <MudIcon Icon="Icons.Material.Filled.Timeline"
+                                             Color="Color.Primary" Class="me-2" />
+                                    <div style="width: 100%;">
+                                        <MudText Typo="Typo.caption"
+                                                 Style="color: var(--mud-palette-text-secondary);">
+                                            Story Points
+                                        </MudText>
+                                        @if (isEditMode)
+                                        {
+                                            <MudSelect T="PbiPoints"
+                                                       @bind-Value="editStoryPoints"
+                                                       Label="Story Points"
+                                                       Variant="Variant.Outlined">
+                                                <MudSelectItem Value="PbiPoints.Zero">0</MudSelectItem>
+                                                <MudSelectItem Value="PbiPoints.One">1</MudSelectItem>
+                                                <MudSelectItem Value="PbiPoints.Two">2</MudSelectItem>
+                                                <MudSelectItem Value="PbiPoints.Three">3</MudSelectItem>
+                                                <MudSelectItem Value="PbiPoints.Five">5</MudSelectItem>
+                                                <MudSelectItem Value="PbiPoints.Eight">8</MudSelectItem>
+                                                <MudSelectItem Value="PbiPoints.Thirteen">13</MudSelectItem>
+                                                <MudSelectItem Value="PbiPoints.TwentyOne">21</MudSelectItem>
+                                            </MudSelect>
+                                        }
+                                        else
+                                        {
+                                            <MudText Typo="Typo.h6" Style="font-weight: 600;">
+                                                @((int)PbiModel.StoryPoints)
+                                            </MudText>
+                                        }
+                                    </div>
+                                </div>
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudPaper Class="pa-3"
+                                      Style="background-color: var(--mud-palette-action-hover);
+                                             border-radius: 8px;">
+                                <div class="d-flex align-center">
+                                    <MudIcon Icon="Icons.Material.Filled.CalendarToday"
+                                             Color="Color.Success" Class="me-2" />
+                                    <div>
+                                        <MudText Typo="Typo.caption"
+                                                 Style="color: var(--mud-palette-text-secondary);">
+                                            Created
+                                        </MudText>
+                                        <MudText Typo="Typo.body1" Style="font-weight: 600;">
+                                            @PbiModel.DateCreated.ToString("MMM dd, yyyy")
+                                        </MudText>
+                                    </div>
+                                </div>
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudPaper Class="pa-3"
+                                      Style="background-color: var(--mud-palette-action-hover);
+                                             border-radius: 8px;">
+                                <div class="d-flex align-center">
+                                    <MudIcon Icon="Icons.Material.Filled.Update"
+                                             Color="Color.Warning" Class="me-2" />
+                                    <div>
+                                        <MudText Typo="Typo.caption"
+                                                 Style="color: var(--mud-palette-text-secondary);">
+                                            Last Updated
+                                        </MudText>
+                                        <MudText Typo="Typo.body1" Style="font-weight: 600;">
+                                            @PbiModel.LastUpdated.ToString("MMM dd, yyyy")
+                                        </MudText>
+                                    </div>
+                                </div>
+                            </MudPaper>
+                        </MudItem>
+                    </MudGrid>
+                </div>
+
+            </MudPaper>
+        </MudContainer>
+    </div>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.Medium" Class="pa-4">
+        <MudPaper Class="pa-6" Elevation="2"
+                  Style="border-radius: 12px; text-align: center;">
+            <MudIcon Icon="Icons.Material.Filled.AutoStories"
+                     Size="Size.Large" Color="Color.Primary" Class="mb-3" />
+            <MudText Typo="Typo.h6" Class="mb-2">Ready to Generate Your Stories!</MudText>
+            <MudText Typo="Typo.body1"
+                     Style="color: var(--mud-palette-text-secondary);">
+                Enter a problem statement above and click add to queue it.
+            </MudText>
+            <MudText Typo="Typo.body1" Class="mt-2"
+                     Style="color: var(--mud-palette-text-secondary);">
+                Once you're satisfied with the queued statements, click Generate to retrieve your AI-powered user stories.
+            </MudText>
+        </MudPaper>
+    </MudContainer>
+}
+
+@code {
+    [Parameter] public ScrumPilot.Shared.Models.ProductBacklogItem? PbiModel { get; set; }
+    [Parameter] public EventCallback<ScrumPilot.Shared.Models.ProductBacklogItem> OnSave { get; set; }
+    [Parameter] public EventCallback<int> OnDelete { get; set; }
+
+    // Edit mode state
+    private bool isEditMode = false;
+    private bool titleError = false;
+    private string errorMessage = "";
+    private bool showDeleteConfirm = false;
+    private bool isImproving = false;
+    private bool isAiSuggestion = false;
+
+    // Edit field values
+    private string editTitle = "";
+    private string editDescription = "";
+    private PbiPriority editPriority;
+    private PbiPoints editStoryPoints;
+    private int? editEpicId;
+    private int? editSprintId;
+
+    // Epic and Sprint data
+    private List<Epic>? epics;
+    private List<Sprint>? sprints;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEpics();
+        await LoadSprints();
+    }
+
+    private async Task LoadEpics()
+    {
+        try
+        {
+            epics = await Http.GetFromJsonAsync<List<Epic>>("api/Epic");
+        }
+        catch
+        {
+            // API not available yet — dropdowns will show disabled
+            epics = new List<Epic>();
+        }
+    }
+
+    private async Task LoadSprints()
+    {
+        try
+        {
+            sprints = await Http.GetFromJsonAsync<List<Sprint>>("api/Sprint");
+        }
+        catch
+        {
+            // API not available yet — dropdowns will show disabled
+            sprints = new List<Sprint>();
+        }
+    }
+
+    private string GetEpicDisplayName(int? epicId)
+    {
+        if (!epicId.HasValue) return "— Unassigned —";
+        var epic = epics?.FirstOrDefault(e => e.EpicId == epicId.Value);
+        return epic?.Name ?? $"Epic {epicId}";
+    }
+
+    private string GetSprintDisplayName(int? sprintId)
+    {
+        if (!sprintId.HasValue) return "— Unassigned —";
+        var sprint = sprints?.FirstOrDefault(s => s.SprintId == sprintId.Value);
+        return sprint?.SprintGoal ?? $"Sprint {sprintId}";
+    }
+
+    // Delete methods
+    private void ConfirmDelete()
+    {
+        showDeleteConfirm = true;
+        errorMessage = "";
+    }
+
+    private void CancelDelete()
+    {
+        showDeleteConfirm = false;
+    }
+
+    private async Task DeleteStory()
+    {
+        if (PbiModel == null) return;
+
+        try
+        {
+            var response = await Http.DeleteAsync($"api/Pbi/{PbiModel.PbiId}");
+            if (response.IsSuccessStatusCode)
+            {
+                showDeleteConfirm = false;
+                if (OnDelete.HasDelegate)
+                {
+                    await OnDelete.InvokeAsync(PbiModel.PbiId);
+                }
+            }
+            else
+            {
+                errorMessage = "Failed to delete story.";
+                showDeleteConfirm = false;
+            }
+        }
+        catch
+        {
+            errorMessage = "Failed to connect to server.";
+            showDeleteConfirm = false;
+        }
+    }
+
+    // Edit methods
+    private void StartEdit()
+    {
+        editTitle = PbiModel!.Title ?? "";
+        editDescription = PbiModel.Description ?? "";
+        editPriority = PbiModel.Priority;
+        editStoryPoints = PbiModel.StoryPoints;
+        editEpicId = PbiModel.EpicId;
+        editSprintId = PbiModel.SprintId;
+        titleError = false;
+        errorMessage = "";
+        isEditMode = true;
+    }
+
+    private async Task SaveChanges()
+    {
+        if (string.IsNullOrWhiteSpace(editTitle))
+        {
+            titleError = true;
+            errorMessage = "Save failed: Title is required.";
+            return;
+        }
+
+        PbiModel!.Title = editTitle;
+        PbiModel.Description = editDescription;
+        PbiModel.Priority = editPriority;
+        PbiModel.StoryPoints = editStoryPoints;
+        PbiModel.EpicId = editEpicId;
+        PbiModel.SprintId = editSprintId;
+        PbiModel.LastUpdated = DateTime.Now;
+
+        titleError = false;
+        errorMessage = "";
+        isEditMode = false;
+        isAiSuggestion = false;
+
+        if (OnSave.HasDelegate)
+        {
+            await OnSave.InvokeAsync(PbiModel);
+        }
+    }
+
+    private void CancelEdit()
+    {
+        titleError = false;
+        errorMessage = "";
+        isEditMode = false;
+        isAiSuggestion = false;
+    }
+
+    private async Task ImproveWithAi()
+    {
+        if (PbiModel == null) return;
+
+        isImproving = true;
+        errorMessage = "";
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/Pbi/ImprovePbi", PbiModel);
+            if (response.IsSuccessStatusCode)
+            {
+                var improved = await response.Content.ReadFromJsonAsync<ProductBacklogItem>();
+                if (improved != null)
+                {
+                    editTitle = improved.Title;
+                    editDescription = improved.Description ?? "";
+                    editPriority = PbiModel.Priority;
+                    editStoryPoints = PbiModel.StoryPoints;
+                    editEpicId = PbiModel.EpicId;
+                    editSprintId = PbiModel.SprintId;
+                    titleError = false;
+                    isAiSuggestion = true;
+                    isEditMode = true;
+                }
+            }
+            else
+            {
+                errorMessage = "AI improvement failed. Please try again.";
+            }
+        }
+        catch
+        {
+            errorMessage = "Failed to connect to server.";
+        }
+        finally
+        {
+            isImproving = false;
+        }
+    }
+
+    private string GetStatusIcon(ScrumPilot.Shared.Models.PbiStatus status) => status switch
+    {
+        ScrumPilot.Shared.Models.PbiStatus.ToDo => Icons.Material.Filled.Assignment,
+        ScrumPilot.Shared.Models.PbiStatus.InProgress => Icons.Material.Filled.Refresh,
+        ScrumPilot.Shared.Models.PbiStatus.Done => Icons.Material.Filled.CheckCircle,
+        _ => Icons.Material.Filled.Assignment
+    };
+
+    private string GetPriorityIcon(ScrumPilot.Shared.Models.PbiPriority priority) => priority switch
+    {
+        ScrumPilot.Shared.Models.PbiPriority.Low => Icons.Material.Filled.KeyboardArrowDown,
+        ScrumPilot.Shared.Models.PbiPriority.Medium => Icons.Material.Filled.KeyboardArrowRight,
+        ScrumPilot.Shared.Models.PbiPriority.High => Icons.Material.Filled.KeyboardArrowUp,
+        _ => Icons.Material.Filled.KeyboardArrowRight
+    };
+
+    private Color GetStatusColor(ScrumPilot.Shared.Models.PbiStatus status) => status switch
+    {
+        ScrumPilot.Shared.Models.PbiStatus.ToDo => Color.Default,
+        ScrumPilot.Shared.Models.PbiStatus.InProgress => Color.Warning,
+        ScrumPilot.Shared.Models.PbiStatus.Done => Color.Success,
+        _ => Color.Default
+    };
+
+    private string GetOriginLabel(ScrumPilot.Shared.Models.PbiOrigin origin) => origin switch
+    {
+        ScrumPilot.Shared.Models.PbiOrigin.AiGenerated => "AI Generated",
+        ScrumPilot.Shared.Models.PbiOrigin.BotGenerated => "Bot Generated",
+        ScrumPilot.Shared.Models.PbiOrigin.WebUserCreated => "Web User",
+        _ => origin.ToString()
+    };
+
+    private Color GetPriorityColor(ScrumPilot.Shared.Models.PbiPriority priority) => priority switch
+    {
+        ScrumPilot.Shared.Models.PbiPriority.Low => Color.Success,
+        ScrumPilot.Shared.Models.PbiPriority.Medium => Color.Warning,
+        ScrumPilot.Shared.Models.PbiPriority.High => Color.Error,
+        _ => Color.Default
+    };
+}

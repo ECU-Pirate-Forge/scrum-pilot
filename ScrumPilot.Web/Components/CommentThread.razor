@@ -1,0 +1,257 @@
+@using ScrumPilot.Shared.Models
+@using System.Net.Http.Json
+@using System.Security.Claims
+@inject HttpClient Http
+@inject AuthenticationStateProvider AuthState
+
+<div class="comment-thread">
+    <div class="comment-thread-header">
+        <MudText Typo="Typo.h6" Style="font-weight: 600;">
+            <MudIcon Icon="@Icons.Material.Filled.Comment" Class="me-2" />
+            Comments
+        </MudText>
+    </div>
+
+    <div class="comment-list">
+        @if (_loading)
+        {
+            <MudStack AlignItems="AlignItems.Center" Class="pa-4">
+                <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+            </MudStack>
+        }
+        else if (_comments.Count == 0)
+        {
+            <MudText Typo="Typo.body2"
+                     Class="pa-3"
+                     Style="color: var(--mud-palette-text-secondary); font-style: italic;">
+                No comments yet. Be the first to comment!
+            </MudText>
+        }
+        else
+        {
+            @foreach (var comment in _comments)
+            {
+                <MudPaper Class="comment-item pa-3 mb-2" Elevation="1">
+                    @if (_editingCommentId == comment.CommentId)
+                    {
+                        <MudTextField @bind-Value="_editBody"
+                                      Variant="Variant.Outlined"
+                                      Lines="3"
+                                      Class="mb-2" />
+                        <div class="d-flex gap-2">
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Success"
+                                       Size="Size.Small"
+                                       OnClick="SaveEdit">
+                                Save
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Default"
+                                       Size="Size.Small"
+                                       OnClick="CancelEdit">
+                                Cancel
+                            </MudButton>
+                        </div>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Style="line-height: 1.5; white-space: pre-wrap;">
+                            @comment.Body
+                        </MudText>
+                        <div class="comment-meta d-flex justify-space-between align-center mt-2">
+                            <MudText Typo="Typo.caption"
+                                     Style="color: var(--mud-palette-text-secondary);">
+                                @comment.UserId · @comment.CreatedDate.ToLocalTime().ToString("MMM dd, yyyy h:mm tt")
+                            </MudText>
+                            @if (comment.UserId == _currentUserName)
+                            {
+                                <div class="d-flex gap-1">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                   Size="Size.Small"
+                                                   Color="Color.Primary"
+                                                   OnClick="@(() => StartEdit(comment))" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                   Size="Size.Small"
+                                                   Color="Color.Error"
+                                                   OnClick="@(() => DeleteComment(comment.CommentId))" />
+                                </div>
+                            }
+                        </div>
+                    }
+                </MudPaper>
+            }
+        }
+    </div>
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2">@_errorMessage</MudAlert>
+    }
+
+    <div class="comment-input mt-3">
+        <MudTextField @bind-Value="_newCommentBody"
+                      Label="Add a comment..."
+                      Variant="Variant.Outlined"
+                      Lines="3"
+                      Class="mb-2" />
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Send"
+                   OnClick="AddComment"
+                   Disabled="@(string.IsNullOrWhiteSpace(_newCommentBody) || _submitting)">
+            Post
+        </MudButton>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int PbiId { get; set; }
+
+    private List<Comment> _comments = new();
+    private bool _loading = true;
+    private string _errorMessage = "";
+    private string _newCommentBody = "";
+    private bool _submitting = false;
+    private string _currentUserId = "";
+    private string _currentUserName = "";
+
+    private int? _editingCommentId;
+    private string _editBody = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthState.GetAuthenticationStateAsync();
+        _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                      ?? authState.User.FindFirst("sub")?.Value
+                      ?? authState.User.FindFirst("nameid")?.Value
+                      ?? "unknown";
+        _currentUserName = authState.User.FindFirst(ClaimTypes.Name)?.Value
+                        ?? authState.User.FindFirst("unique_name")?.Value
+                        ?? _currentUserId;
+
+        await LoadComments();
+    }
+
+    private async Task LoadComments()
+    {
+        _loading = true;
+        try
+        {
+            _comments = await Http.GetFromJsonAsync<List<Comment>>($"api/comments/pbi/{PbiId}") ?? new();
+        }
+        catch
+        {
+            _errorMessage = "Failed to load comments.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task AddComment()
+    {
+        if (string.IsNullOrWhiteSpace(_newCommentBody)) return;
+
+        _submitting = true;
+        _errorMessage = "";
+        try
+        {
+            var comment = new Comment
+            {
+                PbiId = PbiId,
+                UserId = _currentUserName,
+                Body = _newCommentBody.Trim(),
+                CreatedDate = DateTime.UtcNow
+            };
+            var response = await Http.PostAsJsonAsync("api/comments", comment);
+            if (response.IsSuccessStatusCode)
+            {
+                _newCommentBody = "";
+                await LoadComments();
+            }
+            else
+            {
+                _errorMessage = "Failed to post comment.";
+            }
+        }
+        catch
+        {
+            _errorMessage = "Failed to connect to server.";
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private void StartEdit(Comment comment)
+    {
+        _editingCommentId = comment.CommentId;
+        _editBody = comment.Body;
+        _errorMessage = "";
+    }
+
+    private void CancelEdit()
+    {
+        _editingCommentId = null;
+        _editBody = "";
+    }
+
+    private async Task SaveEdit()
+    {
+        if (_editingCommentId is null) return;
+
+        var comment = _comments.FirstOrDefault(c => c.CommentId == _editingCommentId);
+        if (comment is null) return;
+
+        _errorMessage = "";
+        try
+        {
+            var updated = new Comment
+            {
+                CommentId = comment.CommentId,
+                PbiId = comment.PbiId,
+                UserId = comment.UserId,
+                Body = _editBody.Trim(),
+                CreatedDate = comment.CreatedDate
+            };
+            var response = await Http.PutAsJsonAsync($"api/comments/{comment.CommentId}", updated);
+            if (response.IsSuccessStatusCode)
+            {
+                _editingCommentId = null;
+                _editBody = "";
+                await LoadComments();
+            }
+            else
+            {
+                _errorMessage = "Failed to save changes.";
+            }
+        }
+        catch
+        {
+            _errorMessage = "Failed to connect to server.";
+        }
+    }
+
+    private async Task DeleteComment(int commentId)
+    {
+        _errorMessage = "";
+        try
+        {
+            var response = await Http.DeleteAsync($"api/comments/{commentId}");
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadComments();
+            }
+            else
+            {
+                _errorMessage = "Failed to delete comment.";
+            }
+        }
+        catch
+        {
+            _errorMessage = "Failed to connect to server.";
+        }
+    }
+}

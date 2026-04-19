@@ -33,7 +33,7 @@ namespace ScrumPilot.UnitTests.Frontend.PageTests
 
             // Assert
             var dashboardTiles = component.FindComponents<Web.Components.DashboardTile>();
-            Assert.Equal(3, dashboardTiles.Count);
+            Assert.Equal(5, dashboardTiles.Count);
         }
 
         [Fact]
@@ -44,8 +44,10 @@ namespace ScrumPilot.UnitTests.Frontend.PageTests
 
             // Assert
             Assert.Contains("Scrum Board", component.Markup);
-            Assert.Contains("Generate Stories", component.Markup);
-            Assert.Contains("Draft Stories", component.Markup);
+            Assert.Contains("Generate PBIs", component.Markup);
+            Assert.Contains("Draft PBIs", component.Markup);
+            Assert.Contains("Backlog", component.Markup);
+            Assert.Contains("Metrics Dashboard", component.Markup);
         }
 
         [Fact]
@@ -56,8 +58,10 @@ namespace ScrumPilot.UnitTests.Frontend.PageTests
 
             // Assert
             Assert.Contains("View and manage sprint work.", component.Markup);
-            Assert.Contains("Create user stories quickly.", component.Markup);
-            Assert.Contains("Review and refine drafted stories.", component.Markup);
+            Assert.Contains("Create product backlog items quickly.", component.Markup);
+            Assert.Contains("Review and refine drafted product backlog items.", component.Markup);
+            Assert.Contains("View and manage backlog items.", component.Markup);
+            Assert.Contains("Sprint metrics and PBI analytics.", component.Markup);
         }
 
         [Fact]

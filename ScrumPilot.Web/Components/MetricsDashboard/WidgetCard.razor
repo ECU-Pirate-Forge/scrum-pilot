@@ -1,0 +1,61 @@
+@if (_isLoading)
+{
+    <MudPaper Class="widget-card" Elevation="2" Style="@CardStyle">
+        <div class="widget-header">
+            <MudText Typo="Typo.subtitle2" Class="widget-title">@Title</MudText>
+        </div>
+        <div class="widget-body widget-loading">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Small" />
+        </div>
+    </MudPaper>
+}
+else if (_error is not null)
+{
+    <MudPaper Class="widget-card" Elevation="2" Style="@CardStyle">
+        <div class="widget-header">
+            <MudText Typo="Typo.subtitle2" Class="widget-title">@Title</MudText>
+        </div>
+        <div class="widget-body widget-error">
+            <MudIcon Icon="@Icons.Material.Filled.ErrorOutline" Color="Color.Error" Size="Size.Small" />
+            <MudText Typo="Typo.caption" Color="Color.Error" Class="ml-1">@_error</MudText>
+        </div>
+    </MudPaper>
+}
+else
+{
+    <MudPaper Class="widget-card" Elevation="2" Style="@CardStyle">
+        @if (!string.IsNullOrEmpty(Title))
+        {
+            <div class="widget-header">
+                <MudText Typo="Typo.subtitle2" Class="widget-title">@Title</MudText>
+            </div>
+        }
+        <div class="widget-body">
+            @ChildContent
+        </div>
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public Func<Task>? LoadData { get; set; }
+
+    private bool _isLoading = true;
+    private string? _error;
+
+    private string CardStyle => "height: 100%;";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (LoadData is not null)
+        {
+            try { await LoadData(); }
+            catch (Exception ex)
+            {
+                _error = ex.Message.Length > 80 ? ex.Message[..80] + "…" : ex.Message;
+            }
+        }
+        _isLoading = false;
+    }
+}

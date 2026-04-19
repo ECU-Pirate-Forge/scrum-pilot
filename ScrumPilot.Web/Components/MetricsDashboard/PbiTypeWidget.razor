@@ -1,0 +1,30 @@
+@if (_series.Length > 0 && _series.Any(v => v > 0))
+{
+    <MudChart ChartType="ChartType.Donut"
+              InputData="@_series"
+              InputLabels="@_labels"
+              Width="100%"
+              Height="160px" />
+}
+else
+{
+    <MudText Typo="Typo.body2" Style="color:#8b949e;">No data.</MudText>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<ProductBacklogItem> Items { get; set; } = [];
+
+    private double[] _series = [];
+    private string[] _labels = [];
+
+    protected override void OnParametersSet()
+    {
+        _labels = ["Stories", "Bugs", "Tasks"];
+        _series =
+        [
+            Items.Count(i => i.Type == PbiType.Story),
+            Items.Count(i => i.Type == PbiType.Bug),
+            Items.Count(i => i.Type == PbiType.Task),
+        ];
+    }
+}

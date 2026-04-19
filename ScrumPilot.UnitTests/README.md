@@ -189,16 +189,16 @@ When BUnit supports .NET 10, frontend tests will cover:
 
 ### Component Rendering Tests
 ```csharp
-public class StoryCardTests : TestContext
+public class PbiCardTests : TestContext
 {
     [Fact]
-    public void StoryCard_Should_DisplayStoryTitle()
+    public void PbiCard_Should_DisplayStoryTitle()
     {
         // Arrange
         var story = new Story { Title = "Test Story", Description = "Test Description" };
 
         // Act
-        var component = RenderComponent<StoryCard>(parameters => parameters
+        var component = RenderComponent<PbiCard>(parameters => parameters
             .Add(p => p.StoryModel, story));
 
         // Assert
@@ -209,16 +209,16 @@ public class StoryCardTests : TestContext
 
 ### Page Integration Tests
 ```csharp
-public class DraftStoriesPageTests : TestContext
+public class DraftPbiPageTests : TestContext
 {
     [Fact]
-    public void DraftStoriesPage_Should_LoadStoriesOnInit()
+    public void DraftPbiPage_Should_LoadStoriesOnInit()
     {
         // Arrange
         Services.AddSingleton(Substitute.For<HttpClient>());
 
         // Act
-        var component = RenderComponent<DraftStoriesPage>();
+        var component = RenderComponent<DraftPbiPage>();
 
         // Assert
         Assert.Contains("Loading draft stories", component.Markup);

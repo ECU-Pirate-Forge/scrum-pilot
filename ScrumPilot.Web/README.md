@@ -10,19 +10,19 @@ This project is a **Blazor WebAssembly** application that runs entirely in the b
 
 ### Key Components
 - **Pages** - Main application pages and routing
-- **Components** - Reusable UI components (StoryCard, etc.)
+- **Components** - Reusable UI components (PbiCard, etc.)
 - **Layout** - Application shell and navigation
 - **Services** - Client-side services (Theme management)
 
 ## ✨ Features
 
 ### 📊 Pages & Views
-- **Story Generation** (`/storygeneration`) - AI-powered story creation from problem statements
+- **PBI Generation** (`/pbigeneration`) - AI-powered story creation from problem statements
 - **Draft Stories** (`/draft-stories`) - Review, modify, and manage AI-generated stories
-- **Scrum Board** (`/scrum-board`) - Interactive Kanban board for story management
+- **Scrum Board** (`/scrum-board`) - Interactive Scrum board for PBI management
 
 ### 🧩 Components
-- **StoryCard** - Reusable component for displaying and editing story details
+- **PbiCard** - Reusable component for displaying and editing story details
 - **Navigation** - Responsive navigation menu with theme switching
 - **Layouts** - Consistent application shell and page layouts
 
@@ -101,11 +101,11 @@ Development server configuration is in `Properties/launchSettings.json`:
 ```
 ScrumPilot.Web/
 ├── Pages/                    # Application pages
-│   ├── DraftStoriesPage.razor       # Draft story management
-│   ├── StoryGeneration.razor        # AI story generation  
-│   └── ScrumBoard.razor            # Kanban board
+│   ├── DraftPbiPage.razor       # Draft PBI management
+│   ├── PbiGeneration.razor        # AI PBI generation  
+│   └── ScrumBoard.razor            # Scrum board
 ├── Components/               # Reusable components
-│   └── StoryCard.razor             # Story detail component
+│   └── PbiCard.razor             # PBI detail component
 ├── Layout/                  # Application layout
 │   ├── MainLayout.razor            # Main application shell
 │   └── NavMenu.razor              # Navigation menu

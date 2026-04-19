@@ -1,0 +1,78 @@
+@page "/backlog"
+@inject HttpClient Http
+
+<div class="swimlane-page">
+    <MudContainer MaxWidth="MaxWidth.False" Class="pa-0">
+        <SwimLanes @ref="_swimLanes"
+                   GroupByPriority
+                   InitialSprintId="-1"
+                   OnPbiSelected="OpenPbiDetails" />
+    </MudContainer>
+
+    @if (SelectedPbi is not null)
+    {
+        <div class="details-overlay">
+            <div class="details-container">
+                <div class="details-header">
+                    <MudText Typo="Typo.h5" Class="details-title">
+                        <MudIcon Icon="@Icons.Material.Filled.Visibility" Class="me-2" />
+                        PBI Details
+                    </MudText>
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.Close"
+                               OnClick="ClosePbiDetails"
+                               Class="close-button">
+                        Close
+                    </MudButton>
+                </div>
+
+                <div class="details-content">
+                    <div class="details-card">
+                        <PbiCard PbiModel="SelectedPbi" OnSave="HandlePbiSave" OnDelete="HandlePbiDelete" />
+                    </div>
+                    <CommentThread PbiId="SelectedPbi.PbiId" />
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private SwimLanes? _swimLanes;
+    private ProductBacklogItem? SelectedPbi;
+
+    private void OpenPbiDetails(ProductBacklogItem pbi) => SelectedPbi = pbi;
+
+    private async Task ClosePbiDetails()
+    {
+        SelectedPbi = null;
+        if (_swimLanes is not null)
+            await _swimLanes.RefreshAsync();
+    }
+
+    private async Task HandlePbiSave(ProductBacklogItem pbi)
+    {
+        try
+        {
+            var response = await Http.PutAsJsonAsync("api/Pbi", pbi);
+            if (response.IsSuccessStatusCode)
+            {
+                SelectedPbi = null;
+                if (_swimLanes is not null)
+                    await _swimLanes.RefreshAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating story: {ex.Message}");
+        }
+    }
+
+    private async Task HandlePbiDelete(int storyId)
+    {
+        SelectedPbi = null;
+        if (_swimLanes is not null)
+            await _swimLanes.RefreshAsync();
+    }
+}
