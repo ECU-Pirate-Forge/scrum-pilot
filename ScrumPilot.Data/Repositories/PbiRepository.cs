@@ -86,9 +86,12 @@ namespace ScrumPilot.Data.Repositories
                 .ToListAsync();
         }
 
-        public async Task<IEnumerable<ProductBacklogItem>> GetFilteredPbisAsync(int? sprintId, int? epicId)
+        public async Task<IEnumerable<ProductBacklogItem>> GetFilteredPbisAsync(int? sprintId, int? epicId, int? projectId = null)
         {
             var query = _context.Stories.Where(s => !s.IsDraft);
+
+            if (projectId.HasValue)
+                query = query.Where(s => s.ProjectId == projectId.Value);
 
             if (sprintId.HasValue)
             {

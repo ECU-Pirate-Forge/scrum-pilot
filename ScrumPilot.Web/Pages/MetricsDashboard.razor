@@ -17,6 +17,20 @@
         </div>
         <div class="topbar-right">
             <MudSelect T="int?"
+                       Value="_selectedProjectId"
+                       ValueChanged="OnProjectChangedAsync"
+                       Label="Project"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Style="min-width:200px;"
+                       Disabled="_projects.Count == 0">
+                @foreach (var project in _projects)
+                {
+                    <MudSelectItem T="int?" Value="@((int?)project.ProjectId)">@project.ProjectName</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudSelect T="int?"
                        Value="_selectedSprintId"
                        ValueChanged="OnSprintChangedAsync"
                        Label="Sprint"
@@ -239,6 +253,8 @@
     [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
 
+    private List<Project> _projects = [];
+    private int? _selectedProjectId;
     private List<Sprint> _sprints = [];
     private IReadOnlyList<ProductBacklogItem> _pbis = [];
     private int? _selectedSprintId;
@@ -291,22 +307,66 @@
     {
         try
         {
-            _sprints = await MetricsSvc.GetSprintsAsync();
-            var now = DateTime.UtcNow.Date;
-            var mostRecent = _sprints
-                .Where(s => s.StartDate.HasValue && s.StartDate.Value.Date <= now)
-                .OrderByDescending(s => s.StartDate)
-                .FirstOrDefault();
-            _selectedSprintId = mostRecent?.SprintId;
-            _selectedSprint = mostRecent;
-            _pbis = await MetricsSvc.GetPbisForSprintAsync(_selectedSprintId);
+            _projects = await MetricsSvc.GetProjectsAsync();
+            _selectedProjectId = _projects.Count > 0 ? _projects[0].ProjectId : (int?)null;
 
-            var saved = await MetricsSvc.GetDashboardPreferencesAsync();
-            if (saved?.Widgets?.Count > 0)
-                MergePreferences(saved.Widgets);
+            if (_selectedProjectId.HasValue)
+            {
+                _sprints = await MetricsSvc.GetSprintsByProjectAsync(_selectedProjectId.Value);
+                var now = DateTime.UtcNow.Date;
+                var mostRecent = _sprints
+                    .Where(s => s.StartDate.HasValue && s.StartDate.Value.Date <= now)
+                    .OrderByDescending(s => s.StartDate)
+                    .FirstOrDefault();
+                _selectedSprintId = mostRecent?.SprintId;
+                _selectedSprint = mostRecent;
+                _pbis = await MetricsSvc.GetPbisForSprintAsync(_selectedSprintId);
+
+                var saved = await MetricsSvc.GetDashboardPreferencesAsync(_selectedProjectId.Value);
+                if (saved?.Widgets?.Count > 0)
+                    MergePreferences(saved.Widgets);
+            }
         }
         catch { }
         _loading = false;
+    }
+
+    private async Task OnProjectChangedAsync(int? projectId)
+    {
+        _selectedProjectId = projectId;
+        _selectedSprintId = null;
+        _selectedSprint = null;
+        _pbis = [];
+
+        if (projectId.HasValue)
+        {
+            try
+            {
+                _sprints = await MetricsSvc.GetSprintsByProjectAsync(projectId.Value);
+                var now = DateTime.UtcNow.Date;
+                var mostRecent = _sprints
+                    .Where(s => s.StartDate.HasValue && s.StartDate.Value.Date <= now)
+                    .OrderByDescending(s => s.StartDate)
+                    .FirstOrDefault();
+                _selectedSprintId = mostRecent?.SprintId;
+                _selectedSprint = mostRecent;
+                if (_selectedSprintId.HasValue)
+                    _pbis = await MetricsSvc.GetPbisForSprintAsync(_selectedSprintId);
+
+                _widgetPrefs = DefaultLayout();
+                var saved = await MetricsSvc.GetDashboardPreferencesAsync(projectId.Value);
+                if (saved?.Widgets?.Count > 0)
+                    MergePreferences(saved.Widgets);
+            }
+            catch { }
+        }
+        else
+        {
+            _sprints = [];
+        }
+
+        _gridNeedsReinit = true;
+        StateHasChanged();
     }
 
     private void MergePreferences(List<DashboardWidgetConfig> saved)
@@ -393,10 +453,11 @@
 
     private async Task SavePreferencesAsync()
     {
+        if (!_selectedProjectId.HasValue) return;
         await MetricsSvc.SaveDashboardPreferencesAsync(new DashboardPreferenceDto
         {
             Widgets = _widgetPrefs
-        });
+        }, _selectedProjectId.Value);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

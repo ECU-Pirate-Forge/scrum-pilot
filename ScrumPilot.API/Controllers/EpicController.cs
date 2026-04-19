@@ -16,9 +16,11 @@ namespace ScrumPilot.API.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Epic>>> GetAllEpics()
+        public async Task<ActionResult<IEnumerable<Epic>>> GetAllEpics([FromQuery] int? projectId = null)
         {
-            var epics = await _epicService.GetAllEpicsAsync();
+            var epics = projectId.HasValue
+                ? await _epicService.GetEpicsByProjectAsync(projectId.Value)
+                : await _epicService.GetAllEpicsAsync();
             return Ok(epics);
         }
     }

@@ -18,6 +18,23 @@ else
 
     <MudStack Row="true" Spacing="2" Class="mb-4">
         <MudSelect T="int?"
+                   Label="Project"
+                   Value="@_selectedProjectId"
+                   ValueChanged="@(async (int? value) => await OnProjectChanged(value))"
+                   Variant="Variant.Outlined"
+                   Dense="true"
+                   Style="min-width: 200px;"
+                   Disabled="_projects.Count == 0">
+            <MudSelectItem T="int?" Value="@((int?)null)">All</MudSelectItem>
+            @foreach (var project in _projects)
+            {
+                <MudSelectItem T="int?" Value="@((int?)project.ProjectId)">
+                    @project.ProjectName
+                </MudSelectItem>
+            }
+        </MudSelect>
+
+        <MudSelect T="int?"
                    Label="Sprint"
                    Value="@_selectedSprintId"
                    ValueChanged="@(async (int? value) => await OnSprintChanged(value))"
@@ -169,8 +186,10 @@ else
     private IReadOnlyList<LaneDefinition> _lanes = StatusLanes();
 
     private List<ProductBacklogItem> _items = new();
+    private List<Project> _projects = new();
     private List<Sprint> _sprints = new();
     private List<Epic> _epics = new();
+    private int? _selectedProjectId;
     private int? _selectedSprintId;
     private int? _selectedEpicId;
     private bool _loading = true;
@@ -242,15 +261,45 @@ else
     {
         try
         {
-            var sprintsTask = Http.GetFromJsonAsync<List<Sprint>>("api/Sprint");
-            var epicsTask = Http.GetFromJsonAsync<List<Epic>>("api/Epic");
+            _projects = await Http.GetFromJsonAsync<List<Project>>("api/Project") ?? new();
+
+            var sprintUrl = _selectedProjectId.HasValue ? $"api/Sprint?projectId={_selectedProjectId.Value}" : "api/Sprint";
+            var epicUrl   = _selectedProjectId.HasValue ? $"api/Epic?projectId={_selectedProjectId.Value}"   : "api/Epic";
+
+            var sprintsTask = Http.GetFromJsonAsync<List<Sprint>>(sprintUrl);
+            var epicsTask   = Http.GetFromJsonAsync<List<Epic>>(epicUrl);
             _sprints = await sprintsTask ?? new();
-            _epics = await epicsTask ?? new();
+            _epics   = await epicsTask   ?? new();
         }
         catch
         {
             // Dropdowns will be empty if API is unreachable
         }
+    }
+
+    private async Task OnProjectChanged(int? value)
+    {
+        _selectedProjectId = value;
+        _selectedSprintId  = null;
+        _selectedEpicId    = null;
+
+        try
+        {
+            var sprintUrl = value.HasValue ? $"api/Sprint?projectId={value.Value}" : "api/Sprint";
+            var epicUrl   = value.HasValue ? $"api/Epic?projectId={value.Value}"   : "api/Epic";
+
+            var sprintsTask = Http.GetFromJsonAsync<List<Sprint>>(sprintUrl);
+            var epicsTask   = Http.GetFromJsonAsync<List<Epic>>(epicUrl);
+            _sprints = await sprintsTask ?? new();
+            _epics   = await epicsTask   ?? new();
+        }
+        catch
+        {
+            _sprints = new();
+            _epics   = new();
+        }
+
+        await LoadItemsAsync(showLoading: false);
     }
 
     private async Task LoadItemsAsync(bool showLoading = true)
@@ -283,6 +332,8 @@ else
     private string BuildItemUrl()
     {
         var query = new List<string>();
+        if (_selectedProjectId.HasValue)
+            query.Add($"projectId={_selectedProjectId.Value}");
         if (_selectedSprintId.HasValue)
             query.Add($"sprintId={_selectedSprintId.Value}");
         if (_selectedEpicId.HasValue)

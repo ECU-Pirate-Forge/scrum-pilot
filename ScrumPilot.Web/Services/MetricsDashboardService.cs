@@ -12,9 +12,19 @@ namespace ScrumPilot.Web.Services
             _http = http;
         }
 
+        public async Task<List<Project>> GetProjectsAsync()
+        {
+            return await _http.GetFromJsonAsync<List<Project>>("api/project") ?? [];
+        }
+
         public async Task<List<Sprint>> GetSprintsAsync()
         {
             return await _http.GetFromJsonAsync<List<Sprint>>("api/sprint") ?? [];
+        }
+
+        public async Task<List<Sprint>> GetSprintsByProjectAsync(int projectId)
+        {
+            return await _http.GetFromJsonAsync<List<Sprint>>($"api/sprint?projectId={projectId}") ?? [];
         }
 
         public async Task<List<ProductBacklogItem>> GetPbisForSprintAsync(int? sprintId)
@@ -73,15 +83,15 @@ namespace ScrumPilot.Web.Services
                 ?? new TimeInStageData();
         }
 
-        public async Task<DashboardPreferenceDto?> GetDashboardPreferencesAsync()
+        public async Task<DashboardPreferenceDto?> GetDashboardPreferencesAsync(int projectId)
         {
-            try { return await _http.GetFromJsonAsync<DashboardPreferenceDto>("api/dashboard-preferences"); }
+            try { return await _http.GetFromJsonAsync<DashboardPreferenceDto>($"api/dashboard-preferences?projectId={projectId}"); }
             catch { return null; }
         }
 
-        public async Task SaveDashboardPreferencesAsync(DashboardPreferenceDto dto)
+        public async Task SaveDashboardPreferencesAsync(DashboardPreferenceDto dto, int projectId)
         {
-            try { await _http.PutAsJsonAsync("api/dashboard-preferences", dto); } catch { }
+            try { await _http.PutAsJsonAsync($"api/dashboard-preferences?projectId={projectId}", dto); } catch { }
         }
     }
 }

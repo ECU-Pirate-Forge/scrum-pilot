@@ -16,9 +16,11 @@ namespace ScrumPilot.API.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Sprint>>> GetAllSprints()
+        public async Task<ActionResult<IEnumerable<Sprint>>> GetAllSprints([FromQuery] int? projectId = null)
         {
-            var sprints = await _sprintService.GetAllSprintsAsync();
+            var sprints = projectId.HasValue
+                ? await _sprintService.GetSprintsByProjectAsync(projectId.Value)
+                : await _sprintService.GetAllSprintsAsync();
             return Ok(sprints);
         }
     }

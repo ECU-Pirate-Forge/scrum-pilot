@@ -32,13 +32,13 @@ namespace ScrumPilot.API.Controllers
 
         [HttpGet("getNonDraftPbis")]
         public async Task<ActionResult<IEnumerable<ProductBacklogItem>>> GetNonDraftPbis(
-            [FromQuery] int? sprintId, [FromQuery] int? epicId)
+            [FromQuery] int? sprintId, [FromQuery] int? epicId, [FromQuery] int? projectId)
         {
             IEnumerable<ProductBacklogItem> pbis;
 
-            if (sprintId.HasValue || epicId.HasValue)
+            if (sprintId.HasValue || epicId.HasValue || projectId.HasValue)
             {
-                pbis = await _pbiService.GetFilteredPbisAsync(sprintId, epicId);
+                pbis = await _pbiService.GetFilteredPbisAsync(sprintId, epicId, projectId);
             }
             else
             {

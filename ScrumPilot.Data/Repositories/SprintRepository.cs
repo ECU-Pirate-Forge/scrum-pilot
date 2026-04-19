@@ -19,5 +19,13 @@ namespace ScrumPilot.Data.Repositories
                 .OrderByDescending(s => s.StartDate)
                 .ToListAsync();
         }
+
+        public async Task<IEnumerable<Sprint>> GetSprintsByProjectAsync(int projectId)
+        {
+            return await _context.Sprints
+                .Where(s => s.ProjectId == projectId)
+                .OrderByDescending(s => s.StartDate)
+                .ToListAsync();
+        }
     }
 }

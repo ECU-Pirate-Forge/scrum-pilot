@@ -59,6 +59,7 @@ builder.Services.AddAuthorizationBuilder()
 // Add services to the container.
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<PlanningPokerSessionService>();
+builder.Services.AddScoped<IProjectService, ProjectService>();
 builder.Services.AddScoped<ISprintService, SprintService>();
 builder.Services.AddScoped<IEpicService, EpicService>();
 builder.Services.AddScoped<IMetricsDashboardService, MetricsDashboardService>();

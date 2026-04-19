@@ -10,16 +10,16 @@ public class DashboardPreferenceService : IDashboardPreferenceService
 
     public DashboardPreferenceService(IDashboardPreferenceRepository repo) => _repo = repo;
 
-    public async Task<DashboardPreferenceDto> GetPreferencesAsync(string userId)
+    public async Task<DashboardPreferenceDto> GetPreferencesAsync(string userId, int projectId)
     {
-        var json = await _repo.GetPreferencesJsonAsync(userId);
+        var json = await _repo.GetPreferencesJsonAsync(userId, projectId);
         if (string.IsNullOrEmpty(json)) return new DashboardPreferenceDto();
         return JsonSerializer.Deserialize<DashboardPreferenceDto>(json) ?? new DashboardPreferenceDto();
     }
 
-    public async Task SavePreferencesAsync(string userId, DashboardPreferenceDto dto)
+    public async Task SavePreferencesAsync(string userId, int projectId, DashboardPreferenceDto dto)
     {
         var json = JsonSerializer.Serialize(dto);
-        await _repo.UpsertPreferencesJsonAsync(userId, json);
+        await _repo.UpsertPreferencesJsonAsync(userId, projectId, json);
     }
 }

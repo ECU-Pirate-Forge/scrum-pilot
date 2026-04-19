@@ -3,6 +3,7 @@
     public class ProductBacklogItem
     {
         public int PbiId { get; set; }
+        public int ProjectId { get; set; }
         public PbiType Type { get; set; }
         public int? EpicId { get; set; }
         public int? SprintId { get; set; }

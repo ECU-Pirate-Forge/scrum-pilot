@@ -4,6 +4,6 @@ namespace ScrumPilot.API.Services;
 
 public interface IDashboardPreferenceService
 {
-    Task<DashboardPreferenceDto> GetPreferencesAsync(string userId);
-    Task SavePreferencesAsync(string userId, DashboardPreferenceDto dto);
+    Task<DashboardPreferenceDto> GetPreferencesAsync(string userId, int projectId);
+    Task SavePreferencesAsync(string userId, int projectId, DashboardPreferenceDto dto);
 }

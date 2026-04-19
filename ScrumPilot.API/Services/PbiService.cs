@@ -37,9 +37,9 @@ namespace ScrumPilot.API.Services
             return await _pbiRepository.GetDraftPbisAsync();
         }
 
-        public async Task<IEnumerable<ProductBacklogItem>> GetFilteredPbisAsync(int? sprintId, int? epicId)
+        public async Task<IEnumerable<ProductBacklogItem>> GetFilteredPbisAsync(int? sprintId, int? epicId, int? projectId = null)
         {
-            return await _pbiRepository.GetFilteredPbisAsync(sprintId, epicId);
+            return await _pbiRepository.GetFilteredPbisAsync(sprintId, epicId, projectId);
         }
 
         /// <summary>

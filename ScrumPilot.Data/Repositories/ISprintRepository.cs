@@ -5,5 +5,6 @@ namespace ScrumPilot.Data.Repositories
     public interface ISprintRepository
     {
         Task<IEnumerable<Sprint>> GetAllSprintsAsync();
+        Task<IEnumerable<Sprint>> GetSprintsByProjectAsync(int projectId);
     }
 }

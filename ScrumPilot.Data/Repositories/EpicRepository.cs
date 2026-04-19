@@ -19,5 +19,13 @@ namespace ScrumPilot.Data.Repositories
                 .OrderBy(e => e.Name)
                 .ToListAsync();
         }
+
+        public async Task<IEnumerable<Epic>> GetEpicsByProjectAsync(int projectId)
+        {
+            return await _context.Epics
+                .Where(e => e.ProjectId == projectId)
+                .OrderBy(e => e.Name)
+                .ToListAsync();
+        }
     }
 }

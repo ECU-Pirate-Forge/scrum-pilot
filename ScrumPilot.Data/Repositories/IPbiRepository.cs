@@ -11,7 +11,7 @@ namespace ScrumPilot.Data.Repositories
         Task<IEnumerable<ProductBacklogItem>> GetByStatusAsync(PbiStatus status);
         Task<IEnumerable<ProductBacklogItem>> GetDraftPbisAsync();
         Task<IEnumerable<ProductBacklogItem>> GetNonDraftPbisAsync();
-        Task<IEnumerable<ProductBacklogItem>> GetFilteredPbisAsync(int? sprintId, int? epicId);
+        Task<IEnumerable<ProductBacklogItem>> GetFilteredPbisAsync(int? sprintId, int? epicId, int? projectId = null);
         Task<ProductBacklogItem> UpdateAsync(ProductBacklogItem story);
     }
 }
