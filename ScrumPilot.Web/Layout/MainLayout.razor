@@ -163,35 +163,40 @@
     {
         try
         {
-            var projectsTask = Http.GetFromJsonAsync<List<Project>>("api/project");
-            var settingsTask = Http.GetFromJsonAsync<UserSettingsDto>("api/user/settings");
-            await Task.WhenAll(projectsTask, settingsTask);
+            _appBarProjects = await Http.GetFromJsonAsync<List<Project>>("api/project") ?? new();
+        }
+        catch
+        {
+            _appBarProjects = new();
+        }
 
-            _appBarProjects = await projectsTask ?? new();
-            var settings = await settingsTask;
-
+        UserSettingsDto? settings = null;
+        try
+        {
+            settings = await Http.GetFromJsonAsync<UserSettingsDto>("api/user/settings");
             if (settings is not null)
             {
                 _isDarkMode = settings.UiPreference == UiPreference.Dark;
                 _userPreferenceLoaded = true;
             }
-
-            if (ProjectState.SelectedProject == null && _appBarProjects.Count > 0)
-            {
-                var defaultProject = settings?.DefaultProjectId.HasValue == true
-                    ? _appBarProjects.FirstOrDefault(p => p.ProjectId == settings.DefaultProjectId.Value)
-                    : null;
-                ProjectState.SetProject(defaultProject ?? _appBarProjects[0]);
-            }
-            else if (ProjectState.SelectedProject != null)
-            {
-                var refreshed = _appBarProjects.FirstOrDefault(p => p.ProjectId == ProjectState.SelectedProjectId);
-                if (refreshed != null)
-                    ProjectState.SetProject(refreshed);
-            }
-            await InvokeAsync(StateHasChanged);
         }
         catch { }
+
+        if (ProjectState.SelectedProject == null && _appBarProjects.Count > 0)
+        {
+            var defaultProject = settings?.DefaultProjectId.HasValue == true
+                ? _appBarProjects.FirstOrDefault(p => p.ProjectId == settings.DefaultProjectId.Value)
+                : null;
+            ProjectState.SetProject(defaultProject ?? _appBarProjects[0]);
+        }
+        else if (ProjectState.SelectedProject != null)
+        {
+            var refreshed = _appBarProjects.FirstOrDefault(p => p.ProjectId == ProjectState.SelectedProjectId);
+            if (refreshed != null)
+                ProjectState.SetProject(refreshed);
+        }
+
+        await InvokeAsync(StateHasChanged);
     }
 
     private void SetGlobalProject(Project project)

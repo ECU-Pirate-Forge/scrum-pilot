@@ -54,8 +54,10 @@ namespace ScrumPilot.Data.Context
                 entity.Property(e => e.Status).HasConversion<string>();
                 entity.Property(e => e.Priority).HasConversion<string>();
                 entity.Property(e => e.Origin).HasConversion<string>();
+                entity.Property(e => e.AssignedToUserId).IsRequired(false);
                 entity.Property(e => e.DateCreated).IsRequired();
                 entity.Property(e => e.LastUpdated).IsRequired();
+                entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(e => e.AssignedToUserId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
                 entity.HasOne<Project>().WithMany(p => p.ProductBacklogItems).HasForeignKey(e => e.ProjectId).IsRequired();
                 entity.HasOne<Epic>().WithMany(e => e.ProductBacklogItems).HasForeignKey(e => e.EpicId).IsRequired(false);
                 entity.HasOne<Sprint>().WithMany(e => e.ProductBacklogItems).HasForeignKey(e => e.SprintId).IsRequired(false);

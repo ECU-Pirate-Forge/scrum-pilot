@@ -1,6 +1,7 @@
 @page "/user-settings"
 @inject HttpClient Http
 @inject ScrumPilot.Web.Services.ProjectStateService ProjectState
+@inject NavigationManager Navigation
 
 <MudContainer MaxWidth="MaxWidth.Medium" Class="pa-6">
 
@@ -176,12 +177,20 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var settingsTask = Http.GetFromJsonAsync<UserSettingsDto>("api/user/settings");
-        var projectsTask = Http.GetFromJsonAsync<List<Project>>("api/Project");
-        await Task.WhenAll(settingsTask, projectsTask);
+        try
+        {
+            var settingsTask = Http.GetFromJsonAsync<UserSettingsDto>("api/user/settings");
+            var projectsTask = Http.GetFromJsonAsync<List<Project>>("api/Project");
+            await Task.WhenAll(settingsTask, projectsTask);
 
-        _settings = await settingsTask ?? new();
-        _projects = await projectsTask ?? [];
+            _settings = await settingsTask ?? new();
+            _projects = await projectsTask ?? [];
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            Navigation.NavigateTo("/login", forceLoad: false);
+            return;
+        }
         _loading = false;
     }
 

@@ -109,6 +109,7 @@ using (var scope = app.Services.CreateScope())
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
     await DatabaseSeeder.SeedUsersAsync(userManager, roleManager);
+    await DatabaseSeeder.SeedProjectDataAsync(context);
 }
 
 // Configure the HTTP request pipeline.

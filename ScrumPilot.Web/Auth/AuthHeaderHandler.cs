@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -9,11 +10,13 @@ namespace ScrumPilot.Web.Auth
     {
         private readonly IJSRuntime _js;
         private readonly JwtAuthStateProvider _authStateProvider;
+        private readonly NavigationManager _navigation;
 
-        public AuthHeaderHandler(IJSRuntime js, AuthenticationStateProvider authStateProvider)
+        public AuthHeaderHandler(IJSRuntime js, AuthenticationStateProvider authStateProvider, NavigationManager navigation)
         {
             _js = js;
             _authStateProvider = (JwtAuthStateProvider)authStateProvider;
+            _navigation = navigation;
         }
 
         protected override async Task<HttpResponseMessage> SendAsync(
@@ -26,6 +29,8 @@ namespace ScrumPilot.Web.Auth
                 {
                     await _js.InvokeVoidAsync("localStorage.removeItem", "authToken");
                     _authStateProvider.NotifyAuthChanged(null);
+                    _navigation.NavigateTo("/login");
+                    return new HttpResponseMessage(System.Net.HttpStatusCode.Unauthorized);
                 }
                 else
                 {

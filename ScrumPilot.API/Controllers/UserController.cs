@@ -20,7 +20,7 @@ public class UserController : ControllerBase
         if (userId is null) return Unauthorized();
 
         var dto = await _service.GetSettingsAsync(userId);
-        return dto is null ? NotFound() : Ok(dto);
+        return dto is null ? Unauthorized() : Ok(dto);
     }
 
     [HttpPut("settings")]

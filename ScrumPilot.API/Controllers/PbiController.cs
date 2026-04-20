@@ -103,6 +103,7 @@ namespace ScrumPilot.API.Controllers
         [HttpPost("createStory")]
         public async Task<ActionResult<ProductBacklogItem>> CreatePbi([FromBody] ProductBacklogItem pbi)
         {
+            pbi.Origin = PbiOrigin.WebUserCreated;
             var created = await _pbiService.CreatePbiAsync(pbi);
             return Ok(created);
         }
@@ -127,6 +128,7 @@ namespace ScrumPilot.API.Controllers
             var created = new List<ProductBacklogItem>();
             foreach (var pbi in stories)
             {
+                pbi.Origin = PbiOrigin.AiGenerated;
                 created.Add(await _pbiService.CreatePbiAsync(pbi));
             }
             return Ok(created);
@@ -135,6 +137,7 @@ namespace ScrumPilot.API.Controllers
         [HttpPost("createDraftPbi")]
         public async Task<ActionResult<ProductBacklogItem>> CreateDraftPbi([FromBody] ProductBacklogItem pbi)
         {
+            pbi.Origin = PbiOrigin.WebUserCreated;
             var created = await _pbiService.CreateDraftPbiAsync(pbi);
             return Ok(created);
         }
@@ -145,6 +148,7 @@ namespace ScrumPilot.API.Controllers
             var created = new List<ProductBacklogItem>();
             foreach (var pbi in pbis)
             {
+                pbi.Origin = PbiOrigin.AiGenerated;
                 created.Add(await _pbiService.CreateDraftPbiAsync(pbi));
             }
             return Ok(created);

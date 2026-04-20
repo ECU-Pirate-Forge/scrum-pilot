@@ -15,6 +15,9 @@
         public PbiOrigin Origin { get; set; }
         public bool IsDraft { get; set; }
         public bool IsFlagged { get; set; }
+        public string? AssignedToUserId { get; set; }
+        public string? IssueLink { get; set; }
+        public int? DependsOnPbiId { get; set; }
         public DateTime DateCreated { get; set; }
         public DateTime LastUpdated { get; set; }
         public ICollection<Comment>? Comments { get; set; }
