@@ -54,4 +54,13 @@ public class UserSettingsService : IUserSettingsService
         var result = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
         return (result.Succeeded, result.Errors.Select(e => e.Description));
     }
+
+    public Task<IEnumerable<UserSummaryDto>> GetAllUsersAsync()
+    {
+        var users = _userManager.Users
+            .OrderBy(u => u.UserName)
+            .Select(u => new UserSummaryDto { Id = u.Id, UserName = u.UserName ?? "" })
+            .AsEnumerable();
+        return Task.FromResult(users);
+    }
 }

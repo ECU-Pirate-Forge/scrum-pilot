@@ -1,3 +1,4 @@
+@using ScrumPilot.Shared.Models
 @inject HttpClient Http
 @inject ScrumPilot.Web.Services.ProjectStateService ProjectState
 @implements IDisposable
@@ -18,14 +19,14 @@ else
         </MudAlert>
     }
 
-    <MudStack Row="true" Spacing="2" Class="mb-4">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-4" Style="width: 100%;">
         <MudSelect T="int?"
                    Label="Sprint"
                    Value="@_selectedSprintId"
                    ValueChanged="@(async (int? value) => await OnSprintChanged(value))"
                    Variant="Variant.Outlined"
                    Dense="true"
-                   Style="min-width: 220px;">
+                   Style="flex: 1; min-width: 0;">
             <MudSelectItem T="int?" Value="@((int?)null)">All</MudSelectItem>
             <MudSelectItem T="int?" Value="@((int?)-1)">Unassigned</MudSelectItem>
             @foreach (var sprint in _sprints)
@@ -42,7 +43,7 @@ else
                    ValueChanged="@(async (int? value) => await OnEpicChanged(value))"
                    Variant="Variant.Outlined"
                    Dense="true"
-                   Style="min-width: 220px;">
+                   Style="flex: 1; min-width: 0;">
             <MudSelectItem T="int?" Value="@((int?)null)">All</MudSelectItem>
             @foreach (var epic in _epics)
             {
@@ -51,7 +52,17 @@ else
                 </MudSelectItem>
             }
         </MudSelect>
+
+        <MudTooltip Text="Add new PBI">
+            <MudIconButton Icon="@Icons.Material.Filled.Add"
+                           Color="Color.Success"
+                           Variant="Variant.Outlined"
+                           Size="Size.Medium"
+                           Style="flex-shrink: 0; border-radius: 8px;"
+                           OnClick="OpenNewPbiForm" />
+        </MudTooltip>
     </MudStack>
+
 
     @if (!_items.Any())
     {
@@ -156,6 +167,25 @@ else
     </MudDropContainer>
 }
 
+@if (_showNewPbiForm && _newPbi is not null)
+{
+    <MudOverlay Visible="true" DarkBackground="true" ZIndex="1300" />
+    <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1400; width: min(900px, 95vw); max-height: 90vh; overflow-y: auto; border-radius: 12px;">
+        <MudPaper Elevation="24" Style="border-radius: 12px; overflow: hidden;">
+            <div class="d-flex align-center justify-space-between px-4 py-3"
+                 style="border-bottom: 1px solid var(--mud-palette-divider); background: var(--mud-palette-surface);">
+                <MudText Typo="Typo.h6" Style="font-weight: 600;">New Story</MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="CloseNewPbiForm" />
+            </div>
+            <PbiCard PbiModel="@_newPbi"
+                     StartInEditMode="true"
+                     ProjectId="@_selectedProjectId"
+                     OnSave="HandleNewPbiSaved"
+                     OnCancelNew="CloseNewPbiForm" />
+        </MudPaper>
+    </div>
+}
+
 @code {
     [Parameter] public bool GroupByPriority { get; set; }
     [Parameter] public List<ProductBacklogItem>? Items { get; set; }
@@ -173,11 +203,14 @@ else
     private List<ProductBacklogItem> _items = new();
     private List<Sprint> _sprints = new();
     private List<Epic> _epics = new();
+    private List<UserSummaryDto> _users = new();
     private int? _selectedProjectId;
     private int? _selectedSprintId;
     private int? _selectedEpicId;
     private bool _loading = true;
     private string _errorMessage = string.Empty;
+    private bool _showNewPbiForm = false;
+    private ProductBacklogItem? _newPbi;
 
     protected override async Task OnInitializedAsync()
     {
@@ -270,8 +303,10 @@ else
 
             var sprintsTask = Http.GetFromJsonAsync<List<Sprint>>(sprintUrl);
             var epicsTask   = Http.GetFromJsonAsync<List<Epic>>(epicUrl);
+            var usersTask   = Http.GetFromJsonAsync<List<UserSummaryDto>>("api/user/all");
             _sprints = await sprintsTask ?? new();
             _epics   = await epicsTask   ?? new();
+            _users   = await usersTask   ?? new();
         }
         catch
         {
@@ -418,6 +453,35 @@ else
         }
     }
 
+    private void OpenNewPbiForm()
+    {
+        _newPbi = new ProductBacklogItem
+        {
+            PbiId = 0,
+            ProjectId = _selectedProjectId ?? 0,
+            Title = "",
+            Status = PbiStatus.ToDo,
+            Priority = PbiPriority.Medium,
+            Origin = PbiOrigin.WebUserCreated,
+            DateCreated = DateTime.UtcNow,
+            LastUpdated = DateTime.UtcNow
+        };
+        _showNewPbiForm = true;
+    }
+
+    private void CloseNewPbiForm()
+    {
+        _showNewPbiForm = false;
+        _newPbi = null;
+    }
+
+    private async Task HandleNewPbiSaved(ProductBacklogItem saved)
+    {
+        _showNewPbiForm = false;
+        _newPbi = null;
+        await LoadItemsAsync(showLoading: false);
+    }
+
     private static IReadOnlyList<LaneDefinition> StatusLanes() =>
     [
         new(nameof(PbiStatus.ToDo), "TO DO", "column-todo", "220, 38, 38",
@@ -509,12 +573,14 @@ else
         _ => Color.Default
     };
 
-    private static string GetPbiInitials(ProductBacklogItem story) => story.Origin switch
+    private string GetPbiInitials(ProductBacklogItem story)
     {
-        PbiOrigin.AiGenerated => "AI",
-        PbiOrigin.BotGenerated => "BT",
-        _ => "ST"
-    };
+        if (string.IsNullOrEmpty(story.AssignedToUserId)) return "?";
+        var user = _users.FirstOrDefault(u => u.Id == story.AssignedToUserId);
+        if (user is null) return "?";
+        var name = user.UserName.Trim();
+        return name.Length >= 2 ? name[..2].ToUpper() : name.ToUpper();
+    }
 
     private record LaneDefinition(
         string Identifier,

@@ -33,6 +33,13 @@ public class UserController : ControllerBase
         return success ? NoContent() : BadRequest("Failed to update settings.");
     }
 
+    [HttpGet("all")]
+    public async Task<ActionResult<IEnumerable<UserSummaryDto>>> GetAllUsers()
+    {
+        var users = await _service.GetAllUsersAsync();
+        return Ok(users);
+    }
+
     [HttpPost("change-password")]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
     {
