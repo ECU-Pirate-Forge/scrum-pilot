@@ -7,5 +7,6 @@ namespace ScrumPilot.Data.Models
     {
         public string? DiscordUsername { get; set; }
         public UiPreference UiPreference { get; set; } = UiPreference.Light;
+        public int? DefaultProjectId { get; set; }
     }
 }

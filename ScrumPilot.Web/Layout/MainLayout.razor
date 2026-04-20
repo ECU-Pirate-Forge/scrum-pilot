@@ -56,6 +56,10 @@
                        Color="Color.Inherit"
                        OnClick="@ToggleDarkMode"
                        Title="Toggle dark mode" />
+        <MudIconButton Icon="@Icons.Material.Filled.Person"
+                       Color="Color.Inherit"
+                       Href="/user-settings"
+                       Title="User settings" />
         <MudIconButton Icon="@Icons.Material.Filled.Logout"
                        Color="Color.Inherit"
                        OnClick="@HandleLogout"
@@ -79,6 +83,7 @@
 @code {
     private bool _drawerOpen = true;
     private bool _isDarkMode = false;
+    private bool _userPreferenceLoaded = false;
     private MudThemeProvider? _mudThemeProvider;
     private List<Project> _appBarProjects = new();
 
@@ -129,7 +134,7 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && _mudThemeProvider is not null)
+        if (firstRender && _mudThemeProvider is not null && !_userPreferenceLoaded)
         {
             _isDarkMode = await _mudThemeProvider.GetSystemDarkModeAsync();
             StateHasChanged();
@@ -158,12 +163,28 @@
     {
         try
         {
-            _appBarProjects = await Http.GetFromJsonAsync<List<Project>>("api/project") ?? new();
+            var projectsTask = Http.GetFromJsonAsync<List<Project>>("api/project");
+            var settingsTask = Http.GetFromJsonAsync<UserSettingsDto>("api/user/settings");
+            await Task.WhenAll(projectsTask, settingsTask);
+
+            _appBarProjects = await projectsTask ?? new();
+            var settings = await settingsTask;
+
+            if (settings is not null)
+            {
+                _isDarkMode = settings.UiPreference == UiPreference.Dark;
+                _userPreferenceLoaded = true;
+            }
+
             if (ProjectState.SelectedProject == null && _appBarProjects.Count > 0)
-                ProjectState.SetProject(_appBarProjects[0]);
+            {
+                var defaultProject = settings?.DefaultProjectId.HasValue == true
+                    ? _appBarProjects.FirstOrDefault(p => p.ProjectId == settings.DefaultProjectId.Value)
+                    : null;
+                ProjectState.SetProject(defaultProject ?? _appBarProjects[0]);
+            }
             else if (ProjectState.SelectedProject != null)
             {
-                // Sync in case the selected project was renamed/updated
                 var refreshed = _appBarProjects.FirstOrDefault(p => p.ProjectId == ProjectState.SelectedProjectId);
                 if (refreshed != null)
                     ProjectState.SetProject(refreshed);
