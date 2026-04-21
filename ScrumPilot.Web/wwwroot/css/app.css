@@ -36,6 +36,11 @@ html, body {
         0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
+
+.mud-drawer .mud-tertiary-text {
+    color: #FF8A65 !important;
+}
+
 .dashboard-tile {
     cursor: pointer;
     border-radius: 12px;
@@ -154,8 +159,6 @@ a {
 }
 
     .loading-progress-text:after {
-        content: "Loading...";
-    }
         content: var(--blazor-load-percentage-text, "Loading");
     }
 
