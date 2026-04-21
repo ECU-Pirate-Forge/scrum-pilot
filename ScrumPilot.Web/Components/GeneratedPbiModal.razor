@@ -66,17 +66,20 @@
     [Parameter]
     public List<ProductBacklogItem> Stories { get; set; } = new();
 
+    [Parameter]
+    public int? ProjectId { get; set; }
+
     private int _currentStoryIndex = 0;
     private bool _isCommitting = false;
 
     private async Task CommitAllAsDrafts()
     {
-        await CommitStories("api/story/createDraftStories", "Stories saved as drafts.");
+        await CommitStories("api/Pbi/createDraftPbis", "Stories saved as drafts.");
     }
 
     private async Task CommitAllToBacklog()
     {
-        await CommitStories("api/story/createStories", "Stories committed to backlog.");
+        await CommitStories("api/Pbi/createStories", "Stories committed to backlog.");
     }
 
     private async Task CommitStories(string endpoint, string successMessage)
@@ -84,6 +87,12 @@
         _isCommitting = true;
         try
         {
+            if (ProjectId.HasValue)
+            {
+                foreach (var story in Stories)
+                    story.ProjectId = ProjectId.Value;
+            }
+
             var json = JsonSerializer.Serialize(Stories);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
             var response = await Http.PostAsync(endpoint, content);

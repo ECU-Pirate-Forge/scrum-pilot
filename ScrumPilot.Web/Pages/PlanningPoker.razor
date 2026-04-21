@@ -51,6 +51,30 @@
             @if (_selectedPbi != null)
             {
                 <PbiCard PbiModel="_selectedPbi" ProjectId="@ProjectState.SelectedProjectId" OnSave="HandlePbiSave" OnDelete="HandlePbiDelete" />
+
+                <div class="pp-suggest-wrap">
+                    <span class="pp-suggest-label">Suggested Points</span>
+                    <div class="pp-suggest-counter">
+                        <div class="pp-suggest-stepper">
+                            <MudIconButton Icon="@Icons.Material.Filled.KeyboardArrowUp"
+                                           Size="Size.Small"
+                                           OnClick="IncreaseSuggested"
+                                           Disabled="@(!_revealed || _suggestedPointIndex >= ValidPoints.Length - 1)" />
+                            <span class="pp-suggest-value">@SuggestedDisplay</span>
+                            <MudIconButton Icon="@Icons.Material.Filled.KeyboardArrowDown"
+                                           Size="Size.Small"
+                                           OnClick="DecreaseSuggested"
+                                           Disabled="@(!_revealed || _suggestedPointIndex <= 0)" />
+                        </div>
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   Size="Size.Medium"
+                                   Disabled="@(!_revealed || _suggestedPointIndex < 0 || _pointsCommitting)"
+                                   OnClick="CommitSuggestedPoints">
+                            @(_pointsCommitting ? "Saving..." : "Commit")
+                        </MudButton>
+                    </div>
+                </div>
             }
             else
             {
@@ -186,6 +210,7 @@
 
 @code {
     private static readonly int[] PointValues = [1, 2, 3, 5, 8, 13, 21, -1];
+    private static readonly int[] ValidPoints = [0, 1, 2, 3, 5, 8, 13, 21];
 
     private HubConnection? _hub;
     private List<ProductBacklogItem>? _unassignedPbis;
@@ -197,6 +222,10 @@
     private string _myConnectionId = "";
     private string _myDisplayName = "Anonymous";
     private string _connectionStatus = "Connecting...";
+
+    private int _suggestedPointIndex = -1;
+    private bool _pointsCommitting = false;
+    private string SuggestedDisplay => _suggestedPointIndex < 0 ? "-" : ValidPoints[_suggestedPointIndex].ToString();
 
     private bool _isConnected => _hub?.State == HubConnectionState.Connected;
 
@@ -287,12 +316,14 @@
         _hub.On<PokerSessionState>("CardsRevealed", state =>
         {
             ApplySessionState(state);
+            ComputeSuggestedPoints();
             InvokeAsync(StateHasChanged);
         });
 
         _hub.On<PokerSessionState>("PbiSelected", state =>
         {
             ApplySessionState(state);
+            _suggestedPointIndex = -1;
             if (state.CurrentPbiId.HasValue)
                 _selectedPbi = _unassignedPbis?.FirstOrDefault(p => p.PbiId == state.CurrentPbiId);
             InvokeAsync(StateHasChanged);
@@ -302,6 +333,7 @@
         {
             ApplySessionState(state);
             _myVote = null;
+            _suggestedPointIndex = -1;
             InvokeAsync(StateHasChanged);
         });
 
@@ -350,6 +382,7 @@
         _currentPbiId = pbi.PbiId;
         _revealed = false;
         _myVote = null;
+        _suggestedPointIndex = -1;
         foreach (var p in _participants) { p.HasVoted = false; p.Points = null; }
         if (_isConnected)
             await _hub!.SendAsync("SelectPbi", pbi.PbiId);
@@ -395,6 +428,52 @@
         await LoadUnassignedPbisAsync();
         if (_isConnected)
             await _hub!.SendAsync("SelectPbi", (int?)null);
+    }
+
+    private void ComputeSuggestedPoints()
+    {
+        var validVotes = _participants
+            .Where(p => p.HasVoted && p.Points.HasValue && p.Points.Value > 0)
+            .Select(p => p.Points!.Value)
+            .ToList();
+
+        int target = validVotes.Count > 0
+            ? (int)Math.Round(validVotes.Average())
+            : 0;
+
+        int nearest = ValidPoints.MinBy(v => Math.Abs(v - target));
+        _suggestedPointIndex = Array.IndexOf(ValidPoints, nearest);
+        if (_suggestedPointIndex < 0) _suggestedPointIndex = 0;
+    }
+
+    private void IncreaseSuggested()
+    {
+        if (_suggestedPointIndex < ValidPoints.Length - 1)
+            _suggestedPointIndex++;
+    }
+
+    private void DecreaseSuggested()
+    {
+        if (_suggestedPointIndex > 0)
+            _suggestedPointIndex--;
+    }
+
+    private async Task CommitSuggestedPoints()
+    {
+        if (_selectedPbi == null || _suggestedPointIndex < 0) return;
+        _pointsCommitting = true;
+        try
+        {
+            _selectedPbi.StoryPoints = (PbiPoints)ValidPoints[_suggestedPointIndex];
+            var response = await Http.PutAsJsonAsync("api/Pbi", _selectedPbi);
+            if (response.IsSuccessStatusCode)
+                await LoadUnassignedPbisAsync();
+        }
+        catch { }
+        finally
+        {
+            _pointsCommitting = false;
+        }
     }
 
     private static string DisplayPoints(int? points) => points switch

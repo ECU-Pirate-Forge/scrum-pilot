@@ -155,6 +155,50 @@
     box-shadow: 0 4px 12px rgba(25, 118, 210, 0.4);
 }
 
+/* ── Suggested points counter ────────────────────────────── */
+.pp-suggest-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 12px;
+    padding: 14px 20px;
+    background: var(--mud-palette-background-grey);
+    border-radius: 12px;
+    border: 1px solid var(--mud-palette-divider);
+}
+
+.pp-suggest-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--mud-palette-text-secondary);
+    margin-bottom: 10px;
+}
+
+.pp-suggest-counter {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.pp-suggest-stepper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.pp-suggest-value {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: var(--mud-palette-primary);
+    min-width: 3rem;
+    text-align: center;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
 /* ── Team participant cards ──────────────────────────────── */
 .pp-team-row {
     display: flex;

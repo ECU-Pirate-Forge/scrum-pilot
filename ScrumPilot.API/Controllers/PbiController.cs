@@ -123,10 +123,10 @@ namespace ScrumPilot.API.Controllers
         }
 
         [HttpPost("createStories")]
-        public async Task<ActionResult<List<ProductBacklogItem>>> CreateStories([FromBody] List<ProductBacklogItem> stories)
+        public async Task<ActionResult<List<ProductBacklogItem>>> CreatePbis([FromBody] List<ProductBacklogItem> pbis)
         {
             var created = new List<ProductBacklogItem>();
-            foreach (var pbi in stories)
+            foreach (var pbi in pbis)
             {
                 pbi.Origin = PbiOrigin.AiGenerated;
                 created.Add(await _pbiService.CreatePbiAsync(pbi));
