@@ -61,6 +61,17 @@ else
                            Style="flex-shrink: 0; border-radius: 8px;"
                            OnClick="OpenNewPbiForm" />
         </MudTooltip>
+        @if (ShowDependencyChart)
+        {
+            <MudTooltip Text="Dependency Chart">
+                <MudIconButton Icon="@Icons.Material.Filled.AccountTree"
+                               Color="Color.Secondary"
+                               Variant="Variant.Outlined"
+                               Size="Size.Medium"
+                               Style="flex-shrink: 0; border-radius: 8px;"
+                               OnClick="@(() => OnDependencyChartRequested.InvokeAsync())" />
+            </MudTooltip>
+        }
     </MudStack>
 
 
@@ -117,6 +128,14 @@ else
                                 {
                                     <MudTooltip Text="Unpointed">
                                         <MudIcon Icon="@Icons.Material.Filled.ErrorOutline"
+                                                 Color="Color.Error"
+                                                 Size="Size.Small" />
+                                    </MudTooltip>
+                                }
+                                @if (context.IsFlagged)
+                                {
+                                    <MudTooltip Text="Flagged">
+                                        <MudIcon Icon="@Icons.Material.Filled.Flag"
                                                  Color="Color.Error"
                                                  Size="Size.Small" />
                                     </MudTooltip>
@@ -194,6 +213,10 @@ else
     [Parameter] public int? InitialSprintId { get; set; }
     /// <summary>When true, automatically selects the sprint with the most recent start date on first load.</summary>
     [Parameter] public bool DefaultToLatestSprint { get; set; }
+    /// <summary>When true, shows the Dependency Chart icon button in the toolbar.</summary>
+    [Parameter] public bool ShowDependencyChart { get; set; }
+    /// <summary>Raised when the user clicks the Dependency Chart button.</summary>
+    [Parameter] public EventCallback OnDependencyChartRequested { get; set; }
 
     private MudDropContainer<ProductBacklogItem>? _dropContainer;
     private bool _needsRefresh;
@@ -293,6 +316,9 @@ else
         await LoadItemsAsync(showLoading: false);
         StateHasChanged();
     }
+
+    public IReadOnlyList<ProductBacklogItem> CurrentItems => _items;
+    public int? CurrentSprintId => _selectedSprintId;
 
     private async Task LoadDropdownsAsync()
     {

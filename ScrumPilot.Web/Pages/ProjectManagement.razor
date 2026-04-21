@@ -202,9 +202,10 @@
                             </MudText>
                         }
 
-                        <MudStack Spacing="2">
-                            @foreach (var sprint in _sprints)
-                            {
+                        <div style="overflow-y: auto; max-height: 55vh;">
+                            <MudStack Spacing="2">
+                                @foreach (var sprint in _sprints)
+                                {
                                 var isSelected = _selectedSprintId == sprint.SprintId;
                                 var isHovered = _hoveredSprintId == sprint.SprintId;
                                 var sprintStyle = isSelected
@@ -286,10 +287,11 @@
                                     }
                                 </MudPaper>
                             }
-                        </MudStack>
-                    </MudTabPanel>
+                                </MudStack>
+                            </div>
+                        </MudTabPanel>
 
-                    <!-- EPICS TAB -->
+                        <!-- EPICS TAB -->
                     <MudTabPanel Text="Epics" Icon="@Icons.Material.Filled.Bookmark">
                         <div class="d-flex justify-end mb-3">
                             <MudButton StartIcon="@Icons.Material.Filled.Add"
@@ -328,9 +330,10 @@
                             </MudText>
                         }
 
-                        <MudStack Spacing="2">
-                            @foreach (var epic in _epics)
-                            {
+                        <div style="overflow-y: auto; max-height: 55vh;">
+                            <MudStack Spacing="2">
+                                @foreach (var epic in _epics)
+                                {
                                 <MudPaper Class="pa-3" Elevation="1" Style="border-radius: 8px;">
                                     @if (_editingEpicId == epic.EpicId)
                                     {
@@ -363,10 +366,11 @@
                                     }
                                 </MudPaper>
                             }
-                        </MudStack>
-                    </MudTabPanel>
+                                </MudStack>
+                            </div>
+                        </MudTabPanel>
 
-                    <!-- PBIS TAB -->
+                        <!-- PBIS TAB -->
                     <MudTabPanel Text="PBIs" Icon="@Icons.Material.Filled.AutoStories">
                         <!-- Filter row -->
                         <div class="d-flex flex-wrap gap-3 align-center mb-4">

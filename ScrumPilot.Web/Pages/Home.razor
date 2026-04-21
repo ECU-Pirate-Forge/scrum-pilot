@@ -1,13 +1,11 @@
 @page "/"
 @using MudBlazor
+@using System.Security.Claims
+@inject AuthenticationStateProvider AuthState
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
 
-    <MudText Typo="Typo.h4">Scrum Pilot Dashboard</MudText>
-
-    <MudText Typo="Typo.body1" Class="mb-4">
-        Quick access to core Scrum Pilot workflows.
-    </MudText>
+    <MudText Typo="Typo.h4" Class="mb-6">Welcome back to ScrumPilot, @_userName!</MudText>
 
     <MudGrid Spacing="4">
 
@@ -70,7 +68,7 @@
                 Title="Manage Project"
                 Description="Create and manage projects, sprints, epics, and PBIs."
                 Href="/project-management"
-                Icon="@Icons.Material.Filled.AccountTree"
+                Icon="@Icons.Material.Filled.BusinessCenter"
                 IconColor="#FF8A65" />
         </MudItem>
 
@@ -86,3 +84,16 @@
     </MudGrid>
 
 </MudContainer>
+
+@code {
+    private string _userName = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthState.GetAuthenticationStateAsync();
+        _userName = authState.User.FindFirst(ClaimTypes.Name)?.Value
+                 ?? authState.User.FindFirst("unique_name")?.Value
+                 ?? authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                 ?? "there";
+    }
+}

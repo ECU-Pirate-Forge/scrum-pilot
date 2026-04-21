@@ -68,9 +68,55 @@
                                     <span>Improve with AI</span>
                                 }
                             </MudButton>
+                            <MudTooltip Text="@(PbiModel?.IsFlagged == true ? "Remove flag" : "Flag this PBI")">
+                                <MudIconButton Icon="@Icons.Material.Filled.Flag"
+                                               Color="@(PbiModel?.IsFlagged == true ? Color.Error : Color.Default)"
+                                               Variant="Variant.Outlined"
+                                               Size="Size.Medium"
+                                               OnClick="HandleFlagClick" />
+                            </MudTooltip>
                         </div>
                     }
                 </div>
+
+                <!-- FLAG REASON DIALOG -->
+                @if (showFlagDialog)
+                {
+                    <MudAlert Severity="@(_isUnflagging ? Severity.Info : Severity.Warning)" Class="mb-3">
+                        <div class="d-flex flex-column gap-2">
+                            <MudText>
+                                @if (_isUnflagging)
+                                {
+                                    <span>🏳️ Why are you removing the flag from <strong>@PbiModel?.Title</strong>? This will be posted as a comment.</span>
+                                }
+                                else
+                                {
+                                    <span>🚩 Why are you flagging <strong>@PbiModel?.Title</strong>? This will be posted as a comment.</span>
+                                }
+                            </MudText>
+                            <MudTextField @bind-Value="flagReason"
+                                          Label="Reason (required)"
+                                          Variant="Variant.Outlined"
+                                          Lines="2"
+                                          Error="@flagReasonError"
+                                          ErrorText="Please provide a reason." />
+                            <div class="d-flex gap-2">
+                                <MudButton Variant="Variant.Filled"
+                                           Color="@(_isUnflagging ? Color.Info : Color.Error)"
+                                           Size="Size.Small"
+                                           OnClick="ConfirmFlag">
+                                    @(_isUnflagging ? "Remove Flag" : "Flag It")
+                                </MudButton>
+                                <MudButton Variant="Variant.Outlined"
+                                           Color="Color.Default"
+                                           Size="Size.Small"
+                                           OnClick="@(() => { showFlagDialog = false; flagReason = ""; flagReasonError = false; _isUnflagging = false; })">
+                                    Cancel
+                                </MudButton>
+                            </div>
+                        </div>
+                    </MudAlert>
+                }
 
                 <!-- DELETE CONFIRMATION -->
                 @if (showDeleteConfirm)
@@ -413,6 +459,7 @@
                                                  SearchFunc="SearchDependencies"
                                                  ToStringFunc="DependencyToString"
                                                  Clearable="true"
+                                                 MaxItems="null"
                                                  Adornment="Adornment.Start"
                                                  AdornmentIcon="@Icons.Material.Filled.AccountTree" />
                             }
@@ -513,6 +560,13 @@ else
     private bool isImproving = false;
     private bool isAiSuggestion = false;
 
+    // Flag state
+    private bool showFlagDialog = false;
+    private string flagReason = "";
+    private bool flagReasonError = false;
+    private bool _isUnflagging = false;
+    private string? _currentUserName;
+
     // Edit field values
     private string editTitle = "";
     private string editDescription = "";
@@ -537,6 +591,9 @@ else
     {
         var authState = await AuthState.GetAuthenticationStateAsync();
         _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        _currentUserName = authState.User.FindFirst(ClaimTypes.Name)?.Value
+                        ?? authState.User.FindFirst("unique_name")?.Value
+                        ?? _currentUserId;
         await Task.WhenAll(LoadEpics(), LoadSprints(), LoadUsers(), LoadProjectPbis());
         if (StartInEditMode && PbiModel != null)
             StartEdit();
@@ -600,7 +657,11 @@ else
 
     private async Task<IEnumerable<ProductBacklogItem>> SearchDependencies(string text, CancellationToken ct)
     {
+        // Scope to the same sprint so the list stays relevant; fall back to all project PBIs if unassigned
         var candidates = projectPbis.Where(p => p.PbiId != PbiModel?.PbiId);
+        if (PbiModel?.SprintId.HasValue == true)
+            candidates = candidates.Where(p => p.SprintId == PbiModel.SprintId);
+
         if (string.IsNullOrWhiteSpace(text)) return candidates;
         return candidates.Where(p => p.Title.Contains(text, StringComparison.OrdinalIgnoreCase));
     }
@@ -632,6 +693,53 @@ else
     private void CancelDelete()
     {
         showDeleteConfirm = false;
+    }
+
+    private void HandleFlagClick()
+    {
+        if (PbiModel == null) return;
+        flagReason = "";
+        flagReasonError = false;
+        _isUnflagging = PbiModel.IsFlagged;
+        showFlagDialog = true;
+    }
+
+    private async Task ConfirmFlag()
+    {
+        if (string.IsNullOrWhiteSpace(flagReason))
+        {
+            flagReasonError = true;
+            return;
+        }
+        if (PbiModel == null) return;
+
+        flagReasonError = false;
+        showFlagDialog = false;
+
+        PbiModel.IsFlagged = !_isUnflagging;
+        PbiModel.LastUpdated = DateTime.Now;
+
+        try { await Http.PutAsJsonAsync("api/Pbi", PbiModel); }
+        catch { }
+
+        var emoji = _isUnflagging ? "🏳️ Flag removed" : "🚩 Flagged";
+        try
+        {
+            var comment = new Comment
+            {
+                PbiId = PbiModel.PbiId,
+                UserId = _currentUserName ?? _currentUserId ?? "unknown",
+                Body = $"{emoji}: {flagReason.Trim()}",
+                CreatedDate = DateTime.UtcNow
+            };
+            await Http.PostAsJsonAsync("api/comments", comment);
+        }
+        catch { }
+
+        _isUnflagging = false;
+        flagReason = "";
+        if (OnSave.HasDelegate)
+            await OnSave.InvokeAsync(PbiModel);
     }
 
     private async Task DeleteStory()

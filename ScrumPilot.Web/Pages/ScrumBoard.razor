@@ -1,11 +1,14 @@
 @page "/scrum-board"
 @inject HttpClient Http
 @inject ScrumPilot.Web.Services.ProjectStateService ProjectState
+@inject NavigationManager Nav
 
 <div class="swimlane-page">
     <MudContainer MaxWidth="MaxWidth.False" Class="pa-0">
         <SwimLanes @ref="_swimLanes"
                    DefaultToLatestSprint
+                   ShowDependencyChart
+                   OnDependencyChartRequested="OpenDependencyChart"
                    OnPbiSelected="OpenPbiDetails" />
     </MudContainer>
 
@@ -36,13 +39,23 @@
             </div>
         </div>
     }
-</div>
+
+    </div>
 
 @code {
     private SwimLanes? _swimLanes;
     private ProductBacklogItem? SelectedPbi;
 
     private void OpenPbiDetails(ProductBacklogItem pbi) => SelectedPbi = pbi;
+
+    private void OpenDependencyChart()
+    {
+        var sprintId = _swimLanes?.CurrentSprintId;
+        var url = sprintId.HasValue
+            ? $"/dependency-chart?sprintId={sprintId.Value}"
+            : "/dependency-chart";
+        Nav.NavigateTo(url);
+    }
 
     private async Task ClosePbiDetails()
     {
