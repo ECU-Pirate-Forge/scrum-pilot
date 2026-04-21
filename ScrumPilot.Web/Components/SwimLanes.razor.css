@@ -44,7 +44,7 @@
 
 /* Swimlane dropzone styling - FULL AREA COVERAGE */
 .swimlane-dropzone {
-    min-height: 500px !important;
+    min-height: clamp(300px, 55vh, 500px) !important;
     height: 100% !important;
     padding: 16px !important;
     flex: 1 !important;

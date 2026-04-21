@@ -19,7 +19,7 @@
 /* Story details modal overlay with enhanced floating appearance */
 .details-overlay {
     position: fixed;
-    top: 0;
+    top: var(--mud-appbar-height, 64px);
     left: 0;
     right: 0;
     bottom: 0;
@@ -37,9 +37,9 @@
     border: 3px solid var(--mud-palette-lines-default);
     border-radius: 16px;
     box-shadow: 0 24px 48px rgba(0, 0, 0, 0.3), 0 12px 24px rgba(0, 0, 0, 0.2);
-    max-width: 90vw;
-    width: 1200px;
-    max-height: 90vh;
+    max-width: min(1200px, 96vw);
+    width: 100%;
+    max-height: calc(100vh - var(--mud-appbar-height, 64px) - 32px);
     display: flex;
     flex-direction: column;
     animation: slideInUp 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
@@ -88,6 +88,13 @@
     flex: 1;
     min-width: 0;
     overflow-y: auto;
+}
+
+/* Compact header on short viewports */
+@media (max-height: 850px) {
+    .details-header {
+        padding: 14px 20px;
+    }
 }
 
 /* Responsive design for modal */
