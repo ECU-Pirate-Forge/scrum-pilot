@@ -16,7 +16,7 @@
             <div class="stat-label">Committed</div>
             @if (_issueCount > 0)
             {
-                <MudText Typo="Typo.caption" Style="color: #8b949e; margin-top: 8px;">
+                <MudText Typo="Typo.caption" Class="stat-caption" Style="margin-top: 8px;">
                     across @_issueCount issue@(_issueCount == 1 ? "" : "s")
                 </MudText>
             }

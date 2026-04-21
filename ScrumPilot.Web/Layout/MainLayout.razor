@@ -75,7 +75,9 @@
 
     <MudMainContent>
         <div class="content px-4">
-            @Body
+            <CascadingValue Value="_isDarkMode" Name="IsDarkMode">
+                @Body
+            </CascadingValue>
         </div>
     </MudMainContent>
 </MudLayout>
@@ -94,34 +96,38 @@
             Primary = "#1b6ec2",
             AppbarBackground = "#1b6ec2",
             Surface = "#ffffff",
-            Background = "#ffffff",
+            Background = "#f5f7fa",
             TextPrimary = "#212529",
-            TextSecondary = "#666666"
+            TextSecondary = "#64748b",
+            Divider = "rgba(0,0,0,0.12)",
+            LinesDefault = "rgba(0,0,0,0.08)",
+            TableLines = "rgba(0,0,0,0.12)",
+            TableStriped = "rgba(0,0,0,0.03)",
         },
         PaletteDark = new PaletteDark()
         {
             Primary = "#1b6ec2",
             Secondary = "#f48fb1",
             AppbarBackground = "#1a1a1a",
-            Surface = "#2d2d30",
-            Background = "#1e1e1e",
-            TextPrimary = "#ffffff",
-            TextSecondary = "#e0e0e0",
-            TextDisabled = "#9e9e9e",
-            ActionDefault = "#e0e0e0",
-            ActionDisabled = "#757575",
-            Divider = "rgba(255, 255, 255, 0.2)",
-            DividerLight = "rgba(255, 255, 255, 0.1)",
-            TableLines = "rgba(255, 255, 255, 0.2)",
-            LinesDefault = "rgba(255, 255, 255, 0.2)",
-            LinesInputs = "rgba(255, 255, 255, 0.4)",
-            TableStriped = "rgba(255, 255, 255, 0.05)",
-            HoverOpacity = 0.1,
-            GrayDefault = "#424242",
-            GrayLight = "#616161",
-            GrayLighter = "#757575",
-            GrayDark = "#303030",
-            GrayDarker = "#212121"
+            Surface = "#161b22",
+            Background = "#0d1117",
+            TextPrimary = "#e6edf3",
+            TextSecondary = "#8b949e",
+            TextDisabled = "#484f58",
+            ActionDefault = "#e6edf3",
+            ActionDisabled = "#484f58",
+            Divider = "#21262d",
+            DividerLight = "#21262d",
+            TableLines = "#21262d",
+            LinesDefault = "#21262d",
+            LinesInputs = "#30363d",
+            TableStriped = "#1c2128",
+            HoverOpacity = 0.07,
+            GrayDefault = "#30363d",
+            GrayLight = "#484f58",
+            GrayLighter = "#6e7681",
+            GrayDark = "#21262d",
+            GrayDarker = "#161b22"
         }
     };
 

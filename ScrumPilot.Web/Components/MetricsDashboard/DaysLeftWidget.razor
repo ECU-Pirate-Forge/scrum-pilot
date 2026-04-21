@@ -10,7 +10,7 @@
             {
                 <MudProgressLinear Value="@_progressPct" Color="MudBlazor.Color.Primary"
                     Style="margin-top: 12px; border-radius: 4px;" Size="MudBlazor.Size.Small" />
-                <MudText Typo="Typo.caption" Style="color: #8b949e; margin-top: 4px;">
+                <MudText Typo="Typo.caption" Class="stat-caption" Style="margin-top: 4px;">
                     @(_totalDays - _daysLeft) of @_totalDays days elapsed
                 </MudText>
             }

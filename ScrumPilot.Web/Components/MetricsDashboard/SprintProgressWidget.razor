@@ -10,8 +10,8 @@
         <div style="padding: 8px 0;">
             <div class="progress-row">
                 <div class="progress-label">
-                    <MudText Typo="Typo.caption" Style="color: #8b949e;">Committed</MudText>
-                    <MudText Typo="Typo.body2" Style="color: #e6edf3; font-weight: 600;">@_data.CommittedPoints.ToString("0") SP</MudText>
+                    <MudText Typo="Typo.caption" Class="stat-caption">Committed</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight: 600;">@_data.CommittedPoints.ToString("0") SP</MudText>
                 </div>
                 <div class="progress-bar-wrap">
                     <div class="progress-bar-bg">
@@ -22,8 +22,8 @@
 
             <div class="progress-row" style="margin-top: 16px;">
                 <div class="progress-label">
-                    <MudText Typo="Typo.caption" Style="color: #8b949e;">Completed</MudText>
-                    <MudText Typo="Typo.body2" Style="color: #e6edf3; font-weight: 600;">@_data.CompletedPoints.ToString("0") SP</MudText>
+                    <MudText Typo="Typo.caption" Class="stat-caption">Completed</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight: 600;">@_data.CompletedPoints.ToString("0") SP</MudText>
                 </div>
                 <div class="progress-bar-wrap">
                     <div class="progress-bar-bg">
@@ -34,16 +34,16 @@
 
             <div style="display: flex; gap: 24px; margin-top: 16px;">
                 <div>
-                    <MudText Typo="Typo.caption" Style="color: #8b949e;">Issues Committed</MudText>
-                    <MudText Typo="Typo.body1" Style="color: #e6edf3; font-weight: 600;">@_data.CommittedCount</MudText>
+                    <MudText Typo="Typo.caption" Class="stat-caption">Issues Committed</MudText>
+                    <MudText Typo="Typo.body1" Style="font-weight: 600;">@_data.CommittedCount</MudText>
                 </div>
                 <div>
-                    <MudText Typo="Typo.caption" Style="color: #8b949e;">Issues Completed</MudText>
-                    <MudText Typo="Typo.body1" Style="color: #e6edf3; font-weight: 600;">@_data.CompletedCount</MudText>
+                    <MudText Typo="Typo.caption" Class="stat-caption">Issues Completed</MudText>
+                    <MudText Typo="Typo.body1" Style="font-weight: 600;">@_data.CompletedCount</MudText>
                 </div>
                 <div>
-                    <MudText Typo="Typo.caption" Style="color: #8b949e;">Completion</MudText>
-                    <MudText Typo="Typo.body1" Style="color: #e6edf3; font-weight: 600;">@_completedPct.ToString("0")%</MudText>
+                    <MudText Typo="Typo.caption" Class="stat-caption">Completion</MudText>
+                    <MudText Typo="Typo.body1" Style="font-weight: 600;">@_completedPct.ToString("0")%</MudText>
                 </div>
             </div>
         </div>
