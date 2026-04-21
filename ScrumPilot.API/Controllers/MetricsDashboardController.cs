@@ -31,8 +31,8 @@ public class MetricsDashboardController : ControllerBase
         => Ok(await _svc.GetBurndownDataAsync(sprintId));
 
     [HttpGet("velocity")]
-    public async Task<ActionResult<List<VelocityPoint>>> GetVelocity([FromQuery] int? sprintId = null)
-        => Ok(await _svc.GetVelocityDataAsync(sprintId));
+    public async Task<ActionResult<List<VelocityPoint>>> GetVelocity([FromQuery] int? sprintId = null, [FromQuery] int? projectId = null)
+        => Ok(await _svc.GetVelocityDataAsync(sprintId, projectId));
 
     [HttpGet("wip/{sprintId:int}")]
     public async Task<ActionResult<List<WipItem>>> GetWip(int sprintId)

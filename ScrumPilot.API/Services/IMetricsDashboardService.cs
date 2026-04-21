@@ -7,7 +7,7 @@ public interface IMetricsDashboardService
     Task<SprintSummaryDto?> GetSprintSummaryAsync(int sprintId);
     Task<SprintProgressDto> GetSprintProgressAsync(int sprintId);
     Task<List<BurndownPoint>> GetBurndownDataAsync(int sprintId);
-    Task<List<VelocityPoint>> GetVelocityDataAsync(int? currentSprintId = null);
+    Task<List<VelocityPoint>> GetVelocityDataAsync(int? currentSprintId = null, int? projectId = null);
     Task<List<WipItem>> GetWipItemsAsync(int sprintId);
     Task<List<BugTrendPoint>> GetBugTrendAsync(int sprintId);
     Task<List<CycleTimePoint>> GetCycleTimeDataAsync(int sprintId);

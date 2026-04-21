@@ -157,7 +157,7 @@
             {
                 <div class="grid-stack-item" gs-id="velocity" gs-x="0" gs-y="7" gs-w="6" gs-h="4">
                     <div class="grid-stack-item-content">
-                        <VelocityWidget SprintId="_selectedSprintId" />
+                        <VelocityWidget SprintId="_selectedSprintId" ProjectId="_selectedProjectId" />
                     </div>
                 </div>
             }
@@ -327,7 +327,7 @@
                 .FirstOrDefault();
             _selectedSprintId = mostRecent?.SprintId;
             _selectedSprint = mostRecent;
-            _pbis = await MetricsSvc.GetPbisForSprintAsync(_selectedSprintId);
+            _pbis = await MetricsSvc.GetPbisForSprintAsync(_selectedSprintId, projectId);
 
             _widgetPrefs = DefaultLayout();
             var saved = await MetricsSvc.GetDashboardPreferencesAsync(projectId.Value);
@@ -363,7 +363,7 @@
         _selectedSprint = sprintId.HasValue
             ? _sprints.FirstOrDefault(s => s.SprintId == sprintId.Value)
             : null;
-        try { _pbis = await MetricsSvc.GetPbisForSprintAsync(sprintId); } catch { _pbis = []; }
+        try { _pbis = await MetricsSvc.GetPbisForSprintAsync(sprintId, _selectedProjectId); } catch { _pbis = []; }
     }
 
     private void ToggleSettings() => _settingsOpen = !_settingsOpen;

@@ -209,6 +209,12 @@ code {
     overflow: auto;
 }
 
+.widget-body .mud-chart {
+    flex: 1;
+    min-height: 0;
+    height: 100%;
+}
+
 .widget-loading,
 .widget-error {
     flex: 1;

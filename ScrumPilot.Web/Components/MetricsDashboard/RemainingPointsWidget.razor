@@ -5,6 +5,10 @@
     {
         <div class="widget-center"><MudProgressCircular Indeterminate="true" Size="MudBlazor.Size.Small" Color="MudBlazor.Color.Primary" /></div>
     }
+    else if (!SprintId.HasValue)
+    {
+        <div class="widget-empty">No sprint selected</div>
+    }
     else
     {
         <div class="stat-card-content" style="align-items: center; text-align: center;">
