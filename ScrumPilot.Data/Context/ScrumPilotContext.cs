@@ -128,6 +128,11 @@ namespace ScrumPilot.Data.Context
                 entity.Property(e => e.RecordedAt).IsRequired();
             });
 
+            // Prevent EF Core 10's complex-type convention from auto-mapping these as
+            // owned JSON entities — the value converter below handles serialization instead.
+            modelBuilder.Ignore<DiscordMessage>();
+            modelBuilder.Ignore<DiscordAuthor>();
+
             modelBuilder.Entity<MessageTranscript>(entity =>
             {
                 entity.HasKey(e => e.Id);
