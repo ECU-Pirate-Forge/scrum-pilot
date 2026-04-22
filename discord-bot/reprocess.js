@@ -71,11 +71,21 @@
           ? `⚠️ Recording from ${dateString} appears to be corrupted and could not be processed.`
           : `⚠️ Something went wrong processing the recording from ${dateString}.`
       );
+      if (fs.existsSync(filePath)) {
+        fs.renameSync(filePath, filePath + '.corrupted');
+        console.log(`[Reprocess] Renamed to ${filePath}.corrupted`);
+      }
     }
   }
 
   // Multi-track handler for new per-user recordings
   async function reprocessMultiTrack(guild, timestamp, userFiles, recapChannel, controlChannel) {
+    // get channel and category from the first file's name
+    const firstFilename = path.basename(userFiles[0].filePath);
+    const nameMatch = firstFilename.match(/^recording-\d+-(.+?)-(.+?)-\d+\.ogg$/);
+    const mockVoiceChannel = nameMatch
+      ? { name: nameMatch[1].replace(/-/g, ' '), parent: { name: nameMatch[2].replace(/-/g, ' ') } }
+      : { name: 'unknown-channel', parent: { name: 'uncategorized' } };
     const dateString = formatDate(timestamp);
     console.log(`[Reprocess] Processing multi-track session from ${dateString} (${userFiles.length} tracks)`);
     await controlChannel.send(`🔄 Reprocessing ${userFiles.length}-track recording from ${dateString}...`);
@@ -90,7 +100,7 @@
       });
     });
 
-    await transcribeMultiTrack(guild, userRecordings, timestamp, recapChannel, controlChannel);
+    await transcribeMultiTrack(guild, userRecordings, timestamp, recapChannel, controlChannel, mockVoiceChannel);
   }
 
   client.once('clientReady', async () => {
@@ -126,11 +136,13 @@
 
     for (const filePath of allOggs) {
       const filename = path.basename(filePath);
-      const multiMatch = filename.match(/^recording-(\d+)-(\d+)\.ogg$/);
+      const multiMatch = filename.match(/^recording-(\d+)-(.+?)-(.+?)-(\d+)\.ogg$/) || filename.match(/^recording-(\d+)-(\d+)\.ogg$/);
       const singleMatch = filename.match(/^recording-(\d+)\.ogg$/);
 
       if (multiMatch) {
-        const [, timestamp, userId] = multiMatch;
+        const isNewFormat = multiMatch[0].split('-').length > 3;
+        const timestamp = multiMatch[1];
+        const userId = isNewFormat ? multiMatch[4] : multiMatch[2];
         if (!multiTrackGroups.has(timestamp)) multiTrackGroups.set(timestamp, []);
         multiTrackGroups.get(timestamp).push({ userId, filePath });
       } else if (singleMatch) {
