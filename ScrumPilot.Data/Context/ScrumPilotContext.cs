@@ -132,18 +132,28 @@ namespace ScrumPilot.Data.Context
             {
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Id).ValueGeneratedOnAdd();
-                // Use a value converter so Messages serializes as a plain JSON string,
-                // which is compatible with both SQLite (TEXT) and Postgres (text).
-                entity.Property(e => e.Messages)
+                // Use a value converter so Messages serializes as a plain JSON string.
+                var messagesProperty = entity.Property(e => e.Messages)
                     .HasConversion(
                         v => System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions?)null),
                         v => System.Text.Json.JsonSerializer.Deserialize<List<DiscordMessage>>(v, (System.Text.Json.JsonSerializerOptions?)null) ?? new List<DiscordMessage>()
-                    )
-                    .Metadata.SetValueComparer(new Microsoft.EntityFrameworkCore.ChangeTracking.ValueComparer<List<DiscordMessage>>(
-                        (c1, c2) => System.Text.Json.JsonSerializer.Serialize(c1, (System.Text.Json.JsonSerializerOptions?)null) == System.Text.Json.JsonSerializer.Serialize(c2, (System.Text.Json.JsonSerializerOptions?)null),
-                        c => c == null ? 0 : System.Text.Json.JsonSerializer.Serialize(c, (System.Text.Json.JsonSerializerOptions?)null).GetHashCode(),
-                        c => System.Text.Json.JsonSerializer.Deserialize<List<DiscordMessage>>(System.Text.Json.JsonSerializer.Serialize(c, (System.Text.Json.JsonSerializerOptions?)null), (System.Text.Json.JsonSerializerOptions?)null) ?? new List<DiscordMessage>()
-                    ));
+                    );
+
+                // Use jsonb for PostgreSQL, TEXT for SQLite
+                if (Database.IsNpgsql())
+                {
+                    messagesProperty.HasColumnType("jsonb");
+                }
+                else
+                {
+                    messagesProperty.HasColumnType("TEXT");
+                }
+
+                messagesProperty.Metadata.SetValueComparer(new Microsoft.EntityFrameworkCore.ChangeTracking.ValueComparer<List<DiscordMessage>>(
+                    (c1, c2) => System.Text.Json.JsonSerializer.Serialize(c1, (System.Text.Json.JsonSerializerOptions?)null) == System.Text.Json.JsonSerializer.Serialize(c2, (System.Text.Json.JsonSerializerOptions?)null),
+                    c => c == null ? 0 : System.Text.Json.JsonSerializer.Serialize(c, (System.Text.Json.JsonSerializerOptions?)null).GetHashCode(),
+                    c => System.Text.Json.JsonSerializer.Deserialize<List<DiscordMessage>>(System.Text.Json.JsonSerializer.Serialize(c, (System.Text.Json.JsonSerializerOptions?)null), (System.Text.Json.JsonSerializerOptions?)null) ?? new List<DiscordMessage>()
+                ));
             });
         }
 
