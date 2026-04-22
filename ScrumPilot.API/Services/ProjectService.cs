@@ -3,6 +3,9 @@ using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.API.Services;
 
+/// <summary>
+/// Implements <see cref="IProjectService"/> by delegating to <see cref="IProjectRepository"/>.
+/// </summary>
 public class ProjectService : IProjectService
 {
     private readonly IProjectRepository _repo;

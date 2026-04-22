@@ -229,7 +229,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             // Assert
             var statusCodeResult = Assert.IsType<ObjectResult>(result.Result);
             Assert.Equal(502, statusCodeResult.StatusCode);
-            Assert.Equal($"Failed to communicate with Ollama service: {exceptionMessage}", statusCodeResult.Value);
+            Assert.Equal($"Failed to communicate with AI service: {exceptionMessage}", statusCodeResult.Value);
             await _mockPbiService.Received(1).GenerateAiPbis(problemStatements);
         }
 

@@ -3,6 +3,9 @@ using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.API.Services
 {
+    /// <summary>
+    /// Implements <see cref="IEpicService"/> by delegating to <see cref="IEpicRepository"/>.
+    /// </summary>
     public class EpicService : IEpicService
     {
         private readonly IEpicRepository _epicRepository;

@@ -6,12 +6,18 @@ using System.Text.Json;
 
 namespace ScrumPilot.Web.Auth
 {
+    /// <summary>
+    /// Delegating HTTP handler that attaches the JWT bearer token to every outgoing API request.
+    /// If the stored token has expired, it clears the token, resets auth state, and redirects to
+    /// the login page instead of sending the request.
+    /// </summary>
     public class AuthHeaderHandler : DelegatingHandler
     {
         private readonly IJSRuntime _js;
         private readonly JwtAuthStateProvider _authStateProvider;
         private readonly NavigationManager _navigation;
 
+        /// <summary>Initialises a new instance of <see cref="AuthHeaderHandler"/>.</summary>
         public AuthHeaderHandler(IJSRuntime js, AuthenticationStateProvider authStateProvider, NavigationManager navigation)
         {
             _js = js;
@@ -19,6 +25,7 @@ namespace ScrumPilot.Web.Auth
             _navigation = navigation;
         }
 
+        /// <inheritdoc/>
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
@@ -41,6 +48,10 @@ namespace ScrumPilot.Web.Auth
             return await base.SendAsync(request, cancellationToken);
         }
 
+        /// <summary>
+        /// Decodes the JWT payload and checks whether the <c>exp</c> claim is in the past.
+        /// Returns <c>false</c> (not expired) if the token cannot be decoded.
+        /// </summary>
         private static bool IsTokenExpired(string token)
         {
             try

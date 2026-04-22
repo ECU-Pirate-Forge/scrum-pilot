@@ -4,17 +4,22 @@ using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.API.Controllers
 {
+    /// <summary>
+    /// Manages Sprint resources.
+    /// </summary>
     [ApiController]
     [Route("api/[controller]")]
     public class SprintController : ControllerBase
     {
         private readonly ISprintService _sprintService;
 
+        /// <summary>Initialises a new instance of <see cref="SprintController"/>.</summary>
         public SprintController(ISprintService sprintService)
         {
             _sprintService = sprintService;
         }
 
+        /// <summary>Returns all sprints, optionally filtered by project.</summary>
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Sprint>>> GetAllSprints([FromQuery] int? projectId = null)
         {
@@ -24,6 +29,7 @@ namespace ScrumPilot.API.Controllers
             return Ok(sprints);
         }
 
+        /// <summary>Creates a new sprint.</summary>
         [HttpPost]
         public async Task<ActionResult<Sprint>> Create([FromBody] Sprint sprint)
         {
@@ -31,6 +37,7 @@ namespace ScrumPilot.API.Controllers
             return Ok(created);
         }
 
+        /// <summary>Updates an existing sprint. Returns 400 if the route ID does not match the body.</summary>
         [HttpPut("{id:int}")]
         public async Task<ActionResult<Sprint>> Update(int id, [FromBody] Sprint sprint)
         {
@@ -39,6 +46,7 @@ namespace ScrumPilot.API.Controllers
             return Ok(updated);
         }
 
+        /// <summary>Deletes the sprint and unassigns all its PBIs.</summary>
         [HttpDelete("{id:int}")]
         public async Task<ActionResult> Delete(int id)
         {

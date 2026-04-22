@@ -5,14 +5,19 @@ using System.Security.Claims;
 
 namespace ScrumPilot.API.Controllers;
 
+/// <summary>
+/// Manages user profile settings and password changes.
+/// </summary>
 [ApiController]
 [Route("api/[controller]")]
 public class UserController : ControllerBase
 {
     private readonly IUserSettingsService _service;
 
+    /// <summary>Initialises a new instance of <see cref="UserController"/>.</summary>
     public UserController(IUserSettingsService service) => _service = service;
 
+    /// <summary>Returns the authenticated user's profile settings.</summary>
     [HttpGet("settings")]
     public async Task<ActionResult<UserSettingsDto>> GetSettings()
     {
@@ -23,6 +28,7 @@ public class UserController : ControllerBase
         return dto is null ? Unauthorized() : Ok(dto);
     }
 
+    /// <summary>Updates the authenticated user's profile settings.</summary>
     [HttpPut("settings")]
     public async Task<IActionResult> UpdateSettings([FromBody] UserSettingsDto dto)
     {
@@ -33,6 +39,7 @@ public class UserController : ControllerBase
         return success ? NoContent() : BadRequest("Failed to update settings.");
     }
 
+    /// <summary>Returns a lightweight summary of every registered user for assignment dropdowns.</summary>
     [HttpGet("all")]
     public async Task<ActionResult<IEnumerable<UserSummaryDto>>> GetAllUsers()
     {
@@ -40,6 +47,7 @@ public class UserController : ControllerBase
         return Ok(users);
     }
 
+    /// <summary>Changes the authenticated user's password after verifying the current one.</summary>
     [HttpPost("change-password")]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
     {

@@ -43,7 +43,8 @@
                 <MudChip T="string"
                          Color="@GetPriorityColor(p)"
                          Variant="@(_priorityFilter == p ? Variant.Filled : Variant.Outlined)"
-                         Size="Size.Small"
+                         Size="Size.Medium"
+                                  Style="font-size: 0.8125rem;"
                          OnClick="@(() => TogglePriorityFilter(p))">
                     @p
                 </MudChip>

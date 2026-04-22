@@ -4,6 +4,10 @@ using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.API.Services;
 
+/// <summary>
+/// Implements <see cref="IDashboardPreferenceService"/> by serialising preferences to JSON
+/// and delegating storage to <see cref="IDashboardPreferenceRepository"/>.
+/// </summary>
 public class DashboardPreferenceService : IDashboardPreferenceService
 {
     private readonly IDashboardPreferenceRepository _repo;
