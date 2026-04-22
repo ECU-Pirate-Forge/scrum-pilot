@@ -98,14 +98,14 @@ namespace ScrumPilot.Data.Seeders
             // Build username → userId lookup
             var users = await context.Users.ToListAsync();
             string? U(string name) => users.FirstOrDefault(u => u.UserName == name)?.Id;
-            string? josh    = U("Joshua");
-            string? tyler   = U("Tyler");
+            string? josh = U("Joshua");
+            string? tyler = U("Tyler");
             string? anthony = U("Anthony");
-            string? aden    = U("Aden");
-            string? huan    = U("Huan");
-            string? james   = U("James");
-            string? dylan   = U("Dylan");
-            string? nate    = U("Nate");
+            string? aden = U("Aden");
+            string? huan = U("Huan");
+            string? james = U("James");
+            string? dylan = U("Dylan");
+            string? nate = U("Nate");
 
             int pid = project.ProjectId;
 

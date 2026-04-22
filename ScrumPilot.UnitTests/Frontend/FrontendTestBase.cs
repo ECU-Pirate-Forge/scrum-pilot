@@ -27,6 +27,9 @@ namespace ScrumPilot.UnitTests.Frontend
             // (ScrumBoard, SwimLanes, Backlog, PbiGeneration, etc.) can be rendered.
             Services.AddSingleton<ProjectStateService>();
 
+            // Register MetricsDashboardService so Backlog (and other pages that inject it) can be rendered.
+            Services.AddSingleton(new MetricsDashboardService(MockHttpClient));
+
             // Use loose mode to ignore JSInterop issues - focus on component logic instead
             JSInterop.Mode = JSRuntimeMode.Loose;
 

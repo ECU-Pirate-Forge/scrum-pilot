@@ -53,10 +53,10 @@ namespace ScrumPilot.UnitTests.Frontend.PageTests
         {
             var component = Render<ScrumBoard>();
 
-            Assert.Contains("TO DO",        component.Markup);
-            Assert.Contains("IN PROGRESS",  component.Markup);
-            Assert.Contains("IN REVIEW",    component.Markup);
-            Assert.Contains("DONE",         component.Markup);
+            Assert.Contains("TO DO", component.Markup);
+            Assert.Contains("IN PROGRESS", component.Markup);
+            Assert.Contains("IN REVIEW", component.Markup);
+            Assert.Contains("DONE", component.Markup);
         }
 
         [Fact]
@@ -64,14 +64,14 @@ namespace ScrumPilot.UnitTests.Frontend.PageTests
         {
             var markup = Render<ScrumBoard>().Markup;
 
-            var todoIdx       = markup.IndexOf("column-todo",       StringComparison.Ordinal);
+            var todoIdx = markup.IndexOf("column-todo", StringComparison.Ordinal);
             var inProgressIdx = markup.IndexOf("column-inprogress", StringComparison.Ordinal);
-            var inReviewIdx   = markup.IndexOf("column-inreview",   StringComparison.Ordinal);
-            var doneIdx       = markup.IndexOf("column-done",       StringComparison.Ordinal);
+            var inReviewIdx = markup.IndexOf("column-inreview", StringComparison.Ordinal);
+            var doneIdx = markup.IndexOf("column-done", StringComparison.Ordinal);
 
-            Assert.True(todoIdx       < inProgressIdx, "ToDo lane should appear before InProgress");
-            Assert.True(inProgressIdx < inReviewIdx,   "InProgress lane should appear before InReview");
-            Assert.True(inReviewIdx   < doneIdx,       "InReview lane should appear before Done");
+            Assert.True(todoIdx < inProgressIdx, "ToDo lane should appear before InProgress");
+            Assert.True(inProgressIdx < inReviewIdx, "InProgress lane should appear before InReview");
+            Assert.True(inReviewIdx < doneIdx, "InReview lane should appear before Done");
         }
 
         [Fact]
@@ -79,10 +79,10 @@ namespace ScrumPilot.UnitTests.Frontend.PageTests
         {
             var markup = Render<ScrumBoard>().Markup;
 
-            Assert.Contains("column-todo",       markup);
+            Assert.Contains("column-todo", markup);
             Assert.Contains("column-inprogress", markup);
-            Assert.Contains("column-inreview",   markup);
-            Assert.Contains("column-done",       markup);
+            Assert.Contains("column-inreview", markup);
+            Assert.Contains("column-done", markup);
         }
 
         [Fact]
@@ -91,10 +91,10 @@ namespace ScrumPilot.UnitTests.Frontend.PageTests
             // ScrumBoard is always in status mode — priority lane columns must never appear
             var markup = Render<ScrumBoard>().Markup;
 
-            Assert.DoesNotContain("column-none",   markup);
-            Assert.DoesNotContain("column-high",   markup);
+            Assert.DoesNotContain("column-none", markup);
+            Assert.DoesNotContain("column-high", markup);
             Assert.DoesNotContain("column-medium", markup);
-            Assert.DoesNotContain("column-low",    markup);
+            Assert.DoesNotContain("column-low", markup);
         }
 
         // ── Toolbar ─────────────────────────────────────────────────────────────

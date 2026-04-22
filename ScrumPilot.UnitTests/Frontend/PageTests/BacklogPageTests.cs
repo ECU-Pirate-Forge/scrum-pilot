@@ -64,14 +64,14 @@ namespace ScrumPilot.UnitTests.Frontend.PageTests
             var markup = Render<Backlog>().Markup;
 
             // Priority filter chips are rendered in enum order: None, Low, Medium, High
-            var noneIdx   = markup.IndexOf(">None<",   StringComparison.Ordinal);
-            var lowIdx    = markup.IndexOf(">Low<",    StringComparison.Ordinal);
+            var noneIdx = markup.IndexOf(">None<", StringComparison.Ordinal);
+            var lowIdx = markup.IndexOf(">Low<", StringComparison.Ordinal);
             var mediumIdx = markup.IndexOf(">Medium<", StringComparison.Ordinal);
-            var highIdx   = markup.IndexOf(">High<",   StringComparison.Ordinal);
+            var highIdx = markup.IndexOf(">High<", StringComparison.Ordinal);
 
-            Assert.True(noneIdx   < lowIdx,    "None chip should appear before Low");
-            Assert.True(lowIdx    < mediumIdx, "Low chip should appear before Medium");
-            Assert.True(mediumIdx < highIdx,   "Medium chip should appear before High");
+            Assert.True(noneIdx < lowIdx, "None chip should appear before Low");
+            Assert.True(lowIdx < mediumIdx, "Low chip should appear before Medium");
+            Assert.True(mediumIdx < highIdx, "Medium chip should appear before High");
         }
 
         [Fact]
@@ -80,10 +80,10 @@ namespace ScrumPilot.UnitTests.Frontend.PageTests
             var markup = Render<Backlog>().Markup;
 
             // Backlog is a flat list, not a swim-lane board — status lane columns must not appear
-            Assert.DoesNotContain("column-todo",       markup);
+            Assert.DoesNotContain("column-todo", markup);
             Assert.DoesNotContain("column-inprogress", markup);
-            Assert.DoesNotContain("column-inreview",   markup);
-            Assert.DoesNotContain("column-done",       markup);
+            Assert.DoesNotContain("column-inreview", markup);
+            Assert.DoesNotContain("column-done", markup);
         }
     }
 }

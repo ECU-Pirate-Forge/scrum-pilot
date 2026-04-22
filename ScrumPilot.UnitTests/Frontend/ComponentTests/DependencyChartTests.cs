@@ -15,12 +15,12 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
         private static ProductBacklogItem MakePbi(int id, string title, PbiStatus status = PbiStatus.ToDo, int? dependsOn = null) =>
             new()
             {
-                PbiId        = id,
-                Title        = title,
-                Status       = status,
-                Priority     = PbiPriority.Medium,
-                DateCreated  = DateTime.UtcNow,
-                LastUpdated  = DateTime.UtcNow,
+                PbiId = id,
+                Title = title,
+                Status = status,
+                Priority = PbiPriority.Medium,
+                DateCreated = DateTime.UtcNow,
+                LastUpdated = DateTime.UtcNow,
                 DependsOnPbiId = dependsOn
             };
 

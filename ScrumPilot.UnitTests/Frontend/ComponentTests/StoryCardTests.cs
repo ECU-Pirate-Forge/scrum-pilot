@@ -89,11 +89,11 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
         public void PbiCard_FlagButton_ShowsRedState_WhenPbiIsFlagged()
         {
             var unflagged = CreateTestPbi(); // IsFlagged = false
-            var flagged   = CreateTestPbi();
+            var flagged = CreateTestPbi();
             flagged.IsFlagged = true;
 
             var unflaggedMarkup = Render<PbiCard>(p => p.Add(x => x.PbiModel, unflagged)).Markup;
-            var flaggedMarkup   = Render<PbiCard>(p => p.Add(x => x.PbiModel, flagged)).Markup;
+            var flaggedMarkup = Render<PbiCard>(p => p.Add(x => x.PbiModel, flagged)).Markup;
 
             // The flagged and unflagged markups must differ — the icon button colour changes
             Assert.NotEqual(unflaggedMarkup, flaggedMarkup);
