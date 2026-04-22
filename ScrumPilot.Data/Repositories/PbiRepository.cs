@@ -20,7 +20,7 @@ namespace ScrumPilot.Data.Repositories
                 .ToListAsync();
         }
 
-        //public async Task<IEnumerable<Story>> GetActiveStoriesAsync(epicId)
+        //public async Task<IEnumerable<Story>> GetActiveStoriesAsync(epicId) //This is for the Discord bot - Future State
         //{
         //    return await _context.Stories
         //        .Where(s => s.EpicId == epicId && s.Status != StoryStatus.Closed)
@@ -49,7 +49,7 @@ namespace ScrumPilot.Data.Repositories
             return story;
         }
 
-        public async Task<bool> DeleteAsync(int id) //This is a full delete right now. We may want to consider a soft delete. To Be Determined - TB
+        public async Task<bool> DeleteAsync(int id)
         {
             var story = await _context.Stories.FindAsync(id);
             if (story == null)
@@ -86,9 +86,12 @@ namespace ScrumPilot.Data.Repositories
                 .ToListAsync();
         }
 
-        public async Task<IEnumerable<ProductBacklogItem>> GetFilteredPbisAsync(int? sprintId, int? epicId)
+        public async Task<IEnumerable<ProductBacklogItem>> GetFilteredPbisAsync(int? sprintId, int? epicId, int? projectId = null)
         {
             var query = _context.Stories.Where(s => !s.IsDraft);
+
+            if (projectId.HasValue)
+                query = query.Where(s => s.ProjectId == projectId.Value);
 
             if (sprintId.HasValue)
             {

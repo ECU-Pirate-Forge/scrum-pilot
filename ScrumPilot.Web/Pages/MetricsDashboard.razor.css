@@ -2,8 +2,15 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    background-color: #0d1117;
     min-height: 100vh;
+}
+
+.metrics-light {
+    background: linear-gradient(160deg, rgb(5, 39, 103) 0%, #3a0647 100%);
+}
+
+.metrics-dark {
+    background: var(--mud-palette-background);
 }
 
 .metrics-topbar {
@@ -11,8 +18,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 12px 20px;
-    background-color: #161b22;
-    border-bottom: 1px solid #21262d;
+    background-color: rgba(0, 0, 0, 0.25);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     flex-shrink: 0;
 }
 
@@ -31,7 +38,6 @@
 .metrics-grid {
     flex: 1;
     padding: 8px;
-    background-color: #0d1117;
 }
 
 .settings-dropdown-container {
@@ -42,11 +48,11 @@
     position: absolute;
     right: 0;
     top: calc(100% + 6px);
-    background: #161b22;
-    border: 1px solid #30363d;
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-divider);
     border-radius: 8px;
     min-width: 230px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
     display: flex;
     flex-direction: column;
 }
@@ -56,11 +62,11 @@
     align-items: center;
     justify-content: space-between;
     padding: 12px 14px 8px;
-    border-bottom: 1px solid #21262d;
+    border-bottom: 1px solid var(--mud-palette-divider);
 }
 
 .settings-title {
-    color: #e6edf3;
+    color: var(--mud-palette-text-primary);
     font-size: 0.85rem;
     font-weight: 600;
     letter-spacing: 0.02em;
@@ -82,18 +88,35 @@
 }
 
 .settings-row:hover {
-    background: #21262d;
+    background: var(--mud-palette-table-striped);
 }
 
 .settings-label {
-    color: #c9d1d9;
+    color: var(--mud-palette-text-primary);
     font-size: 0.85rem;
     white-space: nowrap;
 }
 
 .settings-footer {
-    border-top: 1px solid #21262d;
+    border-top: 1px solid var(--mud-palette-divider);
     padding: 6px 8px;
     display: flex;
     justify-content: flex-end;
+}
+
+/* Sprint select in topbar — always on dark overlay, force white */
+.metrics-topbar ::deep .mud-input-label,
+.metrics-topbar ::deep .mud-input-label.mud-input-label-animated,
+.metrics-topbar ::deep .mud-input-slot,
+.metrics-topbar ::deep .mud-select-input,
+.metrics-topbar ::deep .mud-input-root,
+.metrics-topbar ::deep .mud-input-root input,
+.metrics-topbar ::deep .mud-input-adornment,
+.metrics-topbar ::deep .mud-input-adornment .mud-icon-root,
+.metrics-topbar ::deep .mud-select-input .mud-icon-root {
+    color: #ffffff !important;
+}
+
+.metrics-topbar ::deep .mud-outlined-input fieldset {
+    border-color: rgba(255, 255, 255, 0.5) !important;
 }

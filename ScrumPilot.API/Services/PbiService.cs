@@ -22,7 +22,7 @@ namespace ScrumPilot.API.Services
             return await _pbiRepository.GetAllPbisAsync();
         }
 
-        //public async Task<IEnumerable<ProductBacklogItem>> GetActivePbisAsync(int epicId)
+        //public async Task<IEnumerable<ProductBacklogItem>> GetActivePbisAsync(int epicId) //This is for the Discord bot - Future State
         //{
         //    return await _pbiRepository.GetActivePbisAsync(epicId);
         //}
@@ -37,9 +37,9 @@ namespace ScrumPilot.API.Services
             return await _pbiRepository.GetDraftPbisAsync();
         }
 
-        public async Task<IEnumerable<ProductBacklogItem>> GetFilteredPbisAsync(int? sprintId, int? epicId)
+        public async Task<IEnumerable<ProductBacklogItem>> GetFilteredPbisAsync(int? sprintId, int? epicId, int? projectId = null)
         {
-            return await _pbiRepository.GetFilteredPbisAsync(sprintId, epicId);
+            return await _pbiRepository.GetFilteredPbisAsync(sprintId, epicId, projectId);
         }
 
         /// <summary>
@@ -384,7 +384,7 @@ namespace ScrumPilot.API.Services
             return await _pbiRepository.UpdateAsync(pbi);
         }
 
-        public async Task<bool> DeletePbiAsync(int id) //Currently a hard delete. Maybe we reconsider this?
+        public async Task<bool> DeletePbiAsync(int id)
         {
             return await _pbiRepository.DeleteAsync(id);
         }

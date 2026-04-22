@@ -1,0 +1,498 @@
+@page "/planning-poker"
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.SignalR.Client
+@using ScrumPilot.Shared.Models.PlanningPoker
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IConfiguration Configuration
+@inject ScrumPilot.Web.Services.ProjectStateService ProjectState
+@implements IAsyncDisposable
+
+<div class="pp-page">
+
+    <!-- Toolbar -->
+    <div class="pp-toolbar">
+        <div class="pp-toolbar-left">
+            <MudIcon Icon="@Icons.Material.Filled.Casino" Class="me-2" Style="font-size:1.8rem;" />
+            <MudText Typo="Typo.h5" Style="font-weight:700;">Planning Poker</MudText>
+        </div>
+        <div class="pp-toolbar-right">
+            <MudChip T="string" Color="@ConnectionColor" Size="Size.Small" Class="me-2">@_connectionStatus</MudChip>
+            @if (_currentPbiId.HasValue)
+            {
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Warning"
+                           StartIcon="@Icons.Material.Filled.Visibility"
+                           OnClick="RevealAsync"
+                           Disabled="@(_revealed || !_isConnected)"
+                           Class="me-2">
+                    Reveal
+                </MudButton>
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Default"
+                           StartIcon="@Icons.Material.Filled.Refresh"
+                           OnClick="ResetAsync"
+                           Disabled="@(!_isConnected)">
+                    Re-vote
+                </MudButton>
+            }
+        </div>
+    </div>
+
+    <!-- Main body: center + right panel -->
+    <div class="pp-body">
+
+        <!-- Center: PBI display -->
+        <div class="pp-center">
+            @if (_selectedPbi != null)
+            {
+                <PbiCard PbiModel="_selectedPbi" ProjectId="@ProjectState.SelectedProjectId" OnSave="HandlePbiSave" OnDelete="HandlePbiDelete" />
+
+                <div class="pp-suggest-wrap">
+                    <span class="pp-suggest-label">Suggested Points</span>
+                    <div class="pp-suggest-counter">
+                        <div class="pp-suggest-stepper">
+                            <MudIconButton Icon="@Icons.Material.Filled.KeyboardArrowUp"
+                                           Size="Size.Small"
+                                           OnClick="IncreaseSuggested"
+                                           Disabled="@(!_revealed || _suggestedPointIndex >= ValidPoints.Length - 1)" />
+                            <span class="pp-suggest-value">@SuggestedDisplay</span>
+                            <MudIconButton Icon="@Icons.Material.Filled.KeyboardArrowDown"
+                                           Size="Size.Small"
+                                           OnClick="DecreaseSuggested"
+                                           Disabled="@(!_revealed || _suggestedPointIndex <= 0)" />
+                        </div>
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   Size="Size.Medium"
+                                   Disabled="@(!_revealed || _suggestedPointIndex < 0 || _pointsCommitting)"
+                                   OnClick="CommitSuggestedPoints">
+                            @(_pointsCommitting ? "Saving..." : "Commit")
+                        </MudButton>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="pp-empty-state">
+                    <MudIcon Icon="@Icons.Material.Filled.TouchApp"
+                             Style="font-size:4rem; color:var(--mud-palette-text-disabled);" />
+                    <MudText Typo="Typo.h6" Style="color:var(--mud-palette-text-disabled); margin-top:1rem;">
+                        Select a story from the panel
+                    </MudText>
+                    <MudText Typo="Typo.body2" Style="color:var(--mud-palette-text-disabled);">
+                        The team will see it and can begin voting
+                    </MudText>
+                </div>
+            }
+        </div>
+
+        <!-- Right panel: unassigned PBI list -->
+        <div class="pp-panel">
+            <MudText Typo="Typo.subtitle1" Style="font-weight:700;" Class="mb-3">
+                <MudIcon Icon="@Icons.Material.Filled.List" Class="me-1" />
+                Backlog
+            </MudText>
+
+            @if (_unassignedPbis == null)
+            {
+                <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+            }
+            else if (_unassignedPbis.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Style="color:var(--mud-palette-text-disabled);">
+                    No unassigned stories
+                </MudText>
+            }
+            else
+            {
+                @foreach (var pbi in _unassignedPbis)
+                {
+                    <div class="@($"pp-pbi-item {(_currentPbiId == pbi.PbiId ? "pp-pbi-active" : "")}")"
+                         @onclick="() => SelectPbiAsync(pbi)">
+                        <MudText Typo="Typo.body2" Style="font-weight:600; margin-bottom:4px;">@pbi.Title</MudText>
+                        <div class="d-flex flex-wrap gap-1">
+                            <MudChip T="string" Size="Size.Small" Color="@GetPriorityColor(pbi.Priority)" Variant="Variant.Filled">
+                                @pbi.Priority
+                            </MudChip>
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">
+                                @((int)pbi.StoryPoints) pts
+                            </MudChip>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+
+    <!-- Bottom: voting area (left = team cards, right = estimate picker) -->
+    <div class="pp-bottom">
+
+        <!-- Left: team member participant cards -->
+        <div class="pp-bottom-left">
+            @if (_participants.Count > 0)
+            {
+                @foreach (var p in _participants)
+                {
+                    <div class="pp-participant">
+                        <div class="@($"pp-flip-card {(p.HasVoted || _revealed ? "pp-flipped" : "")}")">
+                            <div class="pp-flip-inner">
+                                <div class="pp-flip-front">
+                                    <MudIcon Icon="@Icons.Material.Filled.QuestionMark" />
+                                </div>
+                                <div class="pp-flip-back">
+                                    @if (_revealed && p.HasVoted)
+                                    {
+                                        @DisplayPoints(p.Points)
+                                    }
+                                    else if (p.HasVoted)
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.Check" />
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.HourglassEmpty" />
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                        <MudText Typo="Typo.caption" Class="mt-1" Style="text-align:center; display:block;">
+                            @p.DisplayName
+                            @if (p.ConnectionId == _myConnectionId)
+                            {
+                                <span style="color:var(--mud-palette-primary); font-weight:700;"> (you)</span>
+                            }
+                        </MudText>
+                    </div>
+                }
+            }
+            else if (_isConnected)
+            {
+                <MudText Typo="Typo.body2" Style="color:var(--mud-palette-text-disabled);">
+                    Waiting for team members to join...
+                </MudText>
+            }
+            else
+            {
+                <MudText Typo="Typo.body2" Style="color:var(--mud-palette-text-disabled);">
+                    Connecting...
+                </MudText>
+            }
+        </div>
+
+        <!-- Right: point selection (only shown when a PBI is active and not yet revealed) -->
+        <div class="pp-bottom-right">
+            @if (_isConnected && _currentPbiId.HasValue && !_revealed)
+            {
+                <div class="pp-point-selection">
+                    <MudText Typo="Typo.caption" Style="font-weight:600; margin-bottom:8px; display:block;">
+                        Your estimate:
+                    </MudText>
+                    <div class="pp-point-row">
+                        @foreach (var pts in PointValues)
+                        {
+                            <div class="@($"pp-point-card {(_myVote == pts ? "pp-point-selected" : "")}")"
+                                 @onclick="() => CastVoteAsync(pts)">
+                                @DisplayPoints(pts)
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+
+    </div>
+</div>
+
+@code {
+    private static readonly int[] PointValues = [1, 2, 3, 5, 8, 13, 21, -1];
+    private static readonly int[] ValidPoints = [0, 1, 2, 3, 5, 8, 13, 21];
+
+    private HubConnection? _hub;
+    private List<ProductBacklogItem>? _unassignedPbis;
+    private ProductBacklogItem? _selectedPbi;
+    private int? _currentPbiId;
+    private bool _revealed;
+    private List<ParticipantState> _participants = [];
+    private int? _myVote;
+    private string _myConnectionId = "";
+    private string _myDisplayName = "Anonymous";
+    private string _connectionStatus = "Connecting...";
+
+    private int _suggestedPointIndex = -1;
+    private bool _pointsCommitting = false;
+    private string SuggestedDisplay => _suggestedPointIndex < 0 ? "-" : ValidPoints[_suggestedPointIndex].ToString();
+
+    private bool _isConnected => _hub?.State == HubConnectionState.Connected;
+
+    private Color ConnectionColor => _hub?.State switch
+    {
+        HubConnectionState.Connected => Color.Success,
+        HubConnectionState.Connecting or HubConnectionState.Reconnecting => Color.Warning,
+        _ => Color.Error
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        ProjectState.OnChange += HandleProjectStateChanged;
+        await LoadUnassignedPbisAsync();
+        await InitHubAsync();
+    }
+
+    private void HandleProjectStateChanged()
+    {
+        InvokeAsync(async () =>
+        {
+            await LoadUnassignedPbisAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadUnassignedPbisAsync()
+    {
+        try
+        {
+            var url = "api/Pbi/getNonDraftPbis";
+            if (ProjectState.SelectedProjectId.HasValue)
+                url += $"?projectId={ProjectState.SelectedProjectId.Value}";
+            var all = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(url);
+            _unassignedPbis = all?.Where(p => p.SprintId == null).ToList() ?? [];
+        }
+        catch
+        {
+            _unassignedPbis = [];
+        }
+    }
+
+    private async Task InitHubAsync()
+    {
+        var token = await JS.InvokeAsync<string?>("localStorage.getItem", "authToken");
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        _myDisplayName = authState.User.Identity?.Name
+            ?? authState.User.FindFirst("email")?.Value
+            ?? "Anonymous";
+
+        var apiBase = Configuration["ApiBaseUrl"] ?? "http://localhost:5219/";
+        var hubUrl = new Uri(new Uri(apiBase), "hubs/planning-poker").ToString();
+
+        _hub = new HubConnectionBuilder()
+            .WithUrl(hubUrl, opts =>
+            {
+                opts.AccessTokenProvider = () => Task.FromResult(token);
+            })
+            .WithAutomaticReconnect()
+            .Build();
+
+        _hub.On<PokerSessionState>("ReceiveSessionState", state =>
+        {
+            ApplySessionState(state);
+            InvokeAsync(StateHasChanged);
+        });
+
+        _hub.On<ParticipantState>("UserJoined", participant =>
+        {
+            if (!_participants.Any(p => p.ConnectionId == participant.ConnectionId))
+                _participants.Add(participant);
+            InvokeAsync(StateHasChanged);
+        });
+
+        _hub.On<string>("UserLeft", connectionId =>
+        {
+            _participants.RemoveAll(p => p.ConnectionId == connectionId);
+            InvokeAsync(StateHasChanged);
+        });
+
+        _hub.On<string>("CardSelected", connectionId =>
+        {
+            var p = _participants.FirstOrDefault(p => p.ConnectionId == connectionId);
+            if (p != null) p.HasVoted = true;
+            InvokeAsync(StateHasChanged);
+        });
+
+        _hub.On<PokerSessionState>("CardsRevealed", state =>
+        {
+            ApplySessionState(state);
+            ComputeSuggestedPoints();
+            InvokeAsync(StateHasChanged);
+        });
+
+        _hub.On<PokerSessionState>("PbiSelected", state =>
+        {
+            ApplySessionState(state);
+            _suggestedPointIndex = -1;
+            if (state.CurrentPbiId.HasValue)
+                _selectedPbi = _unassignedPbis?.FirstOrDefault(p => p.PbiId == state.CurrentPbiId);
+            InvokeAsync(StateHasChanged);
+        });
+
+        _hub.On<PokerSessionState>("VotingReset", state =>
+        {
+            ApplySessionState(state);
+            _myVote = null;
+            _suggestedPointIndex = -1;
+            InvokeAsync(StateHasChanged);
+        });
+
+        _hub.Reconnected += _ =>
+        {
+            _connectionStatus = "Connected";
+            return _hub.SendAsync("JoinSession", _myDisplayName);
+        };
+
+        _hub.Closed += _ =>
+        {
+            _connectionStatus = "Disconnected";
+            return InvokeAsync(StateHasChanged);
+        };
+
+        try
+        {
+            await _hub.StartAsync();
+            _myConnectionId = _hub.ConnectionId ?? "";
+            _connectionStatus = "Connected";
+            await _hub.SendAsync("JoinSession", _myDisplayName);
+        }
+        catch
+        {
+            _connectionStatus = "Failed";
+        }
+    }
+
+    private void ApplySessionState(PokerSessionState state)
+    {
+        _currentPbiId = state.CurrentPbiId;
+        _revealed = state.Revealed;
+        _participants = state.Participants;
+
+        if (_myConnectionId == "" && _hub?.ConnectionId != null)
+            _myConnectionId = _hub.ConnectionId;
+
+        var me = _participants.FirstOrDefault(p => p.ConnectionId == _myConnectionId);
+        if (me != null && me.HasVoted && state.Revealed)
+            _myVote = me.Points;
+    }
+
+    private async Task SelectPbiAsync(ProductBacklogItem pbi)
+    {
+        _selectedPbi = pbi;
+        _currentPbiId = pbi.PbiId;
+        _revealed = false;
+        _myVote = null;
+        _suggestedPointIndex = -1;
+        foreach (var p in _participants) { p.HasVoted = false; p.Points = null; }
+        if (_isConnected)
+            await _hub!.SendAsync("SelectPbi", pbi.PbiId);
+    }
+
+    private async Task CastVoteAsync(int points)
+    {
+        if (!_isConnected || !_currentPbiId.HasValue) return;
+        _myVote = points;
+        var me = _participants.FirstOrDefault(p => p.ConnectionId == _myConnectionId);
+        if (me != null) me.HasVoted = true;
+        await _hub!.SendAsync("SelectCard", points == -1 ? (int?)null : points);
+    }
+
+    private async Task RevealAsync()
+    {
+        if (!_isConnected) return;
+        await _hub!.SendAsync("RevealCards");
+    }
+
+    private async Task ResetAsync()
+    {
+        if (!_isConnected) return;
+        _myVote = null;
+        await _hub!.SendAsync("ResetVoting");
+    }
+
+    private async Task HandlePbiSave(ProductBacklogItem pbi)
+    {
+        try
+        {
+            var response = await Http.PutAsJsonAsync("api/Pbi", pbi);
+            if (response.IsSuccessStatusCode)
+                await LoadUnassignedPbisAsync();
+        }
+        catch { }
+    }
+
+    private async Task HandlePbiDelete(int pbiId)
+    {
+        _selectedPbi = null;
+        _currentPbiId = null;
+        await LoadUnassignedPbisAsync();
+        if (_isConnected)
+            await _hub!.SendAsync("SelectPbi", (int?)null);
+    }
+
+    private void ComputeSuggestedPoints()
+    {
+        var validVotes = _participants
+            .Where(p => p.HasVoted && p.Points.HasValue && p.Points.Value > 0)
+            .Select(p => p.Points!.Value)
+            .ToList();
+
+        int target = validVotes.Count > 0
+            ? (int)Math.Round(validVotes.Average())
+            : 0;
+
+        int nearest = ValidPoints.MinBy(v => Math.Abs(v - target));
+        _suggestedPointIndex = Array.IndexOf(ValidPoints, nearest);
+        if (_suggestedPointIndex < 0) _suggestedPointIndex = 0;
+    }
+
+    private void IncreaseSuggested()
+    {
+        if (_suggestedPointIndex < ValidPoints.Length - 1)
+            _suggestedPointIndex++;
+    }
+
+    private void DecreaseSuggested()
+    {
+        if (_suggestedPointIndex > 0)
+            _suggestedPointIndex--;
+    }
+
+    private async Task CommitSuggestedPoints()
+    {
+        if (_selectedPbi == null || _suggestedPointIndex < 0) return;
+        _pointsCommitting = true;
+        try
+        {
+            _selectedPbi.StoryPoints = (PbiPoints)ValidPoints[_suggestedPointIndex];
+            var response = await Http.PutAsJsonAsync("api/Pbi", _selectedPbi);
+            if (response.IsSuccessStatusCode)
+                await LoadUnassignedPbisAsync();
+        }
+        catch { }
+        finally
+        {
+            _pointsCommitting = false;
+        }
+    }
+
+    private static string DisplayPoints(int? points) => points switch
+    {
+        null => "?",
+        -1 => "?",
+        _ => points.Value.ToString()
+    };
+
+    private static Color GetPriorityColor(PbiPriority priority) => priority switch
+    {
+        PbiPriority.High => Color.Error,
+        PbiPriority.Medium => Color.Warning,
+        PbiPriority.Low => Color.Success,
+        _ => Color.Default
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        ProjectState.OnChange -= HandleProjectStateChanged;
+        if (_hub is not null)
+            await _hub.DisposeAsync();
+    }
+}

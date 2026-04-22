@@ -1,15 +1,18 @@
-@using MudBlazor
 @inject NavigationManager Nav
 
-<MudPaper Class="dashboard-tile pa-4" Elevation="3" @onclick="Navigate">
+<MudPaper Class="dashboard-tile" Elevation="3" @onclick="Navigate">
 
-    <MudText Typo="Typo.h6">
+    <div class="dashboard-tile-icon" style="color: @IconColor;">
+        <MudIcon Icon="@Icon" Style="font-size: 2.8rem;" />
+    </div>
+
+    <MudText Typo="Typo.h6" Class="mt-3">
         @Title
     </MudText>
 
     @if (!string.IsNullOrWhiteSpace(Description))
     {
-        <MudText Typo="Typo.body2" Class="mt-2">
+        <MudText Typo="Typo.body2" Class="mt-1" Style="color: var(--mud-palette-text-secondary);">
             @Description
         </MudText>
     }
@@ -26,6 +29,12 @@
 
     [Parameter]
     public string Href { get; set; } = "";
+
+    [Parameter]
+    public string Icon { get; set; } = Icons.Material.Filled.Dashboard;
+
+    [Parameter]
+    public string IconColor { get; set; } = "var(--mud-palette-primary)";
 
     private void Navigate()
     {
