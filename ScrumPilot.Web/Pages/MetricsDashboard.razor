@@ -27,15 +27,15 @@
                        Disabled="_sprints.Count == 0">
                 <MudSelectItem T="int?" Value="@((int?)null)">All Sprints</MudSelectItem>
                 @{
-                    // Number all sprints chronologically (asc), then display started ones descending.
-                    var allByDate   = _sprints.OrderBy(s => s.StartDate).ToList();
-                    var today       = DateTime.UtcNow.Date;
-                    var started     = allByDate
-                        .Where(s => s.StartDate.HasValue && s.StartDate.Value.Date <= today)
+                    // Number sprints by chronological start order; show all of them so the
+                    // selected value always has a matching item in the list.
+                    var allByDate   = _sprints
+                        .OrderBy(s => s.StartDate ?? DateTime.MaxValue)
+                        .ThenBy(s => s.SprintId)
                         .ToList();
-                    var startedDesc = ((IEnumerable<Sprint>)started).Reverse().ToList();
+                    var displayDesc = ((IEnumerable<Sprint>)allByDate).Reverse().ToList();
                 }
-                @foreach (var sprint in startedDesc)
+                @foreach (var sprint in displayDesc)
                 {
                     var num = allByDate.IndexOf(sprint) + 1;
                     <MudSelectItem T="int?" Value="@((int?)sprint.SprintId)">
@@ -322,12 +322,21 @@
         {
             _sprints = await MetricsSvc.GetSprintsByProjectAsync(projectId.Value);
             var now = DateTime.UtcNow.Date;
-            var mostRecent = _sprints
-                .Where(s => s.StartDate.HasValue && s.StartDate.Value.Date <= now)
-                .OrderByDescending(s => s.StartDate)
-                .FirstOrDefault();
+            // Prefer the most recent open sprint; fall back to the most recently started
+            // sprint; last resort — take whatever sprint is newest by ID.
+            var mostRecent =
+                _sprints
+                    .Where(s => s.IsOpen)
+                    .OrderByDescending(s => s.StartDate ?? DateTime.MinValue)
+                    .ThenByDescending(s => s.SprintId)
+                    .FirstOrDefault()
+                ?? _sprints
+                    .Where(s => s.StartDate.HasValue && s.StartDate.Value.Date <= now)
+                    .OrderByDescending(s => s.StartDate)
+                    .FirstOrDefault()
+                ?? _sprints.OrderByDescending(s => s.SprintId).FirstOrDefault();
             _selectedSprintId = mostRecent?.SprintId;
-            _selectedSprint = mostRecent;
+            _selectedSprint   = mostRecent;
             _pbis = await MetricsSvc.GetPbisForSprintAsync(_selectedSprintId, projectId);
 
             _widgetPrefs = DefaultLayout();
@@ -361,10 +370,12 @@
     private async Task OnSprintChangedAsync(int? sprintId)
     {
         _selectedSprintId = sprintId;
-        _selectedSprint = sprintId.HasValue
+        _selectedSprint   = sprintId.HasValue
             ? _sprints.FirstOrDefault(s => s.SprintId == sprintId.Value)
             : null;
-        try { _pbis = await MetricsSvc.GetPbisForSprintAsync(sprintId, _selectedProjectId); } catch { _pbis = []; }
+        try { _pbis = await MetricsSvc.GetPbisForSprintAsync(sprintId, _selectedProjectId); }
+        catch  { _pbis = []; }
+        StateHasChanged();
     }
 
     private void ToggleSettings() => _settingsOpen = !_settingsOpen;
