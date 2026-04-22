@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore;
 using ScrumPilot.Data.Context;
 using ScrumPilot.Shared.Models;
 
@@ -10,23 +9,20 @@ public class DashboardPreferenceRepository : IDashboardPreferenceRepository
 
     public DashboardPreferenceRepository(ScrumPilotContext ctx) => _ctx = ctx;
 
-    public async Task<string?> GetPreferencesJsonAsync(string userId, int projectId)
+    public async Task<string?> GetPreferencesJsonAsync(string userId)
     {
-        var pref = await _ctx.UserDashboardPreferences
-            .FindAsync(userId, projectId);
+        var pref = await _ctx.UserDashboardPreferences.FindAsync(userId);
         return pref?.PreferencesJson;
     }
 
-    public async Task UpsertPreferencesJsonAsync(string userId, int projectId, string json)
+    public async Task UpsertPreferencesJsonAsync(string userId, string json)
     {
-        var existing = await _ctx.UserDashboardPreferences
-            .FindAsync(userId, projectId);
+        var existing = await _ctx.UserDashboardPreferences.FindAsync(userId);
         if (existing is null)
         {
             _ctx.UserDashboardPreferences.Add(new UserDashboardPreference
             {
                 UserId = userId,
-                ProjectId = projectId,
                 PreferencesJson = json
             });
         }

@@ -5,10 +5,6 @@
     {
         <div class="widget-center"><MudProgressCircular Indeterminate="true" Size="MudBlazor.Size.Small" Color="MudBlazor.Color.Primary" /></div>
     }
-    else if (!SprintId.HasValue)
-    {
-        <div class="widget-empty">No sprint selected</div>
-    }
     else
     {
         <div class="stat-card-content" style="align-items: center; text-align: center;">
@@ -18,7 +14,7 @@
             {
                 <MudProgressLinear Value="@_completedPercent" Color="MudBlazor.Color.Warning"
                     Style="margin-top: 12px; border-radius: 4px;" Size="MudBlazor.Size.Small" />
-                <MudText Typo="Typo.caption" Class="stat-caption" Style="margin-top: 4px;">
+                <MudText Typo="Typo.caption" Style="color: #8b949e; margin-top: 4px;">
                     @((_total - _remaining).ToString("0")) of @_total.ToString("0") points done
                 </MudText>
             }

@@ -10,50 +10,53 @@ namespace ScrumPilot.UnitTests.Frontend.PageTests
     {
         public HomePageTests()
         {
-            // Base class handles MudServices, JSInterop, auth, and ProjectStateService setup
+            // Base class handles MudServices and JSInterop setup
         }
 
         [Fact]
         public void HomePage_RendersCorrectly()
         {
+            // Act
             var component = Render<Home>();
 
+            // Assert
             Assert.NotNull(component);
-            // Page renders the personalised greeting and the tile grid
-            Assert.Contains("Welcome back to ScrumPilot", component.Markup);
-            Assert.Contains("mud-grid", component.Markup);
+            Assert.Contains("Scrum Pilot Dashboard", component.Markup);
+            Assert.Contains("Quick access to core Scrum Pilot workflows.", component.Markup);
         }
 
         [Fact]
         public void HomePage_ContainsDashboardTiles()
         {
+            // Act
             var component = Render<Home>();
 
-            // Home now has 8 tiles
+            // Assert
             var dashboardTiles = component.FindComponents<Web.Components.DashboardTile>();
-            Assert.Equal(8, dashboardTiles.Count);
+            Assert.Equal(5, dashboardTiles.Count);
         }
 
         [Fact]
         public void HomePage_HasCorrectTileContent()
         {
+            // Act
             var component = Render<Home>();
 
+            // Assert
             Assert.Contains("Scrum Board", component.Markup);
             Assert.Contains("Generate PBIs", component.Markup);
             Assert.Contains("Draft PBIs", component.Markup);
             Assert.Contains("Backlog", component.Markup);
             Assert.Contains("Metrics Dashboard", component.Markup);
-            Assert.Contains("Planning Poker", component.Markup);
-            Assert.Contains("Manage Project", component.Markup);
-            Assert.Contains("User Settings", component.Markup);
         }
 
         [Fact]
         public void HomePage_HasCorrectTileDescriptions()
         {
+            // Act
             var component = Render<Home>();
 
+            // Assert
             Assert.Contains("View and manage sprint work.", component.Markup);
             Assert.Contains("Create product backlog items quickly.", component.Markup);
             Assert.Contains("Review and refine drafted product backlog items.", component.Markup);
@@ -64,8 +67,10 @@ namespace ScrumPilot.UnitTests.Frontend.PageTests
         [Fact]
         public void HomePage_UsesCorrectContainerLayout()
         {
+            // Act
             var component = Render<Home>();
 
+            // Assert
             Assert.Contains("mud-container", component.Markup);
             Assert.Contains("mud-grid", component.Markup);
         }

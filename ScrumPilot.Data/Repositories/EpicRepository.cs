@@ -19,41 +19,5 @@ namespace ScrumPilot.Data.Repositories
                 .OrderBy(e => e.Name)
                 .ToListAsync();
         }
-
-        public async Task<IEnumerable<Epic>> GetEpicsByProjectAsync(int projectId)
-        {
-            return await _context.Epics
-                .Where(e => e.ProjectId == projectId)
-                .OrderBy(e => e.Name)
-                .ToListAsync();
-        }
-
-        public async Task<Epic> CreateAsync(Epic epic)
-        {
-            _context.Epics.Add(epic);
-            await _context.SaveChangesAsync();
-            return epic;
-        }
-
-        public async Task<Epic> UpdateAsync(Epic epic)
-        {
-            _context.Epics.Update(epic);
-            await _context.SaveChangesAsync();
-            return epic;
-        }
-
-        public async Task DeleteAsync(int id)
-        {
-            await _context.Stories
-                .Where(p => p.EpicId == id)
-                .ExecuteUpdateAsync(s => s.SetProperty(p => p.EpicId, (int?)null));
-
-            var epic = await _context.Epics.FindAsync(id);
-            if (epic != null)
-            {
-                _context.Epics.Remove(epic);
-                await _context.SaveChangesAsync();
-            }
-        }
     }
 }
