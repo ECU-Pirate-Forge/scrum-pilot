@@ -36,47 +36,18 @@ html, body {
         0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
-
-.mud-drawer .mud-tertiary-text {
-    color: #FF8A65 !important;
-}
-
 .dashboard-tile {
     cursor: pointer;
-    border-radius: 12px;
-    padding: 28px 24px;
-    min-height: 180px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
+    border-radius: 8px;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.dashboard-tile-icon {
-    line-height: 1;
-}
-
 .dashboard-tile:hover {
-    transform: translateY(-3px);
+    transform: translateY(-2px);
     box-shadow:
         0 0 0 1px rgba(168, 85, 247, 0.75),
         0 0 12px rgba(168, 85, 247, 0.4),
         0 4px 20px rgba(0, 0, 0, 0.35) !important;
-}
-
-/* Draft PBI table — blue header, readable in light and dark */
-.draft-pbi-table .mud-table-head tr th,
-.draft-pbi-table .mud-table-head tr td {
-    background-color: var(--mud-palette-primary) !important;
-    color: #ffffff !important;
-    font-weight: 700 !important;
-    letter-spacing: 0.03em;
-}
-
-.draft-pbi-table .mud-table-head .mud-button-root,
-.draft-pbi-table .mud-table-head .mud-icon-root,
-.draft-pbi-table .mud-table-head span {
-    color: #ffffff !important;
 }
 
 .swimlane-dropzone {
@@ -159,6 +130,8 @@ a {
 }
 
     .loading-progress-text:after {
+        content: "Loading...";
+    }
         content: var(--blazor-load-percentage-text, "Loading");
     }
 
@@ -184,8 +157,8 @@ code {
     height: 100%;
     display: flex;
     flex-direction: column;
-    background-color: var(--mud-palette-surface);
-    border: 1px solid var(--mud-palette-divider);
+    background-color: #161b22;
+    border: 1px solid #21262d;
     border-radius: 8px;
     overflow: hidden;
 }
@@ -197,7 +170,7 @@ code {
 }
 
 .widget-title {
-    color: var(--mud-palette-text-secondary);
+    color: #8b949e;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     font-size: 0.7rem !important;
@@ -210,12 +183,6 @@ code {
     flex-direction: column;
     min-height: 0;
     overflow: auto;
-}
-
-.widget-body .mud-chart {
-    flex: 1;
-    min-height: 0;
-    height: 100%;
 }
 
 .widget-loading,
@@ -232,7 +199,7 @@ code {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--mud-palette-text-secondary);
+    color: #8b949e;
     font-size: 0.85rem;
     font-style: italic;
 }
@@ -262,14 +229,10 @@ code {
 
 .stat-label {
     font-size: 0.8rem;
-    color: var(--mud-palette-text-secondary);
+    color: #8b949e;
     margin-top: 6px;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-}
-
-.stat-caption {
-    color: var(--mud-palette-text-secondary);
 }
 
 /* ── Sprint progress bars ───────────────────────────────── */
@@ -289,7 +252,7 @@ code {
 }
 
 .progress-bar-bg {
-    background-color: var(--mud-palette-lines-default);
+    background-color: #21262d;
     border-radius: 4px;
     height: 24px;
     overflow: hidden;
@@ -320,21 +283,21 @@ code {
 .velocity-stat-value {
     font-size: 1.45rem;
     font-weight: 700;
-    color: var(--mud-palette-text-primary);
+    color: #e6edf3;
     line-height: 1;
     letter-spacing: -0.5px;
 }
 
 .velocity-stat-label {
     font-size: 0.65rem;
-    color: var(--mud-palette-text-secondary);
+    color: #8b949e;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     white-space: nowrap;
 }
 
 .velocity-stat-sep {
-    color: var(--mud-palette-divider);
+    color: #484f58;
     font-size: 1rem;
     flex-shrink: 0;
 }
@@ -342,61 +305,24 @@ code {
 .velocity-up   { color: #3fb950; }
 .velocity-down { color: #f85149; }
 
-/* ── MudBlazor table overrides ──────────────────────────── */
+/* ── MudBlazor table dark overrides ────────────────────── */
 .mud-table-root { background: transparent !important; }
 .mud-table-container { background: transparent !important; }
 .mud-table-head .mud-table-cell {
-    background-color: var(--mud-palette-surface) !important;
-    color: var(--mud-palette-text-secondary) !important;
+    background-color: #161b22 !important;
+    color: #8b949e !important;
     font-size: 0.7rem !important;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    border-bottom: 1px solid var(--mud-palette-divider) !important;
+    border-bottom: 1px solid #21262d !important;
 }
-.mud-table-body .mud-table-row:hover td { background-color: var(--mud-palette-table-striped) !important; }
-.mud-table-body .mud-table-cell { color: var(--mud-palette-text-primary); border-bottom: 1px solid var(--mud-palette-lines-default) !important; }
+.mud-table-body .mud-table-row:hover td { background-color: #1c2128 !important; }
+.mud-table-body .mud-table-cell { color: #e6edf3; border-bottom: 1px solid #1c2128 !important; }
 .mud-chip { border-radius: 4px !important; font-size: 0.65rem !important; height: 20px !important; padding: 0 6px !important; }
 
 /* ── Scrollbar ──────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--mud-palette-background); }
-::-webkit-scrollbar-thumb { background: var(--mud-palette-divider); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--mud-palette-text-secondary); }
-
-/* ── ApexCharts theme-aware overrides ───────────────────── */
-.apexcharts-xaxis-label text,
-.apexcharts-yaxis-label text,
-.apexcharts-xaxis-title text,
-.apexcharts-yaxis-title text {
-    fill: var(--mud-palette-text-secondary) !important;
-}
-.apexcharts-legend-text {
-    color: var(--mud-palette-text-secondary) !important;
-}
-.apexcharts-gridline {
-    stroke: var(--mud-palette-divider) !important;
-}
-.apexcharts-annotation-yaxis rect {
-    fill: var(--mud-palette-surface) !important;
-}
-.apexcharts-annotation-yaxis text {
-    fill: #f59e0b !important;
-}
-.apexcharts-tooltip {
-    background: var(--mud-palette-surface) !important;
-    color: var(--mud-palette-text-primary) !important;
-    border: 1px solid var(--mud-palette-divider) !important;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
-}
-.apexcharts-tooltip-title {
-    background: var(--mud-palette-background) !important;
-    color: var(--mud-palette-text-secondary) !important;
-    border-bottom: 1px solid var(--mud-palette-divider) !important;
-}
-.apexcharts-tooltip-text-y-label,
-.apexcharts-tooltip-text-y-value,
-.apexcharts-tooltip-text-goals-label,
-.apexcharts-tooltip-text-goals-value {
-    color: var(--mud-palette-text-primary) !important;
-}
+::-webkit-scrollbar-track { background: #0d1117; }
+::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #484f58; }
 

@@ -1,8 +1,7 @@
+@using ScrumPilot.Shared.Models
 @using System.Net.Http.Json
-@using System.Security.Claims
 @inject HttpClient Http
 @inject IDialogService DialogService
-@inject AuthenticationStateProvider AuthState
 
 @if (PbiModel != null)
 {
@@ -41,15 +40,13 @@
                                        OnClick="StartEdit">
                                 Edit
                             </MudButton>
-                            @if (PbiModel?.PbiId > 0)
-                            {
-                                <MudButton Variant="Variant.Outlined"
-                                           Color="Color.Error"
-                                           StartIcon="@Icons.Material.Filled.Delete"
-                                           OnClick="ConfirmDelete">
-                                    Delete
-                                </MudButton>
-                            }
+                            <!-- DELETE BUTTON -->
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Error"
+                                       StartIcon="@Icons.Material.Filled.Delete"
+                                       OnClick="ConfirmDelete">
+                                Delete
+                            </MudButton>
                         </div>
                         <div class="pbi-button-right">
                             <MudButton Variant="Variant.Filled"
@@ -67,55 +64,9 @@
                                     <span>Improve with AI</span>
                                 }
                             </MudButton>
-                            <MudTooltip Text="@(PbiModel?.IsFlagged == true ? "Remove flag" : "Flag this PBI")">
-                                <MudIconButton Icon="@Icons.Material.Filled.Flag"
-                                               Color="@(PbiModel?.IsFlagged == true ? Color.Error : Color.Default)"
-                                               Variant="Variant.Outlined"
-                                               Size="Size.Medium"
-                                               OnClick="HandleFlagClick" />
-                            </MudTooltip>
                         </div>
                     }
                 </div>
-
-                <!-- FLAG REASON DIALOG -->
-                @if (showFlagDialog)
-                {
-                    <MudAlert Severity="@(_isUnflagging ? Severity.Info : Severity.Warning)" Class="mb-3">
-                        <div class="d-flex flex-column gap-2">
-                            <MudText>
-                                @if (_isUnflagging)
-                                {
-                                    <span>🏳️ Why are you removing the flag from <strong>@PbiModel?.Title</strong>? This will be posted as a comment.</span>
-                                }
-                                else
-                                {
-                                    <span>🚩 Why are you flagging <strong>@PbiModel?.Title</strong>? This will be posted as a comment.</span>
-                                }
-                            </MudText>
-                            <MudTextField @bind-Value="flagReason"
-                                          Label="Reason (required)"
-                                          Variant="Variant.Outlined"
-                                          Lines="2"
-                                          Error="@flagReasonError"
-                                          ErrorText="Please provide a reason." />
-                            <div class="d-flex gap-2">
-                                <MudButton Variant="Variant.Filled"
-                                           Color="@(_isUnflagging ? Color.Info : Color.Error)"
-                                           Size="Size.Small"
-                                           OnClick="ConfirmFlag">
-                                    @(_isUnflagging ? "Remove Flag" : "Flag It")
-                                </MudButton>
-                                <MudButton Variant="Variant.Outlined"
-                                           Color="Color.Default"
-                                           Size="Size.Small"
-                                           OnClick="@(() => { showFlagDialog = false; flagReason = ""; flagReasonError = false; _isUnflagging = false; })">
-                                    Cancel
-                                </MudButton>
-                            </div>
-                        </div>
-                    </MudAlert>
-                }
 
                 <!-- DELETE CONFIRMATION -->
                 @if (showDeleteConfirm)
@@ -158,7 +109,7 @@
                 }
 
                 <!-- TITLE -->
-                <div class="story-header mb-4">
+                <div class="story-header mb-3">
                     @if (isEditMode)
                     {
                         <MudTextField @bind-Value="editTitle"
@@ -178,202 +129,57 @@
                     }
                 </div>
 
-                <!-- ROW 1: Status | Priority | Story Points -->
-                <MudGrid Spacing="2" Class="mb-3" AlignItems="Center">
-                    <MudItem xs="12" sm="4">
-                        @if (isEditMode)
-                        {
-                            <MudSelect T="PbiStatus"
-                                       @bind-Value="editStatus"
-                                       Label="Status"
-                                       Variant="Variant.Outlined"
-                                       Dense="true">
-                                <MudSelectItem Value="PbiStatus.ToDo">To Do</MudSelectItem>
-                                <MudSelectItem Value="PbiStatus.InProgress">In Progress</MudSelectItem>
-                                <MudSelectItem Value="PbiStatus.Done">Done</MudSelectItem>
-                            </MudSelect>
-                        }
-                        else
-                        {
-                            <MudChip T="string"
-                                     Size="Size.Medium"
-                                     Color="@GetStatusColor(PbiModel.Status)"
-                                     Icon="@GetStatusIcon(PbiModel.Status)"
-                                     Variant="Variant.Filled">
-                                @PbiModel.Status
-                            </MudChip>
-                        }
-                    </MudItem>
-                    <MudItem xs="12" sm="4">
-                        @if (isEditMode)
-                        {
-                            <MudSelect T="PbiPriority"
-                                       @bind-Value="editPriority"
-                                       Label="Priority"
-                                       Variant="Variant.Outlined"
-                                       Dense="true">
-                                <MudSelectItem Value="PbiPriority.Low">Low</MudSelectItem>
-                                <MudSelectItem Value="PbiPriority.Medium">Medium</MudSelectItem>
-                                <MudSelectItem Value="PbiPriority.High">High</MudSelectItem>
-                            </MudSelect>
-                        }
-                        else
-                        {
-                            <MudChip T="string"
-                                     Size="Size.Medium"
-                                     Color="@GetPriorityColor(PbiModel.Priority)"
-                                     Icon="@GetPriorityIcon(PbiModel.Priority)"
-                                     Variant="Variant.Filled">
-                                @PbiModel.Priority Priority
-                            </MudChip>
-                        }
-                    </MudItem>
-                    <MudItem xs="12" sm="4">
-                        @if (isEditMode)
-                        {
-                            <MudSelect T="PbiPoints"
-                                       @bind-Value="editStoryPoints"
-                                       Label="Story Points"
-                                       Variant="Variant.Outlined"
-                                       Dense="true">
-                                <MudSelectItem Value="PbiPoints.Zero">0</MudSelectItem>
-                                <MudSelectItem Value="PbiPoints.One">1</MudSelectItem>
-                                <MudSelectItem Value="PbiPoints.Two">2</MudSelectItem>
-                                <MudSelectItem Value="PbiPoints.Three">3</MudSelectItem>
-                                <MudSelectItem Value="PbiPoints.Five">5</MudSelectItem>
-                                <MudSelectItem Value="PbiPoints.Eight">8</MudSelectItem>
-                                <MudSelectItem Value="PbiPoints.Thirteen">13</MudSelectItem>
-                                <MudSelectItem Value="PbiPoints.TwentyOne">21</MudSelectItem>
-                            </MudSelect>
-                        }
-                        else
-                        {
-                            <div class="d-flex align-center gap-2">
-                                <MudIcon Icon="Icons.Material.Filled.Timeline" Color="Color.Primary" Size="Size.Small" />
-                                <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Points:</MudText>
-                                <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">
-                                    @((int)PbiModel.StoryPoints)
-                                </MudChip>
-                            </div>
-                        }
-                    </MudItem>
-                </MudGrid>
+                <!-- BADGES -->
+                <div class="d-flex flex-wrap gap-2 mb-4">
+                    <MudChip T="string"
+                             Size="Size.Medium"
+                             Color="@GetStatusColor(PbiModel.Status)"
+                             Icon="@GetStatusIcon(PbiModel.Status)"
+                             Variant="Variant.Filled">
+                        @PbiModel.Status
+                    </MudChip>
 
-                <!-- ROW 2: Sprint | Epic | Assignee -->
-                <MudGrid Spacing="2" Class="mb-4">
-                    <MudItem xs="12" sm="4">
-                        @if (isEditMode)
-                        {
-                            <MudSelect T="int?"
-                                       @bind-Value="editSprintId"
-                                       Label="Sprint"
-                                       Variant="Variant.Outlined"
-                                       Dense="true"
-                                       Disabled="@(sprints == null)"
-                                       ToStringFunc="@(id => GetSprintDisplayName(id))">
-                                <MudSelectItem T="int?" Value="@((int?)null)">— Unassigned —</MudSelectItem>
-                                @if (sprints != null)
-                                {
-                                    @foreach (var sprint in sprints)
-                                    {
-                                        <MudSelectItem T="int?" Value="@((int?)sprint.SprintId)">
-                                            @(sprint.SprintTitle ?? sprint.SprintGoal ?? $"Sprint {sprint.SprintId}")
-                                        </MudSelectItem>
-                                    }
-                                }
-                            </MudSelect>
-                        }
-                        else
-                        {
-                            <MudPaper Class="pa-3"
-                                      Style="background-color: var(--mud-palette-action-hover); border-radius: 8px;">
-                                <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Sprint</MudText>
-                                <MudText Typo="Typo.body1" Style="font-weight: 600;">@GetSprintDisplayName(PbiModel.SprintId)</MudText>
-                            </MudPaper>
-                        }
-                    </MudItem>
-                    <MudItem xs="12" sm="4">
-                        @if (isEditMode)
-                        {
-                            <MudSelect T="int?"
-                                       @bind-Value="editEpicId"
-                                       Label="Epic"
-                                       Variant="Variant.Outlined"
-                                       Dense="true"
-                                       Disabled="@(epics == null)"
-                                       ToStringFunc="@(id => GetEpicDisplayName(id))">
-                                <MudSelectItem T="int?" Value="@((int?)null)">— Unassigned —</MudSelectItem>
-                                @if (epics != null)
-                                {
-                                    @foreach (var epic in epics)
-                                    {
-                                        <MudSelectItem T="int?" Value="@((int?)epic.EpicId)">
-                                            @epic.Name
-                                        </MudSelectItem>
-                                    }
-                                }
-                            </MudSelect>
-                        }
-                        else
-                        {
-                            <MudPaper Class="pa-3"
-                                      Style="background-color: var(--mud-palette-action-hover); border-radius: 8px;">
-                                <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Epic</MudText>
-                                <MudText Typo="Typo.body1" Style="font-weight: 600;">@GetEpicDisplayName(PbiModel.EpicId)</MudText>
-                            </MudPaper>
-                        }
-                    </MudItem>
-                    <MudItem xs="12" sm="4">
-                        @if (isEditMode)
-                        {
-                            <MudSelect T="string?"
-                                       @bind-Value="editAssignedToUserId"
-                                       Label="Assignee"
-                                       Variant="Variant.Outlined"
-                                       Dense="true"
-                                       ToStringFunc="@(id => GetUserDisplayName(id))">
-                                <MudSelectItem T="string?" Value="@((string?)null)">— Unassigned —</MudSelectItem>
-                                @foreach (var user in users)
-                                {
-                                    <MudSelectItem T="string?" Value="@user.Id">@user.UserName</MudSelectItem>
-                                }
-                            </MudSelect>
-                            @if (!string.IsNullOrEmpty(_currentUserId) && editAssignedToUserId != _currentUserId)
-                            {
-                                <MudLink Class="mt-1" Style="font-size: 0.75rem; cursor: pointer;"
-                                         @onclick="AssignToMe">Assign to me</MudLink>
-                            }
-                        }
-                        else
-                        {
-                            <MudPaper Class="pa-3"
-                                      Style="background-color: var(--mud-palette-action-hover); border-radius: 8px;">
-                                <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Assignee</MudText>
-                                <MudText Typo="Typo.body1" Style="font-weight: 600;">@GetUserDisplayName(PbiModel.AssignedToUserId)</MudText>
-                            </MudPaper>
-                        }
-                    </MudItem>
-                </MudGrid>
-
-                <!-- ORIGIN CHIP (when not web user) -->
-                @if (PbiModel.Origin != PbiOrigin.WebUserCreated)
-                {
-                    <div class="mb-3">
+                    @if (isEditMode)
+                    {
+                        <MudSelect T="PbiPriority"
+                                   @bind-Value="editPriority"
+                                   Label="Priority"
+                                   Variant="Variant.Outlined"
+                                   Style="min-width: 150px;">
+                            <MudSelectItem Value="PbiPriority.Low">Low</MudSelectItem>
+                            <MudSelectItem Value="PbiPriority.Medium">Medium</MudSelectItem>
+                            <MudSelectItem Value="PbiPriority.High">High</MudSelectItem>
+                        </MudSelect>
+                    }
+                    else
+                    {
                         <MudChip T="string"
-                                 Size="Size.Small"
+                                 Size="Size.Medium"
+                                 Color="@GetPriorityColor(PbiModel.Priority)"
+                                 Icon="@GetPriorityIcon(PbiModel.Priority)"
+                                 Variant="Variant.Filled">
+                            @PbiModel.Priority Priority
+                        </MudChip>
+                    }
+
+                    @if (PbiModel.Origin != PbiOrigin.WebUserCreated)
+                    {
+                        <MudChip T="string"
+                                 Size="Size.Medium"
                                  Color="Color.Info"
                                  Icon="Icons.Material.Filled.SmartToy"
                                  Variant="Variant.Filled">
                             @GetOriginLabel(PbiModel.Origin)
                         </MudChip>
-                    </div>
-                }
+                    }
+                </div>
 
                 <MudDivider Class="mb-4" />
 
                 <!-- DESCRIPTION -->
                 <div class="mb-4">
-                    <MudText Typo="Typo.h6" Class="mb-2" Style="font-weight: 600;">
+                    <MudText Typo="Typo.h6" Class="mb-3"
+                             Style="font-weight: 600;">
                         <MudIcon Icon="Icons.Material.Filled.Description" Class="me-2" />
                         Description
                     </MudText>
@@ -396,13 +202,15 @@
                                              border-left: 4px solid var(--mud-palette-primary);">
                                 @foreach (var line in PbiModel.Description.Split('\n'))
                                 {
-                                    <MudText Typo="Typo.body1" Class="mb-2" Style="line-height: 1.6;">@line</MudText>
+                                    <MudText Typo="Typo.body1" Class="mb-2"
+                                             Style="line-height: 1.6;">@line</MudText>
                                 }
                             </MudPaper>
                         }
                         else
                         {
-                            <MudText Typo="Typo.body2" Style="font-style: italic; color: var(--mud-palette-text-secondary);">
+                            <MudText Typo="Typo.body2"
+                                     Style="font-style: italic; color: var(--mud-palette-text-secondary);">
                                 No description provided
                             </MudText>
                         }
@@ -411,112 +219,172 @@
 
                 <MudDivider Class="mb-4" />
 
-                <!-- LINKS & DEPENDENCIES -->
+                <!-- EPIC AND SPRINT ASSIGNMENT -->
                 <div class="mb-4">
-                    <MudText Typo="Typo.h6" Class="mb-2" Style="font-weight: 600;">
-                        <MudIcon Icon="Icons.Material.Filled.Link" Class="me-2" />
-                        Links &amp; Dependencies
+                    <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">
+                        <MudIcon Icon="Icons.Material.Filled.AccountTree" Class="me-2" />
+                        Assignment
                     </MudText>
-                    <MudGrid Spacing="2">
+                    <MudGrid Spacing="3">
+
+                        <!-- EPIC -->
                         <MudItem xs="12" sm="6">
                             @if (isEditMode)
                             {
-                                <MudTextField @bind-Value="editIssueLink"
-                                              Label="Issue Link"
-                                              Placeholder="https://github.com/org/repo/issues/123"
-                                              Variant="Variant.Outlined"
-                                              Adornment="Adornment.Start"
-                                              AdornmentIcon="@Icons.Material.Filled.Link" />
+                                <MudSelect T="int?"
+                                           @bind-Value="editEpicId"
+                                           Label="Epic"
+                                           Variant="Variant.Outlined"
+                                           Disabled="@(epics == null)"
+                                           ToStringFunc="@(id => GetEpicDisplayName(id))">
+                                    <MudSelectItem T="int?" Value="@((int?)null)">
+                                        — Unassigned —
+                                    </MudSelectItem>
+                                    @if (epics != null)
+                                    {
+                                        @foreach (var epic in epics)
+                                        {
+                                            <MudSelectItem T="int?" Value="@((int?)epic.EpicId)">
+                                                @epic.Name
+                                            </MudSelectItem>
+                                        }
+                                    }
+                                </MudSelect>
                             }
                             else
                             {
                                 <MudPaper Class="pa-3"
                                           Style="background-color: var(--mud-palette-action-hover); border-radius: 8px;">
-                                    <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Issue Link</MudText>
-                                    @if (!string.IsNullOrWhiteSpace(PbiModel.IssueLink))
-                                    {
-                                        <MudLink Href="@PbiModel.IssueLink" Target="_blank"
-                                                 Style="font-weight: 600; word-break: break-all;">
-                                            @PbiModel.IssueLink
-                                        </MudLink>
-                                    }
-                                    else
-                                    {
-                                        <MudText Typo="Typo.body1" Style="font-style: italic; color: var(--mud-palette-text-secondary);">None</MudText>
-                                    }
+                                    <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Epic</MudText>
+                                    <MudText Typo="Typo.body1" Style="font-weight: 600;">@GetEpicDisplayName(PbiModel.EpicId)</MudText>
                                 </MudPaper>
                             }
                         </MudItem>
+
+                        <!-- SPRINT -->
                         <MudItem xs="12" sm="6">
                             @if (isEditMode)
                             {
-                                <MudAutocomplete T="ProductBacklogItem"
-                                                 @bind-Value="editDependsOnPbi"
-                                                 Label="Depends On"
-                                                 Placeholder="Search PBI title..."
-                                                 Variant="Variant.Outlined"
-                                                 SearchFunc="SearchDependencies"
-                                                 ToStringFunc="DependencyToString"
-                                                 Clearable="true"
-                                                 MaxItems="null"
-                                                 Adornment="Adornment.Start"
-                                                 AdornmentIcon="@Icons.Material.Filled.AccountTree" />
+                                <MudSelect T="int?"
+                                           @bind-Value="editSprintId"
+                                           Label="Sprint"
+                                           Variant="Variant.Outlined"
+                                           Disabled="@(sprints == null)"
+                                           ToStringFunc="@(id => GetSprintDisplayName(id))">
+                                    <MudSelectItem T="int?" Value="@((int?)null)">
+                                        — Unassigned —
+                                    </MudSelectItem>
+                                    @if (sprints != null)
+                                    {
+                                        @foreach (var sprint in sprints)
+                                        {
+                                            <MudSelectItem T="int?" Value="@((int?)sprint.SprintId)">
+                                                @(sprint.SprintGoal ?? $"Sprint {sprint.SprintId}")
+                                            </MudSelectItem>
+                                        }
+                                    }
+                                </MudSelect>
                             }
                             else
                             {
                                 <MudPaper Class="pa-3"
                                           Style="background-color: var(--mud-palette-action-hover); border-radius: 8px;">
-                                    <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Depends On</MudText>
-                                    @if (PbiModel.DependsOnPbiId.HasValue)
-                                    {
-                                        var dep = projectPbis.FirstOrDefault(p => p.PbiId == PbiModel.DependsOnPbiId.Value);
-                                        @if (dep != null)
-                                        {
-                                            <MudButton Variant="Variant.Text"
-                                                       StartIcon="@Icons.Material.Filled.OpenInNew"
-                                                       Style="font-weight: 600; padding: 0; min-width: 0; text-transform: none; text-align: left;"
-                                                       OnClick="@(() => OnNavigateToPbi.HasDelegate ? OnNavigateToPbi.InvokeAsync(dep.PbiId) : Task.CompletedTask)">
-                                                #@dep.PbiId — @dep.Title
-                                            </MudButton>
-                                        }
-                                        else
-                                        {
-                                            <MudText Typo="Typo.body1" Style="font-weight: 600;">PBI #@PbiModel.DependsOnPbiId</MudText>
-                                        }
-                                    }
-                                    else
-                                    {
-                                        <MudText Typo="Typo.body1" Style="font-style: italic; color: var(--mud-palette-text-secondary);">None</MudText>
-                                    }
+                                    <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Sprint</MudText>
+                                    <MudText Typo="Typo.body1" Style="font-weight: 600;">@GetSprintDisplayName(PbiModel.SprintId)</MudText>
                                 </MudPaper>
                             }
                         </MudItem>
+
                     </MudGrid>
                 </div>
 
                 <MudDivider Class="mb-4" />
 
-                <!-- DATE FIELDS -->
-                <MudGrid Spacing="2">
-                    <MudItem xs="12" sm="6">
-                        <div class="d-flex align-center gap-2">
-                            <MudIcon Icon="Icons.Material.Filled.CalendarToday" Color="Color.Success" Size="Size.Small" />
-                            <div>
-                                <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Created</MudText>
-                                <MudText Typo="Typo.body2" Style="font-weight: 600;">@PbiModel.DateCreated.ToString("MMM dd, yyyy")</MudText>
-                            </div>
-                        </div>
-                    </MudItem>
-                    <MudItem xs="12" sm="6">
-                        <div class="d-flex align-center gap-2">
-                            <MudIcon Icon="Icons.Material.Filled.Update" Color="Color.Warning" Size="Size.Small" />
-                            <div>
-                                <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Last Updated</MudText>
-                                <MudText Typo="Typo.body2" Style="font-weight: 600;">@PbiModel.LastUpdated.ToString("MMM dd, yyyy")</MudText>
-                            </div>
-                        </div>
-                    </MudItem>
-                </MudGrid>
+                <!-- STORY DETAILS -->
+                <div>
+                    <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">
+                        <MudIcon Icon="Icons.Material.Filled.Info" Class="me-2" />
+                        Story Details
+                    </MudText>
+                    <MudGrid AlignItems="Center" Spacing="3">
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudPaper Class="pa-3"
+                                      Style="background-color: var(--mud-palette-action-hover);
+                                             border-radius: 8px;">
+                                <div class="d-flex align-center">
+                                    <MudIcon Icon="Icons.Material.Filled.Timeline"
+                                             Color="Color.Primary" Class="me-2" />
+                                    <div style="width: 100%;">
+                                        <MudText Typo="Typo.caption"
+                                                 Style="color: var(--mud-palette-text-secondary);">
+                                            Story Points
+                                        </MudText>
+                                        @if (isEditMode)
+                                        {
+                                            <MudSelect T="PbiPoints"
+                                                       @bind-Value="editStoryPoints"
+                                                       Label="Story Points"
+                                                       Variant="Variant.Outlined">
+                                                <MudSelectItem Value="PbiPoints.Zero">0</MudSelectItem>
+                                                <MudSelectItem Value="PbiPoints.One">1</MudSelectItem>
+                                                <MudSelectItem Value="PbiPoints.Two">2</MudSelectItem>
+                                                <MudSelectItem Value="PbiPoints.Three">3</MudSelectItem>
+                                                <MudSelectItem Value="PbiPoints.Five">5</MudSelectItem>
+                                                <MudSelectItem Value="PbiPoints.Eight">8</MudSelectItem>
+                                                <MudSelectItem Value="PbiPoints.Thirteen">13</MudSelectItem>
+                                                <MudSelectItem Value="PbiPoints.TwentyOne">21</MudSelectItem>
+                                            </MudSelect>
+                                        }
+                                        else
+                                        {
+                                            <MudText Typo="Typo.h6" Style="font-weight: 600;">
+                                                @((int)PbiModel.StoryPoints)
+                                            </MudText>
+                                        }
+                                    </div>
+                                </div>
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudPaper Class="pa-3"
+                                      Style="background-color: var(--mud-palette-action-hover);
+                                             border-radius: 8px;">
+                                <div class="d-flex align-center">
+                                    <MudIcon Icon="Icons.Material.Filled.CalendarToday"
+                                             Color="Color.Success" Class="me-2" />
+                                    <div>
+                                        <MudText Typo="Typo.caption"
+                                                 Style="color: var(--mud-palette-text-secondary);">
+                                            Created
+                                        </MudText>
+                                        <MudText Typo="Typo.body1" Style="font-weight: 600;">
+                                            @PbiModel.DateCreated.ToString("MMM dd, yyyy")
+                                        </MudText>
+                                    </div>
+                                </div>
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudPaper Class="pa-3"
+                                      Style="background-color: var(--mud-palette-action-hover);
+                                             border-radius: 8px;">
+                                <div class="d-flex align-center">
+                                    <MudIcon Icon="Icons.Material.Filled.Update"
+                                             Color="Color.Warning" Class="me-2" />
+                                    <div>
+                                        <MudText Typo="Typo.caption"
+                                                 Style="color: var(--mud-palette-text-secondary);">
+                                            Last Updated
+                                        </MudText>
+                                        <MudText Typo="Typo.body1" Style="font-weight: 600;">
+                                            @PbiModel.LastUpdated.ToString("MMM dd, yyyy")
+                                        </MudText>
+                                    </div>
+                                </div>
+                            </MudPaper>
+                        </MudItem>
+                    </MudGrid>
+                </div>
 
             </MudPaper>
         </MudContainer>
@@ -546,10 +414,6 @@ else
     [Parameter] public ScrumPilot.Shared.Models.ProductBacklogItem? PbiModel { get; set; }
     [Parameter] public EventCallback<ScrumPilot.Shared.Models.ProductBacklogItem> OnSave { get; set; }
     [Parameter] public EventCallback<int> OnDelete { get; set; }
-    [Parameter] public bool StartInEditMode { get; set; } = false;
-    [Parameter] public EventCallback OnCancelNew { get; set; }
-    [Parameter] public int? ProjectId { get; set; }
-    [Parameter] public EventCallback<int> OnNavigateToPbi { get; set; }
 
     // Edit mode state
     private bool isEditMode = false;
@@ -559,114 +423,49 @@ else
     private bool isImproving = false;
     private bool isAiSuggestion = false;
 
-    // Flag state
-    private bool showFlagDialog = false;
-    private string flagReason = "";
-    private bool flagReasonError = false;
-    private bool _isUnflagging = false;
-    private string? _currentUserName;
-
     // Edit field values
     private string editTitle = "";
     private string editDescription = "";
-    private PbiStatus editStatus;
     private PbiPriority editPriority;
     private PbiPoints editStoryPoints;
     private int? editEpicId;
     private int? editSprintId;
-    private string? editAssignedToUserId;
-    private string? editIssueLink;
-    private int? editDependsOnPbiId;
-    private ProductBacklogItem? editDependsOnPbi;
 
-    // Lookup data
+    // Epic and Sprint data
     private List<Epic>? epics;
     private List<Sprint>? sprints;
-    private List<UserSummaryDto> users = new();
-    private List<ProductBacklogItem> projectPbis = new();
-    private string? _currentUserId;
 
     protected override async Task OnInitializedAsync()
     {
-        var authState = await AuthState.GetAuthenticationStateAsync();
-        _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        _currentUserName = authState.User.FindFirst(ClaimTypes.Name)?.Value
-                        ?? authState.User.FindFirst("unique_name")?.Value
-                        ?? _currentUserId;
-        await Task.WhenAll(LoadEpics(), LoadSprints(), LoadUsers(), LoadProjectPbis());
-        if (StartInEditMode && PbiModel != null)
-            StartEdit();
-    }
-
-    private void AssignToMe()
-    {
-        editAssignedToUserId = _currentUserId;
+        await LoadEpics();
+        await LoadSprints();
     }
 
     private async Task LoadEpics()
     {
         try
         {
-            var url = ProjectId.HasValue ? $"api/Epic?projectId={ProjectId.Value}" : "api/Epic";
-            epics = await Http.GetFromJsonAsync<List<Epic>>(url);
+            epics = await Http.GetFromJsonAsync<List<Epic>>("api/Epic");
         }
-        catch { epics = new(); }
+        catch
+        {
+            // API not available yet — dropdowns will show disabled
+            epics = new List<Epic>();
+        }
     }
 
     private async Task LoadSprints()
     {
         try
         {
-            var url = ProjectId.HasValue ? $"api/Sprint?projectId={ProjectId.Value}" : "api/Sprint";
-            sprints = await Http.GetFromJsonAsync<List<Sprint>>(url);
+            sprints = await Http.GetFromJsonAsync<List<Sprint>>("api/Sprint");
         }
-        catch { sprints = new(); }
-    }
-
-    private async Task LoadUsers()
-    {
-        try { users = await Http.GetFromJsonAsync<List<UserSummaryDto>>("api/user/all") ?? new(); }
-        catch { users = new(); }
-    }
-
-    private async Task LoadProjectPbis()
-    {
-        try
+        catch
         {
-            var url = ProjectId.HasValue
-                ? $"api/Pbi/getNonDraftPbis?projectId={ProjectId.Value}"
-                : "api/Pbi/getNonDraftPbis";
-            projectPbis = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(url) ?? new();
+            // API not available yet — dropdowns will show disabled
+            sprints = new List<Sprint>();
         }
-        catch { projectPbis = new(); }
     }
-
-    private string GetUserDisplayName(string? userId)
-    {
-        if (string.IsNullOrEmpty(userId)) return "— Unassigned —";
-        return users.FirstOrDefault(u => u.Id == userId)?.UserName ?? "Unknown";
-    }
-
-    private string GetDependencyDisplayName(int? pbiId)
-    {
-        if (!pbiId.HasValue) return "— None —";
-        var pbi = projectPbis.FirstOrDefault(p => p.PbiId == pbiId.Value);
-        return pbi != null ? $"#{pbi.PbiId} {pbi.Title}" : $"PBI #{pbiId}";
-    }
-
-    private async Task<IEnumerable<ProductBacklogItem>> SearchDependencies(string text, CancellationToken ct)
-    {
-        // Scope to the same sprint so the list stays relevant; fall back to all project PBIs if unassigned
-        var candidates = projectPbis.Where(p => p.PbiId != PbiModel?.PbiId);
-        if (PbiModel?.SprintId.HasValue == true)
-            candidates = candidates.Where(p => p.SprintId == PbiModel.SprintId);
-
-        if (string.IsNullOrWhiteSpace(text)) return candidates;
-        return candidates.Where(p => p.Title.Contains(text, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private string DependencyToString(ProductBacklogItem? p) =>
-        p is null ? "" : $"#{p.PbiId} {p.Title}";
 
     private string GetEpicDisplayName(int? epicId)
     {
@@ -679,7 +478,7 @@ else
     {
         if (!sprintId.HasValue) return "— Unassigned —";
         var sprint = sprints?.FirstOrDefault(s => s.SprintId == sprintId.Value);
-        return sprint?.SprintTitle ?? sprint?.SprintGoal ?? $"Sprint {sprintId}";
+        return sprint?.SprintGoal ?? $"Sprint {sprintId}";
     }
 
     // Delete methods
@@ -692,53 +491,6 @@ else
     private void CancelDelete()
     {
         showDeleteConfirm = false;
-    }
-
-    private void HandleFlagClick()
-    {
-        if (PbiModel == null) return;
-        flagReason = "";
-        flagReasonError = false;
-        _isUnflagging = PbiModel.IsFlagged;
-        showFlagDialog = true;
-    }
-
-    private async Task ConfirmFlag()
-    {
-        if (string.IsNullOrWhiteSpace(flagReason))
-        {
-            flagReasonError = true;
-            return;
-        }
-        if (PbiModel == null) return;
-
-        flagReasonError = false;
-        showFlagDialog = false;
-
-        PbiModel.IsFlagged = !_isUnflagging;
-        PbiModel.LastUpdated = DateTime.Now;
-
-        try { await Http.PutAsJsonAsync("api/Pbi", PbiModel); }
-        catch { }
-
-        var emoji = _isUnflagging ? "🏳️ Flag removed" : "🚩 Flagged";
-        try
-        {
-            var comment = new Comment
-            {
-                PbiId = PbiModel.PbiId,
-                UserId = _currentUserName ?? _currentUserId ?? "unknown",
-                Body = $"{emoji}: {flagReason.Trim()}",
-                CreatedDate = DateTime.UtcNow
-            };
-            await Http.PostAsJsonAsync("api/comments", comment);
-        }
-        catch { }
-
-        _isUnflagging = false;
-        flagReason = "";
-        if (OnSave.HasDelegate)
-            await OnSave.InvokeAsync(PbiModel);
     }
 
     private async Task DeleteStory()
@@ -772,17 +524,12 @@ else
     // Edit methods
     private void StartEdit()
     {
-        editTitle            = PbiModel!.Title ?? "";
-        editDescription      = PbiModel.Description ?? "";
-        editStatus           = PbiModel.Status;
-        editPriority         = PbiModel.Priority;
-        editStoryPoints      = PbiModel.StoryPoints;
-        editEpicId           = PbiModel.EpicId;
-        editSprintId         = PbiModel.SprintId;
-        editAssignedToUserId = PbiModel.AssignedToUserId;
-        editIssueLink        = PbiModel.IssueLink;
-        editDependsOnPbiId   = PbiModel.DependsOnPbiId;
-        editDependsOnPbi     = projectPbis.FirstOrDefault(p => p.PbiId == PbiModel.DependsOnPbiId);
+        editTitle = PbiModel!.Title ?? "";
+        editDescription = PbiModel.Description ?? "";
+        editPriority = PbiModel.Priority;
+        editStoryPoints = PbiModel.StoryPoints;
+        editEpicId = PbiModel.EpicId;
+        editSprintId = PbiModel.SprintId;
         titleError = false;
         errorMessage = "";
         isEditMode = true;
@@ -797,17 +544,13 @@ else
             return;
         }
 
-        PbiModel!.Title            = editTitle;
-        PbiModel.Description       = editDescription;
-        PbiModel.Status            = editStatus;
-        PbiModel.Priority          = editPriority;
-        PbiModel.StoryPoints       = editStoryPoints;
-        PbiModel.EpicId            = editEpicId;
-        PbiModel.SprintId          = editSprintId;
-        PbiModel.AssignedToUserId  = editAssignedToUserId;
-        PbiModel.IssueLink         = string.IsNullOrWhiteSpace(editIssueLink) ? null : editIssueLink.Trim();
-        PbiModel.DependsOnPbiId    = editDependsOnPbi?.PbiId;
-        PbiModel.LastUpdated       = DateTime.Now;
+        PbiModel!.Title = editTitle;
+        PbiModel.Description = editDescription;
+        PbiModel.Priority = editPriority;
+        PbiModel.StoryPoints = editStoryPoints;
+        PbiModel.EpicId = editEpicId;
+        PbiModel.SprintId = editSprintId;
+        PbiModel.LastUpdated = DateTime.Now;
 
         titleError = false;
         errorMessage = "";
@@ -820,16 +563,12 @@ else
         }
     }
 
-    private async Task CancelEdit()
+    private void CancelEdit()
     {
         titleError = false;
         errorMessage = "";
         isEditMode = false;
         isAiSuggestion = false;
-        if (PbiModel?.PbiId == 0 && OnCancelNew.HasDelegate)
-        {
-            await OnCancelNew.InvokeAsync();
-        }
     }
 
     private async Task ImproveWithAi()
@@ -849,7 +588,6 @@ else
                 {
                     editTitle = improved.Title;
                     editDescription = improved.Description ?? "";
-                    editStatus = PbiModel.Status;
                     editPriority = PbiModel.Priority;
                     editStoryPoints = PbiModel.StoryPoints;
                     editEpicId = PbiModel.EpicId;

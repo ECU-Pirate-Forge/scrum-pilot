@@ -10,9 +10,6 @@ using System.Text;
 
 namespace ScrumPilot.API.Controllers
 {
-    /// <summary>
-    /// Handles user authentication and JWT token issuance.
-    /// </summary>
     [ApiController]
     [Route("api/[controller]")]
     public class AuthController : ControllerBase
@@ -20,17 +17,12 @@ namespace ScrumPilot.API.Controllers
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IConfiguration _configuration;
 
-        /// <summary>Initialises a new instance of <see cref="AuthController"/>.</summary>
         public AuthController(UserManager<ApplicationUser> userManager, IConfiguration configuration)
         {
             _userManager = userManager;
             _configuration = configuration;
         }
 
-        /// <summary>
-        /// Authenticates a user with their username and password and returns a signed JWT token.
-        /// Returns 401 if the credentials are invalid.
-        /// </summary>
         [HttpPost("login")]
         [AllowAnonymous]
         public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request)
@@ -45,7 +37,6 @@ namespace ScrumPilot.API.Controllers
             return Ok(new LoginResponse { Token = token, UserName = user.UserName! });
         }
 
-        /// <summary>Builds a signed JWT token for the given user and their roles.</summary>
         private string GenerateJwtToken(IdentityUser user, IList<string> roles)
         {
             var claims = new List<Claim>

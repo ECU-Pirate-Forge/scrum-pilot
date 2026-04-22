@@ -1,291 +1,14 @@
 @page "/backlog"
 @inject HttpClient Http
-@inject ScrumPilot.Web.Services.ProjectStateService ProjectState
-@inject ScrumPilot.Web.Services.MetricsDashboardService MetricsSvc
-@implements IDisposable
 
-<div class="bl-page">
+<div class="swimlane-page">
+    <MudContainer MaxWidth="MaxWidth.False" Class="pa-0">
+        <SwimLanes @ref="_swimLanes"
+                   GroupByPriority
+                   InitialSprintId="-1"
+                   OnPbiSelected="OpenPbiDetails" />
+    </MudContainer>
 
-    <!-- Toolbar -->
-    <div class="bl-toolbar">
-        <div class="bl-toolbar-search">
-            <MudTextField T="string"
-                          @bind-Value="_searchText"
-                          Placeholder="Search PBIs..."
-                          Variant="Variant.Outlined"
-                          Margin="Margin.Dense"
-                          Adornment="Adornment.Start"
-                          AdornmentIcon="@Icons.Material.Filled.Search"
-                          Immediate="true"
-                          FullWidth="true" />
-        </div>
-        <div class="bl-toolbar-sprint">
-            <MudSelect T="int"
-                       Value="@_sprintViewFilter"
-                       ValueChanged="@((int v) => _sprintViewFilter = v)"
-                       Variant="Variant.Outlined"
-                       Margin="Margin.Dense"
-                       Dense="true"
-                       FullWidth="true"
-                       AnchorOrigin="Origin.BottomLeft">
-                <MudSelectItem T="int" Value="-1">All PBIs</MudSelectItem>
-                <MudSelectItem T="int" Value="0">Unassigned</MudSelectItem>
-                @foreach (var sprint in _sprints)
-                {
-                    <MudSelectItem T="int" Value="@sprint.SprintId">
-                        @(sprint.SprintTitle ?? $"Sprint {sprint.SprintId}")
-                    </MudSelectItem>
-                }
-            </MudSelect>
-        </div>
-        <div class="bl-toolbar-filters">
-            @foreach (var p in Enum.GetValues<PbiPriority>())
-            {
-                <MudChip T="string"
-                         Color="@GetPriorityColor(p)"
-                         Variant="@(_priorityFilter == p ? Variant.Filled : Variant.Outlined)"
-                         Size="Size.Medium"
-                                  Style="font-size: 0.8125rem;"
-                         OnClick="@(() => TogglePriorityFilter(p))">
-                    @p
-                </MudChip>
-            }
-        </div>
-        <div class="bl-toolbar-actions">
-            <MudText Typo="Typo.caption" Style="opacity:0.55; white-space:nowrap;">
-                @FilteredPbis.Count() PBIs
-            </MudText>
-            <MudButton Variant="Variant.Filled"
-                       Color="Color.Success"
-                       StartIcon="@Icons.Material.Filled.Add"
-                       OnClick="OpenNewPbiForm"
-                       Size="Size.Small">
-                New PBI
-            </MudButton>
-        </div>
-    </div>
-
-    <!-- Body -->
-    <div class="bl-body">
-
-        <!-- Main story list -->
-        <div class="bl-main">
-            @if (_loading)
-            {
-                <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center" Style="height:60%;">
-                    <MudProgressCircular Indeterminate="true" Size="Size.Large" />
-                    <MudText Class="mt-3" Typo="Typo.subtitle1">Loading backlog...</MudText>
-                </MudStack>
-            }
-            else if (!FilteredPbis.Any())
-            {
-                <div class="bl-empty">
-                    <MudIcon Icon="@Icons.Material.Filled.LibraryBooks" Style="font-size:3rem; opacity:0.25;" />
-                    <MudText Typo="Typo.h6" Style="opacity:0.4; margin-top:1rem;">No stories match the filters</MudText>
-                </div>
-            }
-            else
-            {
-                <div class="bl-list">
-                    @foreach (var pbi in FilteredPbis)
-                    {
-                        <div class="bl-row @(_draggedPbi?.PbiId == pbi.PbiId ? "bl-row-dragging" : "")"
-                             draggable="true"
-                             @ondragstart="@(() => StartDrag(pbi))"
-                             @ondragend="EndDrag">
-
-                            <MudIcon Icon="@Icons.Material.Filled.DragIndicator"
-                                     Class="bl-drag-handle" Size="Size.Small" />
-
-                            <MudIcon Icon="@GetTypeIcon(pbi.Type)"
-                                     Color="@GetTypeColor(pbi.Type)"
-                                     Class="bl-type-icon" Size="Size.Small" />
-
-                            <span class="bl-row-title">@pbi.Title</span>
-
-                            <div class="bl-row-meta">
-                                @if (pbi.SprintId.HasValue)
-                                {
-                                    var sprintLabel = _sprints.FirstOrDefault(s => s.SprintId == pbi.SprintId);
-                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
-                                             Style="height:22px;">
-                                        @(sprintLabel?.SprintTitle ?? $"Sprint {pbi.SprintId}")
-                                    </MudChip>
-                                }
-
-                                @if (pbi.IsFlagged)
-                                {
-                                    <MudTooltip Text="Flagged">
-                                        <MudIcon Icon="@Icons.Material.Filled.Flag" Color="Color.Error" Size="Size.Small" />
-                                    </MudTooltip>
-                                }
-
-                                <MudChip T="string" Size="Size.Small"
-                                         Color="@GetPriorityColor(pbi.Priority)"
-                                         Variant="Variant.Filled"
-                                         Style="height:22px;">
-                                    @pbi.Priority
-                                </MudChip>
-
-                                <MudChip T="string" Size="Size.Small"
-                                         Color="@GetStatusColor(pbi.Status)"
-                                         Variant="Variant.Outlined"
-                                         Style="height:22px;">
-                                    @GetStatusLabel(pbi.Status)
-                                </MudChip>
-
-                                <span class="bl-pts-badge">@((int)pbi.StoryPoints) pts</span>
-
-                                <MudIconButton Icon="@Icons.Material.Filled.OpenInNew"
-                                               Size="Size.Small"
-                                               Title="View details"
-                                               OnClick="@(() => OpenPbiDetails(pbi))"
-                                               Style="width:28px; height:28px;" />
-                            </div>
-                        </div>
-                    }
-                </div>
-            }
-        </div>
-
-        <!-- Sprint panel -->
-        <div class="bl-sprint-panel">
-
-            <div class="bl-sprint-selector">
-                <MudSelect T="int?"
-                           Label="Sprint"
-                           Value="@_selectedSprintId"
-                           ValueChanged="@(async (int? v) => await SelectSprint(v))"
-                           Variant="Variant.Outlined"
-                           Dense="true"
-                           FullWidth="true"
-                           AnchorOrigin="Origin.BottomLeft">
-                    <MudSelectItem T="int?" Value="@((int?)null)">— Select a sprint —</MudSelectItem>
-                    @foreach (var sprint in _sprints)
-                    {
-                        <MudSelectItem T="int?" Value="@((int?)sprint.SprintId)">
-                            @(sprint.SprintTitle ?? $"Sprint {sprint.SprintId}")
-                            @if (sprint.IsOpen) { <span style="opacity:0.6;"> · Open</span> }
-                        </MudSelectItem>
-                    }
-                </MudSelect>
-            </div>
-
-            @if (_selectedSprint is not null)
-            {
-                <div class="bl-sprint-info">
-                    @if (!string.IsNullOrWhiteSpace(_selectedSprint.SprintGoal))
-                    {
-                        <MudText Typo="Typo.caption" Style="font-style:italic; opacity:0.75; display:block; margin-bottom:3px;">
-                            "@_selectedSprint.SprintGoal"
-                        </MudText>
-                    }
-                    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                        @if (_selectedSprint.StartDate.HasValue && _selectedSprint.EndDate.HasValue)
-                        {
-                            <MudText Typo="Typo.caption" Style="opacity:0.6;">
-                                <MudIcon Icon="@Icons.Material.Filled.DateRange" Size="Size.Small"
-                                         Style="vertical-align:middle; margin-right:2px;" />
-                                @_selectedSprint.StartDate.Value.ToString("MMM d") – @_selectedSprint.EndDate.Value.ToString("MMM d")
-                            </MudText>
-                        }
-                        <MudText Typo="Typo.caption" Style="opacity:0.6; font-weight:700;">
-                            @SprintTotalPoints pts
-                        </MudText>
-                        <MudChip T="string" Size="Size.Small"
-                                 Color="@(_selectedSprint.IsOpen ? Color.Success : Color.Default)"
-                                 Variant="Variant.Outlined"
-                                 Style="height:18px; font-size:0.65rem;">
-                            @(_selectedSprint.IsOpen ? "Open" : "Closed")
-                        </MudChip>
-                    </div>
-                    @if (_recommendedPoints > 0)
-                    {
-                        <div class="bl-velocity-row">
-                            <MudProgressLinear Value="@Math.Min(SprintTotalPoints / _recommendedPoints * 100, 100)"
-                                               Color="@VelocityProgressColor"
-                                               Rounded="true"
-                                               Class="bl-velocity-bar" />
-                            <MudText Typo="Typo.caption" Style="@($"white-space:nowrap; font-weight:700; color:{VelocityColor};")">
-                                @SprintTotalPoints / @((int)_recommendedPoints) pts
-                            </MudText>
-                            <MudText Typo="Typo.caption" Style="opacity:0.5; white-space:nowrap;">suggested</MudText>
-                        </div>
-                    }
-                </div>
-            }
-
-            <!-- Drop zone -->
-            <div class="bl-drop-zone @(_isDragOverSprint ? "bl-drop-active" : "") @(_selectedSprintId == null ? "bl-drop-disabled" : "")"
-                 @ondragover:preventDefault="true"
-                 @ondragenter="HandleDragEnterSprint"
-                 @ondragleave="HandleDragLeaveSprint"
-                 @ondrop="HandleDropOnSprint">
-                <div style="pointer-events:none; display:flex; flex-direction:column; align-items:center; gap:4px;">
-                    <MudIcon Icon="@Icons.Material.Filled.AddTask"
-                             Style="font-size:2rem; opacity:0.35;" />
-                    <MudText Typo="Typo.body2" Style="opacity:0.5; text-align:center;">
-                        @(_selectedSprintId == null ? "Select a sprint above" : _isDragOverSprint ? "Release to assign" : "Drag stories here")
-                    </MudText>
-                </div>
-            </div>
-
-            <!-- Assigned stories -->
-            <div class="bl-sprint-list">
-                @if (_selectedSprintId.HasValue)
-                {
-                    var sprintPbis = SprintPbis.ToList();
-                    if (sprintPbis.Any())
-                    {
-                        <div class="bl-sprint-list-header">
-                            <span>@sprintPbis.Count @(sprintPbis.Count == 1 ? "story" : "stories")</span>
-                            <span style="@($"color:{VelocityColor};")">@SprintTotalPoints@(_recommendedPoints > 0 ? $" / {(int)_recommendedPoints}" : "") pts</span>
-                        </div>
-                        @foreach (var pbi in sprintPbis)
-                        {
-                            <div class="bl-sprint-item">
-                                <div class="bl-sprint-item-top">
-                                    <MudIcon Icon="@GetTypeIcon(pbi.Type)"
-                                             Color="@GetTypeColor(pbi.Type)"
-                                             Size="Size.Small"
-                                             Style="flex-shrink:0;" />
-                                    <span class="bl-sprint-item-title" title="@pbi.Title">@pbi.Title</span>
-                                    <span class="bl-sprint-pts">@((int)pbi.StoryPoints)p</span>
-                                    <MudIconButton Icon="@Icons.Material.Filled.Close"
-                                                   Size="Size.Small"
-                                                   Title="Remove from sprint"
-                                                   OnClick="@(() => UnassignFromSprint(pbi))"
-                                                   Style="width:22px; height:22px; flex-shrink:0;" />
-                                </div>
-                                <div class="bl-sprint-item-bottom">
-                                    <MudChip T="string" Size="Size.Small"
-                                             Color="@GetPriorityColor(pbi.Priority)"
-                                             Variant="Variant.Filled"
-                                             Style="height:18px; font-size:0.65rem;">
-                                        @pbi.Priority
-                                    </MudChip>
-                                    <MudChip T="string" Size="Size.Small"
-                                             Color="@GetStatusColor(pbi.Status)"
-                                             Variant="Variant.Outlined"
-                                             Style="height:18px; font-size:0.65rem;">
-                                        @GetStatusLabel(pbi.Status)
-                                    </MudChip>
-                                </div>
-                            </div>
-                        }
-                    }
-                    else
-                    {
-                        <MudText Typo="Typo.body2" Style="opacity:0.4; text-align:center; padding:20px 0;">
-                            No stories assigned yet
-                        </MudText>
-                    }
-                }
-            </div>
-        </div>
-    </div>
-
-    <!-- PBI detail overlay -->
     @if (SelectedPbi is not null)
     {
         <div class="details-overlay">
@@ -303,220 +26,30 @@
                         Close
                     </MudButton>
                 </div>
+
                 <div class="details-content">
                     <div class="details-card">
-                        <PbiCard PbiModel="SelectedPbi"
-                                 ProjectId="@ProjectState.SelectedProjectId"
-                                 OnSave="HandlePbiSave"
-                                 OnDelete="HandlePbiDelete" />
+                        <PbiCard PbiModel="SelectedPbi" OnSave="HandlePbiSave" OnDelete="HandlePbiDelete" />
                     </div>
                     <CommentThread PbiId="SelectedPbi.PbiId" />
                 </div>
             </div>
         </div>
     }
-
-    <!-- New PBI form overlay -->
-    @if (_showNewPbiForm && _newPbi is not null)
-    {
-        <MudOverlay Visible="true" DarkBackground="true" ZIndex="1300" />
-        <div style="position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:1400; width:min(900px,95vw); max-height:90vh; overflow-y:auto; border-radius:12px;">
-            <MudPaper Elevation="24" Style="border-radius:12px; overflow:hidden;">
-                <div class="d-flex align-center justify-space-between px-4 py-3"
-                     style="border-bottom:1px solid var(--mud-palette-divider); background:var(--mud-palette-surface);">
-                    <MudText Typo="Typo.h6" Style="font-weight:600;">New Story</MudText>
-                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="CloseNewPbiForm" />
-                </div>
-                <PbiCard PbiModel="@_newPbi"
-                         StartInEditMode="true"
-                         ProjectId="@_selectedProjectId"
-                         OnSave="HandleNewPbiSaved"
-                         OnCancelNew="CloseNewPbiForm" />
-            </MudPaper>
-        </div>
-    }
 </div>
 
 @code {
-    private List<ProductBacklogItem> _allPbis = new();
-    private List<Sprint> _sprints = new();
-    private bool _loading = true;
-    private int? _selectedProjectId;
-    private int? _selectedSprintId;
-    private Sprint? _selectedSprint;
-
-    private string _searchText = string.Empty;
-    private PbiPriority? _priorityFilter;
-    private int _sprintViewFilter = 0; // 0 = Unassigned, -1 = All, >0 = specific sprint
-
-    private ProductBacklogItem? _draggedPbi;
-    private int _dragEnterCount;
-    private bool _isDragOverSprint => _dragEnterCount > 0;
-
+    private SwimLanes? _swimLanes;
     private ProductBacklogItem? SelectedPbi;
-    private bool _showNewPbiForm;
-    private ProductBacklogItem? _newPbi;
-
-    private IEnumerable<ProductBacklogItem> FilteredPbis =>
-        _allPbis
-            .Where(p =>
-                (string.IsNullOrWhiteSpace(_searchText) ||
-                 p.Title.Contains(_searchText, StringComparison.OrdinalIgnoreCase)) &&
-                (_priorityFilter == null || p.Priority == _priorityFilter) &&
-                (_sprintViewFilter == -1 ||
-                 (_sprintViewFilter == 0 ? p.SprintId == null : p.SprintId == _sprintViewFilter)))
-            .OrderByDescending(p => (int)p.Priority)
-            .ThenBy(p => p.PbiId);
-
-    private IEnumerable<ProductBacklogItem> SprintPbis =>
-        _selectedSprintId.HasValue
-            ? _allPbis.Where(p => p.SprintId == _selectedSprintId).OrderBy(p => p.PbiId)
-            : Enumerable.Empty<ProductBacklogItem>();
-
-    private int SprintTotalPoints => SprintPbis.Sum(p => (int)p.StoryPoints);
-    private double _recommendedPoints;
-
-    private string VelocityColor => _recommendedPoints <= 0 ? "inherit"
-        : SprintTotalPoints >= _recommendedPoints ? "var(--mud-palette-success)"
-        : SprintTotalPoints >= _recommendedPoints * 0.8 ? "var(--mud-palette-warning)"
-        : "inherit";
-
-    private Color VelocityProgressColor => _recommendedPoints <= 0 ? Color.Default
-        : SprintTotalPoints >= _recommendedPoints ? Color.Success
-        : SprintTotalPoints >= _recommendedPoints * 0.8 ? Color.Warning
-        : Color.Primary;
-
-    protected override async Task OnInitializedAsync()
-    {
-        _selectedProjectId = ProjectState.SelectedProjectId;
-        ProjectState.OnChange += HandleProjectStateChanged;
-        await LoadDataAsync();
-    }
-
-    public void Dispose() => ProjectState.OnChange -= HandleProjectStateChanged;
-
-    private void HandleProjectStateChanged()
-    {
-        InvokeAsync(async () =>
-        {
-            _selectedProjectId = ProjectState.SelectedProjectId;
-            _selectedSprintId = null;
-            _selectedSprint = null;
-            await LoadDataAsync();
-            StateHasChanged();
-        });
-    }
-
-    private async Task LoadDataAsync()
-    {
-        _loading = true;
-        StateHasChanged();
-        try
-        {
-            var sprintUrl = _selectedProjectId.HasValue
-                ? $"api/Sprint?projectId={_selectedProjectId.Value}"
-                : "api/Sprint";
-            var pbiUrl = _selectedProjectId.HasValue
-                ? $"api/Pbi/getNonDraftPbis?projectId={_selectedProjectId.Value}"
-                : "api/Pbi/getNonDraftPbis";
-
-            _sprints = await Http.GetFromJsonAsync<List<Sprint>>(sprintUrl) ?? new();
-            _allPbis = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(pbiUrl) ?? new();
-
-            var velocityPoints = await MetricsSvc.GetVelocityDataAsync(projectId: _selectedProjectId);
-            if (velocityPoints.Count > 0)
-            {
-                var recent = velocityPoints.TakeLast(3).ToList();
-                _recommendedPoints = Math.Round(recent.Average(p => p.Completed), 1);
-            }
-            else
-            {
-                _recommendedPoints = 0;
-            }
-        }
-        catch
-        {
-            _sprints = new();
-            _allPbis = new();
-            _recommendedPoints = 0;
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private Task SelectSprint(int? sprintId)
-    {
-        _selectedSprintId = sprintId;
-        _selectedSprint = sprintId.HasValue
-            ? _sprints.FirstOrDefault(s => s.SprintId == sprintId)
-            : null;
-        return Task.CompletedTask;
-    }
-
-    private void TogglePriorityFilter(PbiPriority p) =>
-        _priorityFilter = _priorityFilter == p ? null : p;
-
-    private void StartDrag(ProductBacklogItem pbi)
-    {
-        _draggedPbi = pbi;
-        _dragEnterCount = 0;
-    }
-
-    private void EndDrag()
-    {
-        _draggedPbi = null;
-        _dragEnterCount = 0;
-    }
-
-    private void HandleDragEnterSprint()
-    {
-        if (_draggedPbi != null && _selectedSprintId.HasValue)
-            _dragEnterCount++;
-    }
-
-    private void HandleDragLeaveSprint()
-    {
-        _dragEnterCount = Math.Max(0, _dragEnterCount - 1);
-    }
-
-    private async Task HandleDropOnSprint()
-    {
-        _dragEnterCount = 0;
-        if (_draggedPbi == null || !_selectedSprintId.HasValue) return;
-        if (_draggedPbi.SprintId == _selectedSprintId) return;
-
-        await AssignToSprint(_draggedPbi, _selectedSprintId);
-        _draggedPbi = null;
-    }
-
-    private async Task UnassignFromSprint(ProductBacklogItem pbi)
-    {
-        await AssignToSprint(pbi, null);
-    }
-
-    private async Task AssignToSprint(ProductBacklogItem pbi, int? sprintId)
-    {
-        var original = pbi.SprintId;
-        pbi.SprintId = sprintId;
-        pbi.LastUpdated = DateTime.UtcNow;
-        try
-        {
-            var response = await Http.PutAsJsonAsync("api/Pbi", pbi);
-            if (!response.IsSuccessStatusCode)
-                pbi.SprintId = original;
-        }
-        catch
-        {
-            pbi.SprintId = original;
-        }
-        StateHasChanged();
-    }
 
     private void OpenPbiDetails(ProductBacklogItem pbi) => SelectedPbi = pbi;
 
-    private void ClosePbiDetails() => SelectedPbi = null;
+    private async Task ClosePbiDetails()
+    {
+        SelectedPbi = null;
+        if (_swimLanes is not null)
+            await _swimLanes.RefreshAsync();
+    }
 
     private async Task HandlePbiSave(ProductBacklogItem pbi)
     {
@@ -526,91 +59,20 @@
             if (response.IsSuccessStatusCode)
             {
                 SelectedPbi = null;
-                var updated = await response.Content.ReadFromJsonAsync<ProductBacklogItem>();
-                if (updated is not null)
-                {
-                    var idx = _allPbis.FindIndex(p => p.PbiId == updated.PbiId);
-                    if (idx >= 0) _allPbis[idx] = updated;
-                }
+                if (_swimLanes is not null)
+                    await _swimLanes.RefreshAsync();
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating story: {ex.Message}");
+        }
     }
 
-    private Task HandlePbiDelete(int pbiId)
+    private async Task HandlePbiDelete(int storyId)
     {
         SelectedPbi = null;
-        _allPbis.RemoveAll(p => p.PbiId == pbiId);
-        return Task.CompletedTask;
+        if (_swimLanes is not null)
+            await _swimLanes.RefreshAsync();
     }
-
-    private void OpenNewPbiForm()
-    {
-        _newPbi = new ProductBacklogItem
-        {
-            PbiId = 0,
-            ProjectId = _selectedProjectId ?? 0,
-            Title = "",
-            Status = PbiStatus.ToDo,
-            Priority = PbiPriority.Medium,
-            Origin = PbiOrigin.WebUserCreated,
-            DateCreated = DateTime.UtcNow,
-            LastUpdated = DateTime.UtcNow
-        };
-        _showNewPbiForm = true;
-    }
-
-    private void CloseNewPbiForm()
-    {
-        _showNewPbiForm = false;
-        _newPbi = null;
-    }
-
-    private async Task HandleNewPbiSaved(ProductBacklogItem saved)
-    {
-        _showNewPbiForm = false;
-        _newPbi = null;
-        _allPbis.Add(saved);
-        StateHasChanged();
-    }
-
-    private static Color GetPriorityColor(PbiPriority p) => p switch
-    {
-        PbiPriority.High   => Color.Error,
-        PbiPriority.Medium => Color.Warning,
-        PbiPriority.Low    => Color.Success,
-        _                  => Color.Default
-    };
-
-    private static Color GetStatusColor(PbiStatus s) => s switch
-    {
-        PbiStatus.ToDo       => Color.Info,
-        PbiStatus.InProgress => Color.Warning,
-        PbiStatus.InReview   => Color.Primary,
-        PbiStatus.Done       => Color.Success,
-        _                    => Color.Default
-    };
-
-    private static string GetStatusLabel(PbiStatus s) => s switch
-    {
-        PbiStatus.ToDo       => "To Do",
-        PbiStatus.InProgress => "In Progress",
-        PbiStatus.InReview   => "In Review",
-        PbiStatus.Done       => "Done",
-        _                    => s.ToString()
-    };
-
-    private static string GetTypeIcon(PbiType t) => t switch
-    {
-        PbiType.Bug  => Icons.Material.Filled.BugReport,
-        PbiType.Task => Icons.Material.Filled.Task,
-        _            => Icons.Material.Filled.Bookmark
-    };
-
-    private static Color GetTypeColor(PbiType t) => t switch
-    {
-        PbiType.Bug  => Color.Error,
-        PbiType.Task => Color.Info,
-        _            => Color.Secondary
-    };
 }

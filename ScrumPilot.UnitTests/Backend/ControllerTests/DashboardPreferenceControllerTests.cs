@@ -13,7 +13,6 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
     {
         private readonly IDashboardPreferenceService _mockService;
         private readonly DashboardPreferenceController _controller;
-        private const int ProjectId = 1;
 
         public DashboardPreferenceControllerTests()
         {
@@ -50,17 +49,17 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
                     new DashboardWidgetConfig { Id = "burndown", Visible = true, X = 0, Y = 0, W = 6, H = 4 }
                 ]
             };
-            _mockService.GetPreferencesAsync("user-1", ProjectId).Returns(dto);
+            _mockService.GetPreferencesAsync("user-1").Returns(dto);
 
             // Act
-            var result = await _controller.Get(ProjectId);
+            var result = await _controller.Get();
 
             // Assert
             var ok = Assert.IsType<OkObjectResult>(result.Result);
             var actual = Assert.IsType<DashboardPreferenceDto>(ok.Value);
             Assert.Single(actual.Widgets);
             Assert.Equal("burndown", actual.Widgets[0].Id);
-            await _mockService.Received(1).GetPreferencesAsync("user-1", ProjectId);
+            await _mockService.Received(1).GetPreferencesAsync("user-1");
         }
 
         [Fact]
@@ -70,11 +69,11 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             _controller.ControllerContext = MakeControllerContext(null);
 
             // Act
-            var result = await _controller.Get(ProjectId);
+            var result = await _controller.Get();
 
             // Assert
             Assert.IsType<UnauthorizedResult>(result.Result);
-            await _mockService.DidNotReceive().GetPreferencesAsync(Arg.Any<string>(), Arg.Any<int>());
+            await _mockService.DidNotReceive().GetPreferencesAsync(Arg.Any<string>());
         }
 
         [Fact]
@@ -82,10 +81,10 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         {
             // Arrange
             _controller.ControllerContext = MakeControllerContext("user-2");
-            _mockService.GetPreferencesAsync("user-2", ProjectId).Returns(new DashboardPreferenceDto());
+            _mockService.GetPreferencesAsync("user-2").Returns(new DashboardPreferenceDto());
 
             // Act
-            var result = await _controller.Get(ProjectId);
+            var result = await _controller.Get();
 
             // Assert
             var ok = Assert.IsType<OkObjectResult>(result.Result);
@@ -109,11 +108,11 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             };
 
             // Act
-            var result = await _controller.Put(dto, ProjectId);
+            var result = await _controller.Put(dto);
 
             // Assert
             Assert.IsType<NoContentResult>(result);
-            await _mockService.Received(1).SavePreferencesAsync("user-1", ProjectId, dto);
+            await _mockService.Received(1).SavePreferencesAsync("user-1", dto);
         }
 
         [Fact]
@@ -124,11 +123,11 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             var dto = new DashboardPreferenceDto();
 
             // Act
-            var result = await _controller.Put(dto, ProjectId);
+            var result = await _controller.Put(dto);
 
             // Assert
             Assert.IsType<UnauthorizedResult>(result);
-            await _mockService.DidNotReceive().SavePreferencesAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<DashboardPreferenceDto>());
+            await _mockService.DidNotReceive().SavePreferencesAsync(Arg.Any<string>(), Arg.Any<DashboardPreferenceDto>());
         }
 
         [Fact]
@@ -146,12 +145,11 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             };
 
             // Act
-            await _controller.Put(dto, ProjectId);
+            await _controller.Put(dto);
 
             // Assert
             await _mockService.Received(1).SavePreferencesAsync(
                 "user-3",
-                ProjectId,
                 Arg.Is<DashboardPreferenceDto>(d => d.Widgets.Count == 2));
         }
     }

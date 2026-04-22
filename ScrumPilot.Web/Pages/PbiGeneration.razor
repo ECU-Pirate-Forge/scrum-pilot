@@ -1,11 +1,13 @@
 ﻿@page "/pbigeneration"
+@using MudBlazor
 @using Microsoft.AspNetCore.Components.Web
+@using ScrumPilot.Shared.Models
+@using ScrumPilot.Web.Components
 @using System.Text.Json
 @using System.Text
 @inject HttpClient Http
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
-@inject ScrumPilot.Web.Services.ProjectStateService ProjectState
 
 <MudContainer MaxWidth="MaxWidth.False" Class="sg-page">
     <!-- Input Section Container -->
@@ -37,83 +39,70 @@
         </div>
     </MudPaper>
 
-    <!-- CSV Upload Zone -->
-    <MudPaper Elevation="2" Class="sg-input-container mb-4" Style="padding-top: 0;">
-        <div class="@($"sg-csv-zone{(_isDragOver ? " sg-csv-drag-over" : "")}")"
-             @ondragenter="HandleDragEnter"
-             @ondragleave="HandleDragLeave"
-             @ondragover:preventDefault="true">
-            <InputFile OnChange="HandleCsvUpload"
-                       accept=".csv"
-                       style="position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;" />
-            <MudIcon Icon="@Icons.Material.Filled.UploadFile"
-                     Color="@(_isDragOver ? Color.Success : Color.Primary)"
-                     Size="Size.Medium" Class="mb-1" />
-            <MudText Typo="Typo.body2">
-                Drag &amp; drop a CSV or <span style="color: var(--mud-palette-primary); text-decoration: underline;">click to browse</span>
-            </MudText>
-            <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">
-                One problem statement per line — no header
-            </MudText>
-        </div>
-    </MudPaper>
-
-    @if (_problemStatements.Count > 0)
-    {
-        <div style="width: min(900px, 92vw); max-height: 300px; overflow-y: auto;">
-            <MudStack Spacing="2">
-                @for (var index = 0; index < _problemStatements.Count; index++)
+    <!-- Main Content Container -->
+    <MudPaper Elevation="0" Class="sg-shell">
+        <div class="sg-list-wrap">
+            <MudPaper Outlined="true" Class="sg-list-shell">
+                @if (_problemStatements.Count == 0)
                 {
-                    var currentIndex = index;
-                    var itemNumber = currentIndex + 1;
-                    var currentStatement = _problemStatements[currentIndex];
-
-                    <MudPaper @key="@($"statement-{itemNumber}-{currentStatement}")"
-                              Elevation="2"
-                              Style="display:flex; align-items:center; justify-content:space-between;
-                                     gap:14px; padding:14px; border-radius:10px;
-                                     border: 2px solid var(--mud-palette-primary);
-                                     box-shadow: 0 4px 16px rgba(25, 118, 210, 0.15);
-                                     transition: transform 140ms ease, box-shadow 140ms ease;">
-                        <div class="sg-list-content">
-                            <MudChip T="string"
-                                     Size="Size.Small"
-                                     Variant="Variant.Filled"
-                                     Color="Color.Primary"
-                                     Class="sg-list-index">
-                                @itemNumber
-                            </MudChip>
-                            <MudText Typo="Typo.body1" Class="sg-list-text">@currentStatement</MudText>
-                        </div>
-                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                                       Color="Color.Error"
-                                       Size="Size.Small"
-                                       Class="sg-list-delete"
-                                       OnClick="@(() => RemoveProblemStatement(currentIndex))"
-                                       Disabled="@_isLoading"
-                                       AriaLabel="Remove problem statement" />
-                    </MudPaper>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="sg-empty-list">
+                        No problem statements added yet.
+                    </MudText>
                 }
-            </MudStack>
+                else
+                {
+                    <MudStack Spacing="1">
+                        @for (var index = 0; index < _problemStatements.Count; index++)
+                        {
+                            var currentIndex = index;
+                            var itemNumber = currentIndex + 1;
+                            var currentStatement = _problemStatements[currentIndex];
+
+                            <MudPaper Outlined="true" Class="sg-list-item" @key="@($"statement-{itemNumber}-{currentStatement}")">
+                                <div class="sg-list-content">
+                                    <MudChip T="string"
+                                             Size="Size.Small"
+                                             Variant="Variant.Filled"
+                                             Color="Color.Primary"
+                                             Class="sg-list-index">
+                                        @itemNumber
+                                    </MudChip>
+                                    <MudText Typo="Typo.body1" Class="sg-list-text">@currentStatement</MudText>
+                                </div>
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                               Color="Color.Error"
+                                               Size="Size.Small"
+                                               Class="sg-list-delete"
+                                               OnClick="@(() => RemoveProblemStatement(currentIndex))"
+                                               Disabled="@_isLoading"
+                                               AriaLabel="Remove problem statement" />
+                            </MudPaper>
+                        }
+                    </MudStack>
+                }
+            </MudPaper>
         </div>
 
-        <MudButton Class="sg-submit mt-4"
-                   Variant="Variant.Filled"
-                   Color="Color.Primary"
-                   EndIcon="@Icons.Material.Filled.ArrowForward"
-                   OnClick="SendMessage"
-                   Disabled="@_isLoading">
-            @if (_isLoading)
-            {
-                <MudProgressCircular Color="Color.Primary" Size="Size.Small" Indeterminate="true" />
-                <span style="margin-left: 8px;">WRITING YOUR PBIs...</span>
-            }
-            else
-            {
-                <span>@($"GENERATE PBI's ({_problemStatements.Count})")</span>
-            }
-        </MudButton>
-    }
+        <div class="sg-submit-wrap">
+            <MudButton Class="sg-submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       EndIcon="@Icons.Material.Filled.ArrowForward"
+                       OnClick="SendMessage"
+                       Disabled="@(_isLoading || _problemStatements.Count == 0)">
+                @if (_isLoading)
+                {
+                    <MudProgressCircular Color="Color.Primary" Size="Size.Small" Indeterminate="true" />
+                    <span style="margin-left: 8px;">WRITING YOUR STORIES...</span>
+                }
+                else
+                {
+                    <span>@($"GENERATE PBI's ({_problemStatements.Count})")</span>
+                }
+            </MudButton>
+        </div>
+
+    </MudPaper>
 
     @* Story Component area - shows loading or actual story *@
     <MudStack Justify="Justify.Center" Class="mt-6">
@@ -121,7 +110,7 @@
     {
         <MudStack AlignItems="AlignItems.Center">
             <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
-            <MudText Class="mt-4" Typo="Typo.subtitle1">Writing your PBIs...</MudText>
+            <MudText Class="mt-4" Typo="Typo.subtitle1">Writing your stories...</MudText>
         </MudStack>
     }
     </MudStack>
@@ -132,8 +121,6 @@
     private string _message = string.Empty;
     private bool _isLoading = false;
     private readonly List<string> _problemStatements = new();
-    private bool _isDragOver = false;
-    private int _dragCounter = 0;
     private List<ProductBacklogItem> _generatedPbis = new();
     private int _currentPbiIndex = 0;
     private ProductBacklogItem? CurrentPbi => _generatedPbis.Count == 0 ? null : _generatedPbis[_currentPbiIndex];
@@ -164,7 +151,7 @@
     {
         if (_problemStatements.Count == 0)
         {
-            Snackbar.Add("Add at least one problem statement before generating PBIs.", Severity.Warning);
+            Snackbar.Add("Add at least one problem statement before generating stories.", Severity.Warning);
             return;
         }
 
@@ -189,14 +176,13 @@
 
                 if (productBacklogItems is null || productBacklogItems.Count == 0)
 {
-    Snackbar.Add("Generation completed but the response did not contain valid PBIs.", Severity.Error);
+    Snackbar.Add("Generation completed but the response did not contain valid stories.", Severity.Error);
     return;
 }
 
 var dialogParameters = new DialogParameters
 {
-                    ["PBIs"] = productBacklogItems,
-                    ["ProjectId"] = ProjectState.SelectedProjectId
+                    ["PBI's"] = productBacklogItems
 };
 
 
@@ -251,60 +237,12 @@ await DialogService.ShowAsync<GeneratedPbiModal>(
     private Task HandleInputKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
+        {
             AddProblemStatement();
+        }
+
         return Task.CompletedTask;
     }
 
-    private void HandleDragEnter()
-    {
-        _dragCounter++;
-        _isDragOver = true;
-    }
-
-    private void HandleDragLeave()
-    {
-        if (--_dragCounter <= 0)
-        {
-            _dragCounter = 0;
-            _isDragOver = false;
-        }
-    }
-
-    private async Task HandleCsvUpload(InputFileChangeEventArgs e)
-    {
-        _isDragOver = false;
-        _dragCounter = 0;
-
-        var file = e.File;
-        if (file is null || !file.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
-        {
-            Snackbar.Add("Please upload a .csv file.", Severity.Warning);
-            return;
-        }
-
-        try
-        {
-            using var stream = file.OpenReadStream(maxAllowedSize: 1_048_576); // 1 MB
-            using var reader = new System.IO.StreamReader(stream);
-            var content = await reader.ReadToEndAsync();
-
-            var lines = content.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-            var added = 0;
-            foreach (var line in lines)
-            {
-                var trimmed = line.Trim();
-                if (!string.IsNullOrWhiteSpace(trimmed))
-                {
-                    _problemStatements.Add(trimmed);
-                    added++;
-                }
-            }
-
-            Snackbar.Add($"{added} problem statement{(added == 1 ? "" : "s")} imported.", Severity.Success);
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Failed to read CSV: {ex.Message}", Severity.Error);
-        }
-    }
+    
 }

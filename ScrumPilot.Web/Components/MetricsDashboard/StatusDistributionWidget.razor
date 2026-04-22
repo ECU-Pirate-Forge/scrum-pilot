@@ -1,51 +1,40 @@
-@using ApexCharts
-
 @if (Items.Count > 0)
 {
-    <ApexChart @ref="_chart" TItem="StatusPoint" Options="_options" Height="@("100%")">
-        <ApexPointSeries TItem="StatusPoint"
-                         Items="_points"
-                         Name="PBIs"
-                         SeriesType="SeriesType.Bar"
-                         XValue="@(p => p.Label)"
-                         YValue="@(p => p.Count)" />
-    </ApexChart>
+    <MudChart ChartType="ChartType.Bar"
+              ChartSeries="@_series"
+              XAxisLabels="@_labels"
+              Width="100%"
+              Height="160px"
+              ChartOptions="@_options" />
 }
 else
 {
-    <div class="widget-empty">No data.</div>
+    <MudText Typo="Typo.body2" Style="color:#8b949e;">No data.</MudText>
 }
 
 @code {
     [Parameter] public IReadOnlyList<ProductBacklogItem> Items { get; set; } = [];
 
-    private record StatusPoint(string Label, decimal Count);
-    private List<StatusPoint> _points = [];
-    private ApexChartOptions<StatusPoint> _options = BuildOptions();
-    private ApexChart<StatusPoint>? _chart;
+    private List<ChartSeries> _series = [];
+    private string[] _labels = [];
+    private ChartOptions _options = new() { YAxisTicks = 1 };
 
-    protected override async Task OnParametersSetAsync()
+    protected override void OnParametersSet()
     {
-        _points =
+        _labels = ["To Do", "In Progress", "In Review", "Done"];
+        _series =
         [
-            new("To Do",      Items.Count(i => i.Status == PbiStatus.ToDo)),
-            new("In Progress",Items.Count(i => i.Status == PbiStatus.InProgress)),
-            new("In Review",  Items.Count(i => i.Status == PbiStatus.InReview)),
-            new("Done",       Items.Count(i => i.Status == PbiStatus.Done)),
+            new ChartSeries
+            {
+                Name = "PBIs",
+                Data = new double[]
+                {
+                    Items.Count(i => i.Status == PbiStatus.ToDo),
+                    Items.Count(i => i.Status == PbiStatus.InProgress),
+                    Items.Count(i => i.Status == PbiStatus.InReview),
+                    Items.Count(i => i.Status == PbiStatus.Done),
+                }
+            }
         ];
-        if (_chart is not null)
-            await _chart.UpdateSeriesAsync(true);
     }
-
-    private static ApexChartOptions<StatusPoint> BuildOptions() => new()
-    {
-        Chart = new Chart { Background = "transparent", Toolbar = new Toolbar { Show = false } },
-        Colors = ["#1e88e5"],
-        PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { BorderRadius = 3, ColumnWidth = "55%" } },
-        Xaxis = new XAxis { Labels = new XAxisLabels { Style = new AxisLabelStyle { Colors = "#8b949e", FontSize = "11px" } } },
-        Yaxis = [new YAxis { Labels = new YAxisLabels { Style = new AxisLabelStyle { Colors = "#8b949e", FontSize = "11px" } }, TickAmount = 5 }],
-        Grid = new Grid { BorderColor = "#21262d", Row = new GridRow { Colors = ["transparent"] } },
-        Legend = new Legend { Show = false },
-        Tooltip = new Tooltip { Theme = ApexCharts.Mode.Dark }
-    };
 }

@@ -2,17 +2,17 @@
 @implements IAsyncDisposable
 @using ScrumPilot.Web.Services
 @using ScrumPilot.Web.Components.MetricsDashboard
+@using ScrumPilot.Shared.Models
 @using Microsoft.JSInterop
-@inject ProjectStateService ProjectState
 
-<div class="metrics-root @(IsDarkMode ? "metrics-dark" : "metrics-light")">
+<div class="metrics-root">
 
     <div class="metrics-topbar">
         <div class="topbar-left">
-            <MudText Typo="Typo.h6" Style="color:#ffffff; font-weight:600; white-space:nowrap;">Metrics Dashboard</MudText>
+            <MudText Typo="Typo.h6" Style="color:#e6edf3; font-weight:600; white-space:nowrap;">Metrics Dashboard</MudText>
             @if (_selectedSprint?.SprintGoal is { Length: > 0 } goal)
             {
-                <MudText Typo="Typo.caption" Style="color:rgba(255,255,255,0.7); white-space:nowrap; margin-left:8px;">@goal</MudText>
+                <MudText Typo="Typo.caption" Style="color:#8b949e; white-space:nowrap; margin-left:8px;">@goal</MudText>
             }
         </div>
         <div class="topbar-right">
@@ -26,15 +26,15 @@
                        Disabled="_sprints.Count == 0">
                 <MudSelectItem T="int?" Value="@((int?)null)">All Sprints</MudSelectItem>
                 @{
-                    // Number sprints by chronological start order; show all of them so the
-                    // selected value always has a matching item in the list.
-                    var allByDate   = _sprints
-                        .OrderBy(s => s.StartDate ?? DateTime.MaxValue)
-                        .ThenBy(s => s.SprintId)
+                    // Number all sprints chronologically (asc), then display started ones descending.
+                    var allByDate   = _sprints.OrderBy(s => s.StartDate).ToList();
+                    var today       = DateTime.UtcNow.Date;
+                    var started     = allByDate
+                        .Where(s => s.StartDate.HasValue && s.StartDate.Value.Date <= today)
                         .ToList();
-                    var displayDesc = ((IEnumerable<Sprint>)allByDate).Reverse().ToList();
+                    var startedDesc = ((IEnumerable<Sprint>)started).Reverse().ToList();
                 }
-                @foreach (var sprint in displayDesc)
+                @foreach (var sprint in startedDesc)
                 {
                     var num = allByDate.IndexOf(sprint) + 1;
                     <MudSelectItem T="int?" Value="@((int?)sprint.SprintId)">
@@ -47,7 +47,7 @@
                 <MudTooltip Text="Dashboard Settings">
                     <MudIconButton Icon="@Icons.Material.Filled.Settings"
                                    Size="Size.Medium"
-                                   Style="color:#ffffff;"
+                                   Style="color:#8b949e;"
                                    @onclick="ToggleSettings" />
                 </MudTooltip>
 
@@ -59,7 +59,7 @@
                             <span class="settings-title">Widgets</span>
                             <MudIconButton Icon="@Icons.Material.Filled.Close"
                                            Size="Size.Small"
-                                           Style="color:var(--mud-palette-text-secondary); margin:-4px;"
+                                           Style="color:#8b949e; margin:-4px;"
                                            @onclick="CloseSettings" />
                         </div>
                         <div class="settings-list">
@@ -78,7 +78,7 @@
                         <div class="settings-footer">
                             <MudButton Variant="Variant.Text"
                                        Size="Size.Small"
-                                       Style="color:var(--mud-palette-text-secondary); font-size:0.75rem;"
+                                       Style="color:#8b949e; font-size:0.75rem;"
                                        @onclick="ResetPreferences">Reset to defaults</MudButton>
                         </div>
                     </div>
@@ -91,7 +91,7 @@
     {
         <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center" Style="height:60vh;">
             <MudProgressCircular Indeterminate="true" Size="Size.Large" />
-            <MudText Class="mt-4" Typo="Typo.subtitle1" Style="color:rgba(255,255,255,0.7);">Loading metrics…</MudText>
+            <MudText Class="mt-4" Typo="Typo.subtitle1" Style="color:#8b949e;">Loading metrics…</MudText>
         </MudStack>
     }
     else
@@ -156,7 +156,7 @@
             {
                 <div class="grid-stack-item" gs-id="velocity" gs-x="0" gs-y="7" gs-w="6" gs-h="4">
                     <div class="grid-stack-item-content">
-                        <VelocityWidget SprintId="_selectedSprintId" ProjectId="_selectedProjectId" />
+                        <VelocityWidget SprintId="_selectedSprintId" />
                     </div>
                 </div>
             }
@@ -236,11 +236,9 @@
 </div>
 
 @code {
-    [CascadingParameter(Name = "IsDarkMode")] private bool IsDarkMode { get; set; }
     [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
 
-    private int? _selectedProjectId => ProjectState.SelectedProjectId;
     private List<Sprint> _sprints = [];
     private IReadOnlyList<ProductBacklogItem> _pbis = [];
     private int? _selectedSprintId;
@@ -291,59 +289,24 @@
 
     protected override async Task OnInitializedAsync()
     {
-        ProjectState.OnChange += HandleProjectStateChanged;
-        await LoadForCurrentProjectAsync();
-        _loading = false;
-    }
-
-    private void HandleProjectStateChanged()
-    {
-        InvokeAsync(async () =>
-        {
-            _loading = true;
-            _selectedSprintId = null;
-            _selectedSprint = null;
-            _pbis = [];
-            _sprints = [];
-            StateHasChanged();
-            await LoadForCurrentProjectAsync();
-            _loading = false;
-            _gridNeedsReinit = true;
-            StateHasChanged();
-        });
-    }
-
-    private async Task LoadForCurrentProjectAsync()
-    {
-        var projectId = ProjectState.SelectedProjectId;
-        if (!projectId.HasValue) return;
         try
         {
-            _sprints = await MetricsSvc.GetSprintsByProjectAsync(projectId.Value);
+            _sprints = await MetricsSvc.GetSprintsAsync();
             var now = DateTime.UtcNow.Date;
-            // Prefer the most recent open sprint; fall back to the most recently started
-            // sprint; last resort — take whatever sprint is newest by ID.
-            var mostRecent =
-                _sprints
-                    .Where(s => s.IsOpen)
-                    .OrderByDescending(s => s.StartDate ?? DateTime.MinValue)
-                    .ThenByDescending(s => s.SprintId)
-                    .FirstOrDefault()
-                ?? _sprints
-                    .Where(s => s.StartDate.HasValue && s.StartDate.Value.Date <= now)
-                    .OrderByDescending(s => s.StartDate)
-                    .FirstOrDefault()
-                ?? _sprints.OrderByDescending(s => s.SprintId).FirstOrDefault();
+            var mostRecent = _sprints
+                .Where(s => s.StartDate.HasValue && s.StartDate.Value.Date <= now)
+                .OrderByDescending(s => s.StartDate)
+                .FirstOrDefault();
             _selectedSprintId = mostRecent?.SprintId;
-            _selectedSprint   = mostRecent;
-            _pbis = await MetricsSvc.GetPbisForSprintAsync(_selectedSprintId, projectId);
+            _selectedSprint = mostRecent;
+            _pbis = await MetricsSvc.GetPbisForSprintAsync(_selectedSprintId);
 
-            _widgetPrefs = DefaultLayout();
-            var saved = await MetricsSvc.GetDashboardPreferencesAsync(projectId.Value);
+            var saved = await MetricsSvc.GetDashboardPreferencesAsync();
             if (saved?.Widgets?.Count > 0)
                 MergePreferences(saved.Widgets);
         }
         catch { }
+        _loading = false;
     }
 
     private void MergePreferences(List<DashboardWidgetConfig> saved)
@@ -369,12 +332,10 @@
     private async Task OnSprintChangedAsync(int? sprintId)
     {
         _selectedSprintId = sprintId;
-        _selectedSprint   = sprintId.HasValue
+        _selectedSprint = sprintId.HasValue
             ? _sprints.FirstOrDefault(s => s.SprintId == sprintId.Value)
             : null;
-        try { _pbis = await MetricsSvc.GetPbisForSprintAsync(sprintId, _selectedProjectId); }
-        catch  { _pbis = []; }
-        StateHasChanged();
+        try { _pbis = await MetricsSvc.GetPbisForSprintAsync(sprintId); } catch { _pbis = []; }
     }
 
     private void ToggleSettings() => _settingsOpen = !_settingsOpen;
@@ -432,11 +393,10 @@
 
     private async Task SavePreferencesAsync()
     {
-        if (!_selectedProjectId.HasValue) return;
         await MetricsSvc.SaveDashboardPreferencesAsync(new DashboardPreferenceDto
         {
             Widgets = _widgetPrefs
-        }, _selectedProjectId.Value);
+        });
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -460,7 +420,6 @@
 
     public async ValueTask DisposeAsync()
     {
-        ProjectState.OnChange -= HandleProjectStateChanged;
         try { await JS.InvokeVoidAsync("metricsGridstack.destroy"); } catch { }
         _dotnetRef?.Dispose();
     }

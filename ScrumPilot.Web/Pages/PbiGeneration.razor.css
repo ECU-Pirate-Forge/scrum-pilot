@@ -33,8 +33,27 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
-.sg-input-wrap {
+/* Main content wrapper */
+.sg-shell {
+    width: min(900px, 92vw);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    background: transparent;
+}
+
+.sg-input-wrap,
+.sg-list-wrap,
+.sg-submit-wrap {
     width: 100%;
+}
+
+.sg-input-wrap {
+    margin-bottom: 14px;
+}
+
+.sg-list-wrap {
     margin-bottom: 14px;
 }
 
@@ -46,12 +65,12 @@
 
 .sg-list-shell {
     width: 100%;
-    padding: 4px 0;
-    max-height: 300px;
+    padding: 12px;
+    max-height: 220px;
     overflow-y: auto;
-    border-radius: 0;
-    background: transparent;
-    border: none;
+    border-radius: 12px;
+    background: var(--mud-palette-background);
+    border-color: var(--mud-palette-lines-default);
 }
 
 .sg-empty-list {
@@ -66,8 +85,9 @@
     padding: 14px;
     border-radius: 10px;
     background: var(--mud-palette-surface);
-    border: 2px solid var(--mud-palette-primary) !important;
-    box-shadow: 0 4px 16px rgba(25, 118, 210, 0.15);
+    border: 1px solid var(--mud-palette-lines-default);
+    border-left: 4px solid var(--mud-palette-primary);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
     transition: transform 140ms ease, box-shadow 140ms ease;
 }
 
@@ -203,34 +223,4 @@
 .sg-nav-position {
     min-width: 70px;
     text-align: center;
-}
-
-/* ============================
-   CSV Drop Zone
-   ============================ */
-
-.sg-csv-zone {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    padding: 20px 16px;
-    border: 2px dashed var(--mud-palette-lines-default);
-    border-radius: 12px;
-    cursor: pointer;
-    transition: border-color 160ms ease, background 160ms ease;
-    text-align: center;
-    user-select: none;
-}
-
-.sg-csv-zone:hover {
-    border-color: var(--mud-palette-primary);
-    background: rgba(var(--mud-palette-primary-rgb), 0.04);
-}
-
-.sg-csv-drag-over {
-    border-color: var(--mud-palette-success) !important;
-    background: rgba(76, 175, 80, 0.08) !important;
 }
