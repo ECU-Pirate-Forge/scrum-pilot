@@ -70,6 +70,7 @@ Planned features for future sprints:
 - **ScrumLord Web Dashboard** — surface ScrumLord's Discord summaries and meeting transcripts inside the ScrumPilot web UI
 - **OAuth / SSO** — Discord OAuth and SSO login options
 - **Mobile Functionality** — Native companion app for on-the-go sprint updates
+- **Web-App & Bot Integration** — deeper integration between the web app and Discord bot (e.g., trigger story generation from a Discord command, post sprint summaries to a Discord channel)
 
 ---
 
