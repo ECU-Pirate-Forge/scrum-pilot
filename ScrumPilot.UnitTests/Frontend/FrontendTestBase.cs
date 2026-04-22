@@ -1,8 +1,10 @@
 using Bunit;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using MudBlazor;
 using MudBlazor.Services;
 using NSubstitute;
+using ScrumPilot.Web.Services;
 
 namespace ScrumPilot.UnitTests.Frontend
 {
@@ -15,6 +17,15 @@ namespace ScrumPilot.UnitTests.Frontend
             Services.AddMudServices();
             MockHttpClient = Substitute.For<HttpClient>();
             Services.AddSingleton(MockHttpClient);
+
+            // Register auth so components that inject AuthenticationStateProvider
+            // (Home, PbiCard, CommentThread, etc.) don't throw MissingBunitAuthorizationException.
+            // Uses bUnit's own test-double extension, not the ASP.NET Core one.
+            this.AddAuthorization();
+
+            // Register ProjectStateService so pages that inject it
+            // (ScrumBoard, SwimLanes, Backlog, PbiGeneration, etc.) can be rendered.
+            Services.AddSingleton<ProjectStateService>();
 
             // Use loose mode to ignore JSInterop issues - focus on component logic instead
             JSInterop.Mode = JSRuntimeMode.Loose;

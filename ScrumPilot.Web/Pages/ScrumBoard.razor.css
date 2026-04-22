@@ -1,5 +1,137 @@
-/* ScrumBoard - Story details modal overlay */
+/* ScrumBoard - Swimlane columns, cards, and detail modal overlay */
 
+/* ── Column hover effects ─────────────────────────────────── */
+.mud-paper.swimlane-column.column-todo:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.2), 0 8px 24px rgba(220, 38, 38, 0.15) !important;
+}
+
+.mud-paper.swimlane-column.column-inprogress:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.2), 0 8px 24px rgba(250, 204, 21, 0.15) !important;
+}
+
+.mud-paper.swimlane-column.column-done:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.2), 0 8px 24px rgba(22, 163, 74, 0.15) !important;
+}
+
+.mud-paper.swimlane-column.column-inreview:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2), 0 8px 24px rgba(59, 130, 246, 0.15) !important;
+}
+
+/* ── Swimlane dropzone ────────────────────────────────────── */
+.swimlane-dropzone {
+    min-height: clamp(300px, 55vh, 500px) !important;
+    height: 100% !important;
+    padding: 16px !important;
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+    overflow-y: auto !important;
+    background: var(--mud-palette-background) !important;
+    border-radius: 0 0 8px 8px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+.swimlane-dropzone.mud-drop-zone-drag-over {
+    background-color: var(--mud-palette-action-hover) !important;
+    border: 2px dashed var(--mud-palette-primary) !important;
+    border-radius: 8px !important;
+    transform: scale(1.01) !important;
+    transition: all 0.2s ease !important;
+}
+
+.mud-drop-zone {
+    min-height: inherit !important;
+    height: 100% !important;
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+}
+
+.swimlane-dropzone:empty::before {
+    content: "Drop cards here" !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    height: 200px !important;
+    color: var(--mud-palette-text-secondary) !important;
+    font-style: italic !important;
+    opacity: 0.5 !important;
+    border: 2px dashed var(--mud-palette-lines-default) !important;
+    border-radius: 8px !important;
+    margin: 8px 0 !important;
+}
+
+.swimlane-dropzone.mud-drop-zone-drag-over:empty::before {
+    content: "Release to drop here" !important;
+    opacity: 0.8 !important;
+    color: var(--mud-palette-primary) !important;
+    border-color: var(--mud-palette-primary) !important;
+    background-color: var(--mud-palette-primary-lighten) !important;
+}
+
+/* ── Card wrapper ─────────────────────────────────────────── */
+.swimlane-card-wrapper {
+    width: 100% !important;
+    margin-bottom: 16px !important;
+    flex-shrink: 0 !important;
+}
+
+.swimlane-card-wrapper:last-child {
+    margin-bottom: 0 !important;
+}
+
+.swimlane-card-wrapper:hover .mud-card {
+    transform: translateY(-2px) !important;
+    transition: all 0.3s ease !important;
+}
+
+/* ── Priority stripe ──────────────────────────────────────── */
+.card-priority-stripe {
+    height: 6px !important;
+    width: 100% !important;
+    flex-shrink: 0 !important;
+}
+
+.priority-high .card-priority-stripe {
+    background-color: #ef4444 !important;
+}
+
+.priority-medium .card-priority-stripe {
+    background-color: #eab308 !important;
+}
+
+.priority-low .card-priority-stripe {
+    background-color: #22c55e !important;
+}
+
+.priority-none .card-priority-stripe {
+    background-color: #7dd3fc !important;
+}
+
+/* ── Drag state ───────────────────────────────────────────── */
+.swimlane-card-wrapper.mud-dragging {
+    transform: rotate(2deg) scale(1.02) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25) !important;
+    z-index: 1000 !important;
+    opacity: 0.8 !important;
+}
+
+.swimlane-card-wrapper[draggable="true"] {
+    cursor: grab !important;
+}
+
+.swimlane-card-wrapper[draggable="true"]:active {
+    cursor: grabbing !important;
+}
+
+/* ── Detail overlay ───────────────────────────────────────── */
 @keyframes fadeIn {
     from { opacity: 0; }
     to { opacity: 1; }

@@ -99,8 +99,8 @@ namespace ScrumPilot.UnitTests.Frontend.PageTests
             // Act
             var component = Render<PbiGeneration>();
 
-            // Assert
-            Assert.Contains("sg-shell", component.Markup);
+            // Assert - main page container class
+            Assert.Contains("sg-page", component.Markup);
         }
 
         [Fact]
@@ -109,8 +109,10 @@ namespace ScrumPilot.UnitTests.Frontend.PageTests
             // Act
             var component = Render<PbiGeneration>();
 
-            // Assert
-            Assert.Contains("No problem statements added yet.", component.Markup);
+            // Assert - when no statements are queued the Generate button is hidden
+            // and the CSV drop-zone hint is visible instead
+            Assert.DoesNotContain("GENERATE PBI", component.Markup);
+            Assert.Contains("One problem statement per line", component.Markup);
         }
     }
 }

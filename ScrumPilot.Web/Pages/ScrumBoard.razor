@@ -1,15 +1,211 @@
 @page "/scrum-board"
+@using ScrumPilot.Shared.Models
 @inject HttpClient Http
 @inject ScrumPilot.Web.Services.ProjectStateService ProjectState
 @inject NavigationManager Nav
+@implements IDisposable
 
 <div class="swimlane-page">
     <MudContainer MaxWidth="MaxWidth.False" Class="pa-0">
-        <SwimLanes @ref="_swimLanes"
-                   DefaultToLatestSprint
-                   ShowDependencyChart
-                   OnDependencyChartRequested="OpenDependencyChart"
-                   OnPbiSelected="OpenPbiDetails" />
+
+        @if (_loading)
+        {
+            <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center" Style="height:60vh;">
+                <MudProgressCircular Indeterminate="true" Size="Size.Large" />
+                <MudText Class="mt-4" Typo="Typo.subtitle1">Loading...</MudText>
+            </MudStack>
+        }
+        else
+        {
+            @if (!string.IsNullOrWhiteSpace(_errorMessage))
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4" Icon="@Icons.Material.Filled.ErrorOutline">
+                    @_errorMessage
+                </MudAlert>
+            }
+
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-4" Style="width: 100%;">
+                <MudSelect T="int?"
+                           Label="Sprint"
+                           Value="@_selectedSprintId"
+                           ValueChanged="@(async (int? value) => await OnSprintChanged(value))"
+                           Variant="Variant.Outlined"
+                           Dense="true"
+                           Style="flex: 1; min-width: 0;">
+                    <MudSelectItem T="int?" Value="@((int?)null)">All</MudSelectItem>
+                    <MudSelectItem T="int?" Value="@((int?)-1)">Unassigned</MudSelectItem>
+                    @foreach (var sprint in _sprints)
+                    {
+                        <MudSelectItem T="int?" Value="@((int?)sprint.SprintId)">
+                            @(sprint.SprintTitle ?? sprint.SprintGoal ?? $"Sprint {sprint.SprintId}")
+                        </MudSelectItem>
+                    }
+                </MudSelect>
+
+                <MudSelect T="int?"
+                           Label="Epic"
+                           Value="@_selectedEpicId"
+                           ValueChanged="@(async (int? value) => await OnEpicChanged(value))"
+                           Variant="Variant.Outlined"
+                           Dense="true"
+                           Style="flex: 1; min-width: 0;">
+                    <MudSelectItem T="int?" Value="@((int?)null)">All</MudSelectItem>
+                    @foreach (var epic in _epics)
+                    {
+                        <MudSelectItem T="int?" Value="@((int?)epic.EpicId)">
+                            @epic.Name
+                        </MudSelectItem>
+                    }
+                </MudSelect>
+
+                <MudTooltip Text="Add new PBI">
+                    <MudIconButton Icon="@Icons.Material.Filled.Add"
+                                   Color="Color.Success"
+                                   Variant="Variant.Outlined"
+                                   Size="Size.Medium"
+                                   Style="flex-shrink: 0; border-radius: 8px;"
+                                   OnClick="OpenNewPbiForm" />
+                </MudTooltip>
+                <MudTooltip Text="Dependency Chart">
+                    <MudIconButton Icon="@Icons.Material.Filled.AccountTree"
+                                   Color="Color.Secondary"
+                                   Variant="Variant.Outlined"
+                                   Size="Size.Medium"
+                                   Style="flex-shrink: 0; border-radius: 8px;"
+                                   OnClick="OpenDependencyChart" />
+                </MudTooltip>
+            </MudStack>
+
+            @if (!_items.Any())
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4" Icon="@Icons.Material.Filled.Info">
+                    No PBIs match the selected filters.
+                </MudAlert>
+            }
+
+            <MudDropContainer T="ProductBacklogItem"
+                              @ref="_dropContainer"
+                              Items="@_items"
+                              ItemsSelector="@((item, zone) => item.Status.ToString() == zone)"
+                              ItemDropped="HandleItemDropped"
+                              Class="d-flex" Style="flex: 1; min-height: calc(100vh - 200px);">
+                <ChildContent>
+                    <MudStack Row Spacing="3" Class="mud-width-full" Style="height: 100%; flex: 1;">
+                        @foreach (var lane in _lanes)
+                        {
+                            <MudPaper Class="@($"swimlane-column {lane.CssClass}")" Elevation="2"
+                                      Style="@GetPaperStyle(lane)">
+                                <MudStack Row AlignItems="AlignItems.Center" Class="column-header"
+                                          Style="@GetHeaderStyle(lane)">
+                                    <MudIcon Icon="@lane.Icon" Color="@lane.ChipColor" Size="Size.Medium" />
+                                    <MudText Typo="Typo.h5" Class="column-title" Style="font-weight: 700;">@lane.Label</MudText>
+                                    <MudSpacer />
+                                    <MudChip T="string" Size="Size.Small" Color="@lane.ChipColor" Variant="Variant.Filled">
+                                        @lane.Count(_items)
+                                    </MudChip>
+                                </MudStack>
+                                <MudDropZone T="ProductBacklogItem" Identifier="@lane.Identifier" Class="swimlane-dropzone"
+                                             Style="min-height: 500px; height: 100%; width: 100%; flex: 1; display: flex; flex-direction: column; gap: 16px;" />
+                            </MudPaper>
+                        }
+                    </MudStack>
+                </ChildContent>
+
+                <ItemRenderer>
+                    <div class="swimlane-card-wrapper">
+                        <MudCard Elevation="8" Style="@GetCardStyle(context)">
+                            <div class="card-priority-stripe @GetPriorityClass(context)"></div>
+
+                            <MudCardContent Class="pa-3" Style="padding-bottom: 8px; border-bottom: 1px solid var(--mud-palette-divider);">
+                                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                    <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                                        @if (context.StoryPoints != PbiPoints.Zero)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Filled">
+                                                @((int)context.StoryPoints) SP
+                                            </MudChip>
+                                        }
+                                        else
+                                        {
+                                            <MudTooltip Text="Unpointed">
+                                                <MudIcon Icon="@Icons.Material.Filled.ErrorOutline"
+                                                         Color="Color.Error"
+                                                         Size="Size.Small" />
+                                            </MudTooltip>
+                                        }
+                                        @if (context.IsFlagged)
+                                        {
+                                            <MudTooltip Text="Flagged">
+                                                <MudIcon Icon="@Icons.Material.Filled.Flag"
+                                                         Color="Color.Error"
+                                                         Size="Size.Small" />
+                                            </MudTooltip>
+                                        }
+                                    </MudStack>
+                                    <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                                        <MudButton Variant="Variant.Text"
+                                                   Size="Size.Small"
+                                                   StartIcon="@Icons.Material.Filled.Visibility"
+                                                   OnClick="@(() => OpenPbiDetails(context))"
+                                                   Style="min-height: 24px; padding: 4px 8px;">
+                                            View Details
+                                        </MudButton>
+                                        <MudIcon Icon="Icons.Material.Filled.DragIndicator"
+                                                 Size="Size.Small"
+                                                 Style="color: var(--mud-palette-text-secondary); cursor: grab;" />
+                                    </MudStack>
+                                </MudStack>
+                            </MudCardContent>
+
+                            <MudCardContent Class="pa-3" Style="padding-top: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--mud-palette-divider);">
+                                <MudText Typo="Typo.subtitle1" Style="font-weight: 600; margin-bottom: 8px; line-height: 1.4;">
+                                    @context.Title
+                                </MudText>
+                                <MudText Typo="Typo.body2" Style="opacity: 0.7;">
+                                    ID: @context.PbiId
+                                </MudText>
+                            </MudCardContent>
+
+                            <MudCardActions Class="pa-3" Style="padding-top: 12px;">
+                                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mud-width-full">
+                                    <MudChip T="string" Size="Size.Small"
+                                             Color="@GetPriorityChipColor(context.Priority)"
+                                             Variant="Variant.Filled">
+                                        @context.Priority
+                                    </MudChip>
+
+                                    <MudAvatar Size="Size.Small" Color="Color.Info">
+                                        <MudText Typo="Typo.caption">
+                                            @GetPbiInitials(context)
+                                        </MudText>
+                                    </MudAvatar>
+                                </MudStack>
+                            </MudCardActions>
+                        </MudCard>
+                    </div>
+                </ItemRenderer>
+            </MudDropContainer>
+        }
+
+        @if (_showNewPbiForm && _newPbi is not null)
+        {
+            <MudOverlay Visible="true" DarkBackground="true" ZIndex="1300" />
+            <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1400; width: min(900px, 95vw); max-height: 90vh; overflow-y: auto; border-radius: 12px;">
+                <MudPaper Elevation="24" Style="border-radius: 12px; overflow: hidden;">
+                    <div class="d-flex align-center justify-space-between px-4 py-3"
+                         style="border-bottom: 1px solid var(--mud-palette-divider); background: var(--mud-palette-surface);">
+                        <MudText Typo="Typo.h6" Style="font-weight: 600;">New Story</MudText>
+                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="CloseNewPbiForm" />
+                    </div>
+                    <PbiCard PbiModel="@_newPbi"
+                             StartInEditMode="true"
+                             ProjectId="@_selectedProjectId"
+                             OnSave="HandleNewPbiSaved"
+                             OnCancelNew="CloseNewPbiForm" />
+                </MudPaper>
+            </div>
+        }
+
     </MudContainer>
 
     @if (SelectedPbi is not null)
@@ -39,20 +235,217 @@
             </div>
         </div>
     }
-
-    </div>
+</div>
 
 @code {
-    private SwimLanes? _swimLanes;
+    private MudDropContainer<ProductBacklogItem>? _dropContainer;
+    private bool _needsRefresh;
+    private IReadOnlyList<LaneDefinition> _lanes = StatusLanes();
+
+    private List<ProductBacklogItem> _items = new();
+    private List<Sprint> _sprints = new();
+    private List<Epic> _epics = new();
+    private List<UserSummaryDto> _users = new();
+    private int? _selectedProjectId;
+    private int? _selectedSprintId;
+    private int? _selectedEpicId;
+    private bool _loading = true;
+    private string _errorMessage = string.Empty;
+    private bool _showNewPbiForm = false;
+    private ProductBacklogItem? _newPbi;
+
     private ProductBacklogItem? SelectedPbi;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _selectedProjectId = ProjectState.SelectedProjectId;
+        ProjectState.OnChange += HandleProjectStateChanged;
+        await LoadDropdownsAsync();
+        ApplyDefaultSprintFilter();
+        await LoadItemsAsync();
+    }
+
+    public void Dispose()
+    {
+        ProjectState.OnChange -= HandleProjectStateChanged;
+    }
+
+    private void HandleProjectStateChanged()
+    {
+        InvokeAsync(async () =>
+        {
+            await OnProjectChanged(ProjectState.SelectedProjectId);
+        });
+    }
+
+    private void ApplyDefaultSprintFilter()
+    {
+        if (_sprints.Count == 0) return;
+        var today = DateTime.UtcNow.Date;
+        _selectedSprintId = (_sprints
+            .FirstOrDefault(s => s.IsOpen && s.StartDate.HasValue && s.EndDate.HasValue
+                && today >= s.StartDate.Value.Date && today <= s.EndDate.Value.Date)
+            ?? _sprints
+                .Where(s => s.IsOpen && s.StartDate.HasValue)
+                .OrderByDescending(s => s.StartDate)
+                .FirstOrDefault())
+            ?.SprintId;
+    }
+
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_needsRefresh)
+        {
+            _needsRefresh = false;
+            _dropContainer?.Refresh();
+        }
+        return Task.CompletedTask;
+    }
+
+    private async Task LoadDropdownsAsync()
+    {
+        try
+        {
+            var sprintUrl = _selectedProjectId.HasValue ? $"api/Sprint?projectId={_selectedProjectId.Value}" : "api/Sprint";
+            var epicUrl   = _selectedProjectId.HasValue ? $"api/Epic?projectId={_selectedProjectId.Value}"   : "api/Epic";
+
+            _sprints = await Http.GetFromJsonAsync<List<Sprint>>(sprintUrl) ?? new();
+            _epics   = await Http.GetFromJsonAsync<List<Epic>>(epicUrl)     ?? new();
+            _users   = await Http.GetFromJsonAsync<List<UserSummaryDto>>("api/user/all") ?? new();
+        }
+        catch
+        {
+            // Dropdowns will be empty if API is unreachable
+        }
+    }
+
+    private async Task OnProjectChanged(int? value)
+    {
+        _selectedProjectId = value;
+        _selectedSprintId  = null;
+        _selectedEpicId    = null;
+
+        try
+        {
+            var sprintUrl = value.HasValue ? $"api/Sprint?projectId={value.Value}" : "api/Sprint";
+            var epicUrl   = value.HasValue ? $"api/Epic?projectId={value.Value}"   : "api/Epic";
+
+            _sprints = await Http.GetFromJsonAsync<List<Sprint>>(sprintUrl) ?? new();
+            _epics   = await Http.GetFromJsonAsync<List<Epic>>(epicUrl)     ?? new();
+        }
+        catch
+        {
+            _sprints = new();
+            _epics   = new();
+        }
+
+        ApplyDefaultSprintFilter();
+        await LoadItemsAsync(showLoading: false);
+        StateHasChanged();
+    }
+
+    private async Task LoadItemsAsync(bool showLoading = true)
+    {
+        if (showLoading)
+        {
+            _loading = true;
+            _items = new();
+        }
+
+        try
+        {
+            var url = BuildItemUrl();
+            var items = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(url);
+            if (items is not null)
+                _items = items.OrderBy(i => i.PbiId).ToList();
+        }
+        catch
+        {
+            _errorMessage = "Unable to load PBIs from the server.";
+        }
+        finally
+        {
+            _loading = false;
+            _needsRefresh = true;
+            StateHasChanged();
+        }
+    }
+
+    private string BuildItemUrl()
+    {
+        var query = new List<string>();
+        if (_selectedProjectId.HasValue)
+            query.Add($"projectId={_selectedProjectId.Value}");
+        if (_selectedSprintId.HasValue)
+            query.Add($"sprintId={_selectedSprintId.Value}");
+        if (_selectedEpicId.HasValue)
+            query.Add($"epicId={_selectedEpicId.Value}");
+
+        var baseUrl = "api/Pbi/getNonDraftPbis";
+        return query.Count > 0 ? $"{baseUrl}?{string.Join("&", query)}" : baseUrl;
+    }
+
+    private async Task OnSprintChanged(int? value)
+    {
+        _selectedSprintId = value;
+        await LoadItemsAsync(showLoading: false);
+    }
+
+    private async Task OnEpicChanged(int? value)
+    {
+        _selectedEpicId = value;
+        await LoadItemsAsync(showLoading: false);
+    }
+
+    private async Task HandleItemDropped(MudItemDropInfo<ProductBacklogItem> dropInfo)
+    {
+        if (dropInfo.Item is null) return;
+
+        _errorMessage = string.Empty;
+
+        if (!Enum.TryParse<PbiStatus>(dropInfo.DropzoneIdentifier, out var newStatus))
+        {
+            _errorMessage = "Unable to move PBI: invalid destination column.";
+            return;
+        }
+        var original = dropInfo.Item.Status;
+        if (original == newStatus) return;
+        dropInfo.Item.Status = newStatus;
+        await PersistItemAsync(dropInfo.Item, () => dropInfo.Item.Status = original,
+            "Could not save the status change. The card was returned to its previous column.");
+
+        _dropContainer?.Refresh();
+    }
+
+    private async Task PersistItemAsync(ProductBacklogItem item, Action revert, string errorMessage)
+    {
+        try
+        {
+            item.LastUpdated = DateTime.UtcNow;
+            var response = await Http.PutAsJsonAsync("api/Pbi", item);
+            if (!response.IsSuccessStatusCode)
+                throw new HttpRequestException($"Update failed with code {(int)response.StatusCode}.");
+
+            var updated = await response.Content.ReadFromJsonAsync<ProductBacklogItem>();
+            if (updated is not null)
+            {
+                var index = _items.FindIndex(i => i.PbiId == updated.PbiId);
+                if (index >= 0) _items[index] = updated;
+            }
+        }
+        catch
+        {
+            revert();
+            _errorMessage = errorMessage;
+        }
+    }
 
     private void OpenPbiDetails(ProductBacklogItem pbi) => SelectedPbi = pbi;
 
     private void OpenDependencyChart()
     {
-        var sprintId = _swimLanes?.CurrentSprintId;
-        var url = sprintId.HasValue
-            ? $"/dependency-chart?sprintId={sprintId.Value}"
+        var url = _selectedSprintId.HasValue
+            ? $"/dependency-chart?sprintId={_selectedSprintId.Value}"
             : "/dependency-chart";
         Nav.NavigateTo(url);
     }
@@ -60,8 +453,7 @@
     private async Task ClosePbiDetails()
     {
         SelectedPbi = null;
-        if (_swimLanes is not null)
-            await _swimLanes.RefreshAsync();
+        await LoadItemsAsync(showLoading: false);
     }
 
     private async Task HandlePbiSave(ProductBacklogItem pbi)
@@ -72,8 +464,7 @@
             if (response.IsSuccessStatusCode)
             {
                 SelectedPbi = null;
-                if (_swimLanes is not null)
-                    await _swimLanes.RefreshAsync();
+                await LoadItemsAsync(showLoading: false);
             }
         }
         catch (Exception ex)
@@ -85,7 +476,117 @@
     private async Task HandlePbiDelete(int pbiId)
     {
         SelectedPbi = null;
-        if (_swimLanes is not null)
-            await _swimLanes.RefreshAsync();
+        await LoadItemsAsync(showLoading: false);
     }
+
+    private void OpenNewPbiForm()
+    {
+        _newPbi = new ProductBacklogItem
+        {
+            PbiId = 0,
+            ProjectId = _selectedProjectId ?? 0,
+            Title = "",
+            Status = PbiStatus.ToDo,
+            Priority = PbiPriority.Medium,
+            Origin = PbiOrigin.WebUserCreated,
+            DateCreated = DateTime.UtcNow,
+            LastUpdated = DateTime.UtcNow
+        };
+        _showNewPbiForm = true;
+    }
+
+    private void CloseNewPbiForm()
+    {
+        _showNewPbiForm = false;
+        _newPbi = null;
+    }
+
+    private async Task HandleNewPbiSaved(ProductBacklogItem saved)
+    {
+        _showNewPbiForm = false;
+        _newPbi = null;
+        await LoadItemsAsync(showLoading: false);
+    }
+
+    private static IReadOnlyList<LaneDefinition> StatusLanes() =>
+    [
+        new(nameof(PbiStatus.ToDo), "TO DO", "column-todo", "220, 38, 38",
+            Icons.Material.Filled.Assignment, Color.Error,
+            items => items.Count(i => i.Status == PbiStatus.ToDo)),
+        new(nameof(PbiStatus.InProgress), "IN PROGRESS", "column-inprogress", "250, 204, 21",
+            Icons.Material.Filled.Speed, Color.Warning,
+            items => items.Count(i => i.Status == PbiStatus.InProgress)),
+        new(nameof(PbiStatus.InReview), "IN REVIEW", "column-inreview", "59, 130, 246",
+            Icons.Material.Filled.RateReview, Color.Info,
+            items => items.Count(i => i.Status == PbiStatus.InReview)),
+        new(nameof(PbiStatus.Done), "DONE", "column-done", "22, 163, 74",
+            Icons.Material.Filled.CheckCircle, Color.Success,
+            items => items.Count(i => i.Status == PbiStatus.Done)),
+    ];
+
+    private static string GetPaperStyle(LaneDefinition lane) =>
+        $"flex: 1; min-width: 300px; " +
+        $"border-top: 6px solid rgb({lane.Rgb}) !important; " +
+        $"box-shadow: 0 0 0 1px rgba({lane.Rgb}, 0.1), 0 4px 16px rgba({lane.Rgb}, 0.08) !important; " +
+        $"background: var(--mud-palette-surface) !important; " +
+        $"border: 1px solid var(--mud-palette-lines-default) !important; " +
+        $"border-top: 6px solid rgb({lane.Rgb}) !important; " +
+        $"border-radius: 12px !important; " +
+        $"transition: all 0.3s ease;";
+
+    private static string GetHeaderStyle(LaneDefinition lane) =>
+        $"background: linear-gradient(135deg, rgba({lane.Rgb}, 0.15) 0%, var(--mud-palette-surface) 100%) !important; " +
+        $"border-bottom: 1px solid var(--mud-palette-divider) !important; " +
+        $"border-radius: 8px 8px 0 0 !important; " +
+        $"padding: 12px !important;";
+
+    private static string GetCardStyle(ProductBacklogItem item)
+    {
+        var rgb = GetStatusRgb(item.Status);
+        return $"border-radius: 12px; margin-bottom: 12px; transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); " +
+               $"border: 2px solid rgba({rgb}, 0.4) !important; " +
+               $"box-shadow: 0 0 0 1px rgba({rgb}, 0.2), " +
+               $"            0 2px 8px rgba({rgb}, 0.15), " +
+               $"            0 0 12px rgba({rgb}, 0.08) !important;";
+    }
+
+    private static string GetStatusRgb(PbiStatus status) => status switch
+    {
+        PbiStatus.ToDo => "220, 38, 38",
+        PbiStatus.InProgress => "250, 204, 21",
+        PbiStatus.InReview => "59, 130, 246",
+        PbiStatus.Done => "22, 163, 74",
+        _ => "128, 128, 128"
+    };
+
+    private static string GetPriorityClass(ProductBacklogItem story) =>
+        $"priority-{story.Priority.ToString().ToLower()}";
+
+    private static Color GetPriorityChipColor(PbiPriority priority) => priority switch
+    {
+        PbiPriority.None => Color.Info,
+        PbiPriority.Low => Color.Success,
+        PbiPriority.Medium => Color.Warning,
+        PbiPriority.High => Color.Error,
+        _ => Color.Default
+    };
+
+    private string GetPbiInitials(ProductBacklogItem story)
+    {
+        if (string.IsNullOrEmpty(story.AssignedToUserId)) return "?";
+        var user = _users.FirstOrDefault(u => u.Id == story.AssignedToUserId);
+        if (user is null) return "?";
+        var name = user.UserName.Trim();
+        return name.Length >= 2 ? name[..2].ToUpper() : name.ToUpper();
+    }
+
+    private record LaneDefinition(
+        string Identifier,
+        string Label,
+        string CssClass,
+        string Rgb,
+        string Icon,
+        Color ChipColor,
+        Func<List<ProductBacklogItem>, int> Count
+    );
 }
