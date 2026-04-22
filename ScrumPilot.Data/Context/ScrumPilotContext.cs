@@ -132,12 +132,14 @@ namespace ScrumPilot.Data.Context
             {
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Id).ValueGeneratedOnAdd();
+                // Use a value converter so Messages serializes as a plain JSON string.
                 var messagesProperty = entity.Property(e => e.Messages)
                     .HasConversion(
                         v => System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions?)null),
                         v => System.Text.Json.JsonSerializer.Deserialize<List<DiscordMessage>>(v, (System.Text.Json.JsonSerializerOptions?)null) ?? new List<DiscordMessage>()
                     );
 
+                // Use jsonb for PostgreSQL, TEXT for SQLite
                 if (Database.IsNpgsql())
                 {
                     messagesProperty.HasColumnType("jsonb");
