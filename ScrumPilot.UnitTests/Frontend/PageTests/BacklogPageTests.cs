@@ -8,87 +8,78 @@ namespace ScrumPilot.UnitTests.Frontend.PageTests
     {
         public BacklogPageTests()
         {
-            // Base class handles MudServices and JSInterop setup
+            // Base class handles MudServices, JSInterop, auth, and ProjectStateService setup
         }
 
         [Fact]
         public void BacklogPage_RendersCorrectly()
         {
-            // Act
             var component = Render<Backlog>();
 
-            // Assert - Basic smoke test
             Assert.NotNull(component);
-            Assert.Contains("swimlane-page", component.Markup);
+            Assert.Contains("bl-page", component.Markup);
         }
 
         [Fact]
         public void BacklogPage_HasSwimlanePageClass()
         {
-            // Act
             var component = Render<Backlog>();
 
-            // Assert
-            Assert.Contains("swimlane-page", component.Markup);
+            // Backlog uses its own bl-page layout, not the swimlane-page layout
+            Assert.Contains("bl-page", component.Markup);
         }
 
         [Fact]
         public void BacklogPage_RendersWithoutExceptions()
         {
-            // Act & Assert - Should not throw any exceptions during rendering
             var component = Render<Backlog>();
+
             Assert.NotNull(component);
         }
 
         [Fact]
         public void BacklogPage_HasCorrectPageRoute()
         {
-            // This test verifies the page has the correct @page directive
             var component = Render<Backlog>();
 
-            // Assert
             Assert.NotNull(component);
         }
 
         [Fact]
         public void BacklogPage_RendersAllFourPriorityLaneLabels()
         {
-            // Act
             var component = Render<Backlog>();
 
-            // Assert - All four PbiPriority lanes must be visible
-            Assert.Contains("NONE", component.Markup);
-            Assert.Contains("LOW", component.Markup);
-            Assert.Contains("MEDIUM", component.Markup);
-            Assert.Contains("HIGH", component.Markup);
+            // Backlog renders priority filter chips in the toolbar, not swim-lane columns.
+            // The chip text matches the PbiPriority enum values.
+            Assert.Contains("None", component.Markup);
+            Assert.Contains("Low", component.Markup);
+            Assert.Contains("Medium", component.Markup);
+            Assert.Contains("High", component.Markup);
         }
 
         [Fact]
         public void BacklogPage_PriorityLanes_AreInCorrectOrder()
         {
-            // Act
-            var component = Render<Backlog>();
-            var markup = component.Markup;
+            var markup = Render<Backlog>().Markup;
 
-            // Assert - Lanes appear left-to-right: None, Low, Medium, High
-            var noneIdx = markup.IndexOf("column-none", StringComparison.Ordinal);
-            var lowIdx = markup.IndexOf("column-low", StringComparison.Ordinal);
-            var mediumIdx = markup.IndexOf("column-medium", StringComparison.Ordinal);
-            var highIdx = markup.IndexOf("column-high", StringComparison.Ordinal);
+            // Priority filter chips are rendered in enum order: None, Low, Medium, High
+            var noneIdx = markup.IndexOf(">None<", StringComparison.Ordinal);
+            var lowIdx = markup.IndexOf(">Low<", StringComparison.Ordinal);
+            var mediumIdx = markup.IndexOf(">Medium<", StringComparison.Ordinal);
+            var highIdx = markup.IndexOf(">High<", StringComparison.Ordinal);
 
-            Assert.True(noneIdx < lowIdx, "None lane should appear before Low");
-            Assert.True(lowIdx < mediumIdx, "Low lane should appear before Medium");
-            Assert.True(mediumIdx < highIdx, "Medium lane should appear before High");
+            Assert.True(noneIdx < lowIdx, "None chip should appear before Low");
+            Assert.True(lowIdx < mediumIdx, "Low chip should appear before Medium");
+            Assert.True(mediumIdx < highIdx, "Medium chip should appear before High");
         }
 
         [Fact]
         public void BacklogPage_DoesNotRenderStatusLanes()
         {
-            // Act
-            var component = Render<Backlog>();
-            var markup = component.Markup;
+            var markup = Render<Backlog>().Markup;
 
-            // Assert - Status lane CSS classes must not be present in Priority mode
+            // Backlog is a flat list, not a swim-lane board — status lane columns must not appear
             Assert.DoesNotContain("column-todo", markup);
             Assert.DoesNotContain("column-inprogress", markup);
             Assert.DoesNotContain("column-inreview", markup);

@@ -2,7 +2,162 @@
 
 🔧 **ASP.NET Core Web API Backend**
 
-The server-side API application that provides data services, business logic, and AI integration for the ScrumPilot application.
+The server-side application providing RESTful endpoints, business logic, AI story generation, real-time SignalR hubs, and JWT authentication for ScrumPilot.
+
+---
+
+## 🏗️ Architecture
+
+```
+ScrumPilot.API/
+├── Controllers/
+│   ├── AuthController.cs                  # Login & JWT issuance
+│   ├── PbiController.cs                   # PBI CRUD, AI generation, draft workflow
+│   ├── SprintController.cs                # Sprint CRUD
+│   ├── EpicController.cs                  # Epic CRUD
+│   ├── ProjectController.cs               # Project CRUD
+│   ├── CommentController.cs               # Per-PBI comment management
+│   ├── UserController.cs                  # Profile settings & password
+│   ├── MetricsDashboardController.cs      # Sprint metrics endpoints
+│   └── DashboardPreferenceController.cs   # Per-user dashboard layout
+├── Services/
+│   ├── PbiService.cs                      # PBI logic + AI provider calls
+│   ├── SprintService.cs                   # Sprint business logic
+│   ├── EpicService.cs                     # Epic business logic
+│   ├── ProjectService.cs                  # Project business logic
+│   ├── MetricsDashboardService.cs         # Burndown, velocity, WIP, cycle time
+│   ├── UserSettingsService.cs             # Profile & password management
+│   ├── DashboardPreferenceService.cs      # JSON layout persistence
+│   └── PlanningPokerSessionService.cs     # In-memory poker session state
+├── Hubs/
+│   └── PlanningPokerHub.cs                # SignalR hub for real-time poker
+└── Program.cs                             # DI, middleware, JWT, CORS, migrations
+```
+
+---
+
+## ✨ Endpoints
+
+### Authentication — `api/auth`
+| Method | Route | Description |
+|---|---|---|
+| `POST` | `/login` | Authenticate and receive a JWT token |
+
+### PBIs — `api/pbi`
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/getAllPbis` | All PBIs (draft + non-draft) |
+| `GET` | `/getNonDraftPbis` | Committed PBIs; supports `sprintId`, `epicId`, `projectId` filters (`sprintId=-1` = unassigned) |
+| `GET` | `/getDraftPbis` | All draft PBIs |
+| `POST` | `/generateAiPbis` | Generate draft PBIs from problem statements |
+| `POST` | `/ImprovePbi` | Rewrite an existing PBI with AI |
+| `POST` | `/createStory` | Create a committed PBI |
+| `POST` | `/createStories` | Bulk-create committed PBIs |
+| `POST` | `/createDraftPbi` | Create a single draft PBI |
+| `POST` | `/createDraftPbis` | Bulk-create draft PBIs |
+| `POST` | `/commitPbi` | Promote a draft PBI to the backlog |
+| `PUT` | `/` | Update an existing PBI |
+| `DELETE` | `/{id}` | Delete a PBI |
+
+### Sprints — `api/sprint`
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/` | All sprints; optional `projectId` filter |
+| `POST` | `/` | Create a sprint |
+| `PUT` | `/{id}` | Update a sprint |
+| `DELETE` | `/{id}` | Delete a sprint (unassigns its PBIs) |
+
+### Epics — `api/epic`
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/` | All epics; optional `projectId` filter |
+| `POST` | `/` | Create an epic |
+| `PUT` | `/{id}` | Update an epic |
+| `DELETE` | `/{id}` | Delete an epic |
+
+### Projects — `api/project`
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/` | All projects |
+| `GET` | `/{id}` | Single project |
+| `POST` | `/` | Create a project |
+| `PUT` | `/{id}` | Update a project |
+| `DELETE` | `/{id}` | Delete a project |
+
+### Comments — `api/comments`
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/pbi/{pbiId}` | All comments for a PBI |
+| `POST` | `/` | Add a comment |
+| `PUT` | `/{commentId}` | Edit a comment |
+| `DELETE` | `/{commentId}` | Delete a comment |
+
+### Users — `api/user`
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/settings` | Current user's profile settings |
+| `PUT` | `/settings` | Update profile settings |
+| `GET` | `/all` | Summary of all users (for assignment dropdowns) |
+| `POST` | `/change-password` | Change password |
+
+### Metrics — `api/metrics`
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/sprint-summary/{sprintId}` | Sprint name, dates, days left |
+| `GET` | `/sprint-progress/{sprintId}` | Committed vs. completed points |
+| `GET` | `/burndown/{sprintId}` | Daily burndown data |
+| `GET` | `/velocity` | Velocity across sprints |
+| `GET` | `/wip/{sprintId}` | In-progress PBI table |
+| `GET` | `/bug-trend/{sprintId}` | Daily bug creation/resolution |
+| `GET` | `/cycle-time/{sprintId}` | Average cycle time |
+| `GET` | `/work-by-status/{sprintId}` | Points by status and type |
+| `GET` | `/time-in-stage/{sprintId}` | Time-in-stage heat-map |
+
+### Dashboard Preferences — `api/dashboard-preferences`
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/` | Current user's widget layout for a project |
+| `PUT` | `/` | Save widget layout |
+
+---
+
+## 🤖 AI Integration
+
+PBI generation supports two AI providers selected at runtime:
+
+| Provider | When Used | Configuration |
+|---|---|---|
+| **Groq** | `GroqApiKey` env var is set | `GroqApiKey`, `GroqModel` (default: `llama-3.3-70b-versatile`) |
+| **Ollama** | No Groq key — local development | `OllamaBaseUrl`, `OllamaModel` in `appsettings.json` |
+
+The AI is prompted to return a strict JSON object with `title`, `userStory`, and `acceptanceCriteria` fields. A JSON extraction helper handles models that prepend extra text before the JSON.
+
+---
+
+## 🔐 Authentication & Security
+
+- JWT bearer token authentication on all endpoints (except `POST /api/auth/login`)
+- All endpoints require an authenticated user by default via `SetFallbackPolicy`
+- SignalR planning poker hub passes the token via query string (`access_token`)
+- Tokens carry `NameIdentifier`, `Name`, `Email`, and `Role` claims
+
+---
+
+## 🚀 Running the API
+
+```bash
+cd ScrumPilot.API
+dotnet run
+```
+
+- HTTP: `http://localhost:5219`
+- Swagger UI: `http://localhost:5219/swagger`
+
+On first run the API will:
+1. Apply any pending EF Core migrations
+2. Seed projects, sprints, and demo PBIs
+3. Seed default Identity users and roles
+
 
 ## 🏗️ Architecture
 
