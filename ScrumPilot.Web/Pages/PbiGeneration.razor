@@ -106,7 +106,7 @@
             @if (_isLoading)
             {
                 <MudProgressCircular Color="Color.Primary" Size="Size.Small" Indeterminate="true" />
-                <span style="margin-left: 8px;">WRITING YOUR STORIES...</span>
+                <span style="margin-left: 8px;">WRITING YOUR PBIs...</span>
             }
             else
             {
@@ -121,7 +121,7 @@
     {
         <MudStack AlignItems="AlignItems.Center">
             <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
-            <MudText Class="mt-4" Typo="Typo.subtitle1">Writing your stories...</MudText>
+            <MudText Class="mt-4" Typo="Typo.subtitle1">Writing your PBIs...</MudText>
         </MudStack>
     }
     </MudStack>
@@ -164,7 +164,7 @@
     {
         if (_problemStatements.Count == 0)
         {
-            Snackbar.Add("Add at least one problem statement before generating stories.", Severity.Warning);
+            Snackbar.Add("Add at least one problem statement before generating PBIs.", Severity.Warning);
             return;
         }
 
@@ -189,13 +189,13 @@
 
                 if (productBacklogItems is null || productBacklogItems.Count == 0)
 {
-    Snackbar.Add("Generation completed but the response did not contain valid stories.", Severity.Error);
+    Snackbar.Add("Generation completed but the response did not contain valid PBIs.", Severity.Error);
     return;
 }
 
 var dialogParameters = new DialogParameters
 {
-                    ["Stories"] = productBacklogItems,
+                    ["PBIs"] = productBacklogItems,
                     ["ProjectId"] = ProjectState.SelectedProjectId
 };
 
