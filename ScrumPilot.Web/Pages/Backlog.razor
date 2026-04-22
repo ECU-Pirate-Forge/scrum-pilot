@@ -1,6 +1,7 @@
 @page "/backlog"
 @inject HttpClient Http
 @inject ScrumPilot.Web.Services.ProjectStateService ProjectState
+@inject ScrumPilot.Web.Services.MetricsDashboardService MetricsSvc
 @implements IDisposable
 
 <div class="bl-page">
@@ -198,6 +199,19 @@
                             @(_selectedSprint.IsOpen ? "Open" : "Closed")
                         </MudChip>
                     </div>
+                    @if (_recommendedPoints > 0)
+                    {
+                        <div class="bl-velocity-row">
+                            <MudProgressLinear Value="@Math.Min(SprintTotalPoints / _recommendedPoints * 100, 100)"
+                                               Color="@VelocityProgressColor"
+                                               Rounded="true"
+                                               Class="bl-velocity-bar" />
+                            <MudText Typo="Typo.caption" Style="@($"white-space:nowrap; font-weight:700; color:{VelocityColor};")">
+                                @SprintTotalPoints / @((int)_recommendedPoints) pts
+                            </MudText>
+                            <MudText Typo="Typo.caption" Style="opacity:0.5; white-space:nowrap;">suggested</MudText>
+                        </div>
+                    }
                 </div>
             }
 
@@ -225,7 +239,7 @@
                     {
                         <div class="bl-sprint-list-header">
                             <span>@sprintPbis.Count @(sprintPbis.Count == 1 ? "story" : "stories")</span>
-                            <span>@SprintTotalPoints pts total</span>
+                            <span style="@($"color:{VelocityColor};")">@SprintTotalPoints@(_recommendedPoints > 0 ? $" / {(int)_recommendedPoints}" : "") pts</span>
                         </div>
                         @foreach (var pbi in sprintPbis)
                         {
@@ -360,6 +374,17 @@
             : Enumerable.Empty<ProductBacklogItem>();
 
     private int SprintTotalPoints => SprintPbis.Sum(p => (int)p.StoryPoints);
+    private double _recommendedPoints;
+
+    private string VelocityColor => _recommendedPoints <= 0 ? "inherit"
+        : SprintTotalPoints >= _recommendedPoints ? "var(--mud-palette-success)"
+        : SprintTotalPoints >= _recommendedPoints * 0.8 ? "var(--mud-palette-warning)"
+        : "inherit";
+
+    private Color VelocityProgressColor => _recommendedPoints <= 0 ? Color.Default
+        : SprintTotalPoints >= _recommendedPoints ? Color.Success
+        : SprintTotalPoints >= _recommendedPoints * 0.8 ? Color.Warning
+        : Color.Primary;
 
     protected override async Task OnInitializedAsync()
     {
@@ -397,11 +422,23 @@
 
             _sprints = await Http.GetFromJsonAsync<List<Sprint>>(sprintUrl) ?? new();
             _allPbis = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(pbiUrl) ?? new();
+
+            var velocityPoints = await MetricsSvc.GetVelocityDataAsync(projectId: _selectedProjectId);
+            if (velocityPoints.Count > 0)
+            {
+                var recent = velocityPoints.TakeLast(3).ToList();
+                _recommendedPoints = Math.Round(recent.Average(p => p.Completed), 1);
+            }
+            else
+            {
+                _recommendedPoints = 0;
+            }
         }
         catch
         {
             _sprints = new();
             _allPbis = new();
+            _recommendedPoints = 0;
         }
         finally
         {

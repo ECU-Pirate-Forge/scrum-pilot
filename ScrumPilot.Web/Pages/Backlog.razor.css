@@ -168,6 +168,19 @@
     flex-shrink: 0;
 }
 
+/* ── Velocity target row ─────────────────────────────────── */
+.bl-velocity-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.bl-velocity-bar {
+    flex: 1;
+    height: 6px !important;
+}
+
 /* ── Drop zone ───────────────────────────────────────────── */
 .bl-drop-zone {
     margin: 10px 12px 6px;
