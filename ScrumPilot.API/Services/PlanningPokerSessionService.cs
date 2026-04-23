@@ -4,66 +4,120 @@ namespace ScrumPilot.API.Services;
 
 public class PlanningPokerSessionService
 {
-    private readonly Dictionary<string, (string DisplayName, int? Points, bool HasVoted)> _participants = [];
-    private int? _currentPbiId;
-    private bool _revealed;
-    private readonly object _lock = new();
-
-    public void AddParticipant(string connectionId, string displayName)
+    private sealed class ProjectSession
     {
-        lock (_lock) _participants[connectionId] = (displayName, null, false);
+        public Dictionary<string, (string DisplayName, int? Points, bool HasVoted)> Participants = [];
+        public int? CurrentPbiId;
+        public bool Revealed;
     }
 
-    public void RemoveParticipant(string connectionId)
+    private readonly Dictionary<int, ProjectSession> _sessions = [];
+    private readonly Dictionary<string, int> _connectionToProject = [];
+    private readonly object _lock = new();
+
+    private ProjectSession GetOrCreateSession(int projectId)
     {
-        lock (_lock) _participants.Remove(connectionId);
+        if (!_sessions.TryGetValue(projectId, out var session))
+        {
+            session = new ProjectSession();
+            _sessions[projectId] = session;
+        }
+        return session;
+    }
+
+    public void AddParticipant(string connectionId, string displayName, int projectId)
+    {
+        lock (_lock)
+        {
+            _connectionToProject[connectionId] = projectId;
+            GetOrCreateSession(projectId).Participants[connectionId] = (displayName, null, false);
+        }
+    }
+
+    public int? RemoveParticipant(string connectionId)
+    {
+        lock (_lock)
+        {
+            if (!_connectionToProject.TryGetValue(connectionId, out var projectId))
+                return null;
+            _connectionToProject.Remove(connectionId);
+            if (_sessions.TryGetValue(projectId, out var session))
+                session.Participants.Remove(connectionId);
+            return projectId;
+        }
+    }
+
+    public int? GetProjectId(string connectionId)
+    {
+        lock (_lock)
+            return _connectionToProject.TryGetValue(connectionId, out var id) ? id : null;
     }
 
     public void SetVote(string connectionId, int? points)
     {
         lock (_lock)
         {
-            if (_participants.ContainsKey(connectionId))
-                _participants[connectionId] = (_participants[connectionId].DisplayName, points, true);
+            if (!_connectionToProject.TryGetValue(connectionId, out var projectId)) return;
+            var s = GetOrCreateSession(projectId);
+            if (s.Participants.ContainsKey(connectionId))
+                s.Participants[connectionId] = (s.Participants[connectionId].DisplayName, points, true);
         }
     }
 
-    public void SetCurrentPbi(int? pbiId)
+    public void SetCurrentPbi(string connectionId, int? pbiId)
     {
         lock (_lock)
         {
-            _currentPbiId = pbiId;
-            _revealed = false;
-            foreach (var key in _participants.Keys.ToList())
-                _participants[key] = (_participants[key].DisplayName, null, false);
+            if (!_connectionToProject.TryGetValue(connectionId, out var projectId)) return;
+            var s = GetOrCreateSession(projectId);
+            s.CurrentPbiId = pbiId;
+            s.Revealed = false;
+            foreach (var key in s.Participants.Keys.ToList())
+                s.Participants[key] = (s.Participants[key].DisplayName, null, false);
         }
     }
 
-    public void Reveal()
-    {
-        lock (_lock) _revealed = true;
-    }
-
-    public void Reset()
+    public void Reveal(string connectionId)
     {
         lock (_lock)
         {
-            _revealed = false;
-            foreach (var key in _participants.Keys.ToList())
-                _participants[key] = (_participants[key].DisplayName, null, false);
+            if (!_connectionToProject.TryGetValue(connectionId, out var projectId)) return;
+            GetOrCreateSession(projectId).Revealed = true;
         }
     }
 
-    public PokerSessionState GetState(bool includeVotes = false)
+    public void Reset(string connectionId)
     {
         lock (_lock)
         {
-            var showVotes = includeVotes || _revealed;
+            if (!_connectionToProject.TryGetValue(connectionId, out var projectId)) return;
+            var s = GetOrCreateSession(projectId);
+            s.Revealed = false;
+            foreach (var key in s.Participants.Keys.ToList())
+                s.Participants[key] = (s.Participants[key].DisplayName, null, false);
+        }
+    }
+
+    public PokerSessionState? GetState(string connectionId, bool includeVotes = false)
+    {
+        lock (_lock)
+        {
+            if (!_connectionToProject.TryGetValue(connectionId, out var projectId)) return null;
+            return GetStateForProject(projectId, includeVotes);
+        }
+    }
+
+    public PokerSessionState GetStateForProject(int projectId, bool includeVotes = false)
+    {
+        lock (_lock)
+        {
+            var s = GetOrCreateSession(projectId);
+            var showVotes = includeVotes || s.Revealed;
             return new PokerSessionState
             {
-                CurrentPbiId = _currentPbiId,
-                Revealed = _revealed,
-                Participants = _participants.Select(kvp => new ParticipantState
+                CurrentPbiId = s.CurrentPbiId,
+                Revealed = s.Revealed,
+                Participants = s.Participants.Select(kvp => new ParticipantState
                 {
                     ConnectionId = kvp.Key,
                     DisplayName = kvp.Value.DisplayName,
