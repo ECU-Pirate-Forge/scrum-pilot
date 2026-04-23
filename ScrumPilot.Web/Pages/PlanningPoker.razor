@@ -338,7 +338,7 @@
         _hub.Reconnected += _ =>
         {
             _connectionStatus = "Connected";
-            return _hub.SendAsync("JoinSession", _myDisplayName);
+            return _hub.SendAsync("JoinSession", _myDisplayName, ProjectState.SelectedProjectId ?? 0);
         };
 
         _hub.Closed += _ =>
@@ -352,7 +352,7 @@
             await _hub.StartAsync();
             _myConnectionId = _hub.ConnectionId ?? "";
             _connectionStatus = "Connected";
-            await _hub.SendAsync("JoinSession", _myDisplayName);
+            await _hub.SendAsync("JoinSession", _myDisplayName, ProjectState.SelectedProjectId ?? 0);
         }
         catch
         {

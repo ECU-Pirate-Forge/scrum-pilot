@@ -8,7 +8,6 @@ namespace ScrumPilot.API.Hubs;
 [Authorize]
 public class PlanningPokerHub : Hub
 {
-    private const string SessionGroup = "planning-poker";
     private readonly PlanningPokerSessionService _session;
 
     public PlanningPokerHub(PlanningPokerSessionService session)
@@ -16,12 +15,15 @@ public class PlanningPokerHub : Hub
         _session = session;
     }
 
-    public async Task JoinSession(string displayName)
-    {
-        _session.AddParticipant(Context.ConnectionId, displayName);
-        await Groups.AddToGroupAsync(Context.ConnectionId, SessionGroup);
+    private static string GroupName(int projectId) => $"planning-poker-{projectId}";
 
-        var state = _session.GetState();
+    public async Task JoinSession(string displayName, int projectId)
+    {
+        _session.AddParticipant(Context.ConnectionId, displayName, projectId);
+        var group = GroupName(projectId);
+        await Groups.AddToGroupAsync(Context.ConnectionId, group);
+
+        var state = _session.GetStateForProject(projectId);
         await Clients.Caller.SendAsync("ReceiveSessionState", state);
 
         var newParticipant = new ParticipantState
@@ -30,40 +32,49 @@ public class PlanningPokerHub : Hub
             DisplayName = displayName,
             HasVoted = false
         };
-        await Clients.OthersInGroup(SessionGroup).SendAsync("UserJoined", newParticipant);
+        await Clients.OthersInGroup(group).SendAsync("UserJoined", newParticipant);
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        _session.RemoveParticipant(Context.ConnectionId);
-        await Clients.Group(SessionGroup).SendAsync("UserLeft", Context.ConnectionId);
+        var projectId = _session.RemoveParticipant(Context.ConnectionId);
+        if (projectId.HasValue)
+            await Clients.Group(GroupName(projectId.Value)).SendAsync("UserLeft", Context.ConnectionId);
         await base.OnDisconnectedAsync(exception);
     }
 
     public async Task SelectCard(int? points)
     {
+        var projectId = _session.GetProjectId(Context.ConnectionId);
+        if (!projectId.HasValue) return;
         _session.SetVote(Context.ConnectionId, points);
-        await Clients.Group(SessionGroup).SendAsync("CardSelected", Context.ConnectionId);
+        await Clients.Group(GroupName(projectId.Value)).SendAsync("CardSelected", Context.ConnectionId);
     }
 
     public async Task RevealCards()
     {
-        _session.Reveal();
-        var state = _session.GetState(includeVotes: true);
-        await Clients.Group(SessionGroup).SendAsync("CardsRevealed", state);
+        var projectId = _session.GetProjectId(Context.ConnectionId);
+        if (!projectId.HasValue) return;
+        _session.Reveal(Context.ConnectionId);
+        var state = _session.GetStateForProject(projectId.Value, includeVotes: true);
+        await Clients.Group(GroupName(projectId.Value)).SendAsync("CardsRevealed", state);
     }
 
     public async Task SelectPbi(int? pbiId)
     {
-        _session.SetCurrentPbi(pbiId);
-        var state = _session.GetState();
-        await Clients.Group(SessionGroup).SendAsync("PbiSelected", state);
+        var projectId = _session.GetProjectId(Context.ConnectionId);
+        if (!projectId.HasValue) return;
+        _session.SetCurrentPbi(Context.ConnectionId, pbiId);
+        var state = _session.GetStateForProject(projectId.Value);
+        await Clients.Group(GroupName(projectId.Value)).SendAsync("PbiSelected", state);
     }
 
     public async Task ResetVoting()
     {
-        _session.Reset();
-        var state = _session.GetState();
-        await Clients.Group(SessionGroup).SendAsync("VotingReset", state);
+        var projectId = _session.GetProjectId(Context.ConnectionId);
+        if (!projectId.HasValue) return;
+        _session.Reset(Context.ConnectionId);
+        var state = _session.GetStateForProject(projectId.Value);
+        await Clients.Group(GroupName(projectId.Value)).SendAsync("VotingReset", state);
     }
 }
