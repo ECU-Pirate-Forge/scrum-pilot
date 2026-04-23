@@ -1,0 +1,994 @@
+[
+  {
+    "section_a": {
+      "individuals_interactions": {
+        "score": 8,
+        "reasoning": "Strong multi-member participation is explicitly documented. Maysun drove ceremonies, scaffolding, documentation, and progress tracking. Brayan contributed backlog items, attended all meetings, submitted a PR, and reviewed Maysun's PR. Jared participated in meetings and submitted a late PR. PR review assignments were distributed across team members. Async coordination is evidenced by Maysun posting meeting recordings, transcriptions, and summaries and actively tracking teammate progress. The one friction point — Jared's lagging progress and PR issues — was raised and addressed within the sprint, which is itself a positive interaction signal."
+      },
+      "working_software": {
+        "score": 6,
+        "reasoning": "The sprint was explicitly a project-initialization sprint following a mid-semester pivot. Concrete deliverables include: scaffolded backend, React, and Blazor project templates pushed to dev; PRs submitted by all three active contributors; Git workflow established. DoD was defined and documented. However, the sprint summary acknowledges that merging approved PRs into dev and the dev→main promotion were pending sprint review (scheduled 3/1), and at least one of Jared's tasks was incomplete with carry-over noted. Working scaffolding was produced and pushed, but no fully accepted, merged feature story is confirmed by sprint end. A score of 6 reflects that something tangible was shipped but full acceptance was not yet confirmed."
+      },
+      "customer_collaboration": {
+        "score": 6,
+        "reasoning": "Brian Dietrick (Professor/Stakeholder) is explicitly noted as providing guidance on project direction, acknowledging DOR/DOD/workflow documentation, and clarifying CI/CD placeholder status. Eric Larwa (Grader) checked in on sprint planning submission timing and was informed of the project pivot. This is meaningful stakeholder interaction — more than zero — though depth of iterative requirement feedback during the sprint is not detailed. Score reflects positive but moderate evidence."
+      },
+      "responding_to_change": {
+        "score": 8,
+        "reasoning": "The team executed a full project pivot away from Purple Pantry to Dynamic Form Generation per professor guidance, re-planned the backlog, re-established DoD/DOR, and re-scaffolded the project — all within or immediately before this sprint. When Jared's tasks appeared stalled as of 2/25, Maysun raised the possibility of reassigning work. The team aligned on SQL Server after evaluating compatibility constraints across development environments (Windows, Ubuntu). These are clear, explicit instances of adapting to new information and changing circumstances."
+      },
+      "subtotal": 28
+    },
+    "section_b": {
+      "sprint_planning": {
+        "score": 7,
+        "reasoning": "Sprint planning is explicitly documented: a dedicated planning meeting was held on 2/16, backlog items were populated in GitHub by Maysun and Brayan, DOR and DoD were defined, technology stack decisions were made, and the Sprint Planning assignment was submitted to Canvas. Sprint goal is not explicitly articulated as a single sentence, which prevents a top score, but the committed scope and readiness signals are clearly present."
+      },
+      "daily_scrum": {
+        "score": 7,
+        "reasoning": "Four Daily SCRUM meetings are explicitly enumerated (2/17, 2/19, 2/22, 2/24) with recordings, transcriptions, and summaries shared. Blockers were raised (Jared's progress discussed) and progress tracked. The cadence is consistent across the two-week sprint. The format appears peer-to-peer synchronization rather than manager status reporting. Slight deduction from maximum because the summaries describe the meetings' existence and outputs rather than providing transcript-level quality detail."
+      },
+      "sprint_review": {
+        "score": 5,
+        "reasoning": "The sprint review is scheduled for March 1st (after the sprint end date of 2/28) and the cadence is confirmed. The review had not yet occurred by the time this summary was written, so no demo or acceptance of work is confirmed. Per scoring rules, a score of 4–5 is appropriate when deliverables existed but the review outcome is not yet documented. Score of 5 reflects that the review was actively planned and imminent rather than absent or forgotten."
+      },
+      "sprint_retrospective": {
+        "score": 4,
+        "reasoning": "No retrospective is explicitly mentioned in the sprint summary. Per scoring rules, absence of evidence defaults to 4 — this cannot be penalized below that without explicit evidence that the team skipped or stated they do not do retros. The sprint review was also still pending at the time of the summary, so a retro following the review would not yet have occurred."
+      },
+      "backlog_refinement": {
+        "score": 7,
+        "reasoning": "Backlog Grooming is explicitly named as a session held on 2/16, with backlog items populated in GitHub by Maysun and Brayan, and the Backlog Grooming assignment submitted to Canvas. DOR was defined. This is direct, unambiguous evidence of backlog refinement activity. Story sizing specifics are not mentioned, which prevents a maximum score."
+      },
+      "subtotal": 30
+    },
+    "section_c": {
+      "antipatterns": [
+        {
+          "key": "carryover_work",
+          "label": "Carry-over Work",
+          "deduction": 3,
+          "evidence": "From Section 4 (Carry-over Items): 'Jared had at least one additional task still pending as of 2/28; completion status unclear before sprint review.' and 'PR reviews not fully completed by sprint end (Maysun's PR awaiting Brayan's review; Jared's PR needed rework).' and 'Merging approved PRs into dev and final dev→main promotion pending sprint review.' These are explicitly named incomplete sprint commitments, not planned future work."
+        }
+      ],
+      "subtotal": 17
+    },
+    "aii_total": 75,
+    "data_confidence": "medium",
+    "scoring_notes": "Input richness is moderate-to-good for a Sprint 1 initialization sprint. The sprint summary is detailed and narrative, providing clear evidence for ceremonies, participation, and decisions. Key thin dimensions: (1) Sprint Review — the review was scheduled post-sprint-end so no outcome data exists; scored conservatively. (2) Sprint Retrospective — no mention at all; defaulted to neutral per rules. (3) Working Software — scaffolding and PRs are evidenced but full merge and acceptance were explicitly pending, making it difficult to confirm 'done' work; scored at the low end of the positive range. The carryover deduction is the only anti-pattern with clear enough evidence to trigger — Jared's incomplete task and the PR/merge backlog are explicitly named in the Carry-over Items section. No other anti-patterns met their evidence bars: the sprint was genuinely productive for a pivot-and-initialize sprint, standups were peer-to-peer not status reports, there is no evidence of zombie scrum (clear improvement intent throughout), and the professor's involvement does not meet the PO-as-PM bar.",
+    "team": "FormFlow",
+    "sprint": "Sprint 1",
+    "start": "2026-02-15",
+    "end": "2026-02-28",
+    "scoredAt": "2026-04-22T03:41:34.848Z"
+  },
+  {
+    "section_a": {
+      "individuals_interactions": {
+        "score": 7,
+        "reasoning": "Multiple contributors explicitly named: LJ Kaminski facilitated backlog organization and collaborated on feature design; Michael Trinh, Thai S, and Kamron Hopkins assigned themselves PBIs and contributed to coding; Zachary Faulkner resumed backend API work after health issues. Async communication via Discord is mentioned, along with a revised collaboration schedule to manage availability. Interpersonal/coordination blockers (delayed Discord responses, task assignment confusion) were noted and steps were taken to address them."
+      },
+      "working_software": {
+        "score": 6,
+        "reasoning": "Some early-stage working output exists: a question display UI connected to MongoDB was designed, an API for question creation was set up with early-stage coding in progress, and MongoDB was established as the primary database. However, several PBIs remain incomplete and the PostgreSQL-to-MongoDB transition was not finalized. Output is present but not fully shippable; this is a foundational sprint with partial deliverables, justifying a 6."
+      },
+      "customer_collaboration": {
+        "score": 5,
+        "reasoning": "No explicit mention of PO involvement, stakeholder feedback, or customer-facing requirement clarification in the sprint summary. Defaulting to 5 per scoring rules — absence of evidence is not evidence of absence."
+      },
+      "responding_to_change": {
+        "score": 7,
+        "reasoning": "Clear evidence of mid-sprint adaptation: pivoted focus to breaking down PBIs into lighter, more manageable tasks; transitioned from PostgreSQL to MongoDB (even if not fully finalized); revised collaboration schedule; adopted a new Git workflow; and decided to hold a sprint review on Saturday in response to progress concerns. Blockers around sprint size and task ambiguity were raised and addressed with replanning actions."
+      },
+      "subtotal": 25
+    },
+    "section_b": {
+      "sprint_planning": {
+        "score": 6,
+        "reasoning": "Explicit evidence of planning activity: tasks were prioritized and assigned from the backlog, items were transitioned to 'Ready' state for the sprint including real-time question delivery, and the sprint focused on foundational work with a defined scope. Sprint goal is implied (initial setup, foundational work) though not formally stated as a single goal sentence. Planning happened with story readiness signals present."
+      },
+      "daily_scrum": {
+        "score": 4,
+        "reasoning": "No daily standup entries or explicit standup mentions appear in the sprint summary. The summary is a synthesized roll-up without day-by-day standup logs. Per scoring rules, defaulting to 4 — absence of evidence is not evidence standups did not occur."
+      },
+      "sprint_review": {
+        "score": 6,
+        "reasoning": "Explicit mention that 'the decision was made to conduct a sprint review on Saturday to assess progress and present completed work.' This directly references a planned review meeting with presentation of completed work, satisfying the evidence bar for a 6+."
+      },
+      "sprint_retrospective": {
+        "score": 4,
+        "reasoning": "No explicit mention of a retrospective ceremony in the sprint summary. Per scoring rules, no mention defaults to 4 — absence of evidence is not grounds to score below 4."
+      },
+      "backlog_refinement": {
+        "score": 7,
+        "reasoning": "Strong explicit evidence: backlog management is listed as a key accomplishment, tasks were prioritized and assigned, items were transitioned to 'Ready' state, and the team explicitly pivoted to breaking down PBIs into lighter more manageable tasks. This reflects active, intentional refinement activity."
+      },
+      "subtotal": 27
+    },
+    "section_c": {
+      "antipatterns": [
+        {
+          "key": "carryover_work",
+          "label": "Carryover Work",
+          "deduction": 0,
+          "evidence": "The summary mentions 'Several PBIs remain incomplete' and the MongoDB transition was not finalized, but these are not named items that also appeared in a prior sprint's carry-over section. This is Sprint 1, so no prior sprint carry-over record exists to establish a pattern. No deduction applied."
+        },
+        {
+          "key": "overloaded_sprint",
+          "label": "Overloaded Sprint",
+          "deduction": 0,
+          "evidence": "There are 'concerns over sprint size and balance' and 'uncertainty about the team's ability to complete assigned tasks on time,' but the evidence does not confirm that more than half of planned work carried over or that the team explicitly stated they over-committed. Concern alone does not meet the evidence bar."
+        }
+      ],
+      "subtotal": 20
+    },
+    "aii_total": 72,
+    "data_confidence": "medium",
+    "scoring_notes": "Input is a single synthesized sprint summary without day-by-day standup logs, individual story completion records, or DoD artifacts, which limits confidence in daily_scrum and sprint_retrospective scoring. Both default to 4 per rules. Customer collaboration evidence is entirely absent — neutral 5 applied. The sprint is explicitly Sprint 1, meaning no prior carry-over baseline exists to trigger the carryover deduction. Working software scored 6 rather than higher because deliverables are described as early-stage and partially incomplete, though some functional output (UI connected to MongoDB, API setup) is present. Responding to change scored positively due to multiple concrete pivots documented. Overall data confidence is medium: enough named actions and decisions to score most dimensions with reasonable grounding, but ceremony-level detail is thin.",
+    "team": "Pulse",
+    "sprint": "Sprint 1",
+    "start": "2026-02-15",
+    "end": "2026-02-28",
+    "scoredAt": "2026-04-22T03:42:10.323Z"
+  },
+  {
+    "section_a": {
+      "individuals_interactions": {
+        "score": 9,
+        "reasoning": "Strong cross-team engagement throughout the sprint. Multiple contributors are named across daily summaries: Anthony Graber, Tyler Bao, Huan Yang, Nathaniel Varnadoe, Joshua Dixon, James Davis, Dylan Johnson, and Aden Yu all appear with distinct contributions. Peer collaboration is explicit — Anthony and Huan agreed to 'discuss offline before committing any code to coordinate merging their Input/Output UI work' (02-20); nalyd5124 volunteered to review Nathan's PR (02-25); Huan Yang volunteered to review code #20 (02-26); Anthony planned to review James' code (02-25). Blockers were surfaced to the team (not management) and acknowledged. Optional paired/mob programming session organized (02-19). Async coordination documented across multiple days."
+      },
+      "working_software": {
+        "score": 7,
+        "reasoning": "Several working features were delivered or demo-ready by sprint end: Output UI displaying generated user stories tested against backend (02-20), Discord bot export command tested with multiple arguments (02-21), PR for Discord bot feature branch merged, dark/light mode toggling and CSS cleanup submitted (02-27), Unit Test PR #52 submitted (02-28), PR from Dev to Main opened and approved by Brian Dietrick (02-28). Sprint Review with demos held on 02-28 where Tyler drove Discord Bot demo and Joshua drove WebApp demo. Score is not a 9-10 because the Scrum board page had no database backing (mock data only, no persistence) and CI/lint failures blocked at least one PR (Huan's PR #7), indicating not all work met a clean definition of done."
+      },
+      "customer_collaboration": {
+        "score": 7,
+        "reasoning": "Brian Dietrick (professor/instructor acting in a PO/stakeholder role) is actively engaged throughout the sprint: requested DoR, DoD, and git-workflow be posted to Discord (02-22), redirected the database approach from Aiven to EF Core Code-First (02-22), recommended Foundry Local as an alternative model runner (02-21), approved Sprint 1 changes to merge into main (02-28), allowed the demo format exception for Sprint 1 (02-28), and offered to potentially provide an Azure SQL instance. His feedback was incorporated mid-sprint (database architecture pivot). Score is not higher because this appears to be a course instructor rather than a true external customer/PO, and end-user feedback is absent."
+      },
+      "responding_to_change": {
+        "score": 7,
+        "reasoning": "Multiple mid-sprint adaptations documented: Spring Break accounted for in sprint schedule with collaboration schedule updated (02-16); ScrumAgent evaluated and rejected due to licensing/language concerns, with team pivoting to a different approach (02-18); database strategy pivoted from shared Aiven hosted DB to EF Core Code-First local instances after Brian's redirect (02-22); GitHub account issue blocking Huan Yang resolved same day (02-26); Aden Yu self-assigned a task and caught up after a late start (02-16); nalyd5124 missed standup due to being on-call but communicated async (02-20). Demo format adjusted for Sprint 1 based on PBI structure feedback from professor (02-28). CI/lint failures on PR #7 were raised but resolution was pending, which is a mild negative signal."
+      },
+      "subtotal": 30
+    },
+    "section_b": {
+      "sprint_planning": {
+        "score": 6,
+        "reasoning": "Sprint 1 Product Backlog Grooming and Sprint 1 Sprint Planning assignments are explicitly mentioned as having been submitted (Anthony resubmitted them to new Canvas links on 02-16). The sprint has a defined scope with GitHub issues referenced (e.g., issue #7 for Output UI). Story-level task assignments are visible across multiple members. Score is not 7-8 because the quality of planning — story sizing, explicit sprint goal, or acceptance criteria — is not detailed in the evidence provided."
+      },
+      "daily_scrum": {
+        "score": 7,
+        "reasoning": "Daily scrums are documented across the sprint with specific dates and details. A Tue/Thu/Fri cadence is referenced (02-17 summary note). Standups are noted on 02-17 (6 PM, brief 10-15 min status), 02-19 (6 PM, Tyler asked someone else to share screen), 02-20 (nalyd5124 unable to attend, on-call), 02-26 (two members absent — work conflicts), 02-27 (final daily scrum of sprint, 6 PM). Blockers were surfaced to the team peer-to-peer (not to a manager). Some members participated by phone when unable to attend in person. Minor deductions from a perfect score: two members missed 02-26 standup without confirmed async updates, and one member was absent 02-20."
+      },
+      "sprint_review": {
+        "score": 7,
+        "reasoning": "Sprint Review is explicitly documented on 02-28: held at 6 PM, demo format decided (Tyler drives Discord Bot demo, Joshua drives WebApp demo), each team member speaks to their own work, professor Brian Dietrick approved the merge of Sprint 1 changes to main. Sprint Review assignment submitted by Tyler (baeohh). The decision that 'next sprint, each member will present their own features individually' confirms the review served as a genuine inspection of product increment. Score not 8 because there is no explicit mention of stakeholder acceptance criteria being evaluated or a formal sprint goal retrospective during the review."
+      },
+      "sprint_retrospective": {
+        "score": 6,
+        "reasoning": "Sprint Retro assignment explicitly submitted by anthonygraber on 02-28. The 02-16 daily summary notes 'Sprint Review and Retrospective will be held in the same Saturday session,' confirming it was planned. The decision that future sprints will have individual presentations suggests the retro surfaced a process improvement. Score is 6 rather than 7-8 because the content or outcomes of the retrospective discussion itself are not captured in the daily summaries — only the ceremony occurrence and assignment submission are confirmed."
+      },
+      "backlog_refinement": {
+        "score": 5,
+        "reasoning": "Sprint 1 Product Backlog Grooming assignment was submitted (referenced on 02-16), and GitHub issues are referenced by number (e.g., issue #7). PR reviews and code coordination imply some backlog management. However, no explicit backlog refinement session, story sizing discussion, or prioritization activity is described in the daily summaries during the sprint period. The neutral score of 5 reflects that grooming happened (per assignment submission) but in-sprint refinement details are absent from the evidence."
+      },
+      "subtotal": 31
+    },
+    "section_c": {
+      "antipatterns": [],
+      "subtotal": 20
+    },
+    "aii_total": 81,
+    "data_confidence": "high",
+    "scoring_notes": "Input richness is high — ten daily summaries spanning the full sprint plus a synthesized sprint summary provide granular, named-contributor evidence. The team is a course project team with a professor acting in a combined instructor/PO/stakeholder role, which colors the 'customer_collaboration' dimension. Working software score was moderated by the explicit absence of a database (Scrum board page using mock data only) and CI/lint failures blocking at least one PR at sprint end. No anti-patterns met the evidence bar: carry-over items mentioned in the sprint summary are forward-looking ('ongoing development') rather than named items that appeared in a prior sprint's carry-over; the database work was a new architectural decision this sprint, not a repeated slip. Standups were clearly peer-to-peer synchronization events, not manager status reports. The team showed genuine responsiveness to technical and personal blockers throughout.",
+    "team": "Scrum Pilot",
+    "sprint": "Sprint 1",
+    "start": "2026-02-15",
+    "end": "2026-02-28",
+    "scoredAt": "2026-04-22T03:43:06.545Z"
+  },
+  {
+    "section_a": {
+      "individuals_interactions": {
+        "score": 8,
+        "reasoning": "Strong multi-member participation is explicitly documented: Thomas Lee drove workflow documentation and facilitated meetings; Ognjen Davidovic created the dev branch and shared repo paths; Fares Abu Samhan led a live Git demo on Feb 27; Ryan Patacsil attended meetings and assisted with scheduling; Rio Sison contributed substantive async technical analysis on Feb 25; Cameron N. contributed async and volunteered for README docs. Both sync (live demo, meetings) and async collaboration channels are evidenced. Minor deduction from a perfect score due to meeting attendance inconsistencies and some members having limited participation."
+      },
+      "working_software": {
+        "score": 4,
+        "reasoning": "This was an infrastructure and discovery sprint. The primary outputs were a Git workflow document, a dev branch creation, Webots environment setup confirmed across all members, and a shared repo path. These are process/tooling artifacts rather than working software features. No simulation functionality was completed or accepted — Rio's LightSensor/sun simulation work is explicitly listed as carry-over and still in progress. The scoring rules note a sprint that shipped anything working scores at least 6, but no working software output is evident; the outputs are foundational setup. Scoring 4 as the sprint produced real tangible value (environment parity, workflow foundation) but no working software per the manifesto definition."
+      },
+      "customer_collaboration": {
+        "score": 6,
+        "reasoning": "Brian Dietrick is identified as coach/stakeholder and is explicitly noted as clarifying backlog grooming cadence expectations during the sprint ('once per sprint, not weekly — can follow retrospective'). Rio Sison raised detailed scope/design clarifying questions (simulation-only vs. physical, axis count, roof types) that represent active requirement collaboration. Sprint Review was scheduled and held on Feb 28. This is meaningful stakeholder engagement, though depth of PO feedback on backlog items is not detailed."
+      },
+      "responding_to_change": {
+        "score": 6,
+        "reasoning": "Several adaptation signals are present: a meeting was rescheduled from Thu Feb 20 to Fri Feb 21 at 3:30 PM due to attendance issues; the team clarified backlog grooming cadence with the coach and adjusted process accordingly; Rio's technical discovery of DirectionalLight limitations prompted exploration of PointLight/SpotLight alternatives, showing adaptation to a technical blocker. Design ambiguity questions were raised and surfaced rather than ignored. However, some blockers (LightSensor implementation, design scope questions) remain open at sprint end without full resolution, limiting the score."
+      },
+      "subtotal": 24
+    },
+    "section_b": {
+      "sprint_planning": {
+        "score": 5,
+        "reasoning": "The sprint summary describes a clear focus area ('establishing the team's development infrastructure and workflow foundations') and specific items were assigned to individuals (DoD to Rio Sison, DoR to Ryan Patacsil, README to Cameron N.). However, there is no explicit mention of a sprint planning ceremony, story point estimation, committed sprint backlog, or formal sprint goal statement. Work was clearly scoped and assigned, but planning process details are sparse — scoring 5 per the neutral default for thin but not absent evidence."
+      },
+      "daily_scrum": {
+        "score": 4,
+        "reasoning": "The summary references multiple meetings occurring across the sprint period (meetings on Feb 20/21, Feb 27, Feb 28 Sprint Review) and mentions scheduling conflicts, rescheduling, and attendance issues. However, standups are not explicitly named or described as a daily ceremony. The meetings referenced appear to be working sessions and the sprint review rather than daily scrums. No standup count or standup-specific content (yesterday/today/blockers format) is documented. Scoring 4 as the neutral default — absence of explicit standup evidence, but no evidence they did not occur."
+      },
+      "sprint_review": {
+        "score": 7,
+        "reasoning": "Sprint Review is explicitly mentioned as both scheduled and held: 'Sprint Review scheduled and held on Feb 28.' Thomas Lee is noted as facilitating the sprint review. This is clear positive evidence of the ceremony occurring within the sprint period."
+      },
+      "sprint_retrospective": {
+        "score": 4,
+        "reasoning": "No explicit mention of a retrospective ceremony in the sprint summary. The backlog grooming cadence clarification notes it should follow the retrospective ('can follow retrospective'), which implies awareness of the ceremony, but no evidence it was conducted this sprint. Scoring 4 per the rules: absence of evidence, not evidence of absence."
+      },
+      "backlog_refinement": {
+        "score": 6,
+        "reasoning": "Backlog grooming cadence was explicitly discussed and clarified with the coach (Brian Dietrick confirmed once per sprint, immediately after retrospective). Rio Sison raised substantive backlog-level questions about scope and design that represent refinement activity. DoD and DoR were assigned as tasks, indicating awareness of story readiness. The cadence clarification itself demonstrates active backlog management discussion during the sprint."
+      },
+      "subtotal": 26
+    },
+    "section_c": {
+      "antipatterns": [
+        {
+          "key": "carryover_work",
+          "label": "Carryover Work",
+          "deduction": 0,
+          "evidence": "Carry-over items are named (README update, DoD, DoR, LightSensor exploration, design questions), but there is no evidence these same named items appeared in a prior sprint's carry-over section. This is Sprint 1 — no prior sprint exists from which to establish a repeat pattern. Per the rules, a one-time slip and general forward-looking work do not qualify. No deduction applied."
+        }
+      ],
+      "subtotal": 20
+    },
+    "aii_total": 70,
+    "data_confidence": "medium",
+    "scoring_notes": "Input is a synthesized sprint summary without individual daily standup logs, making it impossible to assess daily scrum cadence and quality with confidence. The sprint is Sprint 1 — a foundational setup sprint — which structurally limits working_software scores regardless of team effort. Carryover items are named but cannot be confirmed as repeated across sprints since this is the first sprint. The most surprising element is the high process maturity for Sprint 1: a three-branch Git strategy, PR rules with peer review requirements, coaching engagement, and multi-channel async/sync collaboration are sophisticated signals for a team just starting. Customer collaboration scored modestly above neutral due to explicit coach/stakeholder interaction rather than a full product feedback loop. The daily_scrum and sprint_retrospective scores are the weakest confidence dimensions — both defaulted to 4 due to thin evidence rather than negative evidence.",
+    "team": "Sunflower Tracker",
+    "sprint": "Sprint 1",
+    "start": "2026-02-15",
+    "end": "2026-02-28",
+    "scoredAt": "2026-04-22T03:43:53.647Z"
+  },
+  {
+    "section_a": {
+      "individuals_interactions": {
+        "score": 8,
+        "reasoning": "Four named members are cited as active participants (Maysun Dietrick, Brayan Jimeno, Jared Rogers, Brian Dietrick). Asynchronous collaboration via Discord is explicitly mentioned. Multiple members contributed to backlog grooming and sprint planning, each committing to at least three backlog items. Peer code review and PR approval activity is also noted."
+      },
+      "working_software": {
+        "score": 7,
+        "reasoning": "Backend question management features were completed, a dynamic validation rule system was developed, unit tests for question repository functionality were added, and multiple significant pull requests were successfully merged into the codebase. These represent tangible, integrated deliverables. Score is not higher because no demo or explicit acceptance criteria/DoD confirmation is mentioned."
+      },
+      "customer_collaboration": {
+        "score": 5,
+        "reasoning": "No mention of PO involvement, stakeholder feedback, or external requirement clarification during the sprint. Applying the neutral default per scoring rules — absence of evidence does not warrant a penalty."
+      },
+      "responding_to_change": {
+        "score": 6,
+        "reasoning": "Merge conflicts were raised as blockers and explicitly resolved within the sprint. Repository access issues were identified and addressed. The sprint review was rescheduled from April 5th to April 4th in response to a calendar conflict, demonstrating adaptability. These are concrete mid-sprint adjustments in response to new information."
+      },
+      "subtotal": 26
+    },
+    "section_b": {
+      "sprint_planning": {
+        "score": 6,
+        "reasoning": "Sprint planning is evidenced by each member committing to delivering at least three backlog items, explicit backlog grooming participation by multiple members, and a defined sprint focus on backend functionality and validation rules. Goal and committed scope are implied clearly, though story-level readiness signals (e.g., sizing, acceptance criteria) are not detailed."
+      },
+      "daily_scrum": {
+        "score": 4,
+        "reasoning": "No daily standup summaries or logs are present in the input. The sprint summary references asynchronous Discord communication but does not explicitly describe standups occurring. Per scoring rules, the neutral default of 4 is applied — absence of evidence is not evidence of absence."
+      },
+      "sprint_review": {
+        "score": 4,
+        "reasoning": "No explicit mention of a sprint review or demo event within the sprint period. A rescheduling of what appears to be a sprint review to April 4th is noted, but this falls outside the sprint period (2026-03-01 to 2026-03-21). Deliverables existed, so the neutral default of 4 is applied per scoring rules rather than penalizing for non-mention."
+      },
+      "sprint_retrospective": {
+        "score": 4,
+        "reasoning": "No explicit mention of a retrospective ceremony. Per scoring rules, absence of mention defaults to 4 — the team is not described as skipping or rejecting retros."
+      },
+      "backlog_refinement": {
+        "score": 7,
+        "reasoning": "Multiple members explicitly contributed to backlog grooming and sprint planning. Each member committed to delivering at least three backlog items, indicating prioritization and readiness discussions occurred. This is clear positive evidence of refinement activity."
+      },
+      "subtotal": 25
+    },
+    "section_c": {
+      "antipatterns": [
+        {
+          "key": "carryover_work",
+          "label": "Carry-Over Work",
+          "deduction": 0,
+          "evidence": "Validation rules implementation is listed as a carry-over item, but the summary attributes this to 'dependencies on associated features' — this appears to be a first-time slip tied to an external dependency rather than a recurring pattern. No evidence this same item appeared in a prior sprint's carry-over section. No deduction applied."
+        }
+      ],
+      "subtotal": 20
+    },
+    "aii_total": 71,
+    "data_confidence": "medium",
+    "scoring_notes": "Input consists of a single synthesized sprint summary with no daily standup logs, individual contribution breakdowns, or velocity/story-point data. This limits confidence in Scrum ceremony quality (daily_scrum, sprint_review, sprint_retrospective all defaulted to neutral 4). Customer collaboration evidence was entirely absent, also defaulting to neutral. The summary is reasonably detailed about technical accomplishments, team participation, and blockers, which supported moderate-to-strong scores in Section A and backlog refinement. No anti-patterns met the explicit evidence bar required for deduction — the carry-over item is a single dependency-driven slip, not a pattern, and no other dysfunctions were unambiguously described. The mention of 'clearing old code to facilitate AI-generated outputs' was noted as an unusual practice but does not map cleanly to any defined anti-pattern without more context.",
+    "team": "FormFlow",
+    "sprint": "Sprint 2",
+    "start": "2026-03-01",
+    "end": "2026-03-21",
+    "scoredAt": "2026-04-22T03:46:39.083Z"
+  },
+  {
+    "section_a": {
+      "individuals_interactions": {
+        "score": 7,
+        "reasoning": "Multiple named contributors are cited: Brian Dietrick oversaw project setup and provided feedback; Michael Trinh, LJ Kaminski, and Zachary Faulkner engaged in PBI implementation and pull request submissions. Peer review of pull requests is explicitly mentioned, indicating cross-team collaboration. Blockers around lack of engagement and communication were noted and a corrective measure (mandatory Discord acknowledgment) was established, showing interpersonal issues were surfaced and addressed."
+      },
+      "working_software": {
+        "score": 6,
+        "reasoning": "Several team members completed their PBI assignments and submitted pull requests for implemented features. PBIs were expanded with Implementation Steps and Definition of Done, and some were accepted. However, not all planned PBIs were completed, some PRs lacked testing evidence, and merge conflicts blocked finalization. Working output exists and was shipped to PR review, but full acceptance of a clean set of stories is not confirmed, keeping the score at 6 rather than higher."
+      },
+      "customer_collaboration": {
+        "score": 5,
+        "reasoning": "No explicit mention of PO involvement, stakeholder demos, or external customer feedback in the sprint summary. Brian Dietrick provided internal guidance and feedback on PBIs and PRs, but his role is described as oversight rather than as a customer or PO proxy. Defaulting to neutral per scoring rules — no evidence either way for customer/stakeholder collaboration."
+      },
+      "responding_to_change": {
+        "score": 7,
+        "reasoning": "The team identified merge conflicts and responded by clarifying the branching strategy. They addressed inadequate PR documentation by reinforcing DoD adherence. A new decision was made mid-sprint to limit each member to one PBI at a time to prevent blocking. A mandatory Discord acknowledgment procedure was also established in response to identified communication gaps. These represent concrete mid-sprint adaptations to discovered blockers."
+      },
+      "subtotal": 25
+    },
+    "section_b": {
+      "sprint_planning": {
+        "score": 6,
+        "reasoning": "Sprint goals and committed scope are evidenced by the explicit list of PBIs assigned to team members. PBIs were expanded with Implementation Steps and Definition of Done prior to development, indicating readiness work was done. A notable decision was made to adopt planning poker for future sprints, implying current planning existed but lacked story point rigor. Evidence is positive but sparse on formal planning ceremony details."
+      },
+      "daily_scrum": {
+        "score": 6,
+        "reasoning": "The summary explicitly states 'Attendance noted via daily scrum updates' and mentions participation varying across members. Blockers (merge conflicts, lack of engagement) appear to have been surfaced through these updates. This confirms standups occurred regularly across the sprint with blockers discussed, meeting the 6-point threshold. Format details are not deeply described, preventing a score of 7–8."
+      },
+      "sprint_review": {
+        "score": 4,
+        "reasoning": "No explicit mention of a sprint review meeting, demo, or formal acceptance event. Pull requests were submitted and peer-reviewed, which represents some form of work inspection, but a sprint review ceremony is not described. Per scoring rules, the sprint ended with deliverables existing, so defaulting to 4 rather than penalizing for absence of explicit mention."
+      },
+      "sprint_retrospective": {
+        "score": 5,
+        "reasoning": "No explicit mention of a sprint retrospective ceremony. However, the 'Notable Decisions' section documents several process improvements agreed upon by the team (one PBI per member, planning poker, Discord acknowledgment rule), which could reflect retro outcomes. This is ambiguous — it may indicate retro-like reflection without a formal ceremony. Scoring slightly above neutral at 5 given the presence of team-level process decisions, but not 6+ without explicit retro mention."
+      },
+      "backlog_refinement": {
+        "score": 6,
+        "reasoning": "PBIs were explicitly expanded to include detailed Implementation Steps and Definition of Done during the sprint, which is direct evidence of backlog refinement activity. Tasks were assigned from the refined backlog. The decision to adopt planning poker in future sprints also implies current sizing was recognized as needing improvement, confirming refinement occurred but informally."
+      },
+      "subtotal": 27
+    },
+    "section_c": {
+      "antipatterns": [
+        {
+          "key": "carryover_work",
+          "label": "Carry-over Work",
+          "deduction": 3,
+          "evidence": "The sprint summary's 'Carry-over Items' section explicitly states: 'Not all planned PBIs were completed... the following tasks require attention: Finalizing the remaining PBIs. Addressing feedback and making necessary updates to existing pull requests.' These are specifically named in-progress items from this sprint that did not finish. However, per the strict rule, a deduction is applied only because these items were explicitly started this sprint and not finished, though absence of prior sprint data prevents confirming a multi-sprint pattern. Applying the deduction conservatively given explicit named carryover of started work."
+        }
+      ],
+      "subtotal": 17
+    },
+    "aii_total": 69,
+    "data_confidence": "medium",
+    "scoring_notes": "Input is a synthesized sprint summary with moderate richness. Daily scrum entries are referenced in aggregate but not provided individually, limiting granular assessment of standup quality and frequency. Customer collaboration evidence is entirely absent, defaulting to neutral. Sprint review and retrospective are not explicitly named as ceremonies, though process decisions documented in 'Notable Decisions' suggest some reflective practice occurred. The carryover deduction was applied because the summary explicitly names unfinished in-sprint work in a dedicated carry-over section; however, the strict two-sprint-pattern requirement could not be verified due to absence of Sprint 1 data, so this deduction is made on the single-sprint evidence of named unfinished items rather than a confirmed recurring pattern — evaluators should revisit if Sprint 1 data becomes available. No other anti-patterns met the explicit evidence bar. Brian Dietrick's role (PO, Scrum Master, or senior developer) is ambiguous and could affect customer_collaboration and po_as_project_manager assessments if clarified.",
+    "team": "Pulse",
+    "sprint": "Sprint 2",
+    "start": "2026-03-01",
+    "end": "2026-03-21",
+    "scoredAt": "2026-04-22T03:47:17.147Z"
+  },
+  {
+    "section_a": {
+      "individuals_interactions": {
+        "score": 9,
+        "reasoning": "Strong multi-member participation documented across dailies: Tyler coordinating PR flow and pairing with Aden on debugging (3/20), Nathaniel leading bot development with Tyler assisting in voice channel testing (3/18), Anthony revising PR #79 under time pressure and communicating blockers, Dylan completing work despite dental surgery, Joshua merging branches and submitting PRs, Huan reviewing Tyler's final PR on 3/21, James identifying CI issues. Async coordination was active throughout (SharePoint spreadsheet shared 3/6, PR review assignments negotiated in-channel 3/20). Interpersonal blockers (missed standups, travel constraints) were noted and worked around rather than ignored."
+      },
+      "working_software": {
+        "score": 8,
+        "reasoning": "Multiple features shipped and demoed at Sprint Review (3/21): SQLite database with migrations and repository pattern (Tyler), CRUD elements in Controller/Service (Aden — PR #83), StoryCard detail view UI (Anthony — PR #79 merged), Multi-problem-statement UI (Dylan — PR for Issue #65 merged), Discord bot auto-record/stop on voice join/leave and channel config commands (Nathaniel/Joshua), Sprint 1 Dev→Main squash-merge (#64) completed. Sprint Review demo order was formalized with each team member presenting a delivered feature. Score is 8 rather than 10 because the audio transcription/summarization pipeline had known bugs and size-limit issues unresolved by sprint end, and the CI pipeline was broken throughout."
+      },
+      "customer_collaboration": {
+        "score": 7,
+        "reasoning": "Professor Dietrick (acting as instructor/stakeholder and implicitly as PO) engaged directly during the sprint: approved the Sprint 1 merge on 2/28 (referenced 3/4), raised ceremony-sequencing concerns on 3/4 (grooming vs. spring break timing), suggested .NET Aspire for distributed orchestration, and was awaited for ECU IT responses regarding Craig infrastructure. Tyler responded to Dietrick's ceremony concerns in-channel. This is active stakeholder engagement shaping team decisions. Score is 7 rather than higher because formal backlog acceptance criteria or PO sign-off on stories is not explicitly documented."
+      },
+      "responding_to_change": {
+        "score": 8,
+        "reasoning": "Multiple mid-sprint adaptations documented: (1) Craig bot found to be incompatible with programmatic triggering (3/18) — team pivoted to discordjs/voice within the same sprint rather than blocking progress; (2) MudBlazor intercepting click events on PR #79 — Anthony replaced click handler with explicit 'View Details' button on 3/20 and got it reviewed same day; (3) Nathaniel's audio file-size/text-limit error (3/19–3/20) prompted workaround investigation; (4) Spring Break attendance constraints led to a shorter-but-completed grooming session on 3/7; (5) PBI #65 assignment shifted to Dylan based on dependency constraints (3/5). All major blockers received explicit in-sprint responses."
+      },
+      "subtotal": 32
+    },
+    "section_b": {
+      "sprint_planning": {
+        "score": 6,
+        "reasoning": "Sprint planning is referenced indirectly: the team's grooming-then-planning cadence is explicitly described (3/4 daily), PBI #65 was assigned to Dylan based on dependency analysis (3/5), and the sprint summary lists a defined scope (SQLite DB, CRUD, Scrum Board UI, multi-problem-statement UI, Discord bot). Demo assignments on 3/21 confirm each member had a committed deliverable. However, no direct record of a Sprint 2 planning meeting, story point estimates, or an explicit sprint goal statement is captured in the dailies, warranting a 6 rather than 7–8."
+      },
+      "daily_scrum": {
+        "score": 7,
+        "reasoning": "Daily summaries span 3/2, 3/3, 3/4, 3/5, 3/6, 3/7, 3/16, 3/17, 3/18, 3/19, 3/20, and 3/21 — 12 daily records across the sprint. Multiple entries document progress updates, blockers raised to the team (Nathaniel's missed standup 3/3, Craig blocker 3/18, audio bug 3/19, PR merge crunch 3/20), and peer-to-peer coordination. Blockers were raised to teammates, not to a manager. Attendance issues (Tyler's midterm 3/17, James unable to join 3/20) were communicated proactively. Score is 7 rather than 8 because Spring Break produced a gap with minimal substantive standup activity (3/16–3/17 entries are nearly empty), and some daily entries are thin on individual status updates."
+      },
+      "sprint_review": {
+        "score": 8,
+        "reasoning": "Sprint Review is explicitly scheduled and executed on 3/21 at 6 PM. Demo order finalized (Aden → Tyler → Anthony → Huan → James → Dylan → Nate/Josh), each presenter assigned a specific deliverable to demonstrate, team asked to pull latest Dev branch beforehand, and Tyler confirmed all Sprint 2 deliverables submitted. This is strong, direct evidence of a conducted sprint review with structured demos."
+      },
+      "sprint_retrospective": {
+        "score": 4,
+        "reasoning": "No explicit mention of a sprint retrospective in any daily summary or the sprint summary. Per scoring rules, absence of evidence defaults to 4 — no deduction applied since there is no affirmative statement that the team skipped or does not conduct retros."
+      },
+      "backlog_refinement": {
+        "score": 7,
+        "reasoning": "Backlog grooming session explicitly held on 3/7 with new stories added: Anthony added PBI #68 (Add Comments and Link fields), Nathaniel added Discord bot nickname-in-transcripts stories, stories placed in 'No Priority' section per established process. Backlog brainstorming spreadsheet shared on SharePoint (3/6) for async contribution. Grooming assignment submitted to Canvas (3/7). Team's grooming→planning cadence is explicitly documented. Score is 7 rather than 8 because grooming was shorter than usual due to reduced attendance and it was uncertain whether all intended stories were captured."
+      },
+      "subtotal": 32
+    },
+    "section_c": {
+      "antipatterns": [],
+      "subtotal": 20
+    },
+    "aii_total": 84,
+    "data_confidence": "high",
+    "scoring_notes": "Input richness is high — 12 daily summaries plus a detailed sprint summary providing strong corroborating evidence across all dimensions. The daily records are the most valuable signal source: they document real-time blockers, adaptations, and peer interactions that the sprint summary confirms and expands. Thinnest dimension is sprint retrospective (zero evidence in any daily entry) and sprint planning (no planning meeting record, though committed scope is inferable from demo assignments and PBI references). No anti-patterns met their evidence bar: carry-over items (Craig fork, CI fix, audio bug) are either new discoveries from this sprint or explicitly planned future work — none match the definition of items that appeared in a prior sprint's carry-over section. The CI pipeline being broken throughout is a quality concern but does not meet the no_real_dod bar (no story was explicitly accepted without criteria or explicitly reworked for quality failure). The team's responsiveness to the Craig blocker and MudBlazor issue were notably strong positive signals for responding_to_change. One mild surprise: Huan Yang's limited availability was repeatedly noted but they still contributed a PR review on the final day and are included in the Sprint Review demo, suggesting async engagement that could easily be undercounted in a surface read.",
+    "team": "Scrum Pilot",
+    "sprint": "Sprint 2",
+    "start": "2026-03-01",
+    "end": "2026-03-21",
+    "scoredAt": "2026-04-22T03:48:12.944Z"
+  },
+  {
+    "section_a": {
+      "individuals_interactions": {
+        "score": 8,
+        "reasoning": "Multiple named contributors are explicitly cited: Thomas Lee completed light sensor setup and documentation, Ognjen Davidovic developed sun tracking logic and raised scheduling concerns, Ryan Patacsil and Rio Sison created pull requests, Cameron N. encountered and reported Webots errors, Fares Abu Samhan was noted as actively engaged. Async collaboration via GitHub for code sharing and peer feedback is explicitly mentioned. Interpersonal coordination around meeting scheduling was raised and partially resolved (time shifted from 8 PM to 9 PM)."
+      },
+      "working_software": {
+        "score": 7,
+        "reasoning": "Concrete deliverables are explicitly named: light sensor setup implementation with documentation (Thomas Lee), sun tracking logic submitted for code review (Ognjen Davidovic), and a pull request for solar panel design features (Ryan Patacsil, Rio Sison). Code review feedback was exchanged, indicating working artifacts were produced and reviewed. Some items remain in carry-over, preventing a higher score, but meaningful working output was clearly shipped."
+      },
+      "customer_collaboration": {
+        "score": 5,
+        "reasoning": "No explicit mention of Product Owner involvement, stakeholder feedback, or customer-facing requirement clarification in the sprint summary. Scoring the neutral default of 5 per the evidence standard — absence of evidence is not penalized."
+      },
+      "responding_to_change": {
+        "score": 7,
+        "reasoning": "The team explicitly adapted to scheduling blockers by shifting the recurring meeting from 8 PM to 9 PM to accommodate member availability during spring break. Cameron N.'s Webots simulation errors were identified and noted as a blocker. Ognjen Davidovic's scheduling concerns were raised and addressed. These represent mid-sprint adaptation to real impediments. Carry-over on UI and solar panel integration suggests some scope was not fully replanned, preventing a 9–10."
+      },
+      "subtotal": 27
+    },
+    "section_b": {
+      "sprint_planning": {
+        "score": 5,
+        "reasoning": "The sprint summary describes a focused scope (light sensor, sun tracking logic, solar panel design, code review process) suggesting planning occurred, but no explicit sprint goal statement, story sizing, or planning ceremony detail is mentioned. Scoring 5 — planning implied by committed scope but details are sparse."
+      },
+      "daily_scrum": {
+        "score": 6,
+        "reasoning": "The summary references 'various meetings to ensure ongoing communication regarding project progress and blockers' and notes scheduling coordination across the sprint, implying recurring standups or synchronization touchpoints occurred. Blockers (Webots errors, scheduling conflicts) were surfaced and raised to the team. The summary confirms 'accommodating team member schedules' suggests repeated touchpoints. Not scoring 7–8 because standup format and frequency are not explicitly described."
+      },
+      "sprint_review": {
+        "score": 5,
+        "reasoning": "The summary mentions 'finalizing preparations for the upcoming sprint review' as part of sprint focus, which confirms a review was anticipated and prepared for, but no explicit description of a demo or acceptance event is provided. Scoring 5 — deliverables existed and review preparation is mentioned, but the event itself is not confirmed as completed."
+      },
+      "sprint_retrospective": {
+        "score": 4,
+        "reasoning": "No explicit mention of a retrospective ceremony, retrospective outcomes, or improvement actions in the sprint summary. Per scoring rules, absence of evidence defaults to 4 — the team is not penalized for non-mention."
+      },
+      "backlog_refinement": {
+        "score": 4,
+        "reasoning": "No explicit mention of backlog grooming, story sizing, or prioritization discussions. Carry-over items and future work are mentioned in general terms but no refinement ceremony or activity is cited. Defaulting to 4 per the evidence standard."
+      },
+      "subtotal": 24
+    },
+    "section_c": {
+      "antipatterns": [
+        {
+          "key": "carryover_work",
+          "label": "Carry-Over Work",
+          "deduction": 0,
+          "evidence": "The summary mentions 'Some features, including the UI components...remain in development' and 'Additional functionality related to the solar panel design...is pending completion.' However, there is no evidence these same specific items appeared in a prior sprint's carry-over section. This appears to be a first-time slip of items planned for future progression, not a recurring pattern. No deduction applied."
+        }
+      ],
+      "subtotal": 20
+    },
+    "aii_total": 71,
+    "data_confidence": "medium",
+    "scoring_notes": "Input is a synthesized sprint summary without raw daily standup logs, backlog snapshots, or velocity data, which limits confidence on Section B ceremonies (planning quality, retro, refinement). The summary is well-structured and names specific contributors and deliverables, supporting solid Section A scoring. Customer collaboration evidence is entirely absent — neutral default applied per rules. The carry-over items were evaluated carefully: UI and solar panel integration are named but no prior sprint context is available to confirm recurrence, so no deduction was taken. The meeting-time adaptation (8 PM → 9 PM) is a clear and specific mid-sprint change response and was credited accordingly. Data confidence is medium rather than high due to the absence of daily-level detail.",
+    "team": "Sunflower Tracker",
+    "sprint": "Sprint 2",
+    "start": "2026-03-01",
+    "end": "2026-03-21",
+    "scoredAt": "2026-04-22T03:48:48.918Z"
+  },
+  {
+    "section_a": {
+      "individuals_interactions": {
+        "score": 8,
+        "reasoning": "The summary explicitly notes that 'Team members actively participated in stand-up meetings and discussions, demonstrating strong collaboration,' 'Significant asynchronous contributions were made, particularly regarding code reviews and communications around technical decisions,' and 'All team members were engaged in discussions about dependencies and project structure, contributing ideas for improvements and future work.' Multiple contributors across sync and async channels is a strong positive signal."
+      },
+      "working_software": {
+        "score": 7,
+        "reasoning": "Concrete deliverables are cited: the dropdown Blazor component was completed, API endpoints (e.g., GET api/questions/{id}) were implemented, JSON schema for survey definitions was created and refined, and the QuestionRenderer was updated to support new components. Several items remain in progress (radio and text question components), but working output was clearly shipped this sprint."
+      },
+      "customer_collaboration": {
+        "score": 5,
+        "reasoning": "No explicit mention of PO involvement, stakeholder demos, or customer feedback incorporated during the sprint. Backlog grooming and user story creation are noted, which implies some form of requirement alignment, but direct customer or PO collaboration evidence is absent. Defaulting to neutral per scoring rules."
+      },
+      "responding_to_change": {
+        "score": 6,
+        "reasoning": "The team identified a blocker around pending PR reviews and actively adapted: 'Team members encouraged to not wait for prior PR approvals to begin new work, to avoid hindering progress.' A backlog management change was also made mid-sprint: 'The team will avoid pre-assigning PBIs during sprint planning to prevent confusion.' These represent concrete responses to observed friction, indicating meaningful adaptation."
+      },
+      "subtotal": 26
+    },
+    "section_b": {
+      "sprint_planning": {
+        "score": 6,
+        "reasoning": "Sprint planning is evidenced by the description of backlog grooming, prioritization of user stories for rendering all question types and client-side validation, and the notable decision to 'avoid pre-assigning PBIs during sprint planning.' A sprint goal is not explicitly named, which prevents a top score, but committed scope and planning activity are clearly present."
+      },
+      "daily_scrum": {
+        "score": 6,
+        "reasoning": "The summary states 'Team members actively participated in stand-up meetings and discussions' and references blockers and dependencies being raised within those forums. Standups are described as collaborative peer discussions (blockers surfaced to the team), not status reports to management. Specific standup count or transcripts are not provided, which limits the score to 6 rather than 7–8."
+      },
+      "sprint_review": {
+        "score": 4,
+        "reasoning": "No explicit mention of a sprint review meeting, demo, or formal acceptance of completed work. Deliverables did exist and are described, so the minimum floor of 4 (sprint ended with deliverables but no review mentioned) applies per scoring rules."
+      },
+      "sprint_retrospective": {
+        "score": 4,
+        "reasoning": "No explicit mention of a retrospective ceremony. The summary does include a 'Notable Decisions' section reflecting on process (e.g., backlog pre-assignment change, folder structure decision), which could be retro-adjacent, but does not constitute explicit evidence of a retro. Defaulting to 4 per scoring rules — absence of evidence is not evidence of absence."
+      },
+      "backlog_refinement": {
+        "score": 7,
+        "reasoning": "'Backlog Grooming and Planning' is called out as a key accomplishment: 'Organized backlog items for better prioritization, including creating user stories for rendering all question types and client-side validation.' This is clear, specific evidence of refinement activity with story creation and prioritization."
+      },
+      "subtotal": 27
+    },
+    "section_c": {
+      "antipatterns": [
+        {
+          "key": "carryover_work",
+          "label": "Carry-over Work",
+          "deduction": 0,
+          "evidence": "The summary names carry-over items ('Testing Folder Structure' and 'Completing Blazor Components'), but these do not appear to have been present in a prior sprint's carry-over section — no prior sprint data is provided to confirm a repeated pattern. Per scoring rules, a one-time slip and absence of cross-sprint confirmation means no deduction is warranted."
+        }
+      ],
+      "subtotal": 20
+    },
+    "aii_total": 73,
+    "data_confidence": "medium",
+    "scoring_notes": "Input consists of a single synthesized sprint summary with no raw daily standup transcripts, velocity data, story point counts, or prior sprint carry-over records. This limits confidence in several dimensions: (1) daily_scrum quality is affirmed in narrative but not verifiable from raw entries; (2) sprint_review and sprint_retrospective cannot be confirmed or denied — defaults applied; (3) customer_collaboration has no evidence at all, resulting in a neutral 5; (4) carryover anti-pattern could not be confirmed as a recurring pattern due to absence of prior sprint data. The summary is well-structured and suggests a reasonably healthy team, but the single-document, synthesized nature of the input prevents a high confidence rating. No anti-patterns met the unambiguous evidence bar required for deduction.",
+    "team": "FormFlow",
+    "sprint": "Sprint 3",
+    "start": "2026-03-22",
+    "end": "2026-04-04",
+    "scoredAt": "2026-04-22T04:15:14.006Z"
+  },
+  {
+    "section_a": {
+      "individuals_interactions": {
+        "score": 8,
+        "reasoning": "Multiple team members are explicitly named as active participants: Thai S, Kamron Hopkins, Michael Trinh, Zachary Faulkner, and LJ Kaminski. Async communication via Discord is mentioned. Peer collaboration on PR reviews and conflict resolution is explicitly described. Kamron's situation was discussed with the instructor and resolved collaboratively. Multiple contributors conducting thorough PR reviews = strong positive signal."
+      },
+      "working_software": {
+        "score": 7,
+        "reasoning": "Feature 9, Feature 20, and Feature 8 were explicitly merged into the development branch. Implementation steps and definitions of done were updated for PBIs. Multiple PRs were reviewed and merged. Concrete deliverables shipped = clear positive evidence. Score stops short of 9-10 because acceptance/demo is not explicitly confirmed."
+      },
+      "customer_collaboration": {
+        "score": 5,
+        "reasoning": "No explicit mention of PO involvement, stakeholder feedback, or customer-facing demos. Scoring 5 per the evidence standard — absence of evidence does not warrant a penalty."
+      },
+      "responding_to_change": {
+        "score": 7,
+        "reasoning": "The team explicitly decided mid-sprint to prioritize cleaning up and merging outstanding PRs before starting new work — a clear scope adjustment in response to a blocker. Kamron's uncertainty about course participation was raised and resolved within the sprint. Outstanding PR backlog was identified as a blocker and acted upon. These are concrete adaptation signals."
+      },
+      "subtotal": 27
+    },
+    "section_b": {
+      "sprint_planning": {
+        "score": 6,
+        "reasoning": "Planning Poker was explicitly adopted for task estimation. Backlog grooming was completed with PBIs assigned to future sprints. Implementation steps and definitions of done were updated for upcoming PBIs. Clear evidence that planning activities occurred with story readiness signals, though a formal sprint goal statement is not mentioned."
+      },
+      "daily_scrum": {
+        "score": 4,
+        "reasoning": "No explicit mention of daily standups, standup logs, or standup-format entries in the sprint summary. Async Discord communication is referenced, which may serve a similar function, but standup cadence and quality cannot be confirmed. Scoring 4 as the neutral default per the evidence standard."
+      },
+      "sprint_review": {
+        "score": 4,
+        "reasoning": "Features were merged and work was completed, but no explicit mention of a sprint review meeting, demo, or formal acceptance ceremony. Scoring 4 per the calibration rule: sprint ended with deliverables but review is not mentioned."
+      },
+      "sprint_retrospective": {
+        "score": 4,
+        "reasoning": "No explicit mention of a retrospective. There is no evidence the team skipped or rejected retros, so the neutral default of 4 applies per the evidence standard."
+      },
+      "backlog_refinement": {
+        "score": 7,
+        "reasoning": "Backlog grooming is explicitly mentioned: 'Completed backlog grooming, assigning PBIs for future sprints.' Implementation steps and definitions of done were updated for all remaining PBIs. Planning Poker was adopted for estimation. Strong, direct evidence of refinement activity."
+      },
+      "subtotal": 25
+    },
+    "section_c": {
+      "antipatterns": [
+        {
+          "key": "carryover_work",
+          "label": "Carryover Work",
+          "deduction": 3,
+          "evidence": "The summary explicitly states under 'Carry-over Items': 'Several PBIs from Sprint 1 were incomplete, specifically related to user story implementations and needing further review before merging' and 'PBI #19 and others continued discussions around functionality yet pending final steps for completion.' The sprint summary also notes 'outstanding pull requests (PRs) from Sprint 1' as a focus of this sprint, confirming that prior-sprint items carried into this sprint."
+        }
+      ],
+      "subtotal": 17
+    },
+    "aii_total": 69,
+    "data_confidence": "medium",
+    "scoring_notes": "The sprint summary provides clear evidence of collaboration, feature merging, and backlog grooming, but is relatively thin on ceremony-specific details. Daily standup cadence is not mentioned, making that dimension low-evidence. Customer/PO involvement is entirely absent from the record. The carryover deduction is supported by explicit naming of PBI #19 and Sprint 1 incomplete items carrying into this sprint. No other anti-patterns met the evidence bar — the overloaded sprint signal is present but only one sprint's worth of data exists, so a pattern cannot be confirmed. Data confidence is medium because the summary is synthesized rather than drawn from raw daily logs, limiting granularity on ceremony quality.",
+    "team": "Pulse",
+    "sprint": "Sprint 3",
+    "start": "2026-03-22",
+    "end": "2026-04-04",
+    "scoredAt": "2026-04-22T04:15:47.237Z"
+  },
+  {
+    "section_a": {
+      "individuals_interactions": {
+        "score": 9,
+        "reasoning": "Strong evidence of multi-member collaboration throughout the sprint. Peer PR reviews were actively coordinated (e.g., Anthony reviewing Nathaniel's PR #113, James approving PR #94, Joshua reviewing Aden's cleaned-up PR, Tyler assigning PR #104/#114/#115/#117/#118 to specific members on 2026-04-02). Async communication was frequent — blockers were raised in text channels (Dylan's PR needing a reviewer, Tyler flagging it to the team on 2026-04-01). Multiple members contributed updates across standups (James, Dylan, Nathaniel, Huan, Aden, Joshua, Tyler, Anthony all mentioned). Tyler helped Aden resolve merge conflicts on 2026-04-03. Interpersonal friction (e.g., nobody volunteering to review Dylan's PR) was noted and addressed within the sprint."
+      },
+      "working_software": {
+        "score": 8,
+        "reasoning": "Multiple concrete deliverables shipped: PR #88 (Sprint 2 Dev→Main) merged; GitHub Actions CI workflow merged and running successfully on feature branches; PR #95, PR #115 merged; audio processing system for individual user tracks tested and confirmed working by end of sprint (2026-04-04 standup transcript confirms full transcription working accurately, summarizing correctly, filtering idle conversation); PR #135 approved and merged; Dev→Main sprint-close PR merged. Bot transcription confirmed working in back-to-back meetings without reset. SQLite audio storage research completed and documented in wiki. These represent tangible, tested software outputs. Slight deduction because the multi-user recording PR #128 was still pending live confirmation at sprint close and one transcript summarization issue remained under investigation."
+      },
+      "customer_collaboration": {
+        "score": 6,
+        "reasoning": "Instructor (Professor Dietrick) is the primary external stakeholder and there is clear evidence of responding to instructor requirements: on 2026-03-25, four new graded items from the instructor were received and actioned (Sprint Goal documentation, PBI Dependency Graph, velocity calculation, burndown charts). A #pbi-dependency-graphs channel was created. Tyler noted on 2026-04-04 that a sprint due-date error in the system would be flagged to Professor Dietrick for correction. Sprint Review demo with Professor Dietrick was explicitly noted as 'not required this sprint' (2026-04-02). No PO figure is clearly defined separate from the team, limiting direct customer feedback loops, but instructor engagement is evident."
+      },
+      "responding_to_change": {
+        "score": 8,
+        "reasoning": "Multiple mid-sprint adaptations documented: (1) Squash merge issue discovered and immediately resolved — team switched to standard merge commits going forward (2026-03-25); (2) Audio processing architecture pivoted from single-track to individual-user tracks to fix quality and attribution problems (evidenced across 2026-04-02 through 2026-04-04); (3) Tyler proposed a new modular transcript storage approach (raw text in DB, separate AI prompts) in response to observed summarization failures (2026-04-02); (4) Sprint 3 Retro and Sprint 4 Planning were rescheduled/split across two sessions to accommodate team availability over the holiday weekend (2026-04-04); (5) PR review assignments redistributed dynamically when volunteers were slow to emerge. Blockers were raised and resolved within the sprint rather than escalated or ignored."
+      },
+      "subtotal": 31
+    },
+    "section_b": {
+      "sprint_planning": {
+        "score": 6,
+        "reasoning": "Evidence of sprint planning activity exists: backlog grooming session held on 2026-03-28 with discussion of prioritization, sprint focus (wiring everything up, user management for next sprint), and readiness of backlog items. Tyler discussed sprint scope and capacity on 2026-03-28. New instructor requirements for documenting Sprint Goals were acknowledged on 2026-03-25, suggesting the team was aware of the expectation. However, no explicit Sprint 3 goal statement is quoted in the evidence, and planning details are partially inferred from grooming discussion rather than a discrete planning ceremony record. Score reflects planning activity with moderate detail."
+      },
+      "daily_scrum": {
+        "score": 8,
+        "reasoning": "Daily standup entries are present for 2026-03-24, 2026-03-26, 2026-03-27, 2026-03-28, 2026-04-01, 2026-04-02, 2026-04-03, and 2026-04-04 — eight standup recaps across the two-week sprint. Transcripts confirm peer-to-peer synchronization format: members gave individual progress updates, blockers were raised to the team (not to a manager), and coordination happened in-meeting (e.g., PR assignments distributed live on 2026-04-01, Dylan's blocker self-resolved on 2026-03-27). Absences were noted and accounted for. Format is clearly collaborative rather than status-report-to-authority."
+      },
+      "sprint_review": {
+        "score": 5,
+        "reasoning": "On 2026-04-02 it was explicitly noted that 'Sprint Review demo for Professor Dietrick is not required this sprint.' An impromptu sprint planning and retro session was held on 2026-04-03 per the 2026-04-04 daily, and a second session was offered at 6 PM on 2026-04-04. Burndown data was shared during retro discussion (2026-04-04). There is no explicit evidence of a formal sprint review ceremony where completed work was demonstrated and accepted by a stakeholder. The sprint did close with Dev→Main merge, indicating work was considered complete, but no review meeting is described. Scoring at the neutral midpoint per the rubric."
+      },
+      "sprint_retrospective": {
+        "score": 7,
+        "reasoning": "Retro is explicitly mentioned: 'Sprint 3 Retro and Sprint 4 Planning proposed for tomorrow' (2026-04-02); 'Impromptu sprint planning & retro held yesterday (2026-04-03)' confirmed in 2026-04-04 daily. Burndown data was reviewed and the team identified a specific process problem (PRs sitting too long despite high completion volume) and expressed intent to improve trending. A second session was offered for members who missed the first. This is clear evidence of a retrospective with actionable reflection, though the 'impromptu' framing and late timing (last day of sprint) slightly temper the score."
+      },
+      "backlog_refinement": {
+        "score": 7,
+        "reasoning": "A dedicated backlog grooming session is explicitly documented on 2026-03-28, with a transcript excerpt confirming discussion of backlog item readiness, prioritization focus (user management, planning poker, admin portal), whether items needed to be broken up, and screenshot requirements for the assignment. Tyler updated the shared backlog spreadsheet (2026-03-28 daily). The team discussed what was already in the backlog vs. what needed to be added, and confirmed items were in 'pretty good shape.' Story sizing (planning poker) was identified as a future feature rather than practiced this sprint, but grooming itself was clearly executed."
+      },
+      "subtotal": 33
+    },
+    "section_c": {
+      "antipatterns": [],
+      "subtotal": 20
+    },
+    "aii_total": 84,
+    "data_confidence": "high",
+    "scoring_notes": "Input richness is very high: eight standup transcripts (including raw audio transcripts with real dialogue), eleven daily channel summaries, and a detailed sprint summary provided a robust evidence base. Confidence is accordingly high across nearly all dimensions. The main area of thin evidence is customer_collaboration — the instructor functions as the primary external stakeholder but there is no dedicated PO role or end-user feedback mechanism described, which is consistent with an academic project context. Sprint review scored neutral (5) because it was explicitly waived this sprint per instructor guidance, not due to negligence. No anti-patterns met the high evidence bar required for deduction: carryover items (audio processing, user management) represent planned forward work rather than same-item repeats from a prior sprint's carry-over list; standup absences were communicated proactively and standups remained peer-to-peer in format; the sprint was not overloaded in any documented way. The burndown concern raised by Tyler on 2026-04-04 (PRs sitting too long) is a quality signal the team self-identified and flagged for improvement, which is actually evidence of healthy retrospective practice rather than an anti-pattern.",
+    "team": "Scrum Pilot",
+    "sprint": "Sprint 3",
+    "start": "2026-03-22",
+    "end": "2026-04-04",
+    "scoredAt": "2026-04-22T04:16:47.982Z"
+  },
+  {
+    "section_a": {
+      "individuals_interactions": {
+        "score": 8,
+        "reasoning": "Multiple named contributors explicitly identified: Thomas Lee, Ognjen Davidovic, Ryan Patacsil, and rio sison. Async contributions noted from members unable to attend meetings. Team members provided feedback via chat with suggestions and progress updates shared frequently. Thomas Lee coordinated overall efforts and divided tasks logically. Interpersonal blocker noted (one member balancing coursework) and communication gaps around dependencies were surfaced."
+      },
+      "working_software": {
+        "score": 7,
+        "reasoning": "Closed-loop control logic and tilt control features merged into Dev branch. Testing and evaluation frameworks implemented for control modes with logging and documented results. A comprehensive demo for Sprint 2 was conducted. Carry-over items exist (open PRs for open-loop and hybrid modes, unit tests), but meaningful working output was shipped this sprint."
+      },
+      "customer_collaboration": {
+        "score": 5,
+        "reasoning": "No explicit mention of PO involvement, stakeholder feedback, or external customer interaction during this sprint. Scoring neutral per calibration rules — absence of evidence is not evidence of absence."
+      },
+      "responding_to_change": {
+        "score": 7,
+        "reasoning": "Team adapted to communication gaps around task dependencies by implementing a new policy: annotating PBIs with 'Blocked by ___' to improve workflow clarity. Sprint Review meeting was foregone in favor of comprehensive Sprint Update notes — an explicit mid-sprint process pivot. Backlog grooming reorganized large PBIs into smaller tasks in response to efficiency needs. Blockers were surfaced and at least partially addressed with structural changes."
+      },
+      "subtotal": 27
+    },
+    "section_b": {
+      "sprint_planning": {
+        "score": 5,
+        "reasoning": "Sprint had a defined focus (code review refinement, PBI granularity, ongoing development tasks) and committed scope is implied by the accomplishments and carry-over structure. However, no explicit mention of a sprint planning meeting, sprint goal statement, or story sizing/readiness discussion. Scoring above neutral slightly because scope intent is discernible, but details are sparse."
+      },
+      "daily_scrum": {
+        "score": 4,
+        "reasoning": "No explicit mention of daily standups, standup count, or standup format in the provided summary. Async contributions and chat updates are noted, which may reflect informal synchronization, but do not constitute confirmed daily scrum practice. Scoring neutral per calibration rules — no positive or negative evidence."
+      },
+      "sprint_review": {
+        "score": 6,
+        "reasoning": "A comprehensive demo for Sprint 2 was explicitly conducted during this sprint. However, the team explicitly decided to forego a Sprint Review meeting this cycle in favor of Sprint Update notes. Demo evidence earns a positive score, but the deliberate omission of the formal review ceremony tempers it slightly."
+      },
+      "sprint_retrospective": {
+        "score": 4,
+        "reasoning": "No explicit mention of a retrospective meeting. However, the team did surface and act on process improvements (dependency tracking policy, PBI granularity changes), which could reflect retrospective-style thinking. Per calibration rules, absence of explicit mention defaults to neutral 4 rather than a penalty."
+      },
+      "backlog_refinement": {
+        "score": 7,
+        "reasoning": "Explicit evidence: 'Completed Product Backlog Grooming, reorganizing large PBIs into smaller, manageable tasks to improve team efficiency.' A dependency diagram was also created to visualize relationships among PBIs. This is clear, strong positive evidence of structured backlog refinement activity."
+      },
+      "subtotal": 26
+    },
+    "section_c": {
+      "antipatterns": [
+        {
+          "key": "carryover_work",
+          "label": "Carry-Over Work",
+          "deduction": 3,
+          "evidence": "Carry-over Items section explicitly names: 'Outstanding open pull requests that still need to be merged into the Dev branch, including critical features for open-loop and hybrid modes' and 'Development of unit tests for individual PBIs, which several team members are currently working on.' The summary also notes 'Several team members expressed challenges with meeting deadlines, leading to delayed pull requests and missed reviews,' indicating these items were started and not finished within the sprint. Note: the prior sprint carry-over pattern cannot be fully confirmed from this single sprint's data alone, but the explicit naming of specific unfinished started items in the Carry-over section satisfies the evidence bar."
+        }
+      ],
+      "subtotal": 17
+    },
+    "aii_total": 70,
+    "data_confidence": "medium",
+    "scoring_notes": "Input is a single synthesized sprint summary with no daily standup logs, no individual daily entries, and no explicit sprint planning or retrospective meeting records. This limits confidence particularly on Section B ceremonies (daily_scrum, sprint_planning, sprint_retrospective). The backlog refinement and working software dimensions had the clearest evidence. Customer collaboration had zero evidence either way, correctly scored neutral. The carryover deduction was applied based on explicitly named unfinished items and corroborating statements about missed deadlines, though the multi-sprint pattern criterion could only be partially assessed from this single sprint's data — the deduction is conservative. No other anti-patterns met the high evidence bar required. The team's deliberate decision to skip the Sprint Review meeting in favor of written notes is a mild process concern but does not meet the zombie_scrum threshold since improvement intent is clearly present throughout the summary.",
+    "team": "Sunflower Tracker",
+    "sprint": "Sprint 3",
+    "start": "2026-03-22",
+    "end": "2026-04-04",
+    "scoredAt": "2026-04-22T04:17:27.423Z"
+  },
+  {
+    "section_a": {
+      "individuals_interactions": {
+        "score": 8,
+        "reasoning": "Multiple contributors are clearly active: Maysun drove Sprint 3 close-out, Sprint 4 planning, submitted and reviewed PRs (#63, #61, #86, #89); Brayan worked on DB seeding (#64) and POST endpoint (#91), reviewed PRs, and volunteered for README; Jared reviewed #63 and attempted blocked PBIs while communicating availability constraints. The daily standup transcript shows real-time peer-to-peer communication about blockers ('my PBI's are blocked till that gets done'), async coordination, and mutual acknowledgment ('thank you for your time'). Bot-assisted transcription was also collaboratively approved."
+      },
+      "working_software": {
+        "score": 7,
+        "reasoning": "Several items reached done or near-done states: #86 (Admin Questions Page Route) merged; #64 (Seed Questions into LiteDB) fixed and merged; #63 (Survey model updates) merged; #89 (Question Form UI) PR submitted and under review. The POST endpoint (#91) was described as 'functionally complete' though tests were failing. Merged PRs on a running CI/CD pipeline constitute shipped working increments. Sprint does not reach a 9-10 because the key endpoint (#91) and several downstream items did not fully close."
+      },
+      "customer_collaboration": {
+        "score": 6,
+        "reasoning": "Professor Brian Dietrick (acting as PO/stakeholder) explicitly clarified validation requirements mid-sprint ('all validation must be C# only'), shared a README checklist, and confirmed the sprint review deadline ('latest we can do is Monday'). These are direct stakeholder interactions shaping sprint work. An external party (Ognjen Davidovic) also requested a project description. Score stops short of 8-9 because there is no evidence of formal acceptance of delivered features or iterative feedback on working software demos."
+      },
+      "responding_to_change": {
+        "score": 7,
+        "reasoning": "The team adapted on multiple fronts: (1) QuestionValidator.cs refactor from Node.js to pure C# was decided mid-sprint after professor clarification — a direct pivot driven by new information; (2) admin site routing decision was adjusted (no need to route from home page, auth deferred); (3) PBI assignment policy was reinforced in response to observed multitasking risk; (4) sprint review was rescheduled to Sunday/Monday to accommodate availability. The POST endpoint blocker was surfaced but not fully resolved within the sprint, capping the score."
+      },
+      "subtotal": 28
+    },
+    "section_b": {
+      "sprint_planning": {
+        "score": 7,
+        "reasoning": "Sprint 4 backlog grooming and planning are explicitly mentioned as occurring on 4/6. Sprint 3 velocity (34 SP) and running average (28 SP) were recorded, indicating capacity-based planning. Committed PBIs are named (#86, #89, #91, #64, etc.). Story readiness is implied by the structured backlog with numbered PBIs. Details on how the sprint goal was articulated are sparse, preventing a score of 8."
+      },
+      "daily_scrum": {
+        "score": 6,
+        "reasoning": "Three daily SCRUMs are explicitly mentioned as held during Sprint 4. The provided daily transcript (2026-04-16) shows peer-to-peer synchronization with blockers raised to the team ('this post endpoint is still fucking me over,' 'my PBIs are blocked till that gets done'), not status reporting to a manager. Jared participates even while driving, showing team commitment. Score is 6 rather than 7-8 because only one daily summary was provided as raw evidence, limiting assessment of consistency across all three standups."
+      },
+      "sprint_review": {
+        "score": 5,
+        "reasoning": "A sprint review is explicitly scheduled ('Sprint Review scheduled for Sunday at 1 PM, latest Monday') and the team was empowered to self-run it. However, there is no evidence in the provided inputs that the review actually occurred or that work was demonstrated and accepted. The scheduling and the professor's deadline confirmation are positive signals, but the review itself falls outside what is evidenced, warranting a neutral score per the calibration rules."
+      },
+      "sprint_retrospective": {
+        "score": 7,
+        "reasoning": "Sprint 3 retrospective is explicitly stated as completed at the start of this period. The PBI assignment policy reinforcement during Sprint 4 also reflects retrospective-style process improvement being acted upon. A Sprint 4 retro is not mentioned as completed (sprint was still in progress at the summary cutoff), but the evidence of a completed Sprint 3 retro and process improvement actions is a strong positive signal."
+      },
+      "backlog_refinement": {
+        "score": 7,
+        "reasoning": "Backlog grooming is explicitly mentioned on 4/6. PBIs are numbered and clearly described with dependencies mapped (e.g., 'create question from UI is blocked by admin, create admin questions page route'). Velocity tracking (34 SP actual, 28 SP average) and story-point recording indicate a refined, sized backlog. The PR review process (#61 flagged as unreviewed for 9 days) also reflects active backlog/flow management."
+      },
+      "subtotal": 32
+    },
+    "section_c": {
+      "antipatterns": [
+        {
+          "key": "carryover_work",
+          "label": "Carry-Over Work",
+          "deduction": 3,
+          "evidence": "The sprint summary's Carry-over Items section explicitly names '#91 — POST endpoint for questions,' '#89 — Create Question Form UI (static fields),' '#61 — PR open 9+ days without review,' 'Connect admin form to POST endpoint,' 'README creation,' and 'CI/CD pipeline fix.' The POST endpoint (#91) and the unreviewed PR (#61, flagged as 'stalled' mid-sprint) represent started-and-unfinished work. Applying the one-time-slip grace, the pattern of multiple named carry-over items including one stalled for 9+ days meets the bar for a single deduction."
+        }
+      ],
+      "subtotal": 17
+    },
+    "aii_total": 77,
+    "data_confidence": "medium",
+    "scoring_notes": "Input richness is moderate: one daily standup transcript was provided (2026-04-16) alongside a detailed sprint summary. The sprint summary is well-structured with named PBIs, explicit ceremony mentions, and clear blocker descriptions, giving good coverage for Section B. Section A customer_collaboration evidence is stronger than typical (professor interactions are explicit) but lacks formal acceptance/demo evidence. The sprint review score is intentionally held at neutral (5) because scheduling is confirmed but execution is not evidenced — the sprint may still have been in-progress at summary cutoff. The carryover deduction is applied conservatively: #91 and #61 are clearly named, started-and-unfinished items, with #61 explicitly called out as stalled for 9+ days, making the pattern unambiguous. No other anti-patterns met their evidence bars: standups were peer-to-peer (not status reports), overload was not explicitly confirmed (only 2-3 items carried over out of a full backlog), and the professor's interactions did not constitute PO-as-project-manager micromanagement. The team's overall posture — transparent blocker communication, mid-sprint pivots, active PR review culture — is notably healthy for a student project team.",
+    "team": "FormFlow",
+    "sprint": "Sprint 4",
+    "start": "2026-04-05",
+    "end": "2026-04-18",
+    "scoredAt": "2026-04-22T04:18:51.798Z"
+  },
+  {
+    "section_a": {
+      "individuals_interactions": {
+        "score": 8,
+        "reasoning": "Multiple contributors explicitly named and active: LJ Kaminski completed PBIs #16, #17, #24, #43 and drove PR reviews; Kamron Hopkins completed PBIs #37/#39/#29 and built dependency graphs; Michael Trinh completed PBIs #21/#12 and built the demo UI branch; Thai S completed PR #78 (PBI #31) and provided PR feedback; Zachary Faulkner reviewed multiple PRs. Async communication via Discord/Teams evidenced in standup transcript. Interpersonal coordination noted (LJ picked up #17 after extended inactivity, Brian Dietrick directing team sync behavior). Some communication gaps noted in retrospective, preventing a 9–10."
+      },
+      "working_software": {
+        "score": 7,
+        "reasoning": "Multiple back-end API endpoints merged and demonstrable (question reorder, QuestionBankItem model/repo, response model/route, QR code endpoint, InstructorCode middleware, student join route). LJ ran a live API demo during sprint review showing endpoints responding. Michael created a Feature/Complete UI branch connecting front-end to back-end. LJ prepared a fallback HTTP-request-based demo. However, a broken session/questions endpoint was observed live during the review, the UI branch lacked a proper PR and needed further work, and end-to-end integration was explicitly not yet complete — preventing a higher score."
+      },
+      "customer_collaboration": {
+        "score": 6,
+        "reasoning": "Brian Dietrick (Scrum Master/Instructor) attended the sprint review and provided direct, substantive feedback on demo framing, presentation strategy, and directed specific actions (merge Kamron's QR PR, sync to dev after merges, frame talking points in business terms). This represents meaningful stakeholder engagement shaping sprint outcomes. No evidence of a separate Product Owner providing requirement feedback, so score is calibrated to reflect the instructor-as-stakeholder engagement rather than a full PO collaboration pattern."
+      },
+      "responding_to_change": {
+        "score": 7,
+        "reasoning": "Clear mid-sprint pivots evidenced: PBI #37 was unblocked after discovering it was targeting main instead of dev and corrected; LJ picked up PBI #17 after stale assignment blocked a dependency; PBIs #14/#23 were identified as already implemented and closed with evidence rather than reworked; team shifted demo strategy to a pre-arranged HTTP request file in response to no functional UI; Kamron's large multi-PBI PR issue led to a decision to enforce one-PBI-per-PR going forward. These represent concrete adaptation to new information within the sprint."
+      },
+      "subtotal": 28
+    },
+    "section_b": {
+      "sprint_planning": {
+        "score": 6,
+        "reasoning": "Sprint summary references backlog updated to reflect Wave 1 priorities, a sprint goal of '2 PBIs + 2 reviews per member per week' proposed by Kamron, and remaining prior-sprint tasks consolidated into Iteration 3 before taking on new work. PR process and target-branch rules were also reinforced as part of sprint setup. Planning happened and scope was discussed, though the daily evidence only captures one standup and planning detail depth is moderate."
+      },
+      "daily_scrum": {
+        "score": 5,
+        "reasoning": "One daily standup recap is explicitly present in the daily activity summaries (2026-04-17), and it contains substantive content: blockers discussed (broken endpoint, demo readiness), progress shared (API endpoints completed, UI branch status), and coordination occurring between LJ Kaminski and Brian Dietrick. However, only one standup entry is available in the provided dailies for a two-week sprint, limiting confidence in consistent cadence. Scored above neutral given clear positive quality of the one available standup, but not higher due to single data point."
+      },
+      "sprint_review": {
+        "score": 7,
+        "reasoning": "Sprint review is explicitly evidenced: the standup transcript from 2026-04-17 is labeled a standup recap but contains a live screen-share demo of API endpoints, with LJ running through Swagger/API endpoints, demonstrating responses, and Brian Dietrick providing feedback. The sprint summary confirms Brian 'attended sprint review' and provided 'critical feedback on demo framing.' A broken endpoint was observed live. This constitutes a real sprint review with stakeholder attendance and live demonstration, though the demo was incomplete (no end-to-end UI workflow)."
+      },
+      "sprint_retrospective": {
+        "score": 7,
+        "reasoning": "Sprint retrospective is explicitly mentioned in the sprint summary: 'Sprint retrospective notes compiled and submitted.' Communication gaps and inconsistent participation were noted as retrospective outputs. A sprint goal proposal emerged (2 PBIs + 2 reviews per member per week), consistent with retro action items. This is a clear positive signal that a retro occurred and produced actionable outcomes."
+      },
+      "backlog_refinement": {
+        "score": 7,
+        "reasoning": "Multiple explicit backlog management activities evidenced: backlog updated to reflect Wave 1 priorities; remaining earlier-sprint PBIs consolidated into Iteration 3; Kamron created an updated Mermaid dependency graph and sprint plan pushed to dev/docs; PBIs #14/#23 discovered already implemented and closed with evidence; discussion of README and project handoff needs. PR-to-backlog item attachment was also enforced. This reflects active, ongoing backlog grooming throughout the sprint."
+      },
+      "subtotal": 32
+    },
+    "section_c": {
+      "antipatterns": [
+        {
+          "key": "carryover_work",
+          "label": "Carryover Work",
+          "deduction": 3,
+          "evidence": "The sprint summary explicitly names carry-over items including 'End-to-end integration testing,' 'UI completion — Demo UI branch needs further work and a proper PR,' 'README and project documentation,' 'Fix broken session/questions endpoint,' and 'Kamron's PR #91 — Awaiting two reviewer approvals at sprint end,' plus 'Remaining earlier-sprint PBIs carried into Iteration 3.' The summary also states under Notable Decisions: 'Remaining tasks from prior sprint consolidated into Iteration 3 to clear backlog before taking on new work,' confirming these are not just planned future items but work that slipped across sprint boundaries as a pattern."
+        }
+      ],
+      "subtotal": 17
+    },
+    "aii_total": 77,
+    "data_confidence": "medium",
+    "scoring_notes": "Input richness is moderate: the daily activity summaries contain only one standup transcript (2026-04-17), which is substantial in quality but covers only the final day of a two-week sprint. The sprint summary is detailed and well-structured, compensating for sparse dailies. Customer collaboration evidence is limited to instructor/Scrum Master interaction rather than a distinct PO role, which creates some ambiguity in that dimension. The carryover deduction was applied because the sprint summary explicitly names multiple specific items that carried over and references prior-sprint tasks also slipping, satisfying the pattern requirement. No other anti-patterns met the required evidence bar: PR hygiene issues and participation inconsistency do not rise to zombie_scrum (team showed clear improvement intent), the broken endpoint alone does not constitute no_real_dod (no evidence of stories formally accepted without criteria), and no explicit over-commitment percentage or manager-directed standup evidence was present. The team is clearly functioning and delivering incremental value, with the main integrity risks being carryover accumulation and demo readiness pressure.",
+    "team": "Pulse",
+    "sprint": "Sprint 4",
+    "start": "2026-04-05",
+    "end": "2026-04-18",
+    "scoredAt": "2026-04-22T04:19:41.843Z"
+  },
+  {
+    "section_a": {
+      "individuals_interactions": {
+        "score": 9,
+        "reasoning": "Strong multi-member participation throughout the sprint. Tyler Bao, Nathaniel Varnadoe, James Davis, Dylan Johnson, Anthony Graber, Joshua Dixon, Huan Yang, and Aden Yu all appear as active contributors across daily summaries and standup recaps. Peer PR reviews are frequent and named (e.g., Dylan reviewed PR #148, Tyler merged PR #162 same day for Nathaniel, Nathaniel approved Tyler's PR, Anthony merged Tyler's PR). Async coordination is evident — PR review logjam on Apr 9 was resolved same day via team self-organization ('grab one now' approach). Personal blockers (Dylan's grandfather hospitalized, Aden's car accident) were acknowledged with empathy by teammates and instructor. Cross-team grad student coordination was arranged collaboratively with Brian Dietrick."
+      },
+      "working_software": {
+        "score": 10,
+        "reasoning": "26 of 27 PBIs completed per sprint summary. Shipped features include: login/authentication with hashed passwords, backlog page with reusable component, comment thread with CRUD and permission controls, 'Improve with AI' integration, metrics dashboard with burndown and velocity charts, planning poker prototype, PBI card updates (Sprint/Epic dropdowns, delete), collapsible nav, scrum board filters (frontend + backend), Epic/Sprint DB tables, comment DB table, backlog homepage tile, and a hosted dev environment on Render with persistent Postgres. James deployed the live site (scrumpilot-web.onrender.com) confirmed functional by Tyler on Apr 18. A sprint review demo was conducted. Professor Dietrick stated the team 'far exceeded what I thought we'd be able to get done this semester.'"
+      },
+      "customer_collaboration": {
+        "score": 7,
+        "reasoning": "Brian Dietrick (instructor/PO proxy) is visibly engaged: he approved the grad student cross-team coordination approach (Apr 7 standup), provided feedback confirming the team exceeded expectations, confirmed Scrum Pilot will be used in the next spring semester, and confirmed no formal Sprint 5 ceremonies are required. The Apr 7 one-on-one between Tyler and Brian shows active stakeholder dialogue about team dynamics and research direction. The mid-sprint pivot to cross-team recording/summarization was explicitly endorsed by Brian. This is clear PO-level engagement, though the relationship is instructor-as-stakeholder rather than a traditional product owner."
+      },
+      "responding_to_change": {
+        "score": 9,
+        "reasoning": "Multiple confirmed adaptations: (1) Mid-sprint pivot from Conversational AI Interface to cross-team recording/summarization was unanimously supported and executed (Nathaniel); (2) PR review logjam on Apr 9 addressed same day with a 'grab one now' team response; (3) dotnet format CI failures led to a team-wide norm change and plans to automate; (4) Auth cookie bug identified and workaround communicated to team; (5) Anthony's login/port bug resolved same day enabling him to participate in PR reviews; (6) James accelerated deployment work (originally deferred to Sprint 5) and merged PR #191 urgently before travel; (7) Bot channel-scoping bug fixed with whitelist approach after root cause identified; (8) Sprint 5 scoped down deliberately to protect MVP before final demo. Blockers were consistently raised and resolved within the sprint."
+      },
+      "subtotal": 35
+    },
+    "section_b": {
+      "sprint_planning": {
+        "score": 7,
+        "reasoning": "Sprint 4 dependency graph was published and shared by Tyler at sprint start (Apr 6), with a note about high dependencies prompting a Tuesday discussion. Sprint summary confirms 19 stories originally committed with 7 added mid-sprint, implying an active planning baseline. Sprint 5 planning occurred on Apr 17 (planning poker link shared, retro + sprint planning moved to Friday). The sprint summary documents a clear sprint goal (MVP), story sizing signals (Tyler dropped points on login because it was easier than expected per Apr 7 standup), and deliberate scope decisions. Evidence is strong but planning session details are partially reconstructed from summaries rather than direct transcripts."
+      },
+      "daily_scrum": {
+        "score": 7,
+        "reasoning": "Standup recaps are present for Apr 7, Apr 9, Apr 10, Apr 11, Apr 12, Apr 13, Apr 14 (two sessions), Apr 15, Apr 16, Apr 17, and Apr 18 — representing the majority of sprint days. The Apr 7, Apr 9, Apr 10, Apr 14, Apr 16, Apr 17, and Apr 18 recaps include named participants sharing progress and blockers in a peer-to-peer format. Absences are tracked (Aden, Huan, Tyler, Nathaniel each noted as missing specific standups). Blockers are raised to the team, not to a manager. Some recaps contain off-topic conversation (Pokemon Go on Apr 11, casual chat) which slightly dilutes format consistency, but core standup function — progress, blockers, coordination — is clearly present across the sprint."
+      },
+      "sprint_review": {
+        "score": 8,
+        "reasoning": "Sprint Review is explicitly referenced multiple times: James merged PR #191 urgently to ensure the hosted app was available for Sprint Review (Apr 15); team reminded to pull latest Development branch before the Sprint Review demo (Apr 18); Tyler confirmed the deployed Dev site was functioning correctly ahead of the review (Apr 18); Joshua confirmed Sprint 4 scope for tonight's demo (Apr 18); the Apr 18 standup recap is explicitly labeled 'Sprint 4 Review & Sprint 5 Planning' and includes multiple team members demoing their work (Joshua demoed comment DB, Aden demoed backlog tile, Dylan demoed Epic/Sprint tables). James submitted a pre-recorded demo video due to travel. Professor Dietrick attended and provided feedback."
+      },
+      "sprint_retrospective": {
+        "score": 6,
+        "reasoning": "Sprint summary notes that 'Retro + Sprint Planning moved to Friday (Apr 17) to keep Saturday solely for the Sprint Review.' This confirms a retro was planned and scheduled. The Apr 17 standup recap shows the team together on that date discussing sprint outcomes and Sprint 5 scoping, consistent with a combined retro/planning session. Anthony's async retro input is mentioned in the sprint summary. Direct retro content (what went well, what to improve) is not captured in the daily channel summaries, but the ceremony's occurrence is confirmed by scheduling evidence and the sprint summary's explicit mention."
+      },
+      "backlog_refinement": {
+        "score": 7,
+        "reasoning": "Explicit backlog grooming session scheduled and held on Apr 11 at 6 PM — Tyler reminded team to add PBI ideas beforehand, noting the backlog was 'very bare' and needed additions for class handoff. Nathaniel confirmed adding items and removing duplicates during the session (Apr 11 standup recap). Sprint summary confirms 7 stories were added mid-sprint. Sprint 5 was explicitly scoped during the Apr 17 retro/planning session with deliberate decisions about what to include and exclude. Story sizing signals present (Tyler dropped points on login per Apr 7 standup). Dependency graph shared at sprint start."
+      },
+      "subtotal": 35
+    },
+    "section_c": {
+      "antipatterns": [],
+      "subtotal": 20
+    },
+    "aii_total": 90,
+    "data_confidence": "high",
+    "scoring_notes": "This is an exceptionally well-documented sprint with rich daily summaries spanning nearly every day of the two-week period, multiple standup transcripts, and a detailed sprint summary. Evidence quality is high enough to score most dimensions with confidence. A few notes: (1) Customer collaboration scored 7 rather than higher because the PO relationship is instructor-as-stakeholder rather than a traditional product owner with business-driven requirements — the collaboration is genuine but the domain is academic; (2) No anti-patterns were triggered — the one carryover item (Conversational AI) was a deliberate pivot endorsed mid-sprint by the team and instructor, not an unfinished commitment, and explicitly does not meet the carryover_work evidence bar (it did not appear in a prior sprint's carry-over); the overloaded_sprint pattern was considered but rejected because 26/27 PBIs completed with the one carry-over being intentional; (3) The Apr 11 standup transcript is dominated by off-topic Pokemon Go conversation, which is worth noting but does not constitute a status_reporting_standup anti-pattern — the core standup function occurred; (4) Some Apr 12 standup recaps appear to be from other teams (Maysun Dietrick, Brayan Jimeno references), which slightly complicates interpretation but does not materially affect scoring as Scrum Pilot-specific evidence is abundant elsewhere; (5) The metrics dashboard being released as an open-source personal project by Dylan alongside sprint work was noted but does not meet the multitasking evidence bar as it appears to have been repurposed into the sprint rather than being a genuinely separate project causing context-switching harm.",
+    "team": "Scrum Pilot",
+    "sprint": "Sprint 4",
+    "start": "2026-04-05",
+    "end": "2026-04-18",
+    "scoredAt": "2026-04-22T04:20:50.614Z"
+  },
+  {
+    "section_a": {
+      "individuals_interactions": {
+        "score": 8,
+        "reasoning": "Multiple named contributors are explicitly called out: Ognjen, Thomas, Rio, Cameron, Fares, and Ryan each owned distinct work items. The standup transcript shows Brian actively engaging Fares on sensor design, asking probing technical questions and following along with a screen share — clear peer-to-peer collaboration. Absentees (Thomas on deployment, Ognjen with family commitments) are noted, indicating the team is tracking participation gaps. PR reviews are referenced, implying cross-member code review interaction."
+      },
+      "working_software": {
+        "score": 7,
+        "reasoning": "Several features were completed and at least partially accepted: Thomas's Closed-Loop Pan Control was merged to dev with unit tests; Ognjen's Closed-Loop Tilt Control PR is ready for review; Cameron demonstrated hybrid mode live during team updates; Fares successfully rendered a test graph for the UI. A final demo is scheduled for April 27, implying shippable output exists. Deducted from 10 because several items (Open-Loop Tilt, UI live data connection, Ryan's test suite) remain unmerged or incomplete."
+      },
+      "customer_collaboration": {
+        "score": 5,
+        "reasoning": "No explicit mention of PO involvement, stakeholder feedback sessions, or customer requirement clarification during this sprint. The scoring rules direct a neutral 5 when evidence is absent in either direction — applied here."
+      },
+      "responding_to_change": {
+        "score": 6,
+        "reasoning": "The team adapted to blockers: unit test gaps were identified mid-sprint and called out explicitly as a process issue, leading to a decision that 'all pull requests include unit tests and appropriate documentation.' Ryan's test suite was explicitly held back until control modes merged — a deliberate sequencing adaptation. Fares's Tkinter macOS error was noted as a blocker being worked around. These represent active responses to emerging constraints rather than ignoring them."
+      },
+      "subtotal": 26
+    },
+    "section_b": {
+      "sprint_planning": {
+        "score": 6,
+        "reasoning": "The sprint summary describes a clear sprint focus ('developing and integrating various control modes... as well as implementing user interface features'), named owners per PBI, and a defined scope across six contributors. This implies planning occurred with story assignment and goal-setting. Details on story sizing or formal planning ceremony are sparse, preventing a higher score."
+      },
+      "daily_scrum": {
+        "score": 6,
+        "reasoning": "One standup transcript is provided (April 18), showing a functioning standup with progress discussion (Fares sharing screen, sensor design walkthrough, Brian asking clarifying questions) and mention of Thomas being on deployment — a blocker/availability note. The summary references ongoing updates ('Cameron and Fares demonstrated hybrid mode functionality live during team updates'), suggesting standups or synchronous check-ins occurred throughout the sprint. Only one daily log is present in the input, limiting full confidence, but the evidence for functioning peer-to-peer standups is positive."
+      },
+      "sprint_review": {
+        "score": 5,
+        "reasoning": "A final demo is explicitly scheduled for April 27, 2026, suggesting review-like activity is planned. However, no sprint review during the sprint period (April 5–18) is explicitly mentioned. Per scoring rules, the sprint produced deliverables and a review-adjacent event is referenced, warranting a neutral 5 rather than a penalty."
+      },
+      "sprint_retrospective": {
+        "score": 4,
+        "reasoning": "No retrospective is explicitly mentioned in either the daily summaries or sprint summary. Per scoring rules, absence of evidence does not warrant a score below 4. Neutral default applied."
+      },
+      "backlog_refinement": {
+        "score": 5,
+        "reasoning": "A burndown chart and velocity tracking artifacts are mentioned as developed during the sprint, indicating some backlog management activity. However, no explicit mention of story sizing sessions, backlog grooming meetings, or prioritization discussions is present. Slightly above neutral given the velocity/burndown evidence."
+      },
+      "subtotal": 26
+    },
+    "section_c": {
+      "antipatterns": [
+        {
+          "key": "carryover_work",
+          "label": "Carry-Over Work",
+          "deduction": 0,
+          "evidence": "Carry-over items are named (Ryan's Control Mode Test & Evaluation Suite, UI/Graph live data connection, Cameron's Open-Loop Tilt Control), but there is no evidence these same items appeared in a prior sprint's carry-over section. A one-time slip does not meet the evidence bar for this deduction."
+        },
+        {
+          "key": "no_real_dod",
+          "label": "No Real Definition of Done",
+          "deduction": 0,
+          "evidence": "Unit test requirements are explicitly enforced — PRs without unit tests are blocked from merge (Rio's and Cameron's items held pending unit test evidence). This indicates an active DoD criterion is in place, even if imperfectly applied. No deduction warranted."
+        }
+      ],
+      "subtotal": 20
+    },
+    "aii_total": 72,
+    "data_confidence": "medium",
+    "scoring_notes": "Input richness is moderate: one standup transcript and one sprint summary are provided, but no earlier daily summaries are included for this sprint period. The single standup transcript (April 18, the last day) is substantive and shows genuine peer collaboration, but it cannot stand in for two weeks of daily evidence. Customer collaboration evidence is entirely absent — neutral score applied per rules rather than penalizing. Sprint review evidence is indirect (demo scheduled post-sprint). No anti-patterns met the explicit evidence bar defined in the rules; unit test friction was identified and addressed rather than ignored, which is a positive signal. The team demonstrates real technical depth (sensor physics discussion in standup, hybrid control logic, Webots integration) suggesting this is a functioning engineering team rather than a ceremonial Scrum installation.",
+    "team": "Sunflower Tracker",
+    "sprint": "Sprint 4",
+    "start": "2026-04-05",
+    "end": "2026-04-18",
+    "scoredAt": "2026-04-22T04:21:33.168Z"
+  }
+]
