@@ -87,11 +87,14 @@
     }
 
     <div class="comment-input mt-3">
+        <div @onkeydown="HandleCommentKeyDown">
         <MudTextField @bind-Value="_newCommentBody"
-                      Label="Add a comment..."
+                      Label="Add a comment... (Enter to submit, Shift+Enter for new line)"
                       Variant="Variant.Outlined"
                       Lines="3"
+                      Immediate="true"
                       Class="mb-2" />
+        </div>
         <MudButton Variant="Variant.Filled"
                    Color="Color.Primary"
                    StartIcon="@Icons.Material.Filled.Send"
@@ -144,6 +147,14 @@
         finally
         {
             _loading = false;
+        }
+    }
+
+    private async Task HandleCommentKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await AddComment();
         }
     }
 
