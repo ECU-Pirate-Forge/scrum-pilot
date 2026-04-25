@@ -245,7 +245,26 @@
     {
         InvokeAsync(async () =>
         {
+            // Clear all session state from the previous project
+            _selectedPbi = null;
+            _currentPbiId = null;
+            _revealed = false;
+            _myVote = null;
+            _suggestedPointIndex = -1;
+            _participants = [];
+
+            // Dispose old hub so the server removes us from the old project's group
+            if (_hub is not null)
+            {
+                await _hub.DisposeAsync();
+                _hub = null;
+            }
+
             await LoadUnassignedPbisAsync();
+
+            // Reconnect under the new project
+            await InitHubAsync();
+
             StateHasChanged();
         });
     }
