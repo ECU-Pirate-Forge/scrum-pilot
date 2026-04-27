@@ -73,7 +73,7 @@
                 Labels = new YAxisLabels
                 {
                     Style = new AxisLabelStyle { Colors = "#8b949e", FontSize = "11px" },
-                    Formatter = "function(val) { return val.toFixed(2); }"
+                    Formatter = "function(val) { return val != null ? val.toFixed(2) : ''; }"
                 }
             }
         ],

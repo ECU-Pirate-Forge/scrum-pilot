@@ -55,7 +55,7 @@
             Labels = new YAxisLabels
             {
                 Style = new AxisLabelStyle { Colors = "#8b949e", FontSize = "11px" },
-                Formatter = "function(val) { return val.toFixed(1) + 'd'; }"
+                Formatter = "function(val) { return val != null ? val.toFixed(1) + 'd' : ''; }"
             }
         }],
         Grid = new Grid { BorderColor = "#21262d", Row = new GridRow { Colors = ["transparent"] } },
