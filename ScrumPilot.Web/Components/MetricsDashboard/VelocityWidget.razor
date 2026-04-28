@@ -30,7 +30,6 @@
             }
         </div>
 
-        <div style="flex:1; min-height:0; overflow:hidden;">
         <ApexChart TItem="VelocityPoint" Options="_options" Height="@("100%")">
             <ApexPointSeries TItem="VelocityPoint"
                              Items="_points"
@@ -51,7 +50,6 @@
                              XValue="@(p => p.SprintName)"
                              YValue="@(p => (decimal)p.Completed)" />
         </ApexChart>
-        </div>
     }
     else
     {
@@ -61,7 +59,6 @@
 
 @code {
     [Parameter] public int? SprintId { get; set; }
-    [Parameter] public int? ProjectId { get; set; }
     [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
 
     private List<VelocityPoint> _points = [];
@@ -78,7 +75,7 @@
         if (_lastSprintId == SprintId) return;
         _lastSprintId = SprintId;
         _loading = true;
-        try { _points = await MetricsSvc.GetVelocityDataAsync(SprintId, ProjectId); }
+        try { _points = await MetricsSvc.GetVelocityDataAsync(SprintId); }
         catch { _points = []; }
         ComputeStats();
         _options = BuildOptions(_avgVelocity);

@@ -11,7 +11,6 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
     {
         private readonly IDashboardPreferenceRepository _mockRepo;
         private readonly DashboardPreferenceService _service;
-        private const int ProjectId = 1;
 
         public DashboardPreferenceServiceTests()
         {
@@ -34,10 +33,10 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
                 ]
             };
             var json = JsonSerializer.Serialize(dto);
-            _mockRepo.GetPreferencesJsonAsync("user-1", ProjectId).Returns(json);
+            _mockRepo.GetPreferencesJsonAsync("user-1").Returns(json);
 
             // Act
-            var result = await _service.GetPreferencesAsync("user-1", ProjectId);
+            var result = await _service.GetPreferencesAsync("user-1");
 
             // Assert
             Assert.Equal(2, result.Widgets.Count);
@@ -45,17 +44,17 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             Assert.True(result.Widgets[0].Visible);
             Assert.Equal("velocity", result.Widgets[1].Id);
             Assert.False(result.Widgets[1].Visible);
-            await _mockRepo.Received(1).GetPreferencesJsonAsync("user-1", ProjectId);
+            await _mockRepo.Received(1).GetPreferencesJsonAsync("user-1");
         }
 
         [Fact]
         public async Task GetPreferencesAsync_WhenJsonIsNull_ReturnsEmptyDto()
         {
             // Arrange
-            _mockRepo.GetPreferencesJsonAsync("user-2", ProjectId).Returns((string?)null);
+            _mockRepo.GetPreferencesJsonAsync("user-2").Returns((string?)null);
 
             // Act
-            var result = await _service.GetPreferencesAsync("user-2", ProjectId);
+            var result = await _service.GetPreferencesAsync("user-2");
 
             // Assert
             Assert.NotNull(result);
@@ -66,10 +65,10 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
         public async Task GetPreferencesAsync_WhenJsonIsEmpty_ReturnsEmptyDto()
         {
             // Arrange
-            _mockRepo.GetPreferencesJsonAsync("user-3", ProjectId).Returns(string.Empty);
+            _mockRepo.GetPreferencesJsonAsync("user-3").Returns(string.Empty);
 
             // Act
-            var result = await _service.GetPreferencesAsync("user-3", ProjectId);
+            var result = await _service.GetPreferencesAsync("user-3");
 
             // Assert
             Assert.NotNull(result);
@@ -88,12 +87,11 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             };
 
             // Act
-            await _service.SavePreferencesAsync("user-1", ProjectId, dto);
+            await _service.SavePreferencesAsync("user-1", dto);
 
-            // Assert — repo must be called with the correct userId, projectId, and valid JSON
+            // Assert — repo must be called with the correct userId and valid JSON
             await _mockRepo.Received(1).UpsertPreferencesJsonAsync(
                 "user-1",
-                ProjectId,
                 Arg.Is<string>(json =>
                     json.Contains("\"Id\":\"wip\"") || json.Contains("\"id\":\"wip\"")));
         }
@@ -112,13 +110,12 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             string? capturedJson = null;
             await _mockRepo.UpsertPreferencesJsonAsync(
                 Arg.Any<string>(),
-                Arg.Any<int>(),
                 Arg.Do<string>(j => capturedJson = j));
-            _mockRepo.GetPreferencesJsonAsync("user-1", ProjectId).Returns(_ => capturedJson!);
+            _mockRepo.GetPreferencesJsonAsync("user-1").Returns(_ => capturedJson!);
 
             // Act — save then load
-            await _service.SavePreferencesAsync("user-1", ProjectId, dto);
-            var result = await _service.GetPreferencesAsync("user-1", ProjectId);
+            await _service.SavePreferencesAsync("user-1", dto);
+            var result = await _service.GetPreferencesAsync("user-1");
 
             // Assert
             Assert.Single(result.Widgets);

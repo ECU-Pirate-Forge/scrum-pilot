@@ -5,10 +5,6 @@ using System.Text.Json;
 
 namespace ScrumPilot.Web.Auth
 {
-    /// <summary>
-    /// Custom <see cref="AuthenticationStateProvider"/> that reads a JWT bearer token
-    /// from <c>localStorage</c> and parses its claims to build the authentication state.
-    /// </summary>
     public class JwtAuthStateProvider : AuthenticationStateProvider
     {
         private readonly IJSRuntime _js;
@@ -16,20 +12,15 @@ namespace ScrumPilot.Web.Auth
         private static readonly AuthenticationState Anonymous =
             new(new ClaimsPrincipal(new ClaimsIdentity()));
 
-        /// <summary>Initialises a new instance of <see cref="JwtAuthStateProvider"/>.</summary>
         public JwtAuthStateProvider(IJSRuntime js) => _js = js;
 
-        /// <inheritdoc/>
         public override async Task<AuthenticationState> GetAuthenticationStateAsync()
         {
             _cachedToken = await _js.InvokeAsync<string?>("localStorage.getItem", "authToken");
             return string.IsNullOrWhiteSpace(_cachedToken) ? Anonymous : BuildAuthState(_cachedToken);
         }
 
-        /// <summary>
-        /// Called by <see cref="AuthService"/> after login or logout to update the cached token
-        /// and notify all subscribed components of the new authentication state.
-        /// </summary>
+        // Called by AuthService after login/logout — updates the cached token and notifies the app
         public void NotifyAuthChanged(string? token)
         {
             _cachedToken = token;
