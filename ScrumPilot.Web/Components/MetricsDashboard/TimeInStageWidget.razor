@@ -8,22 +8,20 @@
     }
     else if (_data.Stages.Count > 0)
     {
-        @foreach (var stage in _data.Stages)
-        {
-            var stagePoints = _data.Points.Where(p => p.Stage == stage).ToList();
-            <ApexChart TItem="TimeInStagePoint" Options="_options" Height="80">
-                @foreach (var bucket in _buckets)
-                {
-                    var b = bucket;
-                    <ApexPointSeries TItem="TimeInStagePoint"
-                                     Items="stagePoints.Where(p => p.Bucket == b).ToList()"
-                                     Name="@b"
-                                     SeriesType="SeriesType.Bar"
-                                     XValue="@(p => p.Stage)"
-                                     YValue="@(p => (decimal)p.Count)" />
-                }
-            </ApexChart>
-        }
+        <ApexChart TItem="TimeInStagePoint" Options="_options" Height="@("100%")">
+            <ApexPointSeries TItem="TimeInStagePoint"
+                             Items="@PointsFor("InProgress")"
+                             Name="In Progress"
+                             SeriesType="SeriesType.Bar"
+                             XValue="@(p => p.Bucket)"
+                             YValue="@(p => p.Count)" />
+            <ApexPointSeries TItem="TimeInStagePoint"
+                             Items="@PointsFor("InReview")"
+                             Name="In Review"
+                             SeriesType="SeriesType.Bar"
+                             XValue="@(p => p.Bucket)"
+                             YValue="@(p => p.Count)" />
+        </ApexChart>
     }
     else
     {
@@ -40,7 +38,14 @@
     private bool _loading = true;
     private int? _lastSprintId = -1;
 
-    private static readonly string[] _buckets = ["≤1d", "2-3d", "4-8d", "9+d"];
+    private static readonly string[] Buckets = new[] { "≤1d", "2-3d", "4-8d", "9+d" };
+
+    // Always return all 4 buckets for a stage, defaulting to 0 so both bars render per group
+    private List<TimeInStagePoint> PointsFor(string stage) =>
+        Buckets.Select(b =>
+            _data.Points.FirstOrDefault(p => p.Stage == stage && p.Bucket == b)
+            ?? new TimeInStagePoint(b, stage, 0)
+        ).ToList();
 
     protected override async Task OnParametersSetAsync()
     {
@@ -55,13 +60,54 @@
 
     private static ApexChartOptions<TimeInStagePoint> BuildOptions() => new()
     {
-        Chart = new Chart { Background = "transparent", Toolbar = new Toolbar { Show = false }, Stacked = true },
-        Colors = ["#1e88e5", "#43a047", "#ff9800", "#ef5350"],
-        PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { Horizontal = true, BorderRadius = 3 } },
-        Xaxis = new XAxis { Labels = new XAxisLabels { Style = new AxisLabelStyle { Colors = "#8b949e", FontSize = "11px" } } },
-        Yaxis = [new YAxis { Labels = new YAxisLabels { Style = new AxisLabelStyle { Colors = "#8b949e", FontSize = "11px" } } }],
-        Grid = new Grid { BorderColor = "#21262d", Row = new GridRow { Colors = ["transparent"] } },
-        Legend = new Legend { Labels = new LegendLabels { Colors = ["#8b949e"] }, Position = LegendPosition.Top },
-        Tooltip = new Tooltip { Theme = ApexCharts.Mode.Dark }
+        Chart = new Chart
+        {
+            Background = "transparent",
+            Toolbar = new Toolbar { Show = false },
+            Stacked = false
+        },
+        Colors = new List<string> { "#1e88e5", "#43a047" },
+        PlotOptions = new PlotOptions
+        {
+            Bar = new PlotOptionsBar { BorderRadius = 3, ColumnWidth = "60%" }
+        },
+        Xaxis = new XAxis
+        {
+            Labels = new XAxisLabels { Style = new AxisLabelStyle { Colors = "#8b949e", FontSize = "11px" } },
+            Title = new AxisTitle
+            {
+                Text = "Time in Stage",
+                Style = new AxisTitleStyle { Color = "#8b949e", FontSize = "11px" }
+            }
+        },
+        Yaxis = new List<YAxis>
+        {
+            new YAxis
+            {
+                Min = 0,
+                TickAmount = 5,
+                Labels = new YAxisLabels
+                {
+                    Style = new AxisLabelStyle { Colors = "#8b949e", FontSize = "11px" },
+                    Formatter = "function(val) { return Math.floor(val) }"
+                },
+                Title = new AxisTitle
+                {
+                    Text = "Issues",
+                    Style = new AxisTitleStyle { Color = "#8b949e", FontSize = "11px" }
+                }
+            }
+        },
+        Grid = new Grid { BorderColor = "#21262d", Row = new GridRow { Colors = new List<string> { "transparent" } } },
+        Legend = new Legend
+        {
+            Labels = new LegendLabels { Colors = "#8b949e" },
+            Position = LegendPosition.Top
+        },
+        Tooltip = new Tooltip
+        {
+            Theme = ApexCharts.Mode.Dark,
+            Y = new TooltipY { Formatter = "function(val) { return Math.floor(val) + ' issue' + (val !== 1 ? 's' : '') }" }
+        }
     };
 }

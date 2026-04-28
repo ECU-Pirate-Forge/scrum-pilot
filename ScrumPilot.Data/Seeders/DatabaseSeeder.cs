@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using ScrumPilot.Data.Context;
 using ScrumPilot.Data.Models;
 using ScrumPilot.Shared.Models;
@@ -9,134 +10,488 @@ namespace ScrumPilot.Data.Seeders
     {
         public static void SeedDatabase(ScrumPilotContext context)
         {
-            SeedEpics(context);
-            SeedSprints(context);
-            SeedStories(context);
-            SeedComments(context);
             SeedMessageTranscripts(context);
         }
 
-        private static void SeedEpics(ScrumPilotContext context)
+        public static async Task SeedProjectDataAsync(ScrumPilotContext context)
         {
-            if (context.Epics.Any())
+            var seedProjects = new[]
             {
-                Console.WriteLine("[SEEDER] Database already has epics, skipping seed.");
+                new { Name = "ScrumPilot",        Description = "Scrum focused project management tool." },
+                new { Name = "Pulse",              Description = "A real-time classroom feedback tool." },
+                new { Name = "FormFlow",           Description = "Survey collection tool." },
+                new { Name = "Sunflower Tracker",  Description = "Sunflower Tracker with Webots Simulation." },
+            };
+
+            foreach (var p in seedProjects)
+            {
+                if (!await context.Projects.AnyAsync(x => x.ProjectName == p.Name))
+                {
+                    context.Projects.Add(new Project { ProjectName = p.Name, Description = p.Description });
+                    Console.WriteLine($"[SEEDER] Created project: {p.Name}");
+                }
+            }
+            await context.SaveChangesAsync();
+
+            var project = await context.Projects.FirstOrDefaultAsync(p => p.ProjectName == "ScrumPilot");
+
+            if (await context.Sprints.AnyAsync(s => s.ProjectId == project!.ProjectId))
+            {
+                Console.WriteLine("[SEEDER] Sprint/PBI data already seeded, skipping.");
                 return;
             }
 
-            Console.WriteLine("[SEEDER] Seeding epics...");
-
-            context.Epics.Add(new Epic
+            var sprint1 = new Sprint
             {
-                Name = "Scrum Board Filtering",
-                DateCreated = DateTime.UtcNow
-            });
-
-            context.SaveChanges();
-            Console.WriteLine("[SEEDER] Successfully seeded epics.");
-        }
-
-        private const string Sprint1Goal = "Sprint 1 - Dashboard foundation and baseline metrics";
-        private const string Sprint2Goal = "Sprint 2 - Dashboard insights and polish";
-        private const string Sprint3Goal = "Sprint 3 - Export, reporting, and performance";
-
-        private static void SeedSprints(ScrumPilotContext context)
-        {
-            Console.WriteLine("[SEEDER] Ensuring dashboard demo sprints exist...");
-
-            // Remove any sprints that are not the two seeded ones and have no PBIs attached.
-            var seededGoals = new HashSet<string> { Sprint1Goal, Sprint2Goal, Sprint3Goal };
-            var seededSprintIds = context.Sprints
-                .Where(s => s.SprintGoal != null && seededGoals.Contains(s.SprintGoal))
-                .Select(s => s.SprintId)
-                .ToHashSet();
-
-            var extraSprints = context.Sprints
-                .Where(s => s.SprintGoal == null || !seededGoals.Contains(s.SprintGoal))
-                .ToList();
-
-            foreach (var extra in extraSprints)
+                ProjectId = project.ProjectId,
+                SprintTitle = "Sprint 1",
+                SprintGoal = "Build out initial project framework with Scrum Board focus.",
+                StartDate = new DateTime(2026, 2, 14, 0, 0, 0, DateTimeKind.Utc),
+                EndDate = new DateTime(2026, 2, 28, 0, 0, 0, DateTimeKind.Utc),
+                IsOpen = false,
+                DateClosed = new DateTime(2026, 2, 28, 0, 0, 0, DateTimeKind.Utc)
+            };
+            var sprint2 = new Sprint
             {
-                bool hasPbis = context.Stories.Any(p => p.SprintId == extra.SprintId);
-                if (!hasPbis)
-                {
-                    context.Sprints.Remove(extra);
-                    Console.WriteLine($"[SEEDER] Removed orphan sprint id={extra.SprintId} (no PBIs, not a seeder sprint).");
-                }
-            }
-            context.SaveChanges();
+                ProjectId = project.ProjectId,
+                SprintTitle = "Sprint 2",
+                SprintGoal = "Prepare DB, backend functionality, and implement CRUD elements.",
+                StartDate = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+                EndDate = new DateTime(2026, 3, 21, 0, 0, 0, DateTimeKind.Utc),
+                IsOpen = false,
+                DateClosed = new DateTime(2026, 3, 21, 0, 0, 0, DateTimeKind.Utc)
+            };
+            var sprint3 = new Sprint
+            {
+                ProjectId = project.ProjectId,
+                SprintTitle = "Sprint 3",
+                SprintGoal = "Enable end-to-end workflows by wiring together UI actions, backend APIs, data persistence, and bot integrations.",
+                StartDate = new DateTime(2026, 3, 22, 0, 0, 0, DateTimeKind.Utc),
+                EndDate = new DateTime(2026, 4, 4, 0, 0, 0, DateTimeKind.Utc),
+                IsOpen = false,
+                DateClosed = new DateTime(2026, 4, 4, 0, 0, 0, DateTimeKind.Utc)
+            };
+            var sprint4 = new Sprint
+            {
+                ProjectId = project.ProjectId,
+                SprintTitle = "Sprint 4",
+                SprintGoal = "User facing focus: Enable teams to log in, manage their backlog, filter the Scrum board, and collaborate through comments, powered by AI insights.",
+                StartDate = new DateTime(2026, 4, 5, 0, 0, 0, DateTimeKind.Utc),
+                EndDate = new DateTime(2026, 4, 18, 0, 0, 0, DateTimeKind.Utc),
+                IsOpen = false,
+                DateClosed = new DateTime(2026, 4, 18, 0, 0, 0, DateTimeKind.Utc)
+            };
+            var sprint5 = new Sprint
+            {
+                ProjectId = project.ProjectId,
+                SprintTitle = "Sprint 5",
+                SprintGoal = "Prepare for final demo for class.",
+                StartDate = new DateTime(2026, 4, 19, 0, 0, 0, DateTimeKind.Utc),
+                EndDate = new DateTime(2026, 5, 2, 0, 0, 0, DateTimeKind.Utc),
+                IsOpen = true,
+                DateClosed = null
+            };
+            context.Sprints.AddRange(sprint1, sprint2, sprint3, sprint4, sprint5);
+            await context.SaveChangesAsync();
+            Console.WriteLine("[SEEDER] Created Sprints 1-5.");
 
-            // Upsert Sprint 1 — look up by SprintGoal so dates can be changed freely.
-            var sprint1Start = new DateTime(2026, 3, 22, 0, 0, 0, DateTimeKind.Utc);
-            var sprint1End = new DateTime(2026, 4, 4, 0, 0, 0, DateTimeKind.Utc);
-            var sprint1 = context.Sprints.FirstOrDefault(s => s.SprintGoal == Sprint1Goal);
-            if (sprint1 is null)
-            {
-                context.Sprints.Add(new Sprint
-                {
-                    SprintGoal = Sprint1Goal,
-                    StartDate = sprint1Start,
-                    EndDate = sprint1End,
-                    IsOpen = false,
-                    DateClosed = sprint1End
-                });
-            }
-            else
-            {
-                sprint1.StartDate = sprint1Start;
-                sprint1.EndDate = sprint1End;
-                sprint1.IsOpen = false;
-                sprint1.DateClosed = sprint1End;
-            }
+            // Build username → userId lookup
+            var users = await context.Users.ToListAsync();
+            string? U(string name) => users.FirstOrDefault(u => u.UserName == name)?.Id;
+            string? josh = U("Joshua");
+            string? tyler = U("Tyler");
+            string? anthony = U("Anthony");
+            string? aden = U("Aden");
+            string? huan = U("Huan");
+            string? james = U("James");
+            string? dylan = U("Dylan");
+            string? nate = U("Nate");
 
-            // Upsert Sprint 2
-            var sprint2Start = new DateTime(2026, 4, 5, 0, 0, 0, DateTimeKind.Utc);
-            var sprint2End = new DateTime(2026, 4, 18, 0, 0, 0, DateTimeKind.Utc);
-            var sprint2 = context.Sprints.FirstOrDefault(s => s.SprintGoal == Sprint2Goal);
-            if (sprint2 is null)
-            {
-                context.Sprints.Add(new Sprint
-                {
-                    SprintGoal = Sprint2Goal,
-                    StartDate = sprint2Start,
-                    EndDate = sprint2End,
-                    IsOpen = true,
-                    DateClosed = null
-                });
-            }
-            else
-            {
-                sprint2.StartDate = sprint2Start;
-                sprint2.EndDate = sprint2End;
-                sprint2.IsOpen = true;
-                sprint2.DateClosed = null;
-            }
+            int pid = project.ProjectId;
 
-            // Upsert Sprint 3 — future sprint, starts after Sprint 2 ends
-            var sprint3Start = new DateTime(2026, 4, 19, 0, 0, 0, DateTimeKind.Utc);
-            var sprint3End = new DateTime(2026, 5, 2, 0, 0, 0, DateTimeKind.Utc);
-            var sprint3 = context.Sprints.FirstOrDefault(s => s.SprintGoal == Sprint3Goal);
-            if (sprint3 is null)
+            var sprint1Pbis = new List<ProductBacklogItem>
             {
-                context.Sprints.Add(new Sprint
-                {
-                    SprintGoal = Sprint3Goal,
-                    StartDate = sprint3Start,
-                    EndDate = sprint3End,
-                    IsOpen = false,
-                    DateClosed = null
-                });
-            }
-            else
-            {
-                sprint3.StartDate = sprint3Start;
-                sprint3.EndDate = sprint3End;
-                sprint3.IsOpen = false;
-                sprint3.DateClosed = null;
-            }
+                new() { ProjectId = pid, SprintId = sprint1.SprintId, AssignedToUserId = josh,    Title = "Create Discord bot",                                  Type = PbiType.Story, StoryPoints = PbiPoints.Three, Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint1.SprintId, AssignedToUserId = tyler,   Title = "Create Scrum Board",                                  Type = PbiType.Story, StoryPoints = PbiPoints.Two,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint1.SprintId, AssignedToUserId = anthony, Title = "Generate Initial User Stories from Problem Statement", Type = PbiType.Story, StoryPoints = PbiPoints.Five,  Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint1.SprintId, AssignedToUserId = aden,    Title = "Review and Commit AI-Generated User Stories",         Type = PbiType.Story, StoryPoints = PbiPoints.Three, Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint1.SprintId, AssignedToUserId = huan,    Title = "Dark Mode Toggle",                                    Type = PbiType.Story, StoryPoints = PbiPoints.Three, Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+            };
 
-            context.SaveChanges();
-            Console.WriteLine("[SEEDER] Sprint seed check complete.");
+            var sprint2Pbis = new List<ProductBacklogItem>
+            {
+                new() { ProjectId = pid, SprintId = sprint2.SprintId, AssignedToUserId = james,   Title = "Submit Multiple Problem Statements - Backend",         Type = PbiType.Story, StoryPoints = PbiPoints.Two,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint2.SprintId, AssignedToUserId = tyler,   Title = "Create Database",                                      Type = PbiType.Story, StoryPoints = PbiPoints.Five,  Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint2.SprintId, AssignedToUserId = tyler,   Title = "DB Documentation",                                     Type = PbiType.Story, StoryPoints = PbiPoints.One,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint2.SprintId, AssignedToUserId = aden,    Title = "CRUD Elements",                                        Type = PbiType.Story, StoryPoints = PbiPoints.Two,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint2.SprintId, AssignedToUserId = josh,    Title = "Create server channels for Discord bot",               Type = PbiType.Story, StoryPoints = PbiPoints.One,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint2.SprintId, AssignedToUserId = nate,    Title = "Integrate audio/video capabilities to Discord Bot",    Type = PbiType.Story, StoryPoints = PbiPoints.Five,  Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint2.SprintId, AssignedToUserId = dylan,   Title = "Submit Multiple Problem Statements - Frontend",        Type = PbiType.Story, StoryPoints = PbiPoints.Three, Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint2.SprintId, AssignedToUserId = anthony, Title = "Home Page Tiles",                                      Type = PbiType.Story, StoryPoints = PbiPoints.Two,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint2.SprintId, AssignedToUserId = huan,    Title = "Make StoryCard editable",                              Type = PbiType.Story, StoryPoints = PbiPoints.Two,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint2.SprintId, AssignedToUserId = anthony, Title = "Scrum Board detailed view",                            Type = PbiType.Story, StoryPoints = PbiPoints.One,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+            };
+
+            var sprint3Pbis = new List<ProductBacklogItem>
+            {
+                new() { ProjectId = pid, SprintId = sprint3.SprintId, AssignedToUserId = james,   Title = "Update GitHub Actions Workflow",                                      Type = PbiType.Story, StoryPoints = PbiPoints.Two,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint3.SprintId, AssignedToUserId = aden,    Title = "Research Whether Audio Files Can Be Stored in SQLite",                Type = PbiType.Story, StoryPoints = PbiPoints.One,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint3.SprintId, AssignedToUserId = josh,    Title = "List Required API Endpoints for Discord Bot Integration",             Type = PbiType.Story, StoryPoints = PbiPoints.One,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint3.SprintId, AssignedToUserId = aden,    Title = "Rename the GenerateAiStory List Overload Method",                    Type = PbiType.Story, StoryPoints = PbiPoints.One,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint3.SprintId, AssignedToUserId = tyler,   Title = "Implement Required API Endpoints for Discord Bot",                    Type = PbiType.Story, StoryPoints = PbiPoints.Two,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint3.SprintId, AssignedToUserId = huan,    Title = "Convert Story Points to a Fibonacci Enum",                           Type = PbiType.Story, StoryPoints = PbiPoints.One,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint3.SprintId, AssignedToUserId = josh,    Title = "Create enum for Origin and assign accordingly",                      Type = PbiType.Story, StoryPoints = PbiPoints.One,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint3.SprintId, AssignedToUserId = dylan,   Title = "Commit Individual AI Generated Stories",                              Type = PbiType.Story, StoryPoints = PbiPoints.Two,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint3.SprintId, AssignedToUserId = tyler,   Title = "Connect Frontend to Backend",                                        Type = PbiType.Story, StoryPoints = PbiPoints.Three, Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint3.SprintId, AssignedToUserId = nate,    Title = "Implement Proper Craig Integration With Separate Voice Recordings",  Type = PbiType.Story, StoryPoints = PbiPoints.Three, Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint3.SprintId, AssignedToUserId = nate,    Title = "Fix File Size Bug in Transcription Service",                         Type = PbiType.Story, StoryPoints = PbiPoints.Two,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint3.SprintId, AssignedToUserId = anthony, Title = "Display Generated Stories in a Pop-Up Modal",                        Type = PbiType.Story, StoryPoints = PbiPoints.Three, Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint3.SprintId, AssignedToUserId = tyler,   Title = "Commit All AI Generated Stories",                                    Type = PbiType.Story, StoryPoints = PbiPoints.Two,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint3.SprintId, AssignedToUserId = dylan,   Title = "Update Story Status When Dragging Cards on the Scrum Board",         Type = PbiType.Story, StoryPoints = PbiPoints.Three, Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint3.SprintId, AssignedToUserId = tyler,   Title = "Update Entity Framework to Version 10",                              Type = PbiType.Story, StoryPoints = PbiPoints.One,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint3.SprintId, AssignedToUserId = tyler,   Title = "Add bUnit Front-End Component Tests",                                Type = PbiType.Story, StoryPoints = PbiPoints.Three, Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+            };
+
+            var sprint4Pbis = new List<ProductBacklogItem>
+            {
+                new() { ProjectId = pid, SprintId = sprint4.SprintId, AssignedToUserId = tyler,   Title = "Update Story Model and DB",                               Type = PbiType.Story, StoryPoints = PbiPoints.One,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint4.SprintId, AssignedToUserId = tyler,   Title = "Login Backend Development",                               Type = PbiType.Story, StoryPoints = PbiPoints.Two,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint4.SprintId, AssignedToUserId = tyler,   Title = "Add Swim Lane to Scrum Board",                            Type = PbiType.Story, StoryPoints = PbiPoints.One,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint4.SprintId, AssignedToUserId = tyler,   Title = "Login Landing Page",                                      Type = PbiType.Story, StoryPoints = PbiPoints.One,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint4.SprintId, AssignedToUserId = tyler,   Title = "PBI Comments Backend",                                    Type = PbiType.Story, StoryPoints = PbiPoints.Two,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint4.SprintId, AssignedToUserId = tyler,   Title = "Comment Thread Frontend",                                 Type = PbiType.Story, StoryPoints = PbiPoints.Five,  Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint4.SprintId, AssignedToUserId = tyler,   Title = "Add Backlog Page",                                        Type = PbiType.Story, StoryPoints = PbiPoints.Three, Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint4.SprintId, AssignedToUserId = tyler,   Title = "User Story AI Improvement Frontend",                      Type = PbiType.Story, StoryPoints = PbiPoints.Two,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint4.SprintId, AssignedToUserId = tyler,   Title = "Metrics Dashboard Backend",                               Type = PbiType.Story, StoryPoints = PbiPoints.Three, Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint4.SprintId, AssignedToUserId = tyler,   Title = "Metrics Dashboard Frontend",                              Type = PbiType.Story, StoryPoints = PbiPoints.Five,  Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint4.SprintId, AssignedToUserId = tyler,   Title = "User Story AI Improvement Backend",                       Type = PbiType.Story, StoryPoints = PbiPoints.Two,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint4.SprintId, AssignedToUserId = aden,    Title = "Add Backlog Page to Home Tiles",                          Type = PbiType.Story, StoryPoints = PbiPoints.One,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint4.SprintId, AssignedToUserId = anthony, Title = "Scrum Board Filtering - Frontend",                        Type = PbiType.Story, StoryPoints = PbiPoints.Two,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint4.SprintId, AssignedToUserId = anthony, Title = "Collapsible Side NavMenu",                                Type = PbiType.Story, StoryPoints = PbiPoints.One,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint4.SprintId, AssignedToUserId = dylan,   Title = "Scrum Board Filtering - Backend",                         Type = PbiType.Story, StoryPoints = PbiPoints.Two,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint4.SprintId, AssignedToUserId = dylan,   Title = "Sprint and Epic DB Tables",                               Type = PbiType.Story, StoryPoints = PbiPoints.One,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint4.SprintId, AssignedToUserId = josh,    Title = "Add Comment DB Table",                                    Type = PbiType.Story, StoryPoints = PbiPoints.One,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint4.SprintId, AssignedToUserId = james,   Title = "User Preferences DB",                                     Type = PbiType.Story, StoryPoints = PbiPoints.One,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint4.SprintId, AssignedToUserId = james,   Title = "Integrate PostgreSQL as the Hosted Database",             Type = PbiType.Story, StoryPoints = PbiPoints.Three, Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint4.SprintId, AssignedToUserId = james,   Title = "Deploy Scrum Pilot Application",                          Type = PbiType.Story, StoryPoints = PbiPoints.Five,  Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint4.SprintId, AssignedToUserId = james,   Title = "Containerize Scrum Pilot Application Using Docker",       Type = PbiType.Story, StoryPoints = PbiPoints.Five,  Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint4.SprintId, AssignedToUserId = james,   Title = "Extend CI Pipeline with Publish and Artifact Collection", Type = PbiType.Story, StoryPoints = PbiPoints.Three, Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint4.SprintId, AssignedToUserId = huan,    Title = "StoryCard Updates",                                       Type = PbiType.Story, StoryPoints = PbiPoints.Three, Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint4.SprintId, AssignedToUserId = nate,    Title = "Send chat logs to AI for summarization",                  Type = PbiType.Story, StoryPoints = PbiPoints.Three, Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint4.SprintId, AssignedToUserId = nate,    Title = "Multi-channel recording",                                 Type = PbiType.Story, StoryPoints = PbiPoints.One,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = sprint4.SprintId, AssignedToUserId = nate,    Title = "Sprint Summary Digest",                                   Type = PbiType.Story, StoryPoints = PbiPoints.One,   Status = PbiStatus.Done, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+            };
+
+            var backlogPbis = new List<ProductBacklogItem>
+            {
+                new() { ProjectId = pid, SprintId = null, Title = "Manage Projects page DB work",   Type = PbiType.Story, StoryPoints = PbiPoints.Two,   Status = PbiStatus.ToDo, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = null, Title = "Manage Projects Page Backend",   Type = PbiType.Story, StoryPoints = PbiPoints.Three, Status = PbiStatus.ToDo, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = null, Title = "Manage Projects Page Frontend",  Type = PbiType.Story, StoryPoints = PbiPoints.Three, Status = PbiStatus.ToDo, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+                new() { ProjectId = pid, SprintId = null, Title = "Manual PBI creation",            Type = PbiType.Story, StoryPoints = PbiPoints.Two,   Status = PbiStatus.ToDo, Priority = PbiPriority.High, Origin = PbiOrigin.WebUserCreated },
+            };
+
+            context.Stories.AddRange(sprint1Pbis);
+            context.Stories.AddRange(sprint2Pbis);
+            context.Stories.AddRange(sprint3Pbis);
+            context.Stories.AddRange(sprint4Pbis);
+            context.Stories.AddRange(backlogPbis);
+            await context.SaveChangesAsync();
+            Console.WriteLine("[SEEDER] Created PBIs for all sprints.");
+
+            // Backdate timestamps so metrics charts reflect historical sprint ranges
+            await context.Stories.Where(s => s.SprintId == sprint1.SprintId)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(p => p.DateCreated, new DateTime(2026, 2, 14, 9, 0, 0, DateTimeKind.Utc))
+                    .SetProperty(p => p.LastUpdated, new DateTime(2026, 2, 28, 17, 0, 0, DateTimeKind.Utc)));
+
+            await context.Stories.Where(s => s.SprintId == sprint2.SprintId)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(p => p.DateCreated, new DateTime(2026, 3, 1, 9, 0, 0, DateTimeKind.Utc))
+                    .SetProperty(p => p.LastUpdated, new DateTime(2026, 3, 21, 17, 0, 0, DateTimeKind.Utc)));
+
+            await context.Stories.Where(s => s.SprintId == sprint3.SprintId)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(p => p.DateCreated, new DateTime(2026, 3, 22, 9, 0, 0, DateTimeKind.Utc))
+                    .SetProperty(p => p.LastUpdated, new DateTime(2026, 4, 4, 17, 0, 0, DateTimeKind.Utc)));
+
+            await context.Stories.Where(s => s.SprintId == sprint4.SprintId)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(p => p.DateCreated, new DateTime(2026, 4, 5, 9, 0, 0, DateTimeKind.Utc))
+                    .SetProperty(p => p.LastUpdated, new DateTime(2026, 4, 18, 17, 0, 0, DateTimeKind.Utc)));
+
+            Console.WriteLine("[SEEDER] Backdated PBI timestamps to match sprint ranges.");
+
+            // Seed PbiStatusHistory so burndown charts show gradual completion across each sprint.
+            // Each PBI gets an InProgress entry shortly before its Done entry for cycle-time data.
+            static PbiStatusHistory Hist(int pbiId, PbiStatus from, PbiStatus to, DateTime at) =>
+                new() { PbiId = pbiId, FromStatus = from, ToStatus = to, ChangedAt = at };
+
+            static DateTime Utc(int y, int m, int d, int h = 10) =>
+                new(y, m, d, h, 0, 0, DateTimeKind.Utc);
+
+            var history = new List<PbiStatusHistory>();
+
+            // Sprint 1 — Feb 14–28 (16 total pts, 5 PBIs)
+            // [0]=3pts  [1]=2pts  [2]=5pts  [3]=3pts  [4]=3pts
+            history.AddRange([
+                Hist(sprint1Pbis[0].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 2, 14)),
+                Hist(sprint1Pbis[0].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 2, 17)),
+                Hist(sprint1Pbis[0].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 2, 18)),
+
+                Hist(sprint1Pbis[1].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 2, 16)),
+                Hist(sprint1Pbis[1].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 2, 19)),
+                Hist(sprint1Pbis[1].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 2, 20)),
+
+                Hist(sprint1Pbis[2].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 2, 17)),
+                Hist(sprint1Pbis[2].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 2, 21)),
+                Hist(sprint1Pbis[2].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 2, 23)),
+
+                Hist(sprint1Pbis[3].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 2, 21)),
+                Hist(sprint1Pbis[3].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 2, 24)),
+                Hist(sprint1Pbis[3].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 2, 25)),
+
+                Hist(sprint1Pbis[4].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 2, 24)),
+                Hist(sprint1Pbis[4].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 2, 26)),
+                Hist(sprint1Pbis[4].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 2, 27)),
+            ]);
+
+            // Sprint 2 — Mar 1–21 (24 total pts, 10 PBIs)
+            // [0]=2  [1]=5  [2]=1  [3]=2  [4]=1  [5]=5  [6]=3  [7]=2  [8]=2  [9]=1
+            history.AddRange([
+                Hist(sprint2Pbis[0].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 3,  1)),
+                Hist(sprint2Pbis[0].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 3,  4)),
+                Hist(sprint2Pbis[0].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 3,  5)),
+
+                Hist(sprint2Pbis[1].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 3,  2)),
+                Hist(sprint2Pbis[1].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 3,  5)),
+                Hist(sprint2Pbis[1].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 3,  7)),
+
+                Hist(sprint2Pbis[2].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 3,  6)),
+                Hist(sprint2Pbis[2].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 3,  8)),
+                Hist(sprint2Pbis[2].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 3,  9)),
+
+                Hist(sprint2Pbis[3].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 3,  8)),
+                Hist(sprint2Pbis[3].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 3, 10)),
+                Hist(sprint2Pbis[3].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 3, 11)),
+
+                Hist(sprint2Pbis[4].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 3, 10)),
+                Hist(sprint2Pbis[4].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 3, 12)),
+                Hist(sprint2Pbis[4].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 3, 13)),
+
+                Hist(sprint2Pbis[5].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 3,  9)),
+                Hist(sprint2Pbis[5].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 3, 12)),
+                Hist(sprint2Pbis[5].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 3, 14)),
+
+                Hist(sprint2Pbis[6].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 3, 12)),
+                Hist(sprint2Pbis[6].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 3, 15)),
+                Hist(sprint2Pbis[6].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 3, 16)),
+
+                Hist(sprint2Pbis[7].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 3, 14)),
+                Hist(sprint2Pbis[7].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 3, 16)),
+                Hist(sprint2Pbis[7].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 3, 17)),
+
+                Hist(sprint2Pbis[8].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 3, 16)),
+                Hist(sprint2Pbis[8].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 3, 18)),
+                Hist(sprint2Pbis[8].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 3, 19)),
+
+                Hist(sprint2Pbis[9].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 3, 18)),
+                Hist(sprint2Pbis[9].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 3, 19)),
+                Hist(sprint2Pbis[9].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 3, 20)),
+            ]);
+
+            // Sprint 3 — Mar 22–Apr 4 (31 total pts, 16 PBIs)
+            // [0]=2 [1]=1 [2]=1 [3]=1 [4]=2 [5]=1 [6]=1 [7]=2 [8]=3 [9]=3 [10]=2 [11]=3 [12]=2 [13]=3 [14]=1 [15]=3
+            history.AddRange([
+                Hist(sprint3Pbis[0].PbiId,  PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 3, 22)),
+                Hist(sprint3Pbis[0].PbiId,  PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 3, 23)),
+                Hist(sprint3Pbis[0].PbiId,  PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 3, 24)),
+
+                Hist(sprint3Pbis[1].PbiId,  PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 3, 22)),
+                Hist(sprint3Pbis[1].PbiId,  PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 3, 23)),
+                Hist(sprint3Pbis[1].PbiId,  PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 3, 24)),
+
+                Hist(sprint3Pbis[2].PbiId,  PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 3, 23)),
+                Hist(sprint3Pbis[2].PbiId,  PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 3, 24)),
+                Hist(sprint3Pbis[2].PbiId,  PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 3, 25)),
+
+                Hist(sprint3Pbis[3].PbiId,  PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 3, 24)),
+                Hist(sprint3Pbis[3].PbiId,  PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 3, 25)),
+                Hist(sprint3Pbis[3].PbiId,  PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 3, 26)),
+
+                Hist(sprint3Pbis[4].PbiId,  PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 3, 24)),
+                Hist(sprint3Pbis[4].PbiId,  PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 3, 25)),
+                Hist(sprint3Pbis[4].PbiId,  PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 3, 26)),
+
+                Hist(sprint3Pbis[5].PbiId,  PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 3, 25)),
+                Hist(sprint3Pbis[5].PbiId,  PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 3, 26)),
+                Hist(sprint3Pbis[5].PbiId,  PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 3, 27)),
+
+                Hist(sprint3Pbis[6].PbiId,  PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 3, 25)),
+                Hist(sprint3Pbis[6].PbiId,  PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 3, 26)),
+                Hist(sprint3Pbis[6].PbiId,  PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 3, 27)),
+
+                Hist(sprint3Pbis[7].PbiId,  PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 3, 26)),
+                Hist(sprint3Pbis[7].PbiId,  PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 3, 27)),
+                Hist(sprint3Pbis[7].PbiId,  PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 3, 28)),
+
+                Hist(sprint3Pbis[8].PbiId,  PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 3, 26)),
+                Hist(sprint3Pbis[8].PbiId,  PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 3, 28)),
+                Hist(sprint3Pbis[8].PbiId,  PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 3, 29)),
+
+                Hist(sprint3Pbis[9].PbiId,  PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 3, 27)),
+                Hist(sprint3Pbis[9].PbiId,  PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 3, 29)),
+                Hist(sprint3Pbis[9].PbiId,  PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 3, 30)),
+
+                Hist(sprint3Pbis[10].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 3, 28)),
+                Hist(sprint3Pbis[10].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 3, 30)),
+                Hist(sprint3Pbis[10].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 3, 31)),
+
+                Hist(sprint3Pbis[11].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 3, 29)),
+                Hist(sprint3Pbis[11].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 3, 31)),
+                Hist(sprint3Pbis[11].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026,  4,  1)),
+
+                Hist(sprint3Pbis[12].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 3, 30)),
+                Hist(sprint3Pbis[12].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026,  4,  1)),
+                Hist(sprint3Pbis[12].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026,  4,  2)),
+
+                Hist(sprint3Pbis[13].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 3, 31)),
+                Hist(sprint3Pbis[13].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026,  4,  1)),
+                Hist(sprint3Pbis[13].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026,  4,  2)),
+
+                Hist(sprint3Pbis[14].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026,  4,  1)),
+                Hist(sprint3Pbis[14].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026,  4,  2)),
+                Hist(sprint3Pbis[14].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026,  4,  3)),
+
+                Hist(sprint3Pbis[15].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026,  4,  2)),
+                Hist(sprint3Pbis[15].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026,  4,  3)),
+                Hist(sprint3Pbis[15].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026,  4,  4)),
+            ]);
+
+            // Sprint 4 — Apr 5–18 (60 total pts, 26 PBIs)
+            // Workdays: Apr 6(Mon) 7 8 9 10(Fri) | Apr 13(Mon) 14 15 16 17(Fri) — Apr 11-12 weekend, Apr 18 Sat
+            // [0]=1 [1]=2 [2]=1 [3]=1 [4]=2 [5]=5 [6]=3 [7]=2 [8]=3 [9]=5 [10]=2 [11]=1 [12]=2 [13]=1 [14]=2
+            // [15]=1 [16]=1 [17]=1 [18]=3 [19]=5 [20]=5 [21]=3 [22]=3 [23]=3 [24]=1 [25]=1
+            // Hour-level precision for tight 1-day PBIs: IP@10:00, IR@14:00 → IP=4h(≤1d), IR=20h(≤1d)
+            // [19]=Deploy and [20]=Containerize have IR entered same day but Done 4 days later → IR in "4-8d" bucket
+            history.AddRange([
+                // Apr 7 (Tue) — 3pts: [0]=1 [1]=2
+                Hist(sprint4Pbis[0].PbiId,  PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 4,  6)),
+                Hist(sprint4Pbis[0].PbiId,  PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 4,  6, 14)),
+                Hist(sprint4Pbis[0].PbiId,  PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 4,  7)),
+
+                Hist(sprint4Pbis[1].PbiId,  PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 4,  6)),
+                Hist(sprint4Pbis[1].PbiId,  PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 4,  6, 14)),
+                Hist(sprint4Pbis[1].PbiId,  PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 4,  7)),
+
+                // Apr 8 (Wed) — 4pts: [2]=1 [3]=1 [4]=2
+                Hist(sprint4Pbis[2].PbiId,  PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 4,  7)),
+                Hist(sprint4Pbis[2].PbiId,  PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 4,  7, 14)),
+                Hist(sprint4Pbis[2].PbiId,  PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 4,  8)),
+
+                Hist(sprint4Pbis[3].PbiId,  PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 4,  7)),
+                Hist(sprint4Pbis[3].PbiId,  PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 4,  7, 14)),
+                Hist(sprint4Pbis[3].PbiId,  PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 4,  8)),
+
+                Hist(sprint4Pbis[4].PbiId,  PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 4,  7)),
+                Hist(sprint4Pbis[4].PbiId,  PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 4,  7, 14)),
+                Hist(sprint4Pbis[4].PbiId,  PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 4,  8)),
+
+                // Apr 9 (Thu) — 5pts: [5]=5
+                Hist(sprint4Pbis[5].PbiId,  PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 4,  7)),
+                Hist(sprint4Pbis[5].PbiId,  PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 4,  8)),
+                Hist(sprint4Pbis[5].PbiId,  PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 4,  9)),
+
+                // Apr 10 (Fri) — 5pts: [6]=3 [7]=2
+                Hist(sprint4Pbis[6].PbiId,  PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 4,  8)),
+                Hist(sprint4Pbis[6].PbiId,  PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 4,  9)),
+                Hist(sprint4Pbis[6].PbiId,  PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 4, 10)),
+
+                Hist(sprint4Pbis[7].PbiId,  PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 4,  8)),
+                Hist(sprint4Pbis[7].PbiId,  PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 4,  9)),
+                Hist(sprint4Pbis[7].PbiId,  PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 4, 10)),
+
+                // Apr 13 (Mon) — 5pts: [8]=3 [24]=1 [25]=1
+                Hist(sprint4Pbis[8].PbiId,  PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 4,  9)),
+                Hist(sprint4Pbis[8].PbiId,  PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 4, 11)),
+                Hist(sprint4Pbis[8].PbiId,  PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 4, 13)),
+
+                Hist(sprint4Pbis[24].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 4, 10)),
+                Hist(sprint4Pbis[24].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 4, 12)),
+                Hist(sprint4Pbis[24].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 4, 13)),
+
+                Hist(sprint4Pbis[25].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 4, 10)),
+                Hist(sprint4Pbis[25].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 4, 12)),
+                Hist(sprint4Pbis[25].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 4, 13)),
+
+                // Apr 14 (Tue) — 8pts: [9]=5 [10]=2 [11]=1
+                Hist(sprint4Pbis[9].PbiId,  PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 4, 10)),
+                Hist(sprint4Pbis[9].PbiId,  PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 4, 13)),
+                Hist(sprint4Pbis[9].PbiId,  PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 4, 14)),
+
+                Hist(sprint4Pbis[10].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 4, 13)),
+                Hist(sprint4Pbis[10].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 4, 13, 14)),
+                Hist(sprint4Pbis[10].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 4, 14)),
+
+                Hist(sprint4Pbis[11].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 4, 13)),
+                Hist(sprint4Pbis[11].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 4, 13, 14)),
+                Hist(sprint4Pbis[11].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 4, 14)),
+
+                // Apr 15 (Wed) — 7pts: [12]=2 [13]=1 [22]=3 [16]=1
+                Hist(sprint4Pbis[12].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 4, 13)),
+                Hist(sprint4Pbis[12].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 4, 14)),
+                Hist(sprint4Pbis[12].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 4, 15)),
+
+                Hist(sprint4Pbis[13].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 4, 14)),
+                Hist(sprint4Pbis[13].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 4, 14, 14)),
+                Hist(sprint4Pbis[13].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 4, 15)),
+
+                Hist(sprint4Pbis[22].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 4, 13)),
+                Hist(sprint4Pbis[22].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 4, 14)),
+                Hist(sprint4Pbis[22].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 4, 15)),
+
+                Hist(sprint4Pbis[16].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 4, 14)),
+                Hist(sprint4Pbis[16].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 4, 14, 14)),
+                Hist(sprint4Pbis[16].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 4, 15)),
+
+                // Apr 16 (Thu) — 9pts: [14]=2 [15]=1 [17]=1 [21]=3 [23]=3
+                Hist(sprint4Pbis[14].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 4, 14)),
+                Hist(sprint4Pbis[14].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 4, 15)),
+                Hist(sprint4Pbis[14].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 4, 16)),
+
+                Hist(sprint4Pbis[15].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 4, 15)),
+                Hist(sprint4Pbis[15].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 4, 15, 14)),
+                Hist(sprint4Pbis[15].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 4, 16)),
+
+                Hist(sprint4Pbis[17].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 4, 15)),
+                Hist(sprint4Pbis[17].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 4, 15, 14)),
+                Hist(sprint4Pbis[17].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 4, 16)),
+
+                Hist(sprint4Pbis[21].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 4, 14)),
+                Hist(sprint4Pbis[21].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 4, 15)),
+                Hist(sprint4Pbis[21].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 4, 16)),
+
+                Hist(sprint4Pbis[23].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 4, 14)),
+                Hist(sprint4Pbis[23].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 4, 15)),
+                Hist(sprint4Pbis[23].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 4, 16)),
+
+                // Apr 17 (Fri) — 13pts: [18]=3 [19]=5(Deploy) [20]=5(Containerize)
+                // [19] and [20]: entered InReview Apr 13@14 but Done Apr 17 → IR duration ~92h → "4-8d" bucket (review bottleneck)
+                Hist(sprint4Pbis[18].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 4, 14)),
+                Hist(sprint4Pbis[18].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 4, 16)),
+                Hist(sprint4Pbis[18].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 4, 17)),
+
+                Hist(sprint4Pbis[19].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 4, 13)),
+                Hist(sprint4Pbis[19].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 4, 13, 14)),
+                Hist(sprint4Pbis[19].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 4, 17)),
+
+                Hist(sprint4Pbis[20].PbiId, PbiStatus.ToDo,        PbiStatus.InProgress, Utc(2026, 4, 13)),
+                Hist(sprint4Pbis[20].PbiId, PbiStatus.InProgress,   PbiStatus.InReview,   Utc(2026, 4, 13, 14)),
+                Hist(sprint4Pbis[20].PbiId, PbiStatus.InReview,     PbiStatus.Done,       Utc(2026, 4, 17)),
+            ]);
+
+            context.Set<PbiStatusHistory>().AddRange(history);
+            await context.SaveChangesAsync();
+            Console.WriteLine($"[SEEDER] Created {history.Count} PbiStatusHistory entries for burndown accuracy.");
         }
 
         public static async Task SeedUsersAsync(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager)
@@ -186,362 +541,6 @@ namespace ScrumPilot.Data.Seeders
                     Console.WriteLine($"[SEEDER] Failed to create user {seed.Email}: {string.Join(", ", result.Errors.Select(e => e.Description))}");
                 }
             }
-        }
-
-        private static void SeedStories(ScrumPilotContext context)
-        {
-            var storyCount = context.Stories.Count();
-            Console.WriteLine($"[SEEDER] Current story count: {storyCount}");
-
-            var sprint1 = context.Sprints.FirstOrDefault(s => s.SprintGoal == Sprint1Goal);
-            var sprint2 = context.Sprints.FirstOrDefault(s => s.SprintGoal == Sprint2Goal);
-
-            if (sprint1 is null || sprint2 is null)
-            {
-                Console.WriteLine("[SEEDER] Required sprints not found, skipping dashboard story seed.");
-                return;
-            }
-
-            Console.WriteLine("[SEEDER] Ensuring Sprint 1 and Sprint 2 dashboard stories exist...");
-
-            var seedEpicId = context.Epics.OrderBy(e => e.EpicId).Select(e => (int?)e.EpicId).FirstOrDefault();
-
-            var seededPbis = new[]
-            {
-                new SeedPbiDefinition(
-                    "SP1 Story - Auth hardening",
-                    sprint1.SprintId,
-                    PbiType.Story,
-                    PbiPriority.High,
-                    PbiPoints.Eight,
-                    PbiStatus.Done,
-                    new DateTime(2026, 3, 22, 9, 0, 0, DateTimeKind.Utc),
-                    [
-                        new StatusTransition(PbiStatus.ToDo, PbiStatus.InProgress, new DateTime(2026, 3, 23, 10, 0, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InProgress, PbiStatus.InReview, new DateTime(2026, 3, 27, 14, 0, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InReview, PbiStatus.Done, new DateTime(2026, 4, 4, 16, 0, 0, DateTimeKind.Utc))
-                    ]),
-                new SeedPbiDefinition(
-                    "SP1 Story - Sprint board filters",
-                    sprint1.SprintId,
-                    PbiType.Story,
-                    PbiPriority.High,
-                    PbiPoints.Five,
-                    PbiStatus.Done,
-                    new DateTime(2026, 3, 22, 10, 0, 0, DateTimeKind.Utc),
-                    [
-                        new StatusTransition(PbiStatus.ToDo, PbiStatus.InProgress, new DateTime(2026, 3, 24, 9, 30, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InProgress, PbiStatus.InReview, new DateTime(2026, 3, 26, 11, 0, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InReview, PbiStatus.Done, new DateTime(2026, 3, 27, 15, 45, 0, DateTimeKind.Utc))
-                    ]),
-                new SeedPbiDefinition(
-                    "SP1 Story - Dashboard shell",
-                    sprint1.SprintId,
-                    PbiType.Story,
-                    PbiPriority.Medium,
-                    PbiPoints.Three,
-                    PbiStatus.Done,
-                    new DateTime(2026, 3, 23, 8, 0, 0, DateTimeKind.Utc),
-                    [
-                        new StatusTransition(PbiStatus.ToDo, PbiStatus.InProgress, new DateTime(2026, 3, 25, 10, 0, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InProgress, PbiStatus.InReview, new DateTime(2026, 3, 29, 13, 30, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InReview, PbiStatus.Done, new DateTime(2026, 3, 30, 17, 0, 0, DateTimeKind.Utc))
-                    ]),
-                new SeedPbiDefinition(
-                    "SP1 Story - Comment threading",
-                    sprint1.SprintId,
-                    PbiType.Story,
-                    PbiPriority.Medium,
-                    PbiPoints.Five,
-                    PbiStatus.Done,
-                    new DateTime(2026, 3, 23, 9, 15, 0, DateTimeKind.Utc),
-                    [
-                        new StatusTransition(PbiStatus.ToDo, PbiStatus.InProgress, new DateTime(2026, 3, 28, 10, 0, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InProgress, PbiStatus.InReview, new DateTime(2026, 4, 1, 12, 0, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InReview, PbiStatus.Done, new DateTime(2026, 4, 2, 16, 15, 0, DateTimeKind.Utc))
-                    ]),
-                new SeedPbiDefinition(
-                    "SP1 Story - Epic linking",
-                    sprint1.SprintId,
-                    PbiType.Story,
-                    PbiPriority.Low,
-                    PbiPoints.Two,
-                    PbiStatus.Done,
-                    new DateTime(2026, 3, 24, 8, 30, 0, DateTimeKind.Utc),
-                    [
-                        new StatusTransition(PbiStatus.ToDo, PbiStatus.InProgress, new DateTime(2026, 3, 30, 9, 0, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InProgress, PbiStatus.InReview, new DateTime(2026, 3, 31, 15, 0, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InReview, PbiStatus.Done, new DateTime(2026, 4, 1, 10, 30, 0, DateTimeKind.Utc))
-                    ]),
-                new SeedPbiDefinition(
-                    "SP1 Bug - Login timeout",
-                    sprint1.SprintId,
-                    PbiType.Bug,
-                    PbiPriority.High,
-                    PbiPoints.Three,
-                    PbiStatus.Done,
-                    new DateTime(2026, 3, 24, 11, 0, 0, DateTimeKind.Utc),
-                    [
-                        new StatusTransition(PbiStatus.ToDo, PbiStatus.InProgress, new DateTime(2026, 3, 25, 14, 30, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InProgress, PbiStatus.InReview, new DateTime(2026, 3, 28, 10, 30, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InReview, PbiStatus.Done, new DateTime(2026, 3, 29, 16, 0, 0, DateTimeKind.Utc))
-                    ]),
-                new SeedPbiDefinition(
-                    "SP1 Task - Migrate seed data",
-                    sprint1.SprintId,
-                    PbiType.Task,
-                    PbiPriority.Medium,
-                    PbiPoints.Two,
-                    PbiStatus.Done,
-                    new DateTime(2026, 3, 22, 13, 0, 0, DateTimeKind.Utc),
-                    [
-                        new StatusTransition(PbiStatus.ToDo, PbiStatus.InProgress, new DateTime(2026, 3, 23, 15, 0, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InProgress, PbiStatus.InReview, new DateTime(2026, 3, 25, 10, 0, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InReview, PbiStatus.Done, new DateTime(2026, 3, 26, 11, 30, 0, DateTimeKind.Utc))
-                    ]),
-
-                new SeedPbiDefinition(
-                    "SP2 Story - Burndown chart refinements",
-                    sprint2.SprintId,
-                    PbiType.Story,
-                    PbiPriority.High,
-                    PbiPoints.Five,
-                    PbiStatus.Done,
-                    new DateTime(2026, 4, 5, 9, 0, 0, DateTimeKind.Utc),
-                    [
-                        new StatusTransition(PbiStatus.ToDo, PbiStatus.InProgress, new DateTime(2026, 4, 6, 10, 0, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InProgress, PbiStatus.InReview, new DateTime(2026, 4, 7, 14, 0, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InReview, PbiStatus.Done, new DateTime(2026, 4, 8, 16, 0, 0, DateTimeKind.Utc))
-                    ]),
-                new SeedPbiDefinition(
-                    "SP2 Story - Velocity widget polish",
-                    sprint2.SprintId,
-                    PbiType.Story,
-                    PbiPriority.Medium,
-                    PbiPoints.Three,
-                    PbiStatus.Done,
-                    new DateTime(2026, 4, 5, 10, 15, 0, DateTimeKind.Utc),
-                    [
-                        new StatusTransition(PbiStatus.ToDo, PbiStatus.InProgress, new DateTime(2026, 4, 8, 9, 0, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InProgress, PbiStatus.InReview, new DateTime(2026, 4, 10, 13, 0, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InReview, PbiStatus.Done, new DateTime(2026, 4, 11, 15, 30, 0, DateTimeKind.Utc))
-                    ]),
-                new SeedPbiDefinition(
-                    "SP2 Story - Work by status widget",
-                    sprint2.SprintId,
-                    PbiType.Story,
-                    PbiPriority.Medium,
-                    PbiPoints.Two,
-                    PbiStatus.Done,
-                    new DateTime(2026, 4, 6, 8, 45, 0, DateTimeKind.Utc),
-                    [
-                        new StatusTransition(PbiStatus.ToDo, PbiStatus.InProgress, new DateTime(2026, 4, 9, 10, 30, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InProgress, PbiStatus.InReview, new DateTime(2026, 4, 11, 9, 30, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InReview, PbiStatus.Done, new DateTime(2026, 4, 12, 11, 0, 0, DateTimeKind.Utc))
-                    ]),
-                new SeedPbiDefinition(
-                    "SP2 Story - Cycle time widget",
-                    sprint2.SprintId,
-                    PbiType.Story,
-                    PbiPriority.High,
-                    PbiPoints.Five,
-                    PbiStatus.Done,
-                    new DateTime(2026, 4, 6, 11, 0, 0, DateTimeKind.Utc),
-                    [
-                        new StatusTransition(PbiStatus.ToDo, PbiStatus.InProgress, new DateTime(2026, 4, 10, 9, 0, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InProgress, PbiStatus.InReview, new DateTime(2026, 4, 14, 13, 0, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InReview, PbiStatus.Done, new DateTime(2026, 4, 15, 17, 0, 0, DateTimeKind.Utc))
-                    ]),
-                new SeedPbiDefinition(
-                    "SP2 Bug - API null handling",
-                    sprint2.SprintId,
-                    PbiType.Bug,
-                    PbiPriority.High,
-                    PbiPoints.Two,
-                    PbiStatus.Done,
-                    new DateTime(2026, 4, 7, 10, 0, 0, DateTimeKind.Utc),
-                    [
-                        new StatusTransition(PbiStatus.ToDo, PbiStatus.InProgress, new DateTime(2026, 4, 13, 9, 0, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InProgress, PbiStatus.InReview, new DateTime(2026, 4, 15, 10, 30, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InReview, PbiStatus.Done, new DateTime(2026, 4, 16, 14, 0, 0, DateTimeKind.Utc))
-                    ]),
-                new SeedPbiDefinition(
-                    "SP2 Task - Dashboard empty states",
-                    sprint2.SprintId,
-                    PbiType.Task,
-                    PbiPriority.Low,
-                    PbiPoints.One,
-                    PbiStatus.Done,
-                    new DateTime(2026, 4, 8, 9, 30, 0, DateTimeKind.Utc),
-                    [
-                        new StatusTransition(PbiStatus.ToDo, PbiStatus.InProgress, new DateTime(2026, 4, 16, 9, 30, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InProgress, PbiStatus.InReview, new DateTime(2026, 4, 16, 15, 0, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InReview, PbiStatus.Done, new DateTime(2026, 4, 17, 10, 0, 0, DateTimeKind.Utc))
-                    ]),
-                new SeedPbiDefinition(
-                    "SP2 Story - Export sprint report",
-                    sprint2.SprintId,
-                    PbiType.Story,
-                    PbiPriority.High,
-                    PbiPoints.Eight,
-                    PbiStatus.InProgress,
-                    new DateTime(2026, 4, 7, 8, 30, 0, DateTimeKind.Utc),
-                    [
-                        new StatusTransition(PbiStatus.ToDo, PbiStatus.InProgress, new DateTime(2026, 4, 14, 10, 0, 0, DateTimeKind.Utc))
-                    ]),
-                new SeedPbiDefinition(
-                    "SP2 Story - Dashboard preferences API",
-                    sprint2.SprintId,
-                    PbiType.Story,
-                    PbiPriority.High,
-                    PbiPoints.Eight,
-                    PbiStatus.Done,
-                    new DateTime(2026, 4, 8, 9, 0, 0, DateTimeKind.Utc),
-                    [
-                        new StatusTransition(PbiStatus.ToDo, PbiStatus.InProgress, new DateTime(2026, 4, 9, 9, 0, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InProgress, PbiStatus.InReview, new DateTime(2026, 4, 11, 14, 0, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InReview, PbiStatus.Done, new DateTime(2026, 4, 13, 16, 30, 0, DateTimeKind.Utc))
-                    ]),
-                new SeedPbiDefinition(
-                    "SP2 Story - Widget visibility settings",
-                    sprint2.SprintId,
-                    PbiType.Story,
-                    PbiPriority.Medium,
-                    PbiPoints.Five,
-                    PbiStatus.Done,
-                    new DateTime(2026, 4, 9, 10, 0, 0, DateTimeKind.Utc),
-                    [
-                        new StatusTransition(PbiStatus.ToDo, PbiStatus.InProgress, new DateTime(2026, 4, 12, 9, 30, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InProgress, PbiStatus.InReview, new DateTime(2026, 4, 14, 11, 0, 0, DateTimeKind.Utc)),
-                        new StatusTransition(PbiStatus.InReview, PbiStatus.Done, new DateTime(2026, 4, 15, 15, 0, 0, DateTimeKind.Utc))
-                    ]),
-                new SeedPbiDefinition(
-                    "SP2 Story - Sprint metrics grid persistence",
-                    sprint2.SprintId,
-                    PbiType.Story,
-                    PbiPriority.Medium,
-                    PbiPoints.Three,
-                    PbiStatus.InProgress,
-                    new DateTime(2026, 4, 10, 11, 0, 0, DateTimeKind.Utc),
-                    [
-                        new StatusTransition(PbiStatus.ToDo, PbiStatus.InProgress, new DateTime(2026, 4, 16, 9, 0, 0, DateTimeKind.Utc))
-                    ])
-            };
-
-            var existingTitles = context.Stories
-                .Select(s => s.Title)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            var newStories = seededPbis
-                .Where(def => !existingTitles.Contains(def.Title))
-                .Select(def => new ProductBacklogItem
-                {
-                    Type = def.Type,
-                    EpicId = seedEpicId,
-                    SprintId = def.SprintId,
-                    Title = def.Title,
-                    Description = $"Seeded dashboard scenario item for sprint {def.SprintId}.",
-                    Status = def.FinalStatus,
-                    Priority = def.Priority,
-                    StoryPoints = def.StoryPoints,
-                    Origin = PbiOrigin.WebUserCreated,
-                    IsDraft = false
-                })
-                .ToList();
-
-            if (newStories.Count == 0)
-            {
-                Console.WriteLine("[SEEDER] Dashboard stories already present, skipping insert.");
-                return;
-            }
-
-            context.Stories.AddRange(newStories);
-            context.SaveChanges();
-
-            var createdLookup = seededPbis.ToDictionary(def => def.Title, def => def.CreatedAt, StringComparer.OrdinalIgnoreCase);
-            var insertedStories = context.Stories
-                .Where(s => newStories.Select(ns => ns.Title).Contains(s.Title))
-                .ToList();
-
-            foreach (var story in insertedStories)
-            {
-                if (createdLookup.TryGetValue(story.Title, out var createdAt))
-                {
-                    story.DateCreated = createdAt;
-                }
-            }
-            context.SaveChanges();
-
-            var insertedByTitle = insertedStories.ToDictionary(s => s.Title, s => s, StringComparer.OrdinalIgnoreCase);
-            var newHistoryEntries = new List<PbiStatusHistory>();
-
-            foreach (var definition in seededPbis)
-            {
-                if (!insertedByTitle.TryGetValue(definition.Title, out var story))
-                    continue;
-
-                foreach (var transition in definition.Transitions)
-                {
-                    newHistoryEntries.Add(new PbiStatusHistory
-                    {
-                        PbiId = story.PbiId,
-                        FromStatus = transition.From,
-                        ToStatus = transition.To,
-                        ChangedAt = transition.ChangedAt
-                    });
-                }
-            }
-
-            if (newHistoryEntries.Count > 0)
-            {
-                context.PbiStatusHistories.AddRange(newHistoryEntries);
-                context.SaveChanges();
-            }
-
-            Console.WriteLine($"[SEEDER] Added {newStories.Count} dashboard stories and {newHistoryEntries.Count} status history entries.");
-        }
-
-        private sealed record StatusTransition(PbiStatus From, PbiStatus To, DateTime ChangedAt);
-
-        private sealed record SeedPbiDefinition(
-            string Title,
-            int SprintId,
-            PbiType Type,
-            PbiPriority Priority,
-            PbiPoints StoryPoints,
-            PbiStatus FinalStatus,
-            DateTime CreatedAt,
-            StatusTransition[] Transitions);
-
-        private static void SeedComments(ScrumPilotContext context)
-        {
-            if (context.Comments.Any())
-            {
-                Console.WriteLine("[SEEDER] Database already has comments, skipping seed.");
-                return;
-            }
-
-            var seedPbiId = context.Stories.OrderBy(s => s.PbiId).Select(s => (int?)s.PbiId).FirstOrDefault();
-            var seedUserId = context.Users.OrderBy(u => u.UserName).Select(u => (string?)u.Id).FirstOrDefault();
-
-            if (seedPbiId is null || seedUserId is null)
-            {
-                Console.WriteLine("[SEEDER] No stories or users found, skipping comment seed.");
-                return;
-            }
-
-            Console.WriteLine("[SEEDER] Seeding comments...");
-
-            context.Comments.Add(new Comment
-            {
-                PbiId = seedPbiId.Value,
-                UserId = seedUserId,
-                Body = "This is a seed comment for development and testing purposes.",
-                CreatedDate = DateTime.UtcNow
-            });
-
-            context.SaveChanges();
-            Console.WriteLine("[SEEDER] Successfully seeded comments.");
         }
 
         private static void SeedMessageTranscripts(ScrumPilotContext context)

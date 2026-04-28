@@ -5,7 +5,6 @@ using ScrumPilot.Web;
 using ScrumPilot.Web.Auth;
 using ApexCharts;
 using ScrumPilot.Web.Services;
-using MudBlazor.Services;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -32,6 +31,7 @@ builder.Services.AddScoped(sp =>
     sp.GetRequiredService<IHttpClientFactory>().CreateClient("API"));
 builder.Services.AddApexCharts();
 builder.Services.AddScoped<ScrumPilot.Web.Services.MetricsDashboardService>();
+builder.Services.AddSingleton<ScrumPilot.Web.Services.ProjectStateService>();
 
 await builder.Build().RunAsync();
 

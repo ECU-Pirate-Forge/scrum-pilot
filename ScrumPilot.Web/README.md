@@ -1,8 +1,116 @@
 # ScrumPilot.Web
 
-🎨 **Blazor WebAssembly Frontend Application**
+🎨 **Blazor WebAssembly Frontend**
 
-The client-side web application built with Blazor WebAssembly and MudBlazor, providing a modern and responsive user interface for the ScrumPilot application.
+The client-side application built with Blazor WebAssembly (.NET 10) and MudBlazor. Runs entirely in the browser and communicates with `ScrumPilot.API` over HTTPS.
+
+---
+
+## 🏗️ Architecture
+
+```
+ScrumPilot.Web/
+├── Pages/
+│   ├── Login.razor                  # JWT login form
+│   ├── Home.razor                   # Dashboard tile landing page
+│   ├── ScrumBoard.razor             # Drag-and-drop Kanban board
+│   ├── Backlog.razor                # Full product backlog list with filters
+│   ├── DraftPbiPage.razor           # Review and commit AI-generated draft PBIs
+│   ├── PbiGeneration.razor          # AI story generation from problem statements
+│   ├── MetricsDashboard.razor       # Sprint metrics and charts
+│   ├── PlanningPoker.razor          # Real-time Fibonacci estimation
+│   ├── DependencyChartPage.razor    # PBI dependency visualisation
+│   ├── ProjectManagement.razor      # Create and manage projects
+│   ├── UserSettings.razor           # Profile, theme, and password settings
+│   └── NotFound.razor               # 404 page
+├── Components/
+│   ├── PbiCard.razor                # Full PBI detail/edit form with AI improve
+│   ├── CommentThread.razor          # Per-PBI threaded comments
+│   ├── DependencyChart.razor        # D3/JS dependency graph component
+│   ├── DashboardTile.razor          # Clickable navigation tile
+│   ├── GeneratedPbiModal.razor      # Modal for reviewing AI-generated PBIs
+│   ├── RedirectToLogin.razor        # Auth guard redirect
+│   └── MetricsDashboard/            # Individual widget components (burndown, velocity, etc.)
+├── Layout/
+│   ├── MainLayout.razor             # App shell with sidebar navigation
+│   └── NavMenu.razor                # Navigation links and project selector
+├── Services/
+│   ├── AuthService.cs               # Login/logout, token storage
+│   ├── ProjectStateService.cs       # Singleton selected-project state
+│   └── MetricsDashboardService.cs   # API calls for all metrics widgets
+├── Auth/
+│   ├── JwtAuthStateProvider.cs      # Custom AuthenticationStateProvider
+│   └── AuthHeaderHandler.cs        # Delegating handler — attaches JWT to requests
+├── GlobalUsings.cs                  # Project-wide global using statements
+├── _Imports.razor                   # Razor-wide @using directives
+└── Program.cs                       # DI registration and app startup
+```
+
+---
+
+## 📄 Pages
+
+| Route | Page | Description |
+|---|---|---|
+| `/` | Home | Dashboard tiles linking to each feature |
+| `/scrum-board` | ScrumBoard | Drag-and-drop Kanban with sprint/epic filters |
+| `/backlog` | Backlog | Full backlog list with search, priority chips, and sprint assignment |
+| `/draft-stories` | DraftPbiPage | Review, edit, and commit AI-generated draft PBIs |
+| `/pbigeneration` | PbiGeneration | Enter problem statements and generate AI stories |
+| `/metrics` | MetricsDashboard | Configurable sprint metrics dashboard |
+| `/planning-poker` | PlanningPoker | Real-time planning poker session |
+| `/dependency-chart` | DependencyChartPage | PBI dependency graph for a sprint |
+| `/project-management` | ProjectManagement | Create and manage projects |
+| `/user-settings` | UserSettings | Profile, theme, Discord username, password |
+| `/login` | Login | JWT authentication form |
+
+---
+
+## 🧩 Key Components
+
+### `PbiCard`
+Full-featured PBI view/edit form. Supports:
+- View and edit all PBI fields (title, description, points, sprint, epic, assignee, flags, dependencies)
+- AI improve via `POST api/pbi/ImprovePbi`
+- Delete with confirmation dialog
+- Inline new-PBI creation flow from `ScrumBoard`
+
+### `CommentThread`
+Threaded comments attached to a PBI. Supports add, edit, and delete. Displays the author's username resolved from the user list.
+
+### `MetricsDashboard` widgets
+Each widget is an independent Razor component under `Components/MetricsDashboard/`:
+`BurndownWidget`, `VelocityWidget`, `SprintProgressWidget`, `CommittedPointsWidget`, `RemainingPointsWidget`, `DaysLeftWidget`, `WipTableWidget`, `BugTrendWidget`, `CycleTimeWidget`, `WorkByStatusWidget`, `StatusDistributionWidget`, `PbiTypeWidget`, `PriorityWidget`, `TimeInStageWidget`
+
+---
+
+## 🔐 Authentication
+
+- `JwtAuthStateProvider` reads the JWT from `localStorage` and parses claims
+- `AuthHeaderHandler` attaches `Authorization: Bearer <token>` to every HTTP request and redirects to `/login` if the token has expired
+- All pages require `[Authorize]` via `_Imports.razor`; `Login.razor` is marked `[AllowAnonymous]`
+
+---
+
+## 🎨 UI Framework
+
+- **MudBlazor** — Material Design component library (buttons, cards, tables, drag-and-drop, dialogs, snackbars)
+- **ApexCharts** — Sprint metrics charts
+- **Custom CSS** — Per-component `.razor.css` scoped styles
+
+---
+
+## 🚀 Running the Web App
+
+```bash
+cd ScrumPilot.Web
+dotnet run
+```
+
+- `http://localhost:5199`
+
+Ensure `ScrumPilot.API` is running first. The `ApiBaseUrl` in `wwwroot/appsettings.json` must point to the API base address.
+
 
 ## 🏗️ Architecture
 

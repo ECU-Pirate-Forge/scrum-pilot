@@ -12,11 +12,16 @@ Scrumlord is the Discord bot component of Scrum Pilot. It monitors voice channel
 - An [Anthropic API key](https://console.anthropic.com/) (Claude — primary summarizer)
 - An [OpenAI API key](https://platform.openai.com/) (Whisper transcription + GPT-4o-mini fallback)
 
+---
+
 ## Installation
+
 ```bash
 cd discord-bot
 npm install
 ```
+
+---
 
 ## Configuration
 
@@ -73,6 +78,7 @@ If these are not set, commands are accepted from any channel and replies go to t
 | `SPRINT_EXCLUDE_TEAMS` | *(none)* | Comma-separated Discord category names to skip when auto-detecting teams. |
 
 ### Getting a Bot Token
+
 1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
 2. Select your application (or create a new one)
 3. Navigate to **Bot** → **Reset Token** and copy the token into `DISCORD_TOKEN`
@@ -215,6 +221,8 @@ discord-bot/
 ├── package.json
 └── README.md
 ```
+
+---
 
 ## Contributing
 

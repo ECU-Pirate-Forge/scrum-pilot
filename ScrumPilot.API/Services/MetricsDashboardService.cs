@@ -101,13 +101,10 @@ public class MetricsDashboardService : IMetricsDashboardService
                 .OrderBy(h => h.ChangedAt)
                 .FirstOrDefault();
 
-            DateTime? doneDate = doneEntry?.ChangedAt.Date;
-            if (doneDate is null && item.Status == PbiStatus.Done)
-                doneDate = item.LastUpdated.Date;
+            if (doneEntry is null) continue;
+            var doneDate = doneEntry.ChangedAt.Date;
 
-            if (!doneDate.HasValue) continue;
-
-            var effectiveDate = SnapToBizDay(doneDate.Value);
+            var effectiveDate = SnapToBizDay(doneDate);
             completionsByDate[effectiveDate] = completionsByDate.GetValueOrDefault(effectiveDate) + pts;
         }
 
@@ -146,9 +143,11 @@ public class MetricsDashboardService : IMetricsDashboardService
         return points;
     }
 
-    public async Task<List<VelocityPoint>> GetVelocityDataAsync(int? currentSprintId = null)
+    public async Task<List<VelocityPoint>> GetVelocityDataAsync(int? currentSprintId = null, int? projectId = null)
     {
-        var allSprints = (await _sprints.GetAllSprintsAsync()).ToList();
+        var allSprints = projectId.HasValue
+            ? (await _sprints.GetSprintsByProjectAsync(projectId.Value)).ToList()
+            : (await _sprints.GetAllSprintsAsync()).ToList();
 
         // Upper bound: if a sprint is selected use its start date so we show
         // sprints up to and including it (open sprints are included this way).
@@ -172,7 +171,7 @@ public class MetricsDashboardService : IMetricsDashboardService
             var items = (await _pbis.GetFilteredPbisAsync(sprint.SprintId, null)).ToList();
             var committed = (double)items.Sum(p => (int)p.StoryPoints);
             var completed = (double)items.Where(p => p.Status == PbiStatus.Done).Sum(p => (int)p.StoryPoints);
-            result.Add(new VelocityPoint(sprint.SprintGoal ?? $"Sprint {sprint.SprintId}", committed, completed));
+            result.Add(new VelocityPoint(sprint.SprintTitle ?? $"Sprint {sprint.SprintId}", committed, completed));
         }
         return result;
     }
@@ -210,8 +209,6 @@ public class MetricsDashboardService : IMetricsDashboardService
                 .FirstOrDefault();
             if (doneEntry is not null)
                 resolvedDates[bug.PbiId] = doneEntry.ChangedAt.Date;
-            else if (bug.Status == PbiStatus.Done)
-                resolvedDates[bug.PbiId] = bug.LastUpdated.Date;
         }
 
         var points = new List<BugTrendPoint>();
