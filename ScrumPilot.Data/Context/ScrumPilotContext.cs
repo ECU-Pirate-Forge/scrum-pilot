@@ -12,6 +12,7 @@ namespace ScrumPilot.Data.Context
         {
         }
 
+        public DbSet<Project> Projects { get; set; }
         public DbSet<ProductBacklogItem> Stories { get; set; }
         public DbSet<Epic> Epics { get; set; }
         public DbSet<Sprint> Sprints { get; set; }
@@ -31,11 +32,20 @@ namespace ScrumPilot.Data.Context
                 entity.Property(e => e.UiPreference).HasConversion<string>().HasDefaultValue(UiPreference.Light);
             });
 
+            modelBuilder.Entity<Project>(entity =>
+            {
+                entity.ToTable("Project");
+                entity.HasKey(e => e.ProjectId);
+                entity.Property(e => e.ProjectId).ValueGeneratedOnAdd();
+                entity.Property(e => e.ProjectName).IsRequired();
+            });
+
             // Configure ProductBacklogItem entity
             modelBuilder.Entity<ProductBacklogItem>(entity =>
             {
                 entity.HasKey(e => e.PbiId);
                 entity.Property(e => e.PbiId).ValueGeneratedOnAdd();
+                entity.Property(e => e.ProjectId).IsRequired();
                 entity.Property(e => e.EpicId).IsRequired(false);
                 entity.Property(e => e.SprintId).IsRequired(false);
                 entity.Property(e => e.Title).IsRequired().HasMaxLength(200);
@@ -44,8 +54,11 @@ namespace ScrumPilot.Data.Context
                 entity.Property(e => e.Status).HasConversion<string>();
                 entity.Property(e => e.Priority).HasConversion<string>();
                 entity.Property(e => e.Origin).HasConversion<string>();
+                entity.Property(e => e.AssignedToUserId).IsRequired(false);
                 entity.Property(e => e.DateCreated).IsRequired();
                 entity.Property(e => e.LastUpdated).IsRequired();
+                entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(e => e.AssignedToUserId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+                entity.HasOne<Project>().WithMany(p => p.ProductBacklogItems).HasForeignKey(e => e.ProjectId).IsRequired();
                 entity.HasOne<Epic>().WithMany(e => e.ProductBacklogItems).HasForeignKey(e => e.EpicId).IsRequired(false);
                 entity.HasOne<Sprint>().WithMany(e => e.ProductBacklogItems).HasForeignKey(e => e.SprintId).IsRequired(false);
             });
@@ -55,8 +68,10 @@ namespace ScrumPilot.Data.Context
                 entity.ToTable("Epic");
                 entity.HasKey(e => e.EpicId);
                 entity.Property(e => e.EpicId).ValueGeneratedOnAdd();
+                entity.Property(e => e.ProjectId).IsRequired();
                 entity.Property(e => e.Name).IsRequired();
                 entity.Property(e => e.DateCreated).IsRequired();
+                entity.HasOne<Project>().WithMany(p => p.Epics).HasForeignKey(e => e.ProjectId).IsRequired();
             });
 
             modelBuilder.Entity<Sprint>(entity =>
@@ -64,11 +79,13 @@ namespace ScrumPilot.Data.Context
                 entity.ToTable("Sprint");
                 entity.HasKey(e => e.SprintId);
                 entity.Property(e => e.SprintId).ValueGeneratedOnAdd();
+                entity.Property(e => e.ProjectId).IsRequired();
                 entity.Property(e => e.SprintGoal);
                 entity.Property(e => e.StartDate);
                 entity.Property(e => e.EndDate);
                 entity.Property(e => e.IsOpen);
                 entity.Property(e => e.DateClosed);
+                entity.HasOne<Project>().WithMany(p => p.Sprints).HasForeignKey(e => e.ProjectId).IsRequired();
             });
 
             modelBuilder.Entity<Comment>(entity =>
@@ -99,7 +116,7 @@ namespace ScrumPilot.Data.Context
             modelBuilder.Entity<UserDashboardPreference>(entity =>
             {
                 entity.ToTable("UserDashboardPreferences");
-                entity.HasKey(e => e.UserId);
+                entity.HasKey(e => new { e.UserId, e.ProjectId });
                 entity.Property(e => e.PreferencesJson).HasColumnType("TEXT");
             });
 
@@ -111,22 +128,37 @@ namespace ScrumPilot.Data.Context
                 entity.Property(e => e.RecordedAt).IsRequired();
             });
 
+            // Prevent EF Core 10's complex-type convention from auto-mapping these as
+            // owned JSON entities — the value converter below handles serialization instead.
+            modelBuilder.Ignore<DiscordMessage>();
+            modelBuilder.Ignore<DiscordAuthor>();
+
             modelBuilder.Entity<MessageTranscript>(entity =>
             {
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Id).ValueGeneratedOnAdd();
-                // Use a value converter so Messages serializes as a plain JSON string,
-                // which is compatible with both SQLite (TEXT) and Postgres (text).
-                entity.Property(e => e.Messages)
+                // Use a value converter so Messages serializes as a plain JSON string.
+                var messagesProperty = entity.Property(e => e.Messages)
                     .HasConversion(
                         v => System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions?)null),
                         v => System.Text.Json.JsonSerializer.Deserialize<List<DiscordMessage>>(v, (System.Text.Json.JsonSerializerOptions?)null) ?? new List<DiscordMessage>()
-                    )
-                    .Metadata.SetValueComparer(new Microsoft.EntityFrameworkCore.ChangeTracking.ValueComparer<List<DiscordMessage>>(
-                        (c1, c2) => System.Text.Json.JsonSerializer.Serialize(c1, (System.Text.Json.JsonSerializerOptions?)null) == System.Text.Json.JsonSerializer.Serialize(c2, (System.Text.Json.JsonSerializerOptions?)null),
-                        c => c == null ? 0 : System.Text.Json.JsonSerializer.Serialize(c, (System.Text.Json.JsonSerializerOptions?)null).GetHashCode(),
-                        c => System.Text.Json.JsonSerializer.Deserialize<List<DiscordMessage>>(System.Text.Json.JsonSerializer.Serialize(c, (System.Text.Json.JsonSerializerOptions?)null), (System.Text.Json.JsonSerializerOptions?)null) ?? new List<DiscordMessage>()
-                    ));
+                    );
+
+                // Use jsonb for PostgreSQL, TEXT for SQLite
+                if (Database.IsNpgsql())
+                {
+                    messagesProperty.HasColumnType("jsonb");
+                }
+                else
+                {
+                    messagesProperty.HasColumnType("TEXT");
+                }
+
+                messagesProperty.Metadata.SetValueComparer(new Microsoft.EntityFrameworkCore.ChangeTracking.ValueComparer<List<DiscordMessage>>(
+                    (c1, c2) => System.Text.Json.JsonSerializer.Serialize(c1, (System.Text.Json.JsonSerializerOptions?)null) == System.Text.Json.JsonSerializer.Serialize(c2, (System.Text.Json.JsonSerializerOptions?)null),
+                    c => c == null ? 0 : System.Text.Json.JsonSerializer.Serialize(c, (System.Text.Json.JsonSerializerOptions?)null).GetHashCode(),
+                    c => System.Text.Json.JsonSerializer.Deserialize<List<DiscordMessage>>(System.Text.Json.JsonSerializer.Serialize(c, (System.Text.Json.JsonSerializerOptions?)null), (System.Text.Json.JsonSerializerOptions?)null) ?? new List<DiscordMessage>()
+                ));
             });
         }
 

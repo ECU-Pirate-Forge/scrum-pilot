@@ -1,0 +1,280 @@
+@page "/user-settings"
+@inject HttpClient Http
+@inject ScrumPilot.Web.Services.ProjectStateService ProjectState
+@inject NavigationManager Navigation
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="pa-6">
+
+    <MudText Typo="Typo.h4" Class="mb-1" Style="font-weight: 700;">
+        <MudIcon Icon="@Icons.Material.Filled.ManageAccounts" Class="me-2" Style="vertical-align: middle;" />
+        User Settings
+    </MudText>
+    <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary);" Class="mb-6">
+        Manage your account preferences and personal information.
+    </MudText>
+
+    @if (_loading)
+    {
+        <MudStack AlignItems="AlignItems.Center" Class="mt-10">
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        </MudStack>
+    }
+    else
+    {
+        <MudStack Spacing="4">
+
+            <!-- Change Password -->
+            <MudPaper Elevation="2" Class="pa-5" Style="border-radius: 12px;">
+                <MudText Typo="Typo.h6" Class="mb-4" Style="font-weight: 600;">
+                    <MudIcon Icon="@Icons.Material.Filled.Lock" Class="me-2" Style="vertical-align: middle; font-size: 1.2rem;" />
+                    Change Password
+                </MudText>
+                <MudStack Spacing="3">
+                    <MudTextField @bind-Value="_currentPassword"
+                                  Label="Current Password"
+                                  InputType="InputType.Password"
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.VpnKey" />
+                    <MudTextField @bind-Value="_newPassword"
+                                  Label="New Password"
+                                  InputType="InputType.Password"
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Lock" />
+                    <MudTextField @bind-Value="_confirmPassword"
+                                  Label="Confirm New Password"
+                                  InputType="InputType.Password"
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Lock"
+                                  Error="@(_confirmPassword.Length > 0 && _newPassword != _confirmPassword)"
+                                  ErrorText="Passwords do not match." />
+                    @if (_passwordError is not null)
+                    {
+                        <MudAlert Severity="Severity.Error" Dense="true">@_passwordError</MudAlert>
+                    }
+                    @if (_passwordSuccess)
+                    {
+                        <MudAlert Severity="Severity.Success" Dense="true">Password changed successfully.</MudAlert>
+                    }
+                    <div>
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Save"
+                                   OnClick="SavePasswordAsync"
+                                   Disabled="@_savingPassword">
+                            @if (_savingPassword)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
+                            }
+                            Update Password
+                        </MudButton>
+                    </div>
+                </MudStack>
+            </MudPaper>
+
+            <!-- Profile & Preferences -->
+            <MudPaper Elevation="2" Class="pa-5" Style="border-radius: 12px;">
+                <MudText Typo="Typo.h6" Class="mb-4" Style="font-weight: 600;">
+                    <MudIcon Icon="@Icons.Material.Filled.Person" Class="me-2" Style="vertical-align: middle; font-size: 1.2rem;" />
+                    Profile &amp; Preferences
+                </MudText>
+                <MudStack Spacing="3">
+                    <MudTextField @bind-Value="_settings.Email"
+                                  Label="Email Address"
+                                  InputType="InputType.Email"
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Email" />
+
+                    <MudTextField @bind-Value="_settings.DiscordUsername"
+                                  Label="Discord Username"
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Custom.Brands.Discord"
+                                  HelperText="Used for Discord integrations and notifications." />
+
+                    <MudSelect T="UiPreference"
+                               Label="UI Theme"
+                               @bind-Value="_settings.UiPreference"
+                               Variant="Variant.Outlined"
+                               Adornment="Adornment.Start"
+                               AdornmentIcon="@Icons.Material.Filled.Palette">
+                        <MudSelectItem Value="UiPreference.Light">
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                                <MudIcon Icon="@Icons.Material.Filled.LightMode" Size="Size.Small" />
+                                <span>Light</span>
+                            </MudStack>
+                        </MudSelectItem>
+                        <MudSelectItem Value="UiPreference.Dark">
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                                <MudIcon Icon="@Icons.Material.Filled.DarkMode" Size="Size.Small" />
+                                <span>Dark</span>
+                            </MudStack>
+                        </MudSelectItem>
+                    </MudSelect>
+
+                    <MudSelect T="int?"
+                               Label="Default Project"
+                               @bind-Value="_settings.DefaultProjectId"
+                               Variant="Variant.Outlined"
+                               Adornment="Adornment.Start"
+                               AdornmentIcon="@Icons.Material.Filled.FolderOpen"
+                               Clearable="true"
+                               HelperText="This project will be pre-selected when you log in.">
+                        @foreach (var project in _projects)
+                        {
+                            <MudSelectItem T="int?" Value="@((int?)project.ProjectId)">
+                                @project.ProjectName
+                            </MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    @if (_settingsError is not null)
+                    {
+                        <MudAlert Severity="Severity.Error" Dense="true">@_settingsError</MudAlert>
+                    }
+                    @if (_settingsSuccess)
+                    {
+                        <MudAlert Severity="Severity.Success" Dense="true">Settings saved successfully.</MudAlert>
+                    }
+                    <div>
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Save"
+                                   OnClick="SaveSettingsAsync"
+                                   Disabled="@_savingSettings">
+                            @if (_savingSettings)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
+                            }
+                            Save Preferences
+                        </MudButton>
+                    </div>
+                </MudStack>
+            </MudPaper>
+
+        </MudStack>
+    }
+</MudContainer>
+
+@code {
+    private UserSettingsDto _settings = new();
+    private List<Project> _projects = [];
+    private bool _loading = true;
+
+    private string _currentPassword = string.Empty;
+    private string _newPassword = string.Empty;
+    private string _confirmPassword = string.Empty;
+    private bool _savingPassword;
+    private string? _passwordError;
+    private bool _passwordSuccess;
+
+    private bool _savingSettings;
+    private string? _settingsError;
+    private bool _settingsSuccess;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var settingsTask = Http.GetFromJsonAsync<UserSettingsDto>("api/user/settings");
+            var projectsTask = Http.GetFromJsonAsync<List<Project>>("api/Project");
+            await Task.WhenAll(settingsTask, projectsTask);
+
+            _settings = await settingsTask ?? new();
+            _projects = await projectsTask ?? [];
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            Navigation.NavigateTo("/login", forceLoad: false);
+            return;
+        }
+        _loading = false;
+    }
+
+    private async Task SavePasswordAsync()
+    {
+        _passwordError = null;
+        _passwordSuccess = false;
+
+        if (string.IsNullOrWhiteSpace(_currentPassword) || string.IsNullOrWhiteSpace(_newPassword))
+        {
+            _passwordError = "All password fields are required.";
+            return;
+        }
+        if (_newPassword != _confirmPassword)
+        {
+            _passwordError = "New passwords do not match.";
+            return;
+        }
+
+        _savingPassword = true;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/user/change-password", new ChangePasswordRequest
+            {
+                CurrentPassword = _currentPassword,
+                NewPassword = _newPassword
+            });
+
+            if (response.IsSuccessStatusCode)
+            {
+                _passwordSuccess = true;
+                _currentPassword = string.Empty;
+                _newPassword = string.Empty;
+                _confirmPassword = string.Empty;
+            }
+            else
+            {
+                var body = await response.Content.ReadFromJsonAsync<PasswordErrorResponse>();
+                _passwordError = body?.Errors?.FirstOrDefault() ?? "Failed to change password.";
+            }
+        }
+        catch
+        {
+            _passwordError = "An error occurred. Please try again.";
+        }
+        finally
+        {
+            _savingPassword = false;
+        }
+    }
+
+    private async Task SaveSettingsAsync()
+    {
+        _settingsError = null;
+        _settingsSuccess = false;
+        _savingSettings = true;
+        try
+        {
+            var response = await Http.PutAsJsonAsync("api/user/settings", _settings);
+            if (response.IsSuccessStatusCode)
+            {
+                _settingsSuccess = true;
+                // Sync default project into the project state service if changed
+                if (_settings.DefaultProjectId.HasValue)
+                {
+                    var defaultProject = _projects.FirstOrDefault(p => p.ProjectId == _settings.DefaultProjectId.Value);
+                    if (defaultProject is not null && ProjectState.SelectedProjectId != _settings.DefaultProjectId)
+                        ProjectState.SetProject(defaultProject);
+                }
+            }
+            else
+            {
+                _settingsError = "Failed to save settings.";
+            }
+        }
+        catch
+        {
+            _settingsError = "An error occurred. Please try again.";
+        }
+        finally
+        {
+            _savingSettings = false;
+        }
+    }
+
+    private record PasswordErrorResponse(IEnumerable<string>? Errors);
+}

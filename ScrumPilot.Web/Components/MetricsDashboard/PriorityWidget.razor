@@ -1,40 +1,51 @@
+@using ApexCharts
+
 @if (Items.Count > 0)
 {
-    <MudChart ChartType="ChartType.Bar"
-              ChartSeries="@_series"
-              XAxisLabels="@_labels"
-              Width="100%"
-              Height="160px"
-              ChartOptions="@_options" />
+    <ApexChart @ref="_chart" TItem="PriorityPoint" Options="_options" Height="@("100%")">
+        <ApexPointSeries TItem="PriorityPoint"
+                         Items="_points"
+                         Name="PBIs"
+                         SeriesType="SeriesType.Bar"
+                         XValue="@(p => p.Label)"
+                         YValue="@(p => p.Count)" />
+    </ApexChart>
 }
 else
 {
-    <MudText Typo="Typo.body2" Style="color:#8b949e;">No data.</MudText>
+    <div class="widget-empty">No data.</div>
 }
 
 @code {
     [Parameter] public IReadOnlyList<ProductBacklogItem> Items { get; set; } = [];
 
-    private List<ChartSeries> _series = [];
-    private string[] _labels = [];
-    private ChartOptions _options = new() { YAxisTicks = 1 };
+    private record PriorityPoint(string Label, decimal Count);
+    private List<PriorityPoint> _points = [];
+    private ApexChartOptions<PriorityPoint> _options = BuildOptions();
+    private ApexChart<PriorityPoint>? _chart;
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
-        _labels = ["None", "Low", "Medium", "High"];
-        _series =
+        _points =
         [
-            new ChartSeries
-            {
-                Name = "PBIs",
-                Data = new double[]
-                {
-                    Items.Count(i => i.Priority == PbiPriority.None),
-                    Items.Count(i => i.Priority == PbiPriority.Low),
-                    Items.Count(i => i.Priority == PbiPriority.Medium),
-                    Items.Count(i => i.Priority == PbiPriority.High),
-                }
-            }
+            new("None",  Items.Count(i => i.Priority == PbiPriority.None)),
+            new("Low",   Items.Count(i => i.Priority == PbiPriority.Low)),
+            new("Medium",Items.Count(i => i.Priority == PbiPriority.Medium)),
+            new("High",  Items.Count(i => i.Priority == PbiPriority.High)),
         ];
+        if (_chart is not null)
+            await _chart.UpdateSeriesAsync(true);
     }
+
+    private static ApexChartOptions<PriorityPoint> BuildOptions() => new()
+    {
+        Chart = new Chart { Background = "transparent", Toolbar = new Toolbar { Show = false } },
+        Colors = ["#ff9800"],
+        PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { BorderRadius = 3, ColumnWidth = "55%" } },
+        Xaxis = new XAxis { Labels = new XAxisLabels { Style = new AxisLabelStyle { Colors = "#8b949e", FontSize = "11px" } } },
+        Yaxis = [new YAxis { Labels = new YAxisLabels { Style = new AxisLabelStyle { Colors = "#8b949e", FontSize = "11px" } }, TickAmount = 5 }],
+        Grid = new Grid { BorderColor = "#21262d", Row = new GridRow { Colors = ["transparent"] } },
+        Legend = new Legend { Show = false },
+        Tooltip = new Tooltip { Theme = ApexCharts.Mode.Dark }
+    };
 }

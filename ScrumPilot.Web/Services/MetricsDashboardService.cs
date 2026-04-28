@@ -12,16 +12,30 @@ namespace ScrumPilot.Web.Services
             _http = http;
         }
 
+        public async Task<List<Project>> GetProjectsAsync()
+        {
+            return await _http.GetFromJsonAsync<List<Project>>("api/project") ?? [];
+        }
+
         public async Task<List<Sprint>> GetSprintsAsync()
         {
             return await _http.GetFromJsonAsync<List<Sprint>>("api/sprint") ?? [];
         }
 
-        public async Task<List<ProductBacklogItem>> GetPbisForSprintAsync(int? sprintId)
+        public async Task<List<Sprint>> GetSprintsByProjectAsync(int projectId)
         {
-            var url = sprintId.HasValue
-                ? $"api/pbi/getNonDraftPbis?sprintId={sprintId.Value}"
-                : "api/pbi/getNonDraftPbis";
+            return await _http.GetFromJsonAsync<List<Sprint>>($"api/sprint?projectId={projectId}") ?? [];
+        }
+
+        public async Task<List<ProductBacklogItem>> GetPbisForSprintAsync(int? sprintId, int? projectId = null)
+        {
+            string url;
+            if (sprintId.HasValue)
+                url = $"api/pbi/getNonDraftPbis?sprintId={sprintId.Value}";
+            else if (projectId.HasValue)
+                url = $"api/pbi/getNonDraftPbis?projectId={projectId.Value}";
+            else
+                url = "api/pbi/getNonDraftPbis";
             return await _http.GetFromJsonAsync<List<ProductBacklogItem>>(url) ?? [];
         }
 
@@ -41,9 +55,12 @@ namespace ScrumPilot.Web.Services
             return await _http.GetFromJsonAsync<List<BurndownPoint>>($"api/metrics/burndown/{sprintId}") ?? [];
         }
 
-        public async Task<List<VelocityPoint>> GetVelocityDataAsync(int? sprintId = null)
+        public async Task<List<VelocityPoint>> GetVelocityDataAsync(int? sprintId = null, int? projectId = null)
         {
-            var url = sprintId.HasValue ? $"api/metrics/velocity?sprintId={sprintId.Value}" : "api/metrics/velocity";
+            var qs = new List<string>();
+            if (sprintId.HasValue) qs.Add($"sprintId={sprintId.Value}");
+            if (projectId.HasValue) qs.Add($"projectId={projectId.Value}");
+            var url = qs.Count > 0 ? $"api/metrics/velocity?{string.Join('&', qs)}" : "api/metrics/velocity";
             return await _http.GetFromJsonAsync<List<VelocityPoint>>(url) ?? [];
         }
 
@@ -73,15 +90,15 @@ namespace ScrumPilot.Web.Services
                 ?? new TimeInStageData();
         }
 
-        public async Task<DashboardPreferenceDto?> GetDashboardPreferencesAsync()
+        public async Task<DashboardPreferenceDto?> GetDashboardPreferencesAsync(int projectId)
         {
-            try { return await _http.GetFromJsonAsync<DashboardPreferenceDto>("api/dashboard-preferences"); }
+            try { return await _http.GetFromJsonAsync<DashboardPreferenceDto>($"api/dashboard-preferences?projectId={projectId}"); }
             catch { return null; }
         }
 
-        public async Task SaveDashboardPreferencesAsync(DashboardPreferenceDto dto)
+        public async Task SaveDashboardPreferencesAsync(DashboardPreferenceDto dto, int projectId)
         {
-            try { await _http.PutAsJsonAsync("api/dashboard-preferences", dto); } catch { }
+            try { await _http.PutAsJsonAsync($"api/dashboard-preferences?projectId={projectId}", dto); } catch { }
         }
     }
 }

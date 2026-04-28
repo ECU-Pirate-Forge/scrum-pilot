@@ -3,6 +3,9 @@ using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.API.Services
 {
+    /// <summary>
+    /// Implements <see cref="ISprintService"/> by delegating to <see cref="ISprintRepository"/>.
+    /// </summary>
     public class SprintService : ISprintService
     {
         private readonly ISprintRepository _sprintRepository;
@@ -16,5 +19,14 @@ namespace ScrumPilot.API.Services
         {
             return await _sprintRepository.GetAllSprintsAsync();
         }
+
+        public async Task<IEnumerable<Sprint>> GetSprintsByProjectAsync(int projectId)
+        {
+            return await _sprintRepository.GetSprintsByProjectAsync(projectId);
+        }
+
+        public Task<Sprint> CreateAsync(Sprint sprint) => _sprintRepository.CreateAsync(sprint);
+        public Task<Sprint> UpdateAsync(Sprint sprint) => _sprintRepository.UpdateAsync(sprint);
+        public Task DeleteAsync(int id) => _sprintRepository.DeleteAsync(id);
     }
 }

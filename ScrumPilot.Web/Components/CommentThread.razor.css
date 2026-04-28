@@ -5,8 +5,8 @@
     padding: 24px 20px;
     background-color: var(--mud-palette-background-grey);
     border-left: 2px solid var(--mud-palette-divider);
-    min-width: 320px;
-    width: 340px;
+    flex: 0 0 clamp(260px, 28vw, 340px);
+    width: clamp(260px, 28vw, 340px);
     box-sizing: border-box;
 }
 
@@ -17,7 +17,7 @@
 }
 
 .comment-list {
-    max-height: 340px;
+    max-height: clamp(160px, 30vh, 340px);
     overflow-y: auto;
     margin-bottom: 12px;
 }

@@ -1,8 +1,151 @@
 # ScrumPilot.UnitTests
 
-🧪 **Comprehensive Test Suite for ScrumPilot Application**
+🧪 **Unit Test Suite**
 
-This project contains unit tests for the ScrumPilot application, organized into Backend and Frontend test suites with full coverage of API controllers, services, and Blazor components.
+188 tests covering API controllers, business-logic services, Blazor component rendering, and authentication flows.
+
+---
+
+## 🛠️ Test Stack
+
+| Library | Role |
+|---|---|
+| **xUnit v3** | Test framework and runner |
+| **NSubstitute** | Mocking for repository and service dependencies |
+| **bUnit** | Blazor component rendering and interaction tests |
+| **Microsoft.AspNetCore.Mvc.Testing** | Controller-level integration helpers |
+
+---
+
+## 📁 Project Structure
+
+```
+ScrumPilot.UnitTests/
+├── Backend/
+│   ├── ControllerTests/
+│   │   ├── AuthControllerTests.cs
+│   │   ├── PbiControllerTests.cs  (StoryControllerTests)
+│   │   ├── SprintControllerTests.cs
+│   │   ├── EpicControllerTests.cs
+│   │   ├── CommentControllerTests.cs
+│   │   ├── MetricsDashboardControllerTests.cs
+│   │   └── DashboardPreferenceControllerTests.cs
+│   └── ServiceTests/
+│       ├── StoryServiceTests.cs           # PBI service + AI generation
+│       ├── SprintServiceTests.cs
+│       ├── EpicServiceTests.cs
+│       ├── AuthServiceTests.cs            # Client-side auth service
+│       ├── JwtAuthStateProviderTests.cs
+│       ├── MetricsDashboardServiceTests.cs
+│       ├── DashboardPreferenceServiceTests.cs
+│       └── TestHttpMessageHandler.cs      # HttpClient mock handler
+├── Frontend/
+│   ├── ComponentTests/
+│   │   ├── PbiCardTests.cs
+│   │   ├── DashboardTileTests.cs
+│   │   └── DependencyChartTests.cs
+│   ├── PageTests/
+│   │   ├── HomePageTests.cs
+│   │   ├── ScrumBoardPageTests.cs
+│   │   ├── BacklogPageTests.cs
+│   │   ├── DraftStoriesPageTests.cs
+│   │   ├── PbiGenerationPageTests.cs (StoryGenerationPageTests)
+│   │   └── DependencyChartPageTests.cs
+│   ├── FrontendTestBase.cs                # bUnit context setup with DI
+│   └── SimpleBunitTest.cs                 # Smoke test for bUnit wiring
+└── GlobalUsings.cs
+```
+
+---
+
+## 🚀 Running Tests
+
+### All tests
+```bash
+dotnet test ScrumPilot.UnitTests
+```
+
+### Filter by category
+```bash
+# Controller tests only
+dotnet test --filter "FullyQualifiedName~ControllerTests"
+
+# Service tests only
+dotnet test --filter "FullyQualifiedName~ServiceTests"
+
+# Frontend (bUnit) tests only
+dotnet test --filter "FullyQualifiedName~Frontend"
+```
+
+---
+
+## 📊 Coverage Areas
+
+| Area | What's Tested |
+|---|---|
+| `AuthController` | Login success, wrong password, unknown user, token fields |
+| `PbiController` | All CRUD endpoints, filter combinations, AI generation errors, commit flow |
+| `SprintController` | Get all (empty + populated), create |
+| `EpicController` | Get all (empty + populated) |
+| `CommentController` | Get, add, edit (id mismatch, not found), delete |
+| `MetricsDashboardController` | All 9 metric endpoints |
+| `DashboardPreferenceController` | Get/Put with auth + unauthenticated edge cases |
+| `PbiService` | AI generation (Ollama/Groq), improvement, CRUD, commit, error propagation |
+| `SprintService` | Repository delegation |
+| `EpicService` | Repository delegation |
+| `MetricsDashboardService` | Burndown, progress, sprint summary with/without data |
+| `DashboardPreferenceService` | JSON round-trip, empty/null preference handling |
+| `AuthService` (client) | Login success/failure, logout, token storage |
+| `JwtAuthStateProvider` | Token present/absent, claim extraction, notify changes |
+| `PbiCard` component | Renders, edit button, flag state |
+| `DashboardTile` component | Title, description, elevation, click, null/empty cases |
+| `DependencyChart` component | No PBIs, dependencies present, flagged/done PBIs |
+| `HomePage` | Tile content, descriptions, layout |
+| `ScrumBoard` page | Route, CSS classes, lane labels and order, buttons |
+| `Backlog` page | Route, CSS, priority chips, lane structure |
+| `DraftPbiPage` | Renders, loading state, table structure |
+| `PbiGenerationPage` | Renders, input, placeholders, empty state |
+| `DependencyChartPage` | Renders, header, back button, loading state |
+
+---
+
+## ✍️ Writing New Tests
+
+### Backend controller test pattern
+
+```csharp
+public class MyControllerTests
+{
+    private readonly IMyService _service = Substitute.For<IMyService>();
+    private readonly MyController _sut;
+
+    public MyControllerTests() => _sut = new MyController(_service);
+
+    [Fact]
+    public async Task MyAction_ReturnsOk_WhenValid()
+    {
+        _service.DoThingAsync().Returns(new MyModel());
+        var result = await _sut.MyAction();
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.IsType<MyModel>(ok.Value);
+    }
+}
+```
+
+### Frontend bUnit test pattern
+
+```csharp
+public class MyComponentTests : FrontendTestBase
+{
+    [Fact]
+    public void MyComponent_RendersTitle()
+    {
+        var cut = RenderComponent<MyComponent>(p => p.Add(c => c.Title, "Hello"));
+        cut.Find(".my-title").TextContent.Should().Be("Hello");
+    }
+}
+```
+
 
 ## 🏗️ Test Architecture
 

@@ -1,3 +1,4 @@
+using ScrumPilot.API.Hubs;
 using ScrumPilot.API.Services;
 using ScrumPilot.Data.Context;
 using ScrumPilot.Data.Extensions;
@@ -33,6 +34,20 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             IssuerSigningKey = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
         };
+        // SignalR passes the token via query string for WebSocket connections
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                {
+                    context.Token = accessToken;
+                }
+                return Task.CompletedTask;
+            }
+        };
     });
 
 // Require authentication on every endpoint by default
@@ -42,10 +57,14 @@ builder.Services.AddAuthorizationBuilder()
         .Build());
 
 // Add services to the container.
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<PlanningPokerSessionService>();
+builder.Services.AddScoped<IProjectService, ProjectService>();
 builder.Services.AddScoped<ISprintService, SprintService>();
 builder.Services.AddScoped<IEpicService, EpicService>();
 builder.Services.AddScoped<IMetricsDashboardService, MetricsDashboardService>();
 builder.Services.AddScoped<IDashboardPreferenceService, DashboardPreferenceService>();
+builder.Services.AddScoped<IUserSettingsService, UserSettingsService>();
 builder.Services.AddHttpClient<IPbiService, PbiService>(client =>
 {
     client.Timeout = TimeSpan.FromMinutes(5);
@@ -68,6 +87,7 @@ builder.Services.AddCors(options =>
             )
             .AllowAnyHeader()
             .AllowAnyMethod()
+            .AllowCredentials()
     );
 });
 
@@ -89,6 +109,7 @@ using (var scope = app.Services.CreateScope())
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
     await DatabaseSeeder.SeedUsersAsync(userManager, roleManager);
+    await DatabaseSeeder.SeedProjectDataAsync(context);
 }
 
 // Configure the HTTP request pipeline.
@@ -105,4 +126,5 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<PlanningPokerHub>("/hubs/planning-poker");
 app.Run();

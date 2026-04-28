@@ -1,561 +1,229 @@
 // tests/index.test.js
+// Tests for index.js: client initialization, event registration, and message routing.
+// Command behavior is covered in commands.test.js.
+// Utility function behavior is covered in utils.test.js.
 
 jest.mock('discord.js', () => {
   const mockClient = {
     once: jest.fn(),
-    on: jest.fn(),
+    on:   jest.fn(),
     login: jest.fn().mockResolvedValue('token'),
+    user:  { id: 'bot-id-123', tag: 'Scrumlord#0001' },
+    guilds: { cache: { first: jest.fn().mockReturnValue(null) } },
   };
   return {
     Client: jest.fn(() => mockClient),
     GatewayIntentBits: {
-      Guilds: 1,
-      GuildMembers: 2,
-      GuildPresences: 3,
-      GuildMessages: 4,
-      MessageContent: 5,
-      GuildVoiceStates: 6,
+      Guilds:               1,
+      GuildMembers:         2,
+      GuildPresences:       3,
+      GuildMessages:        4,
+      MessageContent:       5,
+      GuildVoiceStates:     6,
+      GuildScheduledEvents: 7,
     },
     Events: {
-      ClientReady: 'ready',
-      MessageCreate: 'messageCreate',
+      ClientReady:       'ready',
+      VoiceStateUpdate:  'voiceStateUpdate',
+      MessageCreate:     'messageCreate',
     },
-    AttachmentBuilder: jest.fn().mockImplementation((buffer, options) => ({
-      buffer,
-      name: options.name,
-    })),
-    PermissionsBitField: {
-      Flags: {
-        ManageGuild: 'ManageGuild',
-      },
-    },
+    AttachmentBuilder: jest.fn(),
+    PermissionsBitField: { Flags: { ManageGuild: 'ManageGuild' } },
+    ChannelType: { GuildText: 0, GuildVoice: 2 },
   };
 });
 
 jest.mock('dotenv', () => ({ config: jest.fn() }));
+jest.mock('node-cron', () => ({ schedule: jest.fn() }));
+
+jest.mock('../recorder',        () => ({ handleVoiceStateUpdate: jest.fn() }));
+jest.mock('../commands',        () => ({ dispatchCommand: jest.fn().mockResolvedValue(false) }));
+jest.mock('../chat-summarizer', () => ({
+  runSummarizer:     jest.fn(),
+  runSprintSummary:  jest.fn(),
+  getTeamNames:      jest.fn().mockReturnValue([]),
+}));
+jest.mock('../aii/aii',         () => ({ handleAIICommand: jest.fn().mockResolvedValue(false) }));
+jest.mock('../agent/conversate', () => ({
+  handleAgentQuery:   jest.fn().mockResolvedValue(undefined),
+  isScrumlordThread:  jest.fn().mockResolvedValue(false),
+}));
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function getHandler(mockClient, eventName, method = 'on') {
   const call = mockClient[method].mock.calls.find(([event]) => event === eventName);
   return call ? call[1] : null;
 }
 
+function makeMessage(overrides = {}) {
+  return {
+    author:   { bot: false, tag: 'User#0001' },
+    content:  '',
+    channel:  {
+      id:       'channel-1',
+      isThread: jest.fn().mockReturnValue(false),
+      send:     jest.fn().mockResolvedValue({ edit: jest.fn() }),
+    },
+    mentions: { has: jest.fn().mockReturnValue(false) },
+    guild:    null,
+    reply:    jest.fn(),
+    ...overrides,
+  };
+}
+
+// ── Setup ─────────────────────────────────────────────────────────────────────
+
 let mockClient;
-let bot;
-let Client, GatewayIntentBits, Events, dotenv;
+let Client, GatewayIntentBits, Events, dotenv, cron;
+let dispatchCommand, handleAgentQuery, isScrumlordThread, handleSprintCommand, handleAIICommand;
 
 beforeEach(() => {
   jest.resetModules();
   jest.clearAllMocks();
   process.env.DISCORD_TOKEN = 'test-token';
-  process.env.NODE_ENV = 'test';
+  process.env.NODE_ENV      = 'test';
   delete process.env.SCRUMLORD_READ_CHANNEL_ID;
   delete process.env.SCRUMLORD_SPEAK_CHANNEL_ID;
 
-  // Re-require after resetModules so we get the fresh mock references
   ({ Client, GatewayIntentBits, Events } = require('discord.js'));
   dotenv = require('dotenv');
-  bot = require('../index');
+  cron   = require('node-cron');
+
+  // Re-import after resetModules so we get fresh mock references.
+  require('../index');
   mockClient = Client.mock.results[0].value;
+
+  ({ dispatchCommand }  = require('../commands'));
+  ({ handleAgentQuery, isScrumlordThread } = require('../agent/conversate'));
+  ({ handleAIICommand } = require('../aii/aii'));
+  ({ handleSprintCommand } = require('../chat-summarizer'));
 });
 
-  // -------------------------------------------------------
-  // Initialization
-  // -------------------------------------------------------
+// ── Initialization ────────────────────────────────────────────────────────────
 
-  describe('Initialization', () => {
-    test('loads dotenv config', () => {
-      expect(dotenv.config).toHaveBeenCalled();
-    });
+describe('Initialization', () => {
+  test('calls dotenv.config', () => {
+    expect(dotenv.config).toHaveBeenCalled();
+  });
 
-    test('creates a Client with the correct intents', () => {
-      expect(Client).toHaveBeenCalledWith({
-        intents: [
-          GatewayIntentBits.Guilds,
-          GatewayIntentBits.GuildMembers,
-          GatewayIntentBits.GuildPresences,
-          GatewayIntentBits.GuildMessages,
-          GatewayIntentBits.MessageContent,
-          GatewayIntentBits.GuildVoiceStates,
-        ],
-      });
-    });
-
-    test('logs in with the token from .env', () => {
-      expect(mockClient.login).toHaveBeenCalledWith('test-token');
+  test('creates a Client with all required intents', () => {
+    expect(Client).toHaveBeenCalledWith({
+      intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildPresences,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildVoiceStates,
+        GatewayIntentBits.GuildScheduledEvents,
+      ],
     });
   });
 
-  // -------------------------------------------------------
-  // channel routing helpers
-  // -------------------------------------------------------
+  test('logs in with the token from .env', () => {
+    expect(mockClient.login).toHaveBeenCalledWith('test-token');
+  });
+});
 
-  describe('channel routing helpers', () => {
-    test('extractChannelId parses channel mentions', () => {
-      expect(bot.extractChannelId('<#123>')).toBe('123');
-    });
+// ── Event registration ────────────────────────────────────────────────────────
 
-    test('getChannelRoutingConfig reads routing values from env', () => {
-      process.env.SCRUMLORD_READ_CHANNEL_ID = '111';
-      process.env.SCRUMLORD_SPEAK_CHANNEL_ID = '222';
-
-      expect(bot.getChannelRoutingConfig()).toEqual({
-        readChannelId: '111',
-        speakChannelId: '222',
-        isConfigured: true,
-      });
-    });
+describe('Event registration', () => {
+  test('registers a once listener for ClientReady', () => {
+    expect(mockClient.once).toHaveBeenCalledWith(Events.ClientReady, expect.any(Function));
   });
 
-  // -------------------------------------------------------
-  // ClientReady event
-  // -------------------------------------------------------
-
-  describe('ClientReady event', () => {
-    test('registers a once listener for the ready event', () => {
-      expect(mockClient.once).toHaveBeenCalledWith(Events.ClientReady, expect.any(Function));
-    });
-
-    test('logs the correct ready message', () => {
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
-      const readyHandler = getHandler(mockClient, Events.ClientReady, 'once');
-      readyHandler({ user: { tag: 'Scrumlord#1234' } });
-      expect(consoleSpy).toHaveBeenCalledWith(
-        'Scrumlord is online. Logged in as Scrumlord#1234'
-      );
-      consoleSpy.mockRestore();
-    });
+  test('registers an on listener for VoiceStateUpdate', () => {
+    expect(mockClient.on).toHaveBeenCalledWith(Events.VoiceStateUpdate, expect.any(Function));
   });
 
-  // -------------------------------------------------------
-  // parseTimeRange
-  // -------------------------------------------------------
+  test('registers an on listener for MessageCreate', () => {
+    expect(mockClient.on).toHaveBeenCalledWith(Events.MessageCreate, expect.any(Function));
+  });
+});
 
-  describe('parseTimeRange', () => {
-    test('returns a date N days in the past for Xd format', () => {
-      const result = bot.parseTimeRange('7d');
-      const expected = new Date();
-      expected.setDate(expected.getDate() - 7);
-      expect(result.getTime()).toBeCloseTo(expected.getTime(), -3);
-    });
+// ── ClientReady ───────────────────────────────────────────────────────────────
 
-    test('returns a date N hours in the past for Xh format', () => {
-      const result = bot.parseTimeRange('24h');
-      const expected = new Date();
-      expected.setHours(expected.getHours() - 24);
-      expect(result.getTime()).toBeCloseTo(expected.getTime(), -3);
-    });
-
-    test('returns a date N minutes in the past for Xm format', () => {
-      const result = bot.parseTimeRange('30m');
-      const expected = new Date();
-      expected.setMinutes(expected.getMinutes() - 30);
-      expect(result.getTime()).toBeCloseTo(expected.getTime(), -3);
-    });
-
-    test('returns null for an invalid format', () => {
-      expect(bot.parseTimeRange('7x')).toBeNull();
-    });
-
-    test('returns null for a plain number with no unit', () => {
-      expect(bot.parseTimeRange('7')).toBeNull();
-    });
-
-    test('returns null for an empty string', () => {
-      expect(bot.parseTimeRange('')).toBeNull();
-    });
-
-    test('returns null for a unit with no number', () => {
-      expect(bot.parseTimeRange('d')).toBeNull();
-    });
+describe('ClientReady', () => {
+  test('logs the ready message', () => {
+    const spy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    const handler = getHandler(mockClient, Events.ClientReady, 'once');
+    handler({ user: { tag: 'Scrumlord#0001' } });
+    expect(spy).toHaveBeenCalledWith('Scrumlord is online. Logged in as Scrumlord#0001');
+    spy.mockRestore();
   });
 
-  // -------------------------------------------------------
-  // formatMessagesToJson
-  // -------------------------------------------------------
+  test('schedules two cron jobs', () => {
+    const handler = getHandler(mockClient, Events.ClientReady, 'once');
+    handler({ user: { tag: 'Scrumlord#0001' } });
+    expect(cron.schedule).toHaveBeenCalledTimes(2);
+  });
+});
 
-  describe('formatMessagesToJson', () => {
-    const mockMessages = [
-      {
-        author: { id: '111', username: 'Alice' },
-        content: 'Hello there',
-        createdAt: new Date('2026-01-01T10:00:00Z'),
-      },
-      {
-        author: { id: '222', username: 'Bob' },
-        content: 'General Kenobi',
-        createdAt: new Date('2026-01-01T10:01:00Z'),
-      },
-    ];
+// ── Message routing ───────────────────────────────────────────────────────────
 
-    test('returns a valid JSON string', () => {
-      const result = bot.formatMessagesToJson(mockMessages);
-      expect(() => JSON.parse(result)).not.toThrow();
-    });
+describe('Message routing', () => {
+  let messageHandler;
 
-    test('includes the correct fields for each message', () => {
-      const result = JSON.parse(bot.formatMessagesToJson(mockMessages));
-      expect(result[0]).toEqual({
-        author: { id: '111', username: 'Alice' },
-        content: 'Hello there',
-        timestamp: '2026-01-01T10:00:00.000Z',
-      });
-    });
-
-    test('returns the correct number of messages', () => {
-      const result = JSON.parse(bot.formatMessagesToJson(mockMessages));
-      expect(result).toHaveLength(2);
-    });
-
-    test('returns an empty array for no messages', () => {
-      const result = JSON.parse(bot.formatMessagesToJson([]));
-      expect(result).toEqual([]);
-    });
+  beforeEach(() => {
+    messageHandler = getHandler(mockClient, Events.MessageCreate, 'on');
   });
 
-  // -------------------------------------------------------
-  // fetchMessagesInRange
-  // -------------------------------------------------------
-
-  describe('fetchMessagesInRange', () => {
-    const sinceDate = new Date('2026-01-01T00:00:00Z');
-
-    const makeMessage = (id, createdAt, content = 'test') => ({
-      id,
-      content,
-      createdAt: new Date(createdAt),
-      author: { id: '111', username: 'Alice' },
-    });
-
-    test('returns messages within the time range', async () => {
-      const msg1 = makeMessage('1', '2026-01-01T12:00:00Z');
-      const msg2 = makeMessage('2', '2026-01-01T13:00:00Z');
-      const mockMessages = {
-        size: 2,
-        filter: (fn) => ({ values: () => [msg1, msg2].filter(fn).values() }),
-        last: () => msg1,
-        values: () => [msg1, msg2].values(),
-      };
-
-      const mockChannel = {
-        messages: {
-          fetch: jest.fn()
-            .mockResolvedValueOnce(mockMessages)
-            .mockResolvedValueOnce({ size: 0 }),
-        },
-      };
-
-      const result = await bot.fetchMessagesInRange(mockChannel, sinceDate);
-      expect(result.length).toBe(2);
-    });
-
-    test('returns messages sorted oldest first', async () => {
-      const older = makeMessage('1', '2026-01-01T10:00:00Z');
-      const newer = makeMessage('2', '2026-01-01T12:00:00Z');
-      const mockMessages = {
-        size: 2,
-        filter: (fn) => ({ values: () => [newer, older].filter(fn).values() }),
-        last: () => older,
-        values: () => [newer, older].values(),
-      };
-
-      const mockChannel = {
-        messages: {
-          fetch: jest.fn()
-            .mockResolvedValueOnce(mockMessages)
-            .mockResolvedValueOnce({ size: 0 }),
-        },
-      };
-
-      const result = await bot.fetchMessagesInRange(mockChannel, sinceDate);
-      expect(result[0].createdAt.getTime()).toBeLessThan(result[1].createdAt.getTime());
-    });
-
-    test('returns empty array when no messages exist', async () => {
-      const mockChannel = {
-        messages: { fetch: jest.fn().mockResolvedValue({ size: 0 }) },
-      };
-      const result = await bot.fetchMessagesInRange(mockChannel, sinceDate);
-      expect(result).toEqual([]);
-    });
-
-    test('throws an error if fetch fails', async () => {
-      const mockChannel = {
-        messages: { fetch: jest.fn().mockRejectedValue(new Error('Missing Permissions')) },
-      };
-      await expect(bot.fetchMessagesInRange(mockChannel, sinceDate)).rejects.toThrow(
-        'Failed to fetch messages: Missing Permissions'
-      );
-    });
+  test('ignores messages from bots', async () => {
+    const msg = makeMessage({ author: { bot: true } });
+    await messageHandler(msg);
+    expect(dispatchCommand).not.toHaveBeenCalled();
+    expect(handleAgentQuery).not.toHaveBeenCalled();
   });
 
-  // -------------------------------------------------------
-  // !ping command
-  // -------------------------------------------------------
-
-  describe('!ping command', () => {
-    let messageHandler;
-
-    beforeEach(() => {
-      messageHandler = getHandler(mockClient, Events.MessageCreate, 'on');
-    });
-
-    test('registers a listener for the messageCreate event', () => {
-      expect(mockClient.on).toHaveBeenCalledWith(Events.MessageCreate, expect.any(Function));
-    });
-
-    test('ignores messages from bots', async () => {
-      const msg = { author: { bot: true }, content: '!ping', reply: jest.fn() };
-      await messageHandler(msg);
-      expect(msg.reply).not.toHaveBeenCalled();
-    });
-
-    test('replies to !ping with the correct message', async () => {
-      const msg = { author: { bot: false }, content: '!ping', reply: jest.fn() };
-      await messageHandler(msg);
-      expect(msg.reply).toHaveBeenCalledWith('Pong! Scrumlord is watching. 👑');
-    });
-
-    test('does not reply to unrecognized commands', async () => {
-      const msg = { author: { bot: false }, content: '!unknown', reply: jest.fn() };
-      await messageHandler(msg);
-      expect(msg.reply).not.toHaveBeenCalled();
-    });
-
-    test('does not reply to regular messages', async () => {
-      const msg = { author: { bot: false }, content: 'hey everyone', reply: jest.fn() };
-      await messageHandler(msg);
-      expect(msg.reply).not.toHaveBeenCalled();
-    });
-
-    test('does not reply to empty messages', async () => {
-      const msg = { author: { bot: false }, content: '', reply: jest.fn() };
-      await messageHandler(msg);
-      expect(msg.reply).not.toHaveBeenCalled();
-    });
-
-    test('routes ping response to configured speak channel', async () => {
-      process.env.SCRUMLORD_READ_CHANNEL_ID = '111';
-      process.env.SCRUMLORD_SPEAK_CHANNEL_ID = '222';
-
-      jest.resetModules();
-      jest.clearAllMocks();
-      ({ Client, GatewayIntentBits, Events } = require('discord.js'));
-      dotenv = require('dotenv');
-      bot = require('../index');
-      mockClient = Client.mock.results[0].value;
-
-      messageHandler = getHandler(mockClient, Events.MessageCreate, 'on');
-
-      const speakChannel = { send: jest.fn() };
-
-      const msg = {
-        author: { bot: false },
-        content: '!ping',
-        channel: { id: '111', send: jest.fn() },
-        guild: {
-          id: 'guild-1',
-          channels: {
-            fetch: jest.fn((id) => {
-              if (id === '222') return Promise.resolve(speakChannel);
-              return Promise.resolve(null);
-            }),
-          },
-        },
-        reply: jest.fn(),
-      };
-
-      await messageHandler(msg);
-
-      expect(speakChannel.send).toHaveBeenCalledWith('Pong! Scrumlord is watching. 👑');
-      expect(msg.reply).not.toHaveBeenCalled();
-    });
-
-    test('ignores ping when command is outside configured read channel', async () => {
-      process.env.SCRUMLORD_READ_CHANNEL_ID = '111';
-      process.env.SCRUMLORD_SPEAK_CHANNEL_ID = '222';
-
-      jest.resetModules();
-      jest.clearAllMocks();
-      ({ Client, GatewayIntentBits, Events } = require('discord.js'));
-      dotenv = require('dotenv');
-      bot = require('../index');
-      mockClient = Client.mock.results[0].value;
-
-      messageHandler = getHandler(mockClient, Events.MessageCreate, 'on');
-
-      const speakChannel = { send: jest.fn() };
-
-      const msg = {
-        author: { bot: false },
-        content: '!ping',
-        channel: { id: '999', send: jest.fn() },
-        guild: {
-          id: 'guild-1',
-          channels: {
-            fetch: jest.fn((id) => {
-              if (id === '222') return Promise.resolve(speakChannel);
-              return Promise.resolve(null);
-            }),
-          },
-        },
-        reply: jest.fn(),
-      };
-
-      await messageHandler(msg);
-      expect(speakChannel.send).not.toHaveBeenCalled();
-      expect(msg.reply).not.toHaveBeenCalled();
-    });
-  });
-
-  // -------------------------------------------------------
-  // !export command
-  // -------------------------------------------------------
-
-  describe('!export command', () => {
-    let messageHandler;
-
-    beforeEach(() => {
-      messageHandler = getHandler(mockClient, Events.MessageCreate, 'on');
-    });
-
-    const makeExportMessage = (content) => ({
-      author: { bot: false, tag: 'Alice#0001' },
-      content,
+  test('routes Scrumlord-managed thread messages to the agent', async () => {
+    isScrumlordThread.mockResolvedValueOnce(true);
+    const msg = makeMessage({
       channel: {
-        id: 'channel-123',
-        name: 'general',
-        send: jest.fn(),
-        messages: { fetch: jest.fn() },
+        id:       'thread-1',
+        isThread: jest.fn().mockReturnValue(true),
+        send:     jest.fn(),
       },
-      reply: jest.fn(),
     });
-
-    test('shows usage message when no time range is provided', async () => {
-      const msg = makeExportMessage('!export');
-      await messageHandler(msg);
-      expect(msg.reply).toHaveBeenCalledWith(expect.stringContaining('Usage'));
-    });
-
-    test('shows error for invalid time range format', async () => {
-      const msg = makeExportMessage('!export badformat');
-      await messageHandler(msg);
-      expect(msg.reply).toHaveBeenCalledWith(expect.stringContaining('Invalid time range'));
-    });
-
-    test('shows "no messages found" when channel has no messages in range', async () => {
-      const fetchingMsg = { edit: jest.fn() };
-      const msg = makeExportMessage('!export 7d');
-      msg.reply = jest.fn().mockResolvedValue(fetchingMsg);
-      msg.channel.messages.fetch = jest.fn().mockResolvedValue({ size: 0 });
-
-      await messageHandler(msg);
-      expect(fetchingMsg.edit).toHaveBeenCalledWith(expect.stringContaining('No messages found'));
-    });
-
-    test('sends a JSON file attachment when messages are found', async () => {
-      const fetchingMsg = { edit: jest.fn() };
-      const msg = makeExportMessage('!export 7d');
-      msg.reply = jest.fn().mockResolvedValue(fetchingMsg);
-
-      const mockMsg = {
-        id: '1',
-        content: 'hello',
-        createdAt: new Date(),
-        author: { id: '111', username: 'Alice' },
-      };
-      const mockFetchResult = {
-        size: 1,
-        filter: (fn) => ({ values: () => [mockMsg].filter(fn).values() }),
-        last: () => mockMsg,
-        values: () => [mockMsg].values(),
-      };
-      msg.channel.messages.fetch = jest.fn()
-        .mockResolvedValueOnce(mockFetchResult)
-        .mockResolvedValueOnce({ size: 0 });
-
-      await messageHandler(msg);
-
-      expect(fetchingMsg.edit).toHaveBeenCalledWith(expect.stringContaining('Exported'));
-      expect(msg.channel.send).toHaveBeenCalledWith(
-        expect.objectContaining({ files: expect.any(Array) })
-      );
-    });
-
-    test('reports missing permissions error', async () => {
-      const fetchingMsg = { edit: jest.fn() };
-      const msg = makeExportMessage('!export 7d');
-      msg.reply = jest.fn()
-        .mockResolvedValueOnce(fetchingMsg)
-        .mockResolvedValueOnce(undefined);
-      msg.channel.messages.fetch = jest.fn().mockRejectedValue(new Error('Missing Permissions'));
-
-      await messageHandler(msg);
-      expect(msg.reply).toHaveBeenCalledWith(expect.stringContaining('lacks permission'));
-    });
-
-    test('reports missing access error', async () => {
-      const fetchingMsg = { edit: jest.fn() };
-      const msg = makeExportMessage('!export 7d');
-      msg.reply = jest.fn()
-        .mockResolvedValueOnce(fetchingMsg)
-        .mockResolvedValueOnce(undefined);
-      msg.channel.messages.fetch = jest.fn().mockRejectedValue(new Error('Missing Access'));
-
-      await messageHandler(msg);
-      expect(msg.reply).toHaveBeenCalledWith(expect.stringContaining('cannot access'));
-    });
+    await messageHandler(msg);
+    expect(handleAgentQuery).toHaveBeenCalledWith(msg, expect.anything());
+    expect(dispatchCommand).not.toHaveBeenCalled();
   });
 
-  // -------------------------------------------------------
-  // !setchannels command
-  // -------------------------------------------------------
-
-  describe('!setchannels command', () => {
-    let messageHandler;
-
-    beforeEach(() => {
-      messageHandler = getHandler(mockClient, Events.MessageCreate, 'on');
+  test('routes @mention messages to the agent', async () => {
+    const msg = makeMessage({
+      mentions: { has: jest.fn().mockReturnValue(true) },
     });
-
-    const makeSetChannelsMessage = (content) => ({
-      author: { bot: false },
-      content,
-      guild: {
-        channels: {
-          fetch: jest.fn((id) => {
-            if (id === '111' || id === '222') {
-              return Promise.resolve({
-                id,
-                isTextBased: () => true,
-              });
-            }
-
-            return Promise.resolve(null);
-          }),
-        },
-      },
-      member: {
-        permissions: {
-          has: jest.fn().mockReturnValue(true),
-        },
-      },
-      channel: { id: '222', send: jest.fn() },
-      reply: jest.fn(),
-    });
-
-    test('requires manage server permission', async () => {
-      const msg = makeSetChannelsMessage('!setchannels <#111> <#222>');
-      msg.member.permissions.has = jest.fn().mockReturnValue(false);
-
-      await messageHandler(msg);
-      expect(msg.reply).toHaveBeenCalledWith(expect.stringContaining('Manage Server'));
-    });
-
-    test('responds with env values for manual configuration', async () => {
-      const msg = makeSetChannelsMessage('!setchannels <#111> <#222>');
-
-      await messageHandler(msg);
-      expect(msg.reply).toHaveBeenCalledWith(expect.stringContaining('SCRUMLORD_READ_CHANNEL_ID=111'));
-      expect(msg.reply).toHaveBeenCalledWith(expect.stringContaining('SCRUMLORD_SPEAK_CHANNEL_ID=222'));
-    });
+    await messageHandler(msg);
+    expect(handleAgentQuery).toHaveBeenCalledWith(msg, expect.anything());
+    expect(dispatchCommand).not.toHaveBeenCalled();
   });
+
+  test('does not call dispatchCommand for non-command plain messages', async () => {
+    const msg = makeMessage({ content: 'just chatting' });
+    await messageHandler(msg);
+    expect(dispatchCommand).not.toHaveBeenCalled();
+  });
+
+  test('calls dispatchCommand for ! messages', async () => {
+    const msg = makeMessage({ content: '!ping' });
+    await messageHandler(msg);
+    expect(dispatchCommand).toHaveBeenCalledWith(msg, expect.anything());
+  });
+
+  test('calls handleSprintCommand before dispatchCommand', async () => {
+    handleSprintCommand.mockResolvedValueOnce(true);
+    const msg = makeMessage({ content: '!sprintsummary 2026-01-01 2026-01-14' });
+    await messageHandler(msg);
+    expect(handleSprintCommand).toHaveBeenCalledWith(msg);
+    expect(dispatchCommand).not.toHaveBeenCalled();
+  });
+
+  test('calls handleAIICommand before dispatchCommand', async () => {
+    handleAIICommand.mockResolvedValueOnce(true);
+    const msg = makeMessage({ content: '!aiiscore Sprint 3' });
+    await messageHandler(msg);
+    expect(handleAIICommand).toHaveBeenCalled();
+    expect(dispatchCommand).not.toHaveBeenCalled();
+  });
+});

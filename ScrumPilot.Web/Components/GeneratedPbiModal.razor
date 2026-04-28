@@ -1,5 +1,3 @@
-@using MudBlazor
-@using ScrumPilot.Shared.Models
 @using System.Text
 @using System.Text.Json
 @inject HttpClient Http
@@ -8,11 +6,11 @@
 <MudDialog>
     <DialogContent>
         <MudStack Spacing="2">
-            @if (Stories is not null && Stories.Count > 0)
+            @if (PBIs is not null && PBIs.Count > 0)
             {
-                <MudText Typo="Typo.h5" Align="Align.Center">Generated Stories</MudText>
+                <MudText Typo="Typo.h5" Align="Align.Center">Generated PBIs</MudText>
 
-                <PbiCard PbiModel="@Stories[_currentStoryIndex]" />
+                <PbiCard PbiModel="@PBIs[_currentStoryIndex]" />
 
                 <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center" Class="sg-nav-row">
                     <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
@@ -22,13 +20,13 @@
                                    AriaLabel="Show previous story" />
 
                     <MudText Typo="Typo.subtitle1" Class="sg-nav-position">
-                        @($"{_currentStoryIndex + 1} of {Stories.Count}")
+                        @($"{_currentStoryIndex + 1} of {PBIs.Count}")
                     </MudText>
 
                     <MudIconButton Icon="@Icons.Material.Filled.ArrowForward"
                                    Color="Color.Primary"
                                    OnClick="ShowNextStory"
-                                   Disabled="@(_currentStoryIndex >= Stories.Count - 1)"
+                                   Disabled="@(_currentStoryIndex >= PBIs.Count - 1)"
                                    AriaLabel="Show next story" />
                 </MudStack>
 
@@ -52,7 +50,7 @@
             else
             {
                 <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
-                    No generated stories were returned.
+                    No generated PBIs were returned.
                 </MudAlert>
             }
         </MudStack>
@@ -64,19 +62,22 @@
     private IMudDialogInstance MudDialog { get; set; } = default!;
 
     [Parameter]
-    public List<ProductBacklogItem> Stories { get; set; } = new();
+    public List<ProductBacklogItem> PBIs { get; set; } = new();
+
+    [Parameter]
+    public int? ProjectId { get; set; }
 
     private int _currentStoryIndex = 0;
     private bool _isCommitting = false;
 
     private async Task CommitAllAsDrafts()
     {
-        await CommitStories("api/story/createDraftStories", "Stories saved as drafts.");
+        await CommitStories("api/Pbi/createDraftPbis", "PBIs saved as drafts.");
     }
 
     private async Task CommitAllToBacklog()
     {
-        await CommitStories("api/story/createStories", "Stories committed to backlog.");
+        await CommitStories("api/Pbi/createStories", "PBIs committed to backlog.");
     }
 
     private async Task CommitStories(string endpoint, string successMessage)
@@ -84,7 +85,13 @@
         _isCommitting = true;
         try
         {
-            var json = JsonSerializer.Serialize(Stories);
+            if (ProjectId.HasValue)
+            {
+                foreach (var story in PBIs)
+                    story.ProjectId = ProjectId.Value;
+            }
+
+            var json = JsonSerializer.Serialize(PBIs);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
             var response = await Http.PostAsync(endpoint, content);
 
@@ -96,7 +103,7 @@
             else
             {
                 var error = await response.Content.ReadAsStringAsync();
-                Snackbar.Add($"Failed to commit stories: {error}", Severity.Error);
+                    Snackbar.Add($"Failed to commit PBIs: {error}", Severity.Error);
             }
         }
         catch (Exception ex)
@@ -117,7 +124,7 @@
 
     private void ShowNextStory()
     {
-        if (_currentStoryIndex < Stories.Count - 1)
+        if (_currentStoryIndex < PBIs.Count - 1)
             _currentStoryIndex++;
     }
 }

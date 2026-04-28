@@ -494,3 +494,11 @@ $RECYCLE.BIN/
 Data/
 # Local dev overrides
 ScrumPilot.Web/wwwroot/appsettings.Development.json
+
+# Discord bot
+*.ogg
+*.mp3
+*.corrupted
+summaries/
+chat-state.json
+data/mood-scores.json
