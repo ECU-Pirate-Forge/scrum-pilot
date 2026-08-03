@@ -253,7 +253,7 @@ Each sub-project contains its own detailed README:
 
 ## 👥 Team
 
-Built by the **ECU Pirate Forge** team for **SENG 4235** (Undergraduate) and **SENG 6235** (Graduate) at East Carolina University.
+Built by the **ECU Pirate Forge** team for at East Carolina University.
 
 ---
 
