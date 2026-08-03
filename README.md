@@ -26,7 +26,7 @@ Built by students in **SENG 4235** (Undergraduate) and **SENG 6235** (Graduate) 
 
 ## 📖 Project Background
 
-ScrumPilot was created to give software engineering students hands-on experience with Agile/Scrum practices while building the tooling themselves. The application supports the full Scrum lifecycle — from product backlog grooming and sprint planning through sprint execution and retrospective metrics — augmented with AI to reduce the overhead of story writing and estimation.
+ScrumPilot was created because there needed to be something better than what was out there. The goal of ScrumPilot is to eliminate the pains of the existing Agile Software Project Management solutions. The application supports the full Scrum lifecycle — from product backlog grooming and sprint planning through sprint execution and retrospective metrics — augmented with AI to reduce the overhead of story writing and estimation.
 
 Key goals of the project:
 
