@@ -36,6 +36,8 @@
   <ItemGroup>
     <ProjectReference Include="..\ScrumPilot.Data\ScrumPilot.Data.csproj" />
     <ProjectReference Include="..\ScrumPilot.Shared\ScrumPilot.Shared.csproj" />
+    <ProjectReference Include="..\ScrumPilot.Web\ScrumPilot.Web.csproj" />
+    <ProjectReference Include="..\ScrumPilot.ServiceDefaults\ScrumPilot.ServiceDefaults.csproj" />
   </ItemGroup>
 
 </Project>

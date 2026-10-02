@@ -147,19 +147,39 @@ namespace ScrumPilot.API.Services
 
         private string BuildPrompt(string problemStatement)
         {
-            return $@"You are helping generate Scrum user stories.
+            return $@"
+You are an expert at breaking a problem statement down into independent, parallelizable tasks.
 
-                    Generate a Scrum user story for the following problem statement and return it as a JSON object.
+# Instructions
 
-                    The JSON must have exactly these three keys:
-                    - title: a short, specific title describing the feature or need
-                    - userStory: written as 'As a [specific role], I want [specific goal], so that [specific benefit].'
-                    - acceptanceCriteria: an array of 3 to 5 strings, each beginning with 'I see' and describing a concrete, observable outcome
+1. Read the problem statement carefully.
+2. Identify the primary deliverable.
+3. Extract all functional requirements.
+4. Extract all constraints (time, tools, environment).
+5. Identify implicit dependencies.
+6. Produce a dependency graph.
+7. Slice tasks into independent units that can be parallelized.
+8. For each task, output:
+   - title: a short, specific title describing the feature or need
+   - userStory: written as 'As a [specific role], I want [specific goal], so that [specific benefit].'
+   - acceptanceCriteria: an array of 3 to 7 strings, each beginning with 'I see' and describing a concrete, observable outcome
+   - definitionOfDone: an array of strings representing checklist that must be successfully completed before task can be considered complete
+   - dependencies:
+   - parallelizationNotes:
+9. Validate that tasks cover the entire problem statement.
+10. Output the final task plan as a JSON array.
+   - The JSON object in the array must have exactly these 6 keys
+	 1.title
+	 2.userStory
+	 3.acceptanceCriteria
+	 4.definitionOfDone
+	 5.dependencies
+	 6.parallelizationNotes
 
-                    Do not copy these instructions into the output. Do not use placeholder text. Return only the JSON object with no markdown, no explanation, and no extra keys.
+Do not copy these instructions into the output. Do not use placeholder text. Return only the JSON object with no markdown, no explanation, and no extra keys.
 
-                    Problem statement:
-                    {problemStatement}";
+Problem statement: {problemStatement}";
+                    
         }
 
         private string BuildImprovementPrompt(ProductBacklogItem pbi)
