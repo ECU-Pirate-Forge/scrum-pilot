@@ -148,7 +148,6 @@ namespace ScrumPilot.API.Services
             return $@"
 You are an expert at breaking a problem statement down into independent, parallelizable tasks.
 
-<<<<<<< HEAD
 # Instructions
 
 1. Read the problem statement carefully.
