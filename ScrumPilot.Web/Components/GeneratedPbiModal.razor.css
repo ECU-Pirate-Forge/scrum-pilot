@@ -1,0 +1,27 @@
+.generated-pbi-status {
+    display: flex;
+    justify-content: center;
+}
+
+.generated-pbi-navigation {
+    margin-top: 12px;
+    gap: 8px;
+}
+
+.generated-pbi-position {
+    min-width: 70px;
+    text-align: center;
+}
+
+.generated-pbi-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px;
+}
+
+@media (max-width: 600px) {
+    .generated-pbi-actions {
+        flex-direction: column;
+    }
+}

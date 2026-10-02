@@ -2,6 +2,7 @@
 using ScrumPilot.Shared.Models;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace ScrumPilot.API.Services
 {
@@ -58,7 +59,7 @@ namespace ScrumPilot.API.Services
         /// <exception cref="TimeoutException">
         /// Thrown if the request to the Ollama API times out.
         /// </exception>
-        private async Task<ProductBacklogItem> GenerateAiPbi(string problemStatement)
+        private async Task<List<ProductBacklogItem>> GenerateAiPbis(string problemStatement)
         {
             var groqApiKey = _configuration["GroqApiKey"];
             var prompt = BuildPrompt(problemStatement);
@@ -82,21 +83,9 @@ namespace ScrumPilot.API.Services
                 responseContent = await CallOllamaApiAsync(ollamaBaseUrl, ollamaModel, prompt);
             }
 
-            var aiStoryResponse = ParseAiStoryResponse(responseContent);
-
-            var story = new ProductBacklogItem
-            {
-                Title = aiStoryResponse.Title,
-                Description = $"{aiStoryResponse.UserStory}\n\nAcceptance Criteria:\n{string.Join("\n", aiStoryResponse.AcceptanceCriteria.Select(ac => $"• {ac}"))}",
-                Status = PbiStatus.ToDo,
-                Priority = PbiPriority.Low,
-                Origin = PbiOrigin.AiGenerated,
-                IsDraft = true,
-                DateCreated = DateTime.UtcNow,
-                LastUpdated = DateTime.UtcNow
-            };
-
-            return story;
+            return ParseAiStoryResponses(responseContent)
+                .Select(CreateGeneratedPbi)
+                .ToList();
         }
 
         public async Task<ProductBacklogItem> ImprovePbiAsync(ProductBacklogItem pbi)
@@ -123,10 +112,19 @@ namespace ScrumPilot.API.Services
                 responseContent = await CallOllamaApiAsync(ollamaBaseUrl, ollamaModel, prompt);
             }
 
-            var aiPbiResponse = ParseAiStoryResponse(responseContent);
+            var aiPbiResponses = ParseAiStoryResponses(responseContent);
+            if (aiPbiResponses.Count != 1)
+            {
+                throw new InvalidOperationException(
+                    $"AI improvement must return exactly one PBI, but returned {aiPbiResponses.Count}.");
+            }
 
+            var aiPbiResponse = aiPbiResponses[0];
+            pbi.Type = aiPbiResponse.Type!.Value;
+            pbi.Priority = aiPbiResponse.Priority!.Value;
+            pbi.StoryPoints = (PbiPoints)aiPbiResponse.StoryPoints!.Value;
             pbi.Title = aiPbiResponse.Title;
-            pbi.Description = $"{aiPbiResponse.UserStory}\n\nAcceptance Criteria:\n{string.Join("\n", aiPbiResponse.AcceptanceCriteria.Select(ac => $"\u2022 {ac}"))}";
+            pbi.Description = BuildDescription(aiPbiResponse);
 
             // Return without saving — caller decides whether to commit
             return pbi;
@@ -138,8 +136,8 @@ namespace ScrumPilot.API.Services
 
             foreach (var problemStatement in problemStatements)
             {
-                var pbi = await GenerateAiPbi(problemStatement);
-                pbis.Add(pbi);
+                var generatedPbis = await GenerateAiPbis(problemStatement);
+                pbis.AddRange(generatedPbis);
             }
 
             return pbis;
@@ -150,6 +148,7 @@ namespace ScrumPilot.API.Services
             return $@"
 You are an expert at breaking a problem statement down into independent, parallelizable tasks.
 
+<<<<<<< HEAD
 # Instructions
 
 1. Read the problem statement carefully.
@@ -160,23 +159,27 @@ You are an expert at breaking a problem statement down into independent, paralle
 6. Produce a dependency graph.
 7. Slice tasks into independent units that can be parallelized.
 8. For each task, output:
+   - type: one of 'Story', 'Bug', or 'Task'
+   - priority: one of 'None', 'Low', 'Medium', or 'High'
+   - storyPoints: one of 0, 1, 2, 3, 5, 8, 13, or 21
    - title: a short, specific title describing the feature or need
    - userStory: written as 'As a [specific role], I want [specific goal], so that [specific benefit].'
    - acceptanceCriteria: an array of 3 to 7 strings, each beginning with 'I see' and describing a concrete, observable outcome
-   - definitionOfDone: an array of strings representing checklist that must be successfully completed before task can be considered complete
    - dependencies:
    - parallelizationNotes:
 9. Validate that tasks cover the entire problem statement.
-10. Output the final task plan as a JSON array.
-   - The JSON object in the array must have exactly these 6 keys
-	 1.title
-	 2.userStory
-	 3.acceptanceCriteria
-	 4.definitionOfDone
-	 5.dependencies
-	 6.parallelizationNotes
+10.Generate one or more Scrum product backlog items for the following problem statement and return them as a JSON array.
+    - Each array item must have exactly these eight keys:
+      - type: one of 'Story', 'Bug', or 'Task'
+      - priority: one of 'None', 'Low', 'Medium', or 'High'
+      - storyPoints: one of 0, 1, 2, 3, 5, 8, 13, or 21
+      - title: a short, specific title describing the feature or need
+      - userStory: written as 'As a [specific role], I want [specific goal], so that [specific benefit].'
+      - acceptanceCriteria: an array of 3 to 5 strings, each beginning with 'I see' and describing a concrete, observable outcome
+      - dependencies: an array of strings representing task dependencies
+      - parallelizationNotes: an array of strings providing notes on how the task can be parallelized
 
-Do not copy these instructions into the output. Do not use placeholder text. Return only the JSON object with no markdown, no explanation, and no extra keys.
+Do not copy these instructions into the output. Do not use placeholder text. Return only the JSON array with no markdown, no explanation, and no extra keys.
 
 Problem statement: {problemStatement}";
                     
@@ -186,14 +189,17 @@ Problem statement: {problemStatement}";
         {
             return $@"You are helping improve a Scrum Product Backlog Item.
 
-                    Rewrite and improve the following PBI and return it as a JSON object.
+                    Rewrite and improve the following PBI and return a JSON array containing exactly one item.
 
-                    The JSON must have exactly these three keys:
+                    The array item must have exactly these six keys:
+                    - type: one of 'Story', 'Bug', or 'Task'
+                    - priority: one of 'None', 'Low', 'Medium', or 'High'
+                    - storyPoints: one of 0, 1, 2, 3, 5, 8, 13, or 21
                     - title: a short, specific title describing the feature or need
                     - userStory: written as 'As a [specific role], I want [specific goal], so that [specific benefit].'
                     - acceptanceCriteria: an array of 3 to 5 strings, each beginning with 'I see' and describing a concrete, observable outcome
 
-                    Do not copy these instructions into the output. Do not use placeholder text. Return only the JSON object with no markdown, no explanation, and no extra keys.
+                    Do not copy these instructions into the output. Do not use placeholder text. Return only the one-item JSON array with no markdown, no explanation, and no extra keys.
 
                     Current PBI:
                     Title: {pbi.Title}
@@ -282,7 +288,7 @@ Problem statement: {problemStatement}";
             }
         }
 
-        private AiStoryResponse ParseAiStoryResponse(string responseContent)
+        private List<AiStoryResponse> ParseAiStoryResponses(string responseContent)
         {
             try
             {
@@ -319,32 +325,43 @@ Problem statement: {problemStatement}";
                     throw new InvalidOperationException("AI provider returned an empty response");
                 }
 
-                // Extract the first valid JSON object from the response string
-                string? jsonObject = ExtractFirstJsonObject(aiResponseText);
-                if (string.IsNullOrEmpty(jsonObject))
+                var jsonArray = ExtractFirstJsonArray(aiResponseText);
+                if (string.IsNullOrEmpty(jsonArray))
                 {
-                    throw new InvalidOperationException($"Failed to find a JSON object in the AI response. Response: {aiResponseText}");
+                    throw new InvalidOperationException($"Failed to find a JSON array in the AI response. Response: {aiResponseText}");
                 }
 
-                AiStoryResponse? aiStoryResponse = null;
+                List<AiStoryResponse>? aiStoryResponses;
                 try
                 {
-                    aiStoryResponse = JsonSerializer.Deserialize<AiStoryResponse>(jsonObject, new JsonSerializerOptions
+                    var options = new JsonSerializerOptions
                     {
                         PropertyNameCaseInsensitive = true
-                    });
+                    };
+                    options.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false));
+                    aiStoryResponses = JsonSerializer.Deserialize<List<AiStoryResponse>>(jsonArray, options);
                 }
                 catch (JsonException ex)
                 {
-                    throw new InvalidOperationException($"Failed to parse AI response as JSON. Response: {jsonObject}", ex);
+                    throw new InvalidOperationException($"Failed to parse AI response as JSON. Response: {jsonArray}", ex);
                 }
 
-                if (aiStoryResponse == null)
+                if (aiStoryResponses == null)
                 {
-                    throw new InvalidOperationException($"Failed to deserialize AI response. Response: {jsonObject}");
+                    throw new InvalidOperationException($"Failed to deserialize AI response. Response: {jsonArray}");
                 }
 
-                return aiStoryResponse;
+                if (aiStoryResponses.Count == 0)
+                {
+                    throw new InvalidOperationException("AI provider returned an empty PBI array.");
+                }
+
+                foreach (var response in aiStoryResponses)
+                {
+                    ValidateAiStoryResponse(response);
+                }
+
+                return aiStoryResponses;
             }
             catch (Exception ex)
             {
@@ -352,25 +369,96 @@ Problem statement: {problemStatement}";
             }
         }
 
-        // Helper to extract the first JSON object from a string
-        //The models sometimes return extra text befor the JSON despite the instructions not to. 
-        //This is to avoid errors as a result. 
-        private static string? ExtractFirstJsonObject(string input)
+        private static string? ExtractFirstJsonArray(string input)
         {
-            int firstBrace = input.IndexOf('{');
-            if (firstBrace == -1) return null;
+            var firstBracket = input.IndexOf('[');
+            if (firstBracket == -1) return null;
+
             int depth = 0;
-            for (int i = firstBrace; i < input.Length; i++)
+            var inString = false;
+            var isEscaped = false;
+
+            for (var i = firstBracket; i < input.Length; i++)
             {
-                if (input[i] == '{') depth++;
-                else if (input[i] == '}') depth--;
-                if (depth == 0)
+                var character = input[i];
+                if (inString)
                 {
-                    return input.Substring(firstBrace, i - firstBrace + 1);
+                    if (isEscaped)
+                    {
+                        isEscaped = false;
+                    }
+                    else if (character == '\\')
+                    {
+                        isEscaped = true;
+                    }
+                    else if (character == '"')
+                    {
+                        inString = false;
+                    }
+                    continue;
+                }
+
+                if (character == '"')
+                {
+                    inString = true;
+                }
+                else if (character == '[')
+                {
+                    depth++;
+                }
+                else if (character == ']')
+                {
+                    depth--;
+                    if (depth == 0)
+                    {
+                        return input.Substring(firstBracket, i - firstBracket + 1);
+                    }
                 }
             }
+
             return null;
         }
+
+        private static void ValidateAiStoryResponse(AiStoryResponse response)
+        {
+            if (!response.Type.HasValue)
+                throw new InvalidOperationException("AI PBI response is missing type.");
+            if (!response.Priority.HasValue)
+                throw new InvalidOperationException("AI PBI response is missing priority.");
+            if (!response.StoryPoints.HasValue || !Enum.IsDefined(typeof(PbiPoints), response.StoryPoints.Value))
+                throw new InvalidOperationException("AI PBI response has missing or invalid storyPoints.");
+            if (string.IsNullOrWhiteSpace(response.Title))
+                throw new InvalidOperationException("AI PBI response is missing title.");
+            if (string.IsNullOrWhiteSpace(response.UserStory))
+                throw new InvalidOperationException("AI PBI response is missing userStory.");
+            if (response.AcceptanceCriteria == null ||
+                response.AcceptanceCriteria.Count == 0 ||
+                response.AcceptanceCriteria.Any(string.IsNullOrWhiteSpace))
+            {
+                throw new InvalidOperationException("AI PBI response has missing or invalid acceptanceCriteria.");
+            }
+        }
+
+        private static ProductBacklogItem CreateGeneratedPbi(AiStoryResponse response)
+        {
+            var now = DateTime.UtcNow;
+            return new ProductBacklogItem
+            {
+                Type = response.Type!.Value,
+                Priority = response.Priority!.Value,
+                StoryPoints = (PbiPoints)response.StoryPoints!.Value,
+                Title = response.Title!,
+                Description = BuildDescription(response),
+                Status = PbiStatus.ToDo,
+                Origin = PbiOrigin.AiGenerated,
+                IsDraft = true,
+                DateCreated = now,
+                LastUpdated = now
+            };
+        }
+
+        private static string BuildDescription(AiStoryResponse response) =>
+            $"{response.UserStory}\n\nAcceptance Criteria:\n{string.Join("\n", response.AcceptanceCriteria!.Select(ac => $"• {ac}"))}";
 
         public async Task<ProductBacklogItem> CreatePbiAsync(ProductBacklogItem story)
         {
