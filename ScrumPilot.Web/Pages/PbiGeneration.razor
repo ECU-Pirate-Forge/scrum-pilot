@@ -134,10 +134,6 @@
     private readonly List<string> _problemStatements = new();
     private bool _isDragOver = false;
     private int _dragCounter = 0;
-    private List<ProductBacklogItem> _generatedPbis = new();
-    private int _currentPbiIndex = 0;
-    private ProductBacklogItem? CurrentPbi => _generatedPbis.Count == 0 ? null : _generatedPbis[_currentPbiIndex];
-
     private void AddProblemStatement()
     {
         if (string.IsNullOrWhiteSpace(_message))
@@ -188,36 +184,32 @@
                 });
 
                 if (productBacklogItems is null || productBacklogItems.Count == 0)
-{
-    Snackbar.Add("Generation completed but the response did not contain valid PBIs.", Severity.Error);
-    return;
-}
+                {
+                    Snackbar.Add("Generation completed but the response did not contain valid PBIs.", Severity.Error);
+                    return;
+                }
 
-var dialogParameters = new DialogParameters
-{
+                var dialogParameters = new DialogParameters
+                {
                     ["PBIs"] = productBacklogItems,
                     ["ProjectId"] = ProjectState.SelectedProjectId
-};
+                };
 
+                var options = new DialogOptions
+                {
+                    CloseButton = true,
+                    MaxWidth = MaxWidth.Large,
+                    FullWidth = true,
+                    BackdropClick = true
+                };
 
-                _generatedPbis = productBacklogItems;
-_currentPbiIndex = 0;
-_problemStatements.Clear();
-_message = string.Empty;
+                await DialogService.ShowAsync<GeneratedPbiModal>(
+                    string.Empty,
+                    dialogParameters,
+                    options);
 
-
-var options = new DialogOptions
-{
-    CloseButton = true,
-    MaxWidth = MaxWidth.Large,
-    FullWidth = true,
-    BackdropClick = true
-};
-
-await DialogService.ShowAsync<GeneratedPbiModal>(
-    string.Empty,
-    dialogParameters,
-    options);
+                _problemStatements.Clear();
+                _message = string.Empty;
             }
             else
             {

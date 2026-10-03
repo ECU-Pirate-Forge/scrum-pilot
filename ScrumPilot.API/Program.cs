@@ -16,6 +16,8 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddHealthChecks();
+
 // Add Data services (EF Core, Identity, repositories)
 builder.Services.AddDataServices(builder.Configuration);
 
@@ -78,20 +80,24 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowBlazor", policy =>
-        policy.WithOrigins(
-                "http://localhost:5199",
-                "http://127.0.0.1:5199",
-                "https://localhost:7280",
-                "https://127.0.0.1:7280",
-                "https://scrumpilot-web.onrender.com"
-            )
+        policy
+            .AllowAnyOrigin()
+            // .WithOrigins(
+            //     "http://localhost:5199",
+            //     "http://127.0.0.1:5199",
+            //     "https://localhost:7280",
+            //     "https://127.0.0.1:7280",
+            //     "https://scrumpilot-web.onrender.com"
+            // )
             .AllowAnyHeader()
             .AllowAnyMethod()
-            .AllowCredentials()
+            // .AllowCredentials()
     );
 });
 
 var app = builder.Build();
+
+app.MapHealthChecks("/health");
 
 // Apply schema and seed at startup
 using (var scope = app.Services.CreateScope())

@@ -21,6 +21,7 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
                 PbiId = 1,
                 Title = "Test pbi",
                 Description = "Test Description",
+                Type = PbiType.Bug,
                 Status = PbiStatus.ToDo,
                 Priority = PbiPriority.Medium,
                 DateCreated = DateTime.UtcNow,
@@ -41,6 +42,7 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
             // Assert - Focus on content rendering, not interactive elements
             Assert.Contains("Test pbi", component.Markup);
             Assert.Contains("Test Description", component.Markup);
+            Assert.Contains("Bug", component.Markup);
             Assert.Contains("mud-paper", component.Markup);
         }
 
@@ -110,6 +112,20 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
             // When not flagged, the flag icon button must NOT use the error colour
             Assert.DoesNotContain("mud-error-text", component.Markup);
         }
+
+        [Fact]
+        public void PbiCard_HidesMutatingControls_WhenReadOnly()
+        {
+            var pbi = CreateTestPbi();
+
+            var component = Render<PbiCard>(parameters => parameters
+                .Add(p => p.PbiModel, pbi)
+                .Add(p => p.ReadOnly, true));
+
+            Assert.DoesNotContain(">Edit<", component.Markup);
+            Assert.DoesNotContain("Improve with AI", component.Markup);
+            Assert.DoesNotContain("Flag this PBI", component.Markup);
+            Assert.Contains("Bug", component.Markup);
+        }
     }
 }
-

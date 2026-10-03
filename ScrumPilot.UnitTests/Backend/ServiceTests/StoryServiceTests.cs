@@ -7,6 +7,7 @@ using ScrumPilot.Shared.Models;
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace ScrumPilot.UnitTests.Backend.ServiceTests
 {
@@ -268,6 +269,9 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             var problemStatement = "As a user, I want to login";
             var aiResponse = new AiStoryResponse
             {
+                Type = PbiType.Story,
+                Priority = PbiPriority.High,
+                StoryPoints = 5,
                 Title = "User Login Feature",
                 UserStory = "As a user, I want to login to the system, so that I can access my account.",
                 AcceptanceCriteria = ["I see a login form", "I can enter credentials", "I am redirected after login"]
@@ -275,7 +279,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
 
             var ollamaResponse = new
             {
-                response = JsonSerializer.Serialize(aiResponse)
+                response = SerializeAiResponses(aiResponse)
             };
 
             SetupConfiguration("http://localhost:11434/", "llama2");
@@ -293,24 +297,29 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             Assert.All(aiResponse.AcceptanceCriteria, criteria =>
                 Assert.Contains(criteria, result.Description));
             Assert.Equal(PbiStatus.ToDo, result.Status);
-            Assert.Equal(PbiPriority.Low, result.Priority);
+            Assert.Equal(PbiType.Story, result.Type);
+            Assert.Equal(PbiPriority.High, result.Priority);
+            Assert.Equal(PbiPoints.Five, result.StoryPoints);
             Assert.Equal(PbiOrigin.AiGenerated, result.Origin);
         }
 
         [Fact]
-        public async Task GenerateAiPbi_DefaultsToToDoStatus_AndLowPriority()
+        public async Task GenerateAiPbi_DefaultsToToDoStatus_AndUsesGeneratedPriority()
         {
             // Arrange - verifies the initial Status and Priority values assigned to every
             // AI-generated story before it is triaged in the Backlog.
             var problemStatement = "As a user, I want to filter results";
             var aiResponse = new AiStoryResponse
             {
+                Type = PbiType.Task,
+                Priority = PbiPriority.Medium,
+                StoryPoints = 3,
                 Title = "Filter Results Feature",
                 UserStory = "As a user, I want to filter results, so that I can find items faster.",
                 AcceptanceCriteria = ["Filter dropdown is visible", "Results update on selection"]
             };
 
-            var ollamaResponse = new { response = JsonSerializer.Serialize(aiResponse) };
+            var ollamaResponse = new { response = SerializeAiResponses(aiResponse) };
 
             SetupConfiguration("http://localhost:11434/", "llama2");
             var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
@@ -321,7 +330,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
 
             // Assert
             Assert.Equal(PbiStatus.ToDo, result.Status);
-            Assert.Equal(PbiPriority.Low, result.Priority);
+            Assert.Equal(PbiPriority.Medium, result.Priority);
         }
 
         [Fact]
@@ -426,7 +435,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
                 () => service.GenerateAiPbis(new List<string> { problemStatement }));
-            Assert.Contains("Failed to find a JSON object in the AI response", exception.Message);
+            Assert.Contains("Failed to find a JSON array in the AI response", exception.Message);
         }
 
         [Fact]
@@ -436,12 +445,15 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             var problemStatement = "Test problem";
             var aiResponse = new AiStoryResponse
             {
+                Type = PbiType.Bug,
+                Priority = PbiPriority.High,
+                StoryPoints = 8,
                 Title = "Test Story",
                 UserStory = "As a user, I want to test, so that I can verify functionality.",
                 AcceptanceCriteria = ["I see the test", "I can run the test"]
             };
 
-            var responseWithExtraText = $"Here is your story: {JsonSerializer.Serialize(aiResponse)} Hope this helps!";
+            var responseWithExtraText = $"Here are your stories: {SerializeAiResponses(aiResponse)} Hope this helps!";
             var ollamaResponse = new { response = responseWithExtraText };
 
             SetupConfiguration("http://localhost:11434/", "llama2");
@@ -462,7 +474,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
         {
             // Arrange
             var problemStatement = "Test problem";
-            var invalidResponse = new { title = "Test", description = "Missing required fields" };
+            var invalidResponse = new[] { new { title = "Test", description = "Missing required fields" } };
             var ollamaResponse = new { response = JsonSerializer.Serialize(invalidResponse) };
 
             SetupConfiguration("http://localhost:11434/", "llama2");
@@ -471,7 +483,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
                 () => service.GenerateAiPbis(new List<string> { problemStatement }));
-            Assert.Contains("Failed to parse AI response as JSON", exception.Message);
+            Assert.Contains("AI PBI response is missing type", exception.Message);
         }
 
         [Fact]
@@ -484,12 +496,15 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
 
             var aiResponse = new AiStoryResponse
             {
+                Type = PbiType.Story,
+                Priority = PbiPriority.Low,
+                StoryPoints = 1,
                 Title = "Test Story",
                 UserStory = "Test user story",
                 AcceptanceCriteria = ["Test criteria"]
             };
 
-            var ollamaResponse = new { response = JsonSerializer.Serialize(aiResponse) };
+            var ollamaResponse = new { response = SerializeAiResponses(aiResponse) };
 
             SetupConfiguration(baseUrl, model);
             var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
@@ -507,8 +522,17 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             var requestObject = JsonSerializer.Deserialize<JsonElement>(requestContent);
 
             Assert.Equal(model, requestObject.GetProperty("model").GetString());
-            Assert.Contains(problemStatement, requestObject.GetProperty("prompt").GetString());
+            var prompt = requestObject.GetProperty("prompt").GetString();
+            Assert.Contains(problemStatement, prompt);
+            Assert.Contains("exactly these six keys", prompt);
+            Assert.DoesNotContain("- dependencies:", prompt);
+            Assert.DoesNotContain("- parallelizationNotes:", prompt);
             Assert.False(requestObject.GetProperty("stream").GetBoolean());
+
+            var format = requestObject.GetProperty("format");
+            Assert.Equal(JsonValueKind.Object, format.ValueKind);
+            Assert.Equal("array", format.GetProperty("type").GetString());
+            Assert.Equal("object", format.GetProperty("items").GetProperty("type").GetString());
         }
 
         [Fact]
@@ -517,12 +541,15 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             // Arrange
             var aiResponse = new AiStoryResponse
             {
+                Type = PbiType.Story,
+                Priority = PbiPriority.Low,
+                StoryPoints = 2,
                 Title = "Test Story",
                 UserStory = "As a user, I want to test, so that I can verify functionality.",
                 AcceptanceCriteria = ["I see the result"]
             };
 
-            var ollamaResponse = new { response = JsonSerializer.Serialize(aiResponse) };
+            var ollamaResponse = new { response = SerializeAiResponses(aiResponse) };
 
             SetupConfiguration("http://localhost:11434/", "llama2");
             var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
@@ -541,6 +568,126 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
         }
 
         [Fact]
+        public async Task GenerateAiPbis_FlattensMultipleItemsFromEachProblemStatement()
+        {
+            var responses = new[]
+            {
+                new AiStoryResponse
+                {
+                    Type = PbiType.Story,
+                    Priority = PbiPriority.Medium,
+                    StoryPoints = 3,
+                    Title = "First",
+                    UserStory = "As a user, I want the first outcome, so that I receive value.",
+                    AcceptanceCriteria = ["I see the first outcome"]
+                },
+                new AiStoryResponse
+                {
+                    Type = PbiType.Task,
+                    Priority = PbiPriority.Low,
+                    StoryPoints = 2,
+                    Title = "Second",
+                    UserStory = "As a developer, I want the second outcome, so that the feature is supported.",
+                    AcceptanceCriteria = ["I see the second outcome"]
+                }
+            };
+            var ollamaResponse = new { response = SerializeAiResponses(responses) };
+
+            SetupConfiguration("http://localhost:11434/", "llama2");
+            var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
+
+            var result = await service.GenerateAiPbis(["Statement 1", "Statement 2"]);
+
+            Assert.Equal(4, result.Count);
+            Assert.Equal(["First", "Second", "First", "Second"], result.Select(pbi => pbi.Title));
+        }
+
+        [Fact]
+        public async Task GenerateAiPbis_RejectsInvalidStoryPoints()
+        {
+            var response = new AiStoryResponse
+            {
+                Type = PbiType.Story,
+                Priority = PbiPriority.Low,
+                StoryPoints = 4,
+                Title = "Invalid estimate",
+                UserStory = "As a user, I want an estimate, so that work can be planned.",
+                AcceptanceCriteria = ["I see an estimate"]
+            };
+            var ollamaResponse = new { response = SerializeAiResponses(response) };
+
+            SetupConfiguration("http://localhost:11434/", "llama2");
+            var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
+
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => service.GenerateAiPbis(["Statement"]));
+
+            Assert.Contains("invalid storyPoints", exception.Message);
+        }
+
+        [Fact]
+        public async Task ImprovePbiAsync_AppliesSingleArrayItemAndPreservesWorkflowFields()
+        {
+            var response = new AiStoryResponse
+            {
+                Type = PbiType.Bug,
+                Priority = PbiPriority.High,
+                StoryPoints = 8,
+                Title = "Improved",
+                UserStory = "As a user, I want the defect fixed, so that I can continue.",
+                AcceptanceCriteria = ["I see the corrected behavior"]
+            };
+            var ollamaResponse = new { response = SerializeAiResponses(response) };
+            var existing = new ProductBacklogItem
+            {
+                PbiId = 42,
+                ProjectId = 7,
+                Title = "Original",
+                Status = PbiStatus.InProgress,
+                IsDraft = false,
+                Origin = PbiOrigin.WebUserCreated
+            };
+
+            SetupConfiguration("http://localhost:11434/", "llama2");
+            var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
+
+            var result = await service.ImprovePbiAsync(existing);
+
+            Assert.Equal(42, result.PbiId);
+            Assert.Equal(7, result.ProjectId);
+            Assert.Equal(PbiStatus.InProgress, result.Status);
+            Assert.False(result.IsDraft);
+            Assert.Equal(PbiOrigin.WebUserCreated, result.Origin);
+            Assert.Equal(PbiType.Bug, result.Type);
+            Assert.Equal(PbiPriority.High, result.Priority);
+            Assert.Equal(PbiPoints.Eight, result.StoryPoints);
+            Assert.Equal("Improved", result.Title);
+        }
+
+        [Fact]
+        public async Task ImprovePbiAsync_RejectsMultipleArrayItems()
+        {
+            var response = new AiStoryResponse
+            {
+                Type = PbiType.Story,
+                Priority = PbiPriority.Low,
+                StoryPoints = 1,
+                Title = "Improved",
+                UserStory = "As a user, I want an improvement, so that I receive value.",
+                AcceptanceCriteria = ["I see the improvement"]
+            };
+            var ollamaResponse = new { response = SerializeAiResponses(response, response) };
+
+            SetupConfiguration("http://localhost:11434/", "llama2");
+            var service = CreateServiceWithResponse(JsonSerializer.Serialize(ollamaResponse), HttpStatusCode.OK);
+
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => service.ImprovePbiAsync(new ProductBacklogItem { Title = "Original" }));
+
+            Assert.Contains("must return exactly one PBI", exception.Message);
+        }
+
+        [Fact]
         public async Task GenerateAiPbi_PropagatesException_WhenAnyPbiGenerationFails()
         {
             // Arrange
@@ -556,6 +703,13 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
         {
             _mockConfiguration["OllamaBaseUrl"].Returns(baseUrl);
             _mockConfiguration["OllamaModel"].Returns(model);
+        }
+
+        private static string SerializeAiResponses(params AiStoryResponse[] responses)
+        {
+            var options = new JsonSerializerOptions();
+            options.Converters.Add(new JsonStringEnumConverter());
+            return JsonSerializer.Serialize(responses, options);
         }
 
         private void ConfigureHttpResponse(string responseContent, HttpStatusCode statusCode)

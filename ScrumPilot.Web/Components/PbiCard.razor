@@ -16,6 +16,8 @@
                              box-shadow: 0 6px 25px rgba(25, 118, 210, 0.2);">
 
                 <!-- EDIT / SAVE / CANCEL / DELETE BUTTONS -->
+                @if (!ReadOnly)
+                {
                 <div class="pbi-button-row mb-4">
                     @if (isEditMode)
                     {
@@ -77,6 +79,7 @@
                         </div>
                     }
                 </div>
+                }
 
                 <!-- FLAG REASON DIALOG -->
                 @if (showFlagDialog)
@@ -178,9 +181,29 @@
                     }
                 </div>
 
-                <!-- ROW 1: Status | Priority | Story Points -->
+                <!-- ROW 1: Type | Status | Priority | Story Points -->
                 <MudGrid Spacing="2" Class="mb-3" AlignItems="Center">
-                    <MudItem xs="12" sm="4">
+                    <MudItem xs="12" sm="3">
+                        @if (isEditMode)
+                        {
+                            <MudSelect T="PbiType"
+                                       @bind-Value="editType"
+                                       Label="Type"
+                                       Variant="Variant.Outlined"
+                                       Dense="true">
+                                <MudSelectItem Value="PbiType.Story">Story</MudSelectItem>
+                                <MudSelectItem Value="PbiType.Bug">Bug</MudSelectItem>
+                                <MudSelectItem Value="PbiType.Task">Task</MudSelectItem>
+                            </MudSelect>
+                        }
+                        else
+                        {
+                            <MudChip T="string" Size="Size.Medium" Color="Color.Info" Variant="Variant.Outlined">
+                                @PbiModel.Type
+                            </MudChip>
+                        }
+                    </MudItem>
+                    <MudItem xs="12" sm="3">
                         @if (isEditMode)
                         {
                             <MudSelect T="PbiStatus"
@@ -204,7 +227,7 @@
                             </MudChip>
                         }
                     </MudItem>
-                    <MudItem xs="12" sm="4">
+                    <MudItem xs="12" sm="3">
                         @if (isEditMode)
                         {
                             <MudSelect T="PbiPriority"
@@ -228,7 +251,7 @@
                             </MudChip>
                         }
                     </MudItem>
-                    <MudItem xs="12" sm="4">
+                    <MudItem xs="12" sm="3">
                         @if (isEditMode)
                         {
                             <MudSelect T="PbiPoints"
@@ -550,6 +573,7 @@ else
     [Parameter] public EventCallback OnCancelNew { get; set; }
     [Parameter] public int? ProjectId { get; set; }
     [Parameter] public EventCallback<int> OnNavigateToPbi { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
 
     // Edit mode state
     private bool isEditMode = false;
@@ -569,6 +593,7 @@ else
     // Edit field values
     private string editTitle = "";
     private string editDescription = "";
+    private PbiType editType;
     private PbiStatus editStatus;
     private PbiPriority editPriority;
     private PbiPoints editStoryPoints;
@@ -596,6 +621,16 @@ else
         await Task.WhenAll(LoadEpics(), LoadSprints(), LoadUsers(), LoadProjectPbis());
         if (StartInEditMode && PbiModel != null)
             StartEdit();
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (ReadOnly)
+        {
+            isEditMode = false;
+            showDeleteConfirm = false;
+            showFlagDialog = false;
+        }
     }
 
     private void AssignToMe()
@@ -774,6 +809,7 @@ else
     {
         editTitle            = PbiModel!.Title ?? "";
         editDescription      = PbiModel.Description ?? "";
+        editType             = PbiModel.Type;
         editStatus           = PbiModel.Status;
         editPriority         = PbiModel.Priority;
         editStoryPoints      = PbiModel.StoryPoints;
@@ -799,6 +835,7 @@ else
 
         PbiModel!.Title            = editTitle;
         PbiModel.Description       = editDescription;
+        PbiModel.Type              = editType;
         PbiModel.Status            = editStatus;
         PbiModel.Priority          = editPriority;
         PbiModel.StoryPoints       = editStoryPoints;
@@ -849,9 +886,10 @@ else
                 {
                     editTitle = improved.Title;
                     editDescription = improved.Description ?? "";
+                    editType = improved.Type;
                     editStatus = PbiModel.Status;
-                    editPriority = PbiModel.Priority;
-                    editStoryPoints = PbiModel.StoryPoints;
+                    editPriority = improved.Priority;
+                    editStoryPoints = improved.StoryPoints;
                     editEpicId = PbiModel.EpicId;
                     editSprintId = PbiModel.SprintId;
                     titleError = false;
