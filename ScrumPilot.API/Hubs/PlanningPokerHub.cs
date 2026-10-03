@@ -33,6 +33,7 @@ public class PlanningPokerHub(
             return;
 
         var group = GroupName(removedKey.Value);
+        Exception? groupRemovalException = null;
         try
         {
             await Groups.RemoveFromGroupAsync(
@@ -40,9 +41,9 @@ public class PlanningPokerHub(
                 group,
                 CancellationToken.None);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Continue so peers still receive the deterministic departure notification.
+            groupRemovalException = ex;
         }
 
         try
@@ -55,6 +56,12 @@ public class PlanningPokerHub(
         catch (Exception)
         {
             // Session state is already clean; fanout is best effort.
+        }
+
+        if (groupRemovalException is not null)
+        {
+            Context.Abort();
+            throw new HubException(ProjectNotFoundMessage);
         }
     }
 

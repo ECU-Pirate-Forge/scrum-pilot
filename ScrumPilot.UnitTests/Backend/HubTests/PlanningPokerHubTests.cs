@@ -141,18 +141,24 @@ public class PlanningPokerHubTests
     }
 
     [Fact]
-    public async Task JoinSession_RejoinRemoveGroupFailure_NotifiesOldPeersAndJoinsNewSession()
+    public async Task JoinSession_RejoinRemoveGroupFailure_AbortsWithoutJoiningNewSession()
     {
         var setup = CreateHub();
         await setup.Hub.JoinSession("ignored", projectId: 7);
         setup.Access.CanAccessProjectAsync("user-1", 9, setup.CancellationToken).Returns(true);
         setup.Access.GetOrganizationIdForProjectAsync(9, setup.CancellationToken).Returns(4);
+        var newGroup = "planning-poker-4-9";
         setup.Groups.RemoveFromGroupAsync(ConnectionId, Group, CancellationToken.None)
             .Returns(Task.FromException(new InvalidOperationException("group remove failed")));
 
-        await setup.Hub.JoinSession("ignored", projectId: 9);
+        var exception = await Assert.ThrowsAsync<HubException>(
+            () => setup.Hub.JoinSession("ignored", projectId: 9));
 
-        Assert.Equal(new PlanningPokerSessionKey(4, 9), setup.Service.GetSessionKey(ConnectionId));
+        Assert.Equal("Project not found.", exception.Message);
+        Assert.Null(setup.Service.GetSessionKey(ConnectionId));
+        setup.Hub.Context.Received(1).Abort();
+        await setup.Groups.DidNotReceive().AddToGroupAsync(
+            ConnectionId, newGroup, Arg.Any<CancellationToken>());
         await setup.GroupClient.Received(1).SendCoreAsync(
             "UserLeft",
             Arg.Is<object?[]>(arguments =>
@@ -217,6 +223,34 @@ public class PlanningPokerHubTests
             CancellationToken.None);
         await setup.Access.DidNotReceiveWithAnyArgs()
             .PbiBelongsToProjectAsync(default, default, default);
+    }
+
+    [Fact]
+    public async Task SessionOperation_RevokedAccessAndGroupRemovalFailure_AbortsWithoutMutation()
+    {
+        var setup = CreateJoinedHub(currentPbiId: 42);
+        setup.Service.SetVote(ConnectionId, 5);
+        setup.Access.CanAccessProjectAsync("user-1", 7, setup.CancellationToken).Returns(false);
+        setup.Groups.RemoveFromGroupAsync(ConnectionId, Group, CancellationToken.None)
+            .Returns(Task.FromException(new InvalidOperationException("group remove failed")));
+
+        var exception = await Assert.ThrowsAsync<HubException>(
+            () => setup.Hub.SelectCard(8));
+
+        Assert.Equal("Project not found.", exception.Message);
+        Assert.Null(setup.Service.GetSessionKey(ConnectionId));
+        setup.Hub.Context.Received(1).Abort();
+        var state = setup.Service.GetStateForSession(SessionKey, includeVotes: true);
+        Assert.Empty(state.Participants);
+        await setup.GroupClient.Received(1).SendCoreAsync(
+            "UserLeft",
+            Arg.Is<object?[]>(arguments =>
+                arguments.Length == 1 && (string)arguments[0]! == ConnectionId),
+            CancellationToken.None);
+        await setup.GroupClient.DidNotReceive().SendCoreAsync(
+            "CardSelected",
+            Arg.Any<object?[]>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
