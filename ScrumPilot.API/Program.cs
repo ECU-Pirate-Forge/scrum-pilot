@@ -16,6 +16,8 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddHealthChecks();
+
 // Add Data services (EF Core, Identity, repositories)
 builder.Services.AddDataServices(builder.Configuration);
 
@@ -94,6 +96,8 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+app.MapHealthChecks("/health");
 
 // Apply schema and seed at startup
 using (var scope = app.Services.CreateScope())
