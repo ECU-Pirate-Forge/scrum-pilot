@@ -164,19 +164,15 @@ You are an expert at breaking a problem statement down into independent, paralle
    - title: a short, specific title describing the feature or need
    - userStory: written as 'As a [specific role], I want [specific goal], so that [specific benefit].'
    - acceptanceCriteria: an array of 3 to 7 strings, each beginning with 'I see' and describing a concrete, observable outcome
-   - dependencies:
-   - parallelizationNotes:
 9. Validate that tasks cover the entire problem statement.
-10.Generate one or more Scrum product backlog items for the following problem statement and return them as a JSON array.
-    - Each array item must have exactly these eight keys:
+10. Generate one or more Scrum product backlog items for the following problem statement and return them as a JSON array.
+    - Each array item must have exactly these six keys:
       - type: one of 'Story', 'Bug', or 'Task'
       - priority: one of 'None', 'Low', 'Medium', or 'High'
       - storyPoints: one of 0, 1, 2, 3, 5, 8, 13, or 21
       - title: a short, specific title describing the feature or need
       - userStory: written as 'As a [specific role], I want [specific goal], so that [specific benefit].'
       - acceptanceCriteria: an array of 3 to 5 strings, each beginning with 'I see' and describing a concrete, observable outcome
-      - dependencies: an array of strings representing task dependencies
-      - parallelizationNotes: an array of strings providing notes on how the task can be parallelized
 
 Do not copy these instructions into the output. Do not use placeholder text. Return only the JSON array with no markdown, no explanation, and no extra keys.
 
@@ -212,7 +208,38 @@ Problem statement: {problemStatement}";
                 model = model,
                 prompt = prompt,
                 stream = false,
-                format = "json"
+                format = new
+                {
+                    type = "array",
+                    items = new
+                    {
+                        type = "object",
+                        properties = new
+                        {
+                            type = new { type = "string", @enum = new[] { "Story", "Bug", "Task" } },
+                            priority = new { type = "string", @enum = new[] { "None", "Low", "Medium", "High" } },
+                            storyPoints = new { type = "integer", @enum = new[] { 0, 1, 2, 3, 5, 8, 13, 21 } },
+                            title = new { type = "string" },
+                            userStory = new { type = "string" },
+                            acceptanceCriteria = new
+                            {
+                                type = "array",
+                                items = new { type = "string" },
+                                minItems = 1
+                            }
+                        },
+                        required = new[]
+                        {
+                            "type",
+                            "priority",
+                            "storyPoints",
+                            "title",
+                            "userStory",
+                            "acceptanceCriteria"
+                        },
+                        additionalProperties = false
+                    }
+                }
             };
 
             var json = JsonSerializer.Serialize(requestBody);

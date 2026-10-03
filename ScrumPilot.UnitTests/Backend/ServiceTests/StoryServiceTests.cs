@@ -522,8 +522,17 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             var requestObject = JsonSerializer.Deserialize<JsonElement>(requestContent);
 
             Assert.Equal(model, requestObject.GetProperty("model").GetString());
-            Assert.Contains(problemStatement, requestObject.GetProperty("prompt").GetString());
+            var prompt = requestObject.GetProperty("prompt").GetString();
+            Assert.Contains(problemStatement, prompt);
+            Assert.Contains("exactly these six keys", prompt);
+            Assert.DoesNotContain("- dependencies:", prompt);
+            Assert.DoesNotContain("- parallelizationNotes:", prompt);
             Assert.False(requestObject.GetProperty("stream").GetBoolean());
+
+            var format = requestObject.GetProperty("format");
+            Assert.Equal(JsonValueKind.Object, format.ValueKind);
+            Assert.Equal("array", format.GetProperty("type").GetString());
+            Assert.Equal("object", format.GetProperty("items").GetProperty("type").GetString());
         }
 
         [Fact]
