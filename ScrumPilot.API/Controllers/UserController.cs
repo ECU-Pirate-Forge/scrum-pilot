@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using ScrumPilot.API.Authorization;
 using ScrumPilot.API.Services;
 using ScrumPilot.Shared.Models;
@@ -47,6 +48,17 @@ public class UserController(
                 currentUser.UserId, projectId, cancellationToken))
             return NotFound();
         var users = await service.GetProjectUsersAsync(projectId, cancellationToken);
+        return Ok(users);
+    }
+
+    /// <summary>Searches users eligible to become the initial owner of a new organization.</summary>
+    [Authorize(Roles = "Admin")]
+    [HttpGet("admin-search")]
+    public async Task<ActionResult<IReadOnlyList<UserSummaryDto>>> SearchUsers(
+        [FromQuery] string query,
+        CancellationToken cancellationToken)
+    {
+        var users = await service.SearchUsersAsync(query, 20, cancellationToken);
         return Ok(users);
     }
 

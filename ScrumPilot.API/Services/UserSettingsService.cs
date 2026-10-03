@@ -82,4 +82,26 @@ public class UserSettingsService : IUserSettingsService
             orderby user.UserName
             select new UserSummaryDto { Id = user.Id, UserName = user.UserName ?? "" })
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<UserSummaryDto>> SearchUsersAsync(
+        string query,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        var normalized = query.Trim().ToUpperInvariant();
+        if (normalized.Length < 2) return [];
+        return await _context.Users.AsNoTracking()
+            .Where(user =>
+                (user.NormalizedUserName != null && user.NormalizedUserName.Contains(normalized))
+                || (user.NormalizedEmail != null && user.NormalizedEmail.Contains(normalized)))
+            .OrderBy(user => user.UserName)
+            .Take(Math.Clamp(limit, 1, 20))
+            .Select(user => new UserSummaryDto
+            {
+                Id = user.Id,
+                UserName = user.UserName ?? "",
+                Email = user.Email
+            })
+            .ToListAsync(cancellationToken);
+    }
 }

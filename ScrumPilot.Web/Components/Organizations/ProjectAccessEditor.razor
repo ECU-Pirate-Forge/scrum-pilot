@@ -1,0 +1,46 @@
+@inject HttpClient Http
+
+<MudPaper Class="pa-4 mb-4">
+    <MudText Typo="Typo.h6">Project access</MudText>
+    @foreach (var member in _members)
+    {
+        var isOwner = member.OrganizationRole == OrganizationRole.Owner;
+        <div class="d-flex align-center gap-2 my-2">
+            <MudText Style="flex:1">@member.UserId (@(isOwner ? "Owner — implicit access" : member.HasExplicitAccess ? "Access granted" : "No access"))</MudText>
+            @if (CanManage)
+            {
+                <MudButton data-user="@member.UserId" Disabled="@isOwner"
+                           OnClick="@(() => ToggleAsync(member))">
+                    @(member.HasExplicitAccess ? "Remove access" : "Grant access")
+                </MudButton>
+            }
+        </div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_error)) { <MudAlert Severity="Severity.Error">@_error</MudAlert> }
+</MudPaper>
+
+@code {
+    [Parameter] public int ProjectId { get; set; }
+    [Parameter] public bool CanManage { get; set; }
+    private List<ProjectMemberAccessDto> _members = [];
+    private string? _error;
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try { _members = await Http.GetFromJsonAsync<List<ProjectMemberAccessDto>>($"api/projects/{ProjectId}/members") ?? []; }
+        catch (HttpRequestException) { _error = "Unable to load project access."; }
+    }
+
+    private async Task ToggleAsync(ProjectMemberAccessDto member)
+    {
+        var grant = !member.HasExplicitAccess;
+        var response = grant
+            ? await Http.PutAsJsonAsync($"api/projects/{ProjectId}/members/{Uri.EscapeDataString(member.UserId)}",
+                new SetProjectAccessRequest(true))
+            : await Http.DeleteAsync($"api/projects/{ProjectId}/members/{Uri.EscapeDataString(member.UserId)}");
+        if (!response.IsSuccessStatusCode) _error = "Unable to update project access.";
+        else await LoadAsync();
+    }
+}

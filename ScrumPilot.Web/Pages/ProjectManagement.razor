@@ -3,6 +3,7 @@
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject ScrumPilot.Web.Services.ProjectStateService ProjectState
+@inject ScrumPilot.Web.Services.OrganizationStateService OrganizationState
 
 <PageTitle>Project Management</PageTitle>
 
@@ -13,10 +14,13 @@
         <MudPaper Class="pa-4" Elevation="2" Style="min-height: 80vh;">
             <div class="d-flex align-center justify-space-between mb-4">
                 <MudText Typo="Typo.h6" Style="font-weight: 600;">Projects</MudText>
+                @if (IsOwner)
+                {
                 <MudIconButton Icon="@Icons.Material.Filled.AddCircle"
                                Color="Color.Primary"
                                Title="Add Project"
                                OnClick="@(() => _showAddProject = true)" />
+                }
             </div>
 
             @if (_showAddProject)
@@ -98,6 +102,8 @@
                                         <MudText Typo="Typo.caption" Style="opacity: 0.7;">@project.Description</MudText>
                                     }
                                 </div>
+                                @if (IsOwner)
+                                {
                                 <div @onclick:stopPropagation="true">
                                     <MudMenu Icon="@Icons.Material.Filled.Settings"
                                              Size="Size.Small"
@@ -113,6 +119,7 @@
                                         </MudMenuItem>
                                     </MudMenu>
                                 </div>
+                                }
                             }
                         </div>
                     </MudPaper>
@@ -513,6 +520,7 @@
 }
 
 @code {
+    private bool IsOwner => OrganizationState.SelectedOrganization?.Role == OrganizationRole.Owner;
     private List<Project> _projects = new();
     private Project? _selectedProject;
     private bool _saving;
@@ -559,7 +567,13 @@
     {
         try
         {
-            _projects = await Http.GetFromJsonAsync<List<Project>>("api/project") ?? new();
+            if (!OrganizationState.SelectedOrganizationId.HasValue)
+            {
+                Snackbar.Add("Select an organization before managing projects.", Severity.Warning);
+                return;
+            }
+            _projects = await Http.GetFromJsonAsync<List<Project>>(
+                $"api/organizations/{OrganizationState.SelectedOrganizationId.Value}/projects") ?? new();
             if (ProjectState.SelectedProjectId.HasValue)
             {
                 var match = _projects.FirstOrDefault(p => p.ProjectId == ProjectState.SelectedProjectId);
@@ -570,6 +584,7 @@
         catch
         {
             _projects = new();
+            Snackbar.Add("Failed to load projects.", Severity.Error);
         }
     }
 
@@ -598,7 +613,11 @@
         {
             _sprints = await Http.GetFromJsonAsync<List<Sprint>>($"api/sprint?projectId={_selectedProject.ProjectId}") ?? new();
         }
-        catch { _sprints = new(); }
+        catch
+        {
+            _sprints = new();
+            Snackbar.Add("Failed to load sprints.", Severity.Error);
+        }
     }
 
     private async Task LoadEpics()
@@ -608,7 +627,11 @@
         {
             _epics = await Http.GetFromJsonAsync<List<Epic>>($"api/epic?projectId={_selectedProject.ProjectId}") ?? new();
         }
-        catch { _epics = new(); }
+        catch
+        {
+            _epics = new();
+            Snackbar.Add("Failed to load epics.", Severity.Error);
+        }
     }
 
     private async Task LoadStories()
@@ -622,7 +645,11 @@
             if (_storyFilterEpicId.HasValue) url += $"&epicId={_storyFilterEpicId}";
             _pbis = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(url) ?? new();
         }
-        catch { _pbis = new(); }
+        catch
+        {
+            _pbis = new();
+            Snackbar.Add("Failed to load stories.", Severity.Error);
+        }
         _loadingStories = false;
     }
 
@@ -634,7 +661,10 @@
         _saving = true;
         try
         {
-            var created = await Http.PostAsJsonAsync("api/project", new Project { ProjectName = _newProjectName, Description = _newProjectDescription });
+            if (!OrganizationState.SelectedOrganizationId.HasValue) return;
+            var created = await Http.PostAsJsonAsync(
+                $"api/organizations/{OrganizationState.SelectedOrganizationId.Value}/projects",
+                new CreateProjectRequest(_newProjectName, _newProjectDescription));
             if (created.IsSuccessStatusCode)
             {
                 var project = await created.Content.ReadFromJsonAsync<Project>();
@@ -662,7 +692,7 @@
 
         try
         {
-            var response = await Http.DeleteAsync($"api/project/{project.ProjectId}");
+            var response = await Http.DeleteAsync($"api/projects/{project.ProjectId}");
             if (response.IsSuccessStatusCode)
             {
                 _projects.Remove(project);
@@ -697,7 +727,8 @@
         {
             project.ProjectName = _editingProjectName;
             project.Description = string.IsNullOrWhiteSpace(_editingProjectDescription) ? null : _editingProjectDescription;
-            var response = await Http.PutAsJsonAsync($"api/project/{project.ProjectId}", project);
+            var response = await Http.PutAsJsonAsync($"api/projects/{project.ProjectId}",
+                new UpdateProjectRequest(project.ProjectName, project.Description));
             if (response.IsSuccessStatusCode)
             {
                 _editingProjectId = null;

@@ -27,4 +27,10 @@ public interface IUserSettingsService
 
     /// <summary>Returns users eligible for assignment in a project.</summary>
     Task<IEnumerable<UserSummaryDto>> GetProjectUsersAsync(int projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>Returns a bounded user search used only by global administrators.</summary>
+    Task<IReadOnlyList<UserSummaryDto>> SearchUsersAsync(
+        string query,
+        int limit,
+        CancellationToken cancellationToken = default);
 }

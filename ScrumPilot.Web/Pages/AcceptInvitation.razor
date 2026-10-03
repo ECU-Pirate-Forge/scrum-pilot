@@ -1,0 +1,73 @@
+@page "/accept-invitation"
+@attribute [AllowAnonymous]
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ScrumPilot.Web.Services.OrganizationStateService OrganizationState
+
+<PageTitle>Accept Invitation</PageTitle>
+<MudText Typo="Typo.h4">Accept organization invitation</MudText>
+@if (!string.IsNullOrWhiteSpace(_message))
+{
+    <MudAlert Severity="@_severity" Class="mt-4">@_message</MudAlert>
+}
+else
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "token")] public string? Token { get; set; }
+    private string? _message;
+    private Severity _severity = Severity.Info;
+    private bool _redirecting;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_redirecting) return;
+        var user = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
+        if (user.Identity?.IsAuthenticated != true)
+        {
+            _redirecting = true;
+            var relative = Navigation.ToBaseRelativePath(Navigation.Uri);
+            Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/" + relative)}", replace: true);
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(Token))
+        {
+            _message = "This invitation link is invalid.";
+            _severity = Severity.Error;
+            return;
+        }
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await Http.PostAsJsonAsync("api/organization-invitations/accept",
+                new AcceptOrganizationInvitationRequest(Token));
+        }
+        catch (HttpRequestException)
+        {
+            _message = "The invitation could not be accepted. Try again.";
+            _severity = Severity.Error;
+            return;
+        }
+
+        if (response.IsSuccessStatusCode)
+        {
+            var organizations = await Http.GetFromJsonAsync<List<OrganizationSummaryDto>>("api/organizations") ?? [];
+            OrganizationState.SetOrganization(organizations.FirstOrDefault());
+            Navigation.NavigateTo("/organization-management", replace: true);
+            return;
+        }
+        _severity = Severity.Error;
+        _message = response.StatusCode switch
+        {
+            System.Net.HttpStatusCode.BadRequest => "This invitation is invalid or expired. Ask an owner for a new invitation.",
+            System.Net.HttpStatusCode.Forbidden => "This invitation cannot be accepted by the signed-in account.",
+            System.Net.HttpStatusCode.NotFound => "This invitation was not found. Ask an owner for a new invitation.",
+            System.Net.HttpStatusCode.Conflict => "This invitation was already accepted or conflicts with your membership.",
+            _ => "The invitation could not be accepted. Try again."
+        };
+    }
+}

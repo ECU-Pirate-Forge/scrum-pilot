@@ -3,6 +3,7 @@
 @layout MainLayout
 @inject IAuthService AuthService
 @inject NavigationManager Navigation
+@using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Authorization
 @using ScrumPilot.Web.Services
 
@@ -125,6 +126,7 @@
 </style>
 
 @code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
     private LoginRequest _model = new();
     private string _errorMessage = string.Empty;
     private bool _isLoading;
@@ -137,10 +139,17 @@
         var success = await AuthService.LoginAsync(_model);
 
         if (success)
-            Navigation.NavigateTo("/");
+            Navigation.NavigateTo(IsSafeLocalUrl(ReturnUrl) ? ReturnUrl! : "/");
         else
             _errorMessage = "Invalid username or password.";
 
         _isLoading = false;
     }
+
+    private static bool IsSafeLocalUrl(string? url) =>
+        !string.IsNullOrWhiteSpace(url)
+        && url.StartsWith("/", StringComparison.Ordinal)
+        && !url.StartsWith("//", StringComparison.Ordinal)
+        && !url.StartsWith("/\\", StringComparison.Ordinal)
+        && !Uri.TryCreate(url, UriKind.Absolute, out _);
 }

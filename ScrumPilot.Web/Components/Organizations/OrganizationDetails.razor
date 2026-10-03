@@ -1,0 +1,55 @@
+@inject HttpClient Http
+
+<MudPaper Class="pa-4 mb-4">
+    <MudText Typo="Typo.h5">@Organization.Name</MudText>
+    <MudText Typo="Typo.body2">Your role: @Organization.Role</MudText>
+    @if (Organization.Role == OrganizationRole.Owner && !Organization.IsDeleted)
+    {
+        <MudText Typo="Typo.h6" Class="mt-4">Rename organization</MudText>
+        <div class="d-flex gap-2 align-center">
+            <MudTextField @bind-Value="_name" Label="Organization name" />
+            <MudButton data-action="rename" OnClick="RenameAsync" Disabled="_busy">Rename</MudButton>
+        </div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-2">@_error</MudAlert>
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public OrganizationSummaryDto Organization { get; set; } = default!;
+    [Parameter] public EventCallback<OrganizationSummaryDto> OrganizationChanged { get; set; }
+
+    private string _name = "";
+    private string? _error;
+    private bool _busy;
+
+    protected override void OnParametersSet() => _name = Organization.Name;
+
+    private async Task RenameAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_name)) { _error = "Organization name is required."; return; }
+        _busy = true;
+        _error = null;
+        try
+        {
+            var response = await Http.PutAsJsonAsync(
+                $"api/organizations/{Organization.OrganizationId}",
+                new RenameOrganizationRequest(_name.Trim()));
+            if (!response.IsSuccessStatusCode) { _error = await ErrorAsync(response, "Unable to rename the organization."); return; }
+            var updated = await response.Content.ReadFromJsonAsync<OrganizationSummaryDto>();
+            if (updated is not null) await OrganizationChanged.InvokeAsync(updated);
+        }
+        catch (HttpRequestException) { _error = "Unable to rename the organization."; }
+        finally { _busy = false; }
+    }
+
+    private static async Task<string> ErrorAsync(HttpResponseMessage response, string fallback)
+    {
+        try { return (await response.Content.ReadFromJsonAsync<ProblemDetails>())?.Detail ?? fallback; }
+        catch { return fallback; }
+    }
+
+    private sealed class ProblemDetails { public string? Detail { get; set; } }
+}

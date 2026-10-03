@@ -1,0 +1,149 @@
+@implements IDisposable
+@inject HttpClient Http
+
+<MudPaper Class="pa-4 mb-4">
+    <MudText Typo="Typo.h6">Members</MudText>
+    @if (CanManage)
+    {
+        <div class="d-flex gap-2 align-center mb-3">
+            <MudTextField @bind-Value="_email" InputType="InputType.Email" Label="Invite email" />
+            <MudSelect @bind-Value="_inviteRole" Label="Role">
+                <MudSelectItem Value="OrganizationRole.Member">Member</MudSelectItem>
+                <MudSelectItem Value="OrganizationRole.Owner">Owner</MudSelectItem>
+            </MudSelect>
+            <MudButton data-action="invite" OnClick="InviteAsync">Invite</MudButton>
+        </div>
+    }
+    @foreach (var member in _members)
+    {
+        <div class="d-flex gap-2 align-center my-2">
+            <MudText Style="flex:1">@member.UserId — @member.Role</MudText>
+            @if (CanManage)
+            {
+                <MudCheckBox @bind-Value="_confirmedMembers[member.UserId]" Label="Confirm" />
+                @if (member.Role == OrganizationRole.Member)
+                {
+                    <MudButton data-action="promote" Disabled="@(!_confirmedMembers[member.UserId])"
+                               OnClick="@(() => ChangeRoleAsync(member, OrganizationRole.Owner))">Promote</MudButton>
+                }
+                else
+                {
+                    <MudButton data-action="demote" Disabled="@(!_confirmedMembers[member.UserId])"
+                               OnClick="@(() => ChangeRoleAsync(member, OrganizationRole.Member))">Demote</MudButton>
+                }
+                <MudButton data-action="remove" Color="Color.Error" Disabled="@(!_confirmedMembers[member.UserId])"
+                           OnClick="@(() => RemoveAsync(member))">Remove</MudButton>
+            }
+        </div>
+    }
+    @if (CanManage)
+    {
+        <MudText Typo="Typo.h6" Class="mt-4">Pending invitations</MudText>
+        @foreach (var invitation in _invitations.Where(x => x.Status == OrganizationInvitationStatus.Pending))
+        {
+            <div class="d-flex gap-2 align-center my-2">
+                <MudText Style="flex:1">@invitation.Email — @invitation.Role</MudText>
+                @if (!string.IsNullOrWhiteSpace(invitation.DeliveryError))
+                {
+                    <MudText Color="Color.Error">@invitation.DeliveryError</MudText>
+                }
+                <MudButton OnClick="@(() => ResendAsync(invitation))">Resend</MudButton>
+                <MudButton Color="Color.Error" OnClick="@(() => RevokeAsync(invitation))">Revoke</MudButton>
+            </div>
+        }
+    }
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-2">@_error</MudAlert>
+    }
+</MudPaper>
+
+@code {
+    [Parameter] public int OrganizationId { get; set; }
+    [Parameter] public bool CanManage { get; set; }
+
+    private readonly Dictionary<string, bool> _confirmedMembers = [];
+    private List<OrganizationMemberDto> _members = [];
+    private List<OrganizationInvitationDto> _invitations = [];
+    private CancellationTokenSource? _loadCancellation;
+    private string _email = "";
+    private OrganizationRole _inviteRole = OrganizationRole.Member;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loadCancellation?.Cancel();
+        _loadCancellation?.Dispose();
+        _loadCancellation = new();
+        await LoadAsync(_loadCancellation.Token);
+    }
+
+    private async Task LoadAsync(CancellationToken token)
+    {
+        try
+        {
+            _members = await Http.GetFromJsonAsync<List<OrganizationMemberDto>>(
+                $"api/organizations/{OrganizationId}/members", token) ?? [];
+            _confirmedMembers.Clear();
+            foreach (var member in _members) _confirmedMembers[member.UserId] = false;
+            _invitations = CanManage
+                ? await Http.GetFromJsonAsync<List<OrganizationInvitationDto>>(
+                    $"api/organizations/{OrganizationId}/invitations", token) ?? []
+                : [];
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (HttpRequestException) { _error = "Unable to load organization members."; }
+    }
+
+    private async Task InviteAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_email)) { _error = "Email is required."; return; }
+        var response = await Http.PostAsJsonAsync($"api/organizations/{OrganizationId}/invitations",
+            new InviteOrganizationMemberRequest(_email.Trim(), _inviteRole));
+        if (!response.IsSuccessStatusCode) { _error = await ErrorAsync(response, "Unable to send invitation."); return; }
+        _email = "";
+        await LoadAsync(CancellationToken.None);
+    }
+
+    private async Task ChangeRoleAsync(OrganizationMemberDto member, OrganizationRole role)
+    {
+        var response = await Http.PutAsJsonAsync(
+            $"api/organizations/{OrganizationId}/members/{Uri.EscapeDataString(member.UserId)}/role",
+            new UpdateOrganizationMemberRoleRequest(role));
+        if (!response.IsSuccessStatusCode) { _error = await ErrorAsync(response, "Unable to change the member role."); return; }
+        await LoadAsync(CancellationToken.None);
+    }
+
+    private async Task RemoveAsync(OrganizationMemberDto member)
+    {
+        var response = await Http.DeleteAsync(
+            $"api/organizations/{OrganizationId}/members/{Uri.EscapeDataString(member.UserId)}");
+        if (!response.IsSuccessStatusCode) { _error = await ErrorAsync(response, "Unable to remove the member."); return; }
+        await LoadAsync(CancellationToken.None);
+    }
+
+    private async Task ResendAsync(OrganizationInvitationDto invitation)
+    {
+        var response = await Http.PostAsync(
+            $"api/organizations/{OrganizationId}/invitations/{invitation.OrganizationInvitationId}/resend", null);
+        if (!response.IsSuccessStatusCode) _error = await ErrorAsync(response, "Unable to resend the invitation.");
+        else await LoadAsync(CancellationToken.None);
+    }
+
+    private async Task RevokeAsync(OrganizationInvitationDto invitation)
+    {
+        var response = await Http.DeleteAsync(
+            $"api/organizations/{OrganizationId}/invitations/{invitation.OrganizationInvitationId}");
+        if (!response.IsSuccessStatusCode) _error = await ErrorAsync(response, "Unable to revoke the invitation.");
+        else await LoadAsync(CancellationToken.None);
+    }
+
+    private static async Task<string> ErrorAsync(HttpResponseMessage response, string fallback)
+    {
+        try { return (await response.Content.ReadFromJsonAsync<ProblemDetails>())?.Detail ?? fallback; }
+        catch { return fallback; }
+    }
+
+    public void Dispose() { _loadCancellation?.Cancel(); _loadCancellation?.Dispose(); }
+    private sealed class ProblemDetails { public string? Detail { get; set; } }
+}

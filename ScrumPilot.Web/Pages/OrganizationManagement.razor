@@ -1,0 +1,157 @@
+@page "/organization-management"
+@implements IDisposable
+@using ScrumPilot.Web.Components.Organizations
+@inject HttpClient Http
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ScrumPilot.Web.Services.OrganizationStateService OrganizationState
+
+<PageTitle>Organization Management</PageTitle>
+<MudText Typo="Typo.h4" Class="mb-4">Organization Management</MudText>
+
+@if (_isAdmin)
+{
+    <MudPaper Class="pa-4 mb-4">
+        <MudText Typo="Typo.h6">Create organization</MudText>
+        <MudTextField @bind-Value="_newName" Label="Organization name" />
+        <MudCheckBox @bind-Value="_useCurrentUser" Label="Make me the initial owner" />
+        @if (!_useCurrentUser)
+        {
+            <MudTextField @bind-Value="_ownerQuery" Label="Search initial owner by username or email" />
+            <MudButton OnClick="SearchOwnersAsync">Search users</MudButton>
+            <MudSelect @bind-Value="_initialOwnerId" Label="Initial owner user ID">
+                @foreach (var user in _ownerResults)
+                {
+                    <MudSelectItem Value="@user.Id">@user.UserName (@user.Email)</MudSelectItem>
+                }
+            </MudSelect>
+        }
+        else
+        {
+            <MudText Typo="Typo.caption">Initial owner user ID: your authenticated account</MudText>
+        }
+        <MudButton OnClick="CreateAsync">Create</MudButton>
+    </MudPaper>
+}
+
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
+}
+else if (_selected is null)
+{
+    <MudAlert Severity="Severity.Info">Select an organization to manage.</MudAlert>
+}
+else
+{
+    <OrganizationDetails Organization="_selected" OrganizationChanged="UpdateSelected" />
+    <OrganizationMembers OrganizationId="_selected.OrganizationId" CanManage="@(_selected.Role == OrganizationRole.Owner)" />
+    @foreach (var project in _projects)
+    {
+        <MudText Typo="Typo.h6">@project.ProjectName</MudText>
+        <ProjectAccessEditor ProjectId="project.ProjectId" CanManage="@(_selected.Role == OrganizationRole.Owner)" />
+    }
+    <OrganizationDangerZone Organization="_selected" Changed="ReloadAsync" />
+}
+
+@code {
+    private OrganizationSummaryDto? _selected;
+    private List<Project> _projects = [];
+    private bool _isAdmin;
+    private bool _useCurrentUser = true;
+    private string _currentUserId = "";
+    private string _initialOwnerId = "";
+    private string _ownerQuery = "";
+    private List<UserSummaryDto> _ownerResults = [];
+    private string _newName = "";
+    private string? _error;
+    private CancellationTokenSource _cancellation = new();
+    private bool _disposed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
+        _isAdmin = user.IsInRole("Admin");
+        _currentUserId = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+            ?? user.FindFirst("sub")?.Value ?? "";
+        OrganizationState.OnChange += OnOrganizationChanged;
+        await ReloadAsync();
+    }
+
+    private void OnOrganizationChanged()
+    {
+        if (_disposed) return;
+        _ = InvokeAsync(async () =>
+        {
+            try { await ReloadAsync(); }
+            catch (OperationCanceledException) { }
+        });
+    }
+
+    private async Task ReloadAsync()
+    {
+        _cancellation.Cancel();
+        _cancellation.Dispose();
+        _cancellation = new();
+        var token = _cancellation.Token;
+        try
+        {
+            var organizations = await Http.GetFromJsonAsync<List<OrganizationSummaryDto>>("api/organizations", token) ?? [];
+            var selectedId = OrganizationState.SelectedOrganizationId;
+            _selected = organizations.FirstOrDefault(x => x.OrganizationId == selectedId)
+                ?? organizations.FirstOrDefault();
+            if (OrganizationState.SelectedOrganizationId is null && _selected is not null)
+            {
+                OrganizationState.OnChange -= OnOrganizationChanged;
+                OrganizationState.SetOrganization(_selected);
+                OrganizationState.OnChange += OnOrganizationChanged;
+            }
+            _projects = _selected is null ? [] :
+                await Http.GetFromJsonAsync<List<Project>>(
+                    $"api/organizations/{_selected.OrganizationId}/projects", token) ?? [];
+            _error = null;
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (HttpRequestException) { _error = "Unable to load organization management."; }
+    }
+
+    private async Task CreateAsync()
+    {
+        var ownerId = _useCurrentUser ? _currentUserId : _initialOwnerId.Trim();
+        if (string.IsNullOrWhiteSpace(_newName) || string.IsNullOrWhiteSpace(ownerId))
+        {
+            _error = "Organization name and initial owner are required.";
+            return;
+        }
+        var response = await Http.PostAsJsonAsync("api/organizations",
+            new CreateOrganizationRequest(_newName.Trim(), ownerId));
+        if (!response.IsSuccessStatusCode) { _error = "Unable to create the organization."; return; }
+        _newName = "";
+        await ReloadAsync();
+    }
+
+    private async Task SearchOwnersAsync()
+    {
+        if (_ownerQuery.Trim().Length < 2)
+        {
+            _error = "Enter at least two characters to search.";
+            return;
+        }
+        _ownerResults = await Http.GetFromJsonAsync<List<UserSummaryDto>>(
+            $"api/User/admin-search?query={Uri.EscapeDataString(_ownerQuery.Trim())}") ?? [];
+        _error = _ownerResults.Count == 0 ? "No matching users found." : null;
+    }
+
+    private void UpdateSelected(OrganizationSummaryDto organization)
+    {
+        _selected = organization;
+        OrganizationState.SetOrganization(organization);
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        OrganizationState.OnChange -= OnOrganizationChanged;
+        _cancellation.Cancel();
+        _cancellation.Dispose();
+    }
+}

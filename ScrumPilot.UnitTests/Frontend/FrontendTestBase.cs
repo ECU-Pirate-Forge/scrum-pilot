@@ -5,6 +5,7 @@ using MudBlazor;
 using MudBlazor.Services;
 using ScrumPilot.Web.Services;
 using System.Net;
+using NSubstitute;
 
 namespace ScrumPilot.UnitTests.Frontend
 {
@@ -15,6 +16,8 @@ namespace ScrumPilot.UnitTests.Frontend
         protected readonly List<(HttpMethod Method, string Url)> HttpRequestLog = [];
         protected HttpStatusCode HttpResponseStatusCode { get; set; } = HttpStatusCode.OK;
         protected Func<HttpRequestMessage, HttpResponseMessage>? HttpResponseFactory { get; set; }
+        protected dynamic Authorization { get; }
+        protected IAuthService AuthService { get; }
 
         protected FrontendTestBase()
         {
@@ -32,12 +35,14 @@ namespace ScrumPilot.UnitTests.Frontend
             // Register auth so components that inject AuthenticationStateProvider
             // (Home, PbiCard, CommentThread, etc.) don't throw MissingBunitAuthorizationException.
             // Uses bUnit's own test-double extension, not the ASP.NET Core one.
-            this.AddAuthorization();
+            Authorization = this.AddAuthorization();
 
             // Register ProjectStateService so pages that inject it
             // (ScrumBoard, SwimLanes, Backlog, PbiGeneration, etc.) can be rendered.
             Services.AddScoped<ProjectStateService>();
             Services.AddScoped<OrganizationStateService>();
+            AuthService = Substitute.For<IAuthService>();
+            Services.AddSingleton(AuthService);
 
             // Register MetricsDashboardService so Backlog (and other pages that inject it) can be rendered.
             Services.AddSingleton(new MetricsDashboardService(MockHttpClient));
