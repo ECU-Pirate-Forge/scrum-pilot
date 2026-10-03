@@ -33,7 +33,6 @@
 - Invitation acceptance returns `AcceptedOrganizationDto` containing the organization ID. The Web client uses that ID to select the newly joined organization and refresh accessible projects.
 - SendGrid options use lazy `IOptions<SendGridOptions>` validation on first invitation delivery rather than `ValidateOnStart`. Missing mail configuration does not block unrelated API startup; restart the API after correcting deployment configuration so values and any cached options are refreshed.
 - Blazor WebAssembly publish runs without `--no-build`; its trimming pipeline invokes referenced-project build targets even after a solution build.
-- Final pending-model verification found the project text-length model changes were absent from the snapshot. `ConstrainProjectTextFields` records the 200-character name and 2,000-character description limits.
 
 ## File and Responsibility Map
 

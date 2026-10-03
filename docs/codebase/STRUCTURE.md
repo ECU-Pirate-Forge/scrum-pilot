@@ -19,4 +19,4 @@
 | `docs/codebase` | Exactly seven implementation-analysis documents |
 | `docs/superpowers/plans` | Historical plan with implementation divergences |
 
-The solution includes API, Data, Shared, Web, UnitTests, AppHost, ServiceDefaults, and migration utility projects plus `discord-bot`.
+The solution includes API, Data, Shared, Web, UnitTests, AppHost, and ServiceDefaults projects plus `discord-bot`. EF migrations live in `ScrumPilot.Data`; there are no separate migration utility projects.

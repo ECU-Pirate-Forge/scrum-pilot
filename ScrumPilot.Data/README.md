@@ -28,8 +28,6 @@ Organization owners have implicit access to every project in their organization.
 7. Creates explicit project memberships for migrated non-owner members.
 8. Creates invitation storage and token indexes.
 
-`20261003083028_ConstrainProjectTextFields` follows it and applies the model's 200-character project-name and 2,000-character project-description limits.
-
 Startup runs `PirateForgeBootstrapper` in a serializable transaction (plus a PostgreSQL advisory lock), seeds missing development users/data idempotently, repairs Pirate Forge memberships/access, retries classified transient conflicts, and validates the global-Admin owner invariant. If no existing global Admin can own Pirate Forge, startup fails with instructions to assign one.
 
 ## Lifecycle behavior
@@ -45,6 +43,8 @@ Startup runs `PirateForgeBootstrapper` in a serializable transaction (plus a Pos
 
 - `DATABASE_URL` present: PostgreSQL through Npgsql.
 - Otherwise: `ConnectionStrings:DefaultConnection` with SQLite.
+
+`AddOrganizationTenancy` is generated for Npgsql and includes explicit provider branches for PostgreSQL and SQLite. Relational migration tests exercise the SQLite path; production migration SQL is generated with Npgsql.
 
 ## Migration commands
 

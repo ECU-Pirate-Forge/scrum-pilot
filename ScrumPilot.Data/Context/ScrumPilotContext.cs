@@ -131,8 +131,7 @@ namespace ScrumPilot.Data.Context
                 entity.ToTable("Project");
                 entity.HasKey(e => e.ProjectId);
                 entity.Property(e => e.ProjectId).ValueGeneratedOnAdd();
-                entity.Property(e => e.ProjectName).IsRequired().HasMaxLength(200);
-                entity.Property(e => e.Description).HasMaxLength(2000);
+                entity.Property(e => e.ProjectName).IsRequired();
                 entity.Property(e => e.OrganizationId).IsRequired();
                 entity.HasIndex(e => e.OrganizationId);
                 entity.HasOne(e => e.Organization)

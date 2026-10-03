@@ -2,7 +2,7 @@
 
 ## Database
 
-EF Core selects PostgreSQL when `DATABASE_URL` exists and otherwise configured SQLite. Startup applies migrations and runs idempotent Pirate Forge bootstrap. Both providers must preserve migration ordering and tenancy constraints.
+At runtime, EF Core selects PostgreSQL when `DATABASE_URL` exists and otherwise uses the configured SQLite connection. Startup applies migrations and runs the idempotent Pirate Forge bootstrap. `AddOrganizationTenancy` was generated for Npgsql, contains explicit PostgreSQL/SQLite branches, and has relational SQLite migration coverage.
 
 ## SendGrid
 

@@ -27,8 +27,8 @@ jobs:
       - name: Build
         run: dotnet build ./ScrumPilot.slnx --no-restore --configuration Release
 
-      - name: Install EF Core tool
-        run: dotnet tool install --global dotnet-ef --version 10.0.5
+      - name: Install or update EF Core tool
+        run: dotnet tool update --global dotnet-ef --version 10.0.5
 
       - name: Verify EF model matches migrations
         env:

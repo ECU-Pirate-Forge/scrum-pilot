@@ -5,7 +5,10 @@
 | Severity | Concern | Mitigation / follow-up |
 |---|---|---|
 | High | API startup automatically migrates production data | Migration is provider-aware and tested; bootstrap validates invariants. Backups and staged rollout remain important. |
+| High | Transitive `Microsoft.OpenApi` 2.4.1 has known advisory GHSA-v5pm-xwqc-g5wc | Pre-existing dependency risk; update the direct dependency chain after compatibility testing. |
+| High | Transitive `SQLitePCLRaw.lib.e_sqlite3` 2.1.11 has known advisory GHSA-2m69-gcr7-jv3q | Pre-existing dependency risk; update the SQLite provider chain after compatibility and migration testing. |
 | High | Development JWT key/default credentials are unsuitable for production | Deployment must override them; never reuse development values. |
+| Medium | Transitive test dependency `AngleSharp` 1.4.0 has known advisory GHSA-pgww-w46g-26qg | Pre-existing test-only risk; update bUnit/the dependency chain after compatibility testing. |
 | Medium | CORS currently allows any origin | Narrow production origins. Server authorization remains mandatory. |
 | Medium | Planning poker sessions are process-local | Access is authorized, but state is not shared across replicas and is lost on restart. |
 | Medium | SendGrid has no automatic retry policy | Owners can resend; delivery failures are persisted. Add retries only with idempotency analysis. |
