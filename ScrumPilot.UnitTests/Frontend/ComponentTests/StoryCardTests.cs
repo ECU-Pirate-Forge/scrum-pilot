@@ -153,5 +153,52 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
                 Assert.Equal("Test pbi", pbi.Title);
             });
         }
+
+        [Fact]
+        public void PbiCard_SaveWithoutPersistence_UpdatesOriginalInstanceAndNotifiesParent()
+        {
+            var pbi = CreateTestPbi();
+            ProductBacklogItem? notified = null;
+            var component = Render<PbiCard>(parameters => parameters
+                .Add(p => p.PbiModel, pbi)
+                .Add(p => p.ProjectId, 1)
+                .Add(p => p.StartInEditMode, true)
+                .Add(p => p.PersistOnSave, false)
+                .Add(p => p.OnSave, saved => notified = saved));
+            var requestsBeforeSave = HttpRequests.Count;
+
+            component.Find("input").Change("Edited title");
+            component.FindAll("button")
+                .Single(button => button.TextContent.Trim() == "Save")
+                .Click();
+
+            component.WaitForAssertion(() =>
+            {
+                Assert.Equal(requestsBeforeSave, HttpRequests.Count);
+                Assert.Equal("Edited title", pbi.Title);
+                Assert.Same(pbi, notified);
+                Assert.DoesNotContain(component.FindAll("button"),
+                    button => button.TextContent.Trim() == "Save");
+            });
+        }
+
+        [Fact]
+        public void PbiCard_DefaultSave_PersistsToApi()
+        {
+            var pbi = CreateTestPbi();
+            var component = Render<PbiCard>(parameters => parameters
+                .Add(p => p.PbiModel, pbi)
+                .Add(p => p.ProjectId, 1)
+                .Add(p => p.StartInEditMode, true));
+
+            component.Find("input").Change("Persisted title");
+            component.FindAll("button")
+                .Single(button => button.TextContent.Trim() == "Save")
+                .Click();
+
+            component.WaitForAssertion(() =>
+                Assert.Contains(HttpRequests, request =>
+                    request.Equals("api/Pbi", StringComparison.OrdinalIgnoreCase)));
+        }
     }
 }

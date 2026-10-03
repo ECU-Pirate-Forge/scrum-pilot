@@ -21,6 +21,7 @@
 
                 <PbiCard PbiModel="@currentItem.Pbi"
                          ProjectId="@ProjectId"
+                         PersistOnSave="false"
                          ReadOnly="@(currentItem.State != GeneratedPbiSaveState.Pending)" />
 
                 <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center" Class="generated-pbi-navigation">

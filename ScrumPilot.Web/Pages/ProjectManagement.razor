@@ -923,35 +923,22 @@
         _dialogPbi = null;
     }
 
-    private async Task HandlePbiSaveFromDialog(ProductBacklogItem pbi)
+    private Task HandlePbiSaveFromDialog(ProductBacklogItem pbi)
     {
-        try
+        var index = _pbis.FindIndex(item => item.PbiId == pbi.PbiId);
+        if (index >= 0)
         {
-            if (pbi.PbiId == 0)
-            {
-                var response = await Http.PostAsJsonAsync(
-                    $"api/pbi/createStory?projectId={_selectedProject.ProjectId}", pbi);
-                if (response.IsSuccessStatusCode)
-                {
-                    var created = await response.Content.ReadFromJsonAsync<ProductBacklogItem>();
-                    if (created != null) _pbis.Insert(0, created);
-                    Snackbar.Add("Story created.", Severity.Success);
-                    ClosePbiDialog();
-                }
-            }
-            else
-            {
-                var response = await Http.PutAsJsonAsync("api/pbi", pbi);
-                if (response.IsSuccessStatusCode)
-                {
-                    var idx = _pbis.FindIndex(p => p.PbiId == pbi.PbiId);
-                    if (idx >= 0) _pbis[idx] = pbi;
-                    Snackbar.Add("Story updated.", Severity.Success);
-                    ClosePbiDialog();
-                }
-            }
+            _pbis[index] = pbi;
+            Snackbar.Add("Story updated.", Severity.Success);
         }
-        catch { Snackbar.Add("Failed to save story.", Severity.Error); }
+        else
+        {
+            _pbis.Insert(0, pbi);
+            Snackbar.Add("Story created.", Severity.Success);
+        }
+
+        ClosePbiDialog();
+        return Task.CompletedTask;
     }
 
     private Task HandlePbiDeleteFromDialog(int id)

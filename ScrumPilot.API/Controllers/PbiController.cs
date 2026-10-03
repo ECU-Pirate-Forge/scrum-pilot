@@ -33,7 +33,9 @@ public class PbiController(
         CancellationToken cancellationToken = default)
     {
         if (!await CanAccess(projectId, cancellationToken)) return NotFound();
-        if (!await RelatedIdsBelongToProject(projectId, sprintId, epicId, null, null, cancellationToken))
+        var sprintIdToValidate = sprintId == -1 ? null : sprintId;
+        if (!await RelatedIdsBelongToProject(
+                projectId, sprintIdToValidate, epicId, null, null, cancellationToken))
             return NotFound();
         return Ok(await pbiService.GetFilteredPbisAsync(sprintId, epicId, projectId, cancellationToken));
     }

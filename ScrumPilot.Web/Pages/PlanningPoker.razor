@@ -427,15 +427,12 @@
         await _hub!.SendAsync("ResetVoting");
     }
 
-    private async Task HandlePbiSave(ProductBacklogItem pbi)
+    private Task HandlePbiSave(ProductBacklogItem pbi)
     {
-        try
-        {
-            var response = await Http.PutAsJsonAsync("api/Pbi", pbi);
-            if (response.IsSuccessStatusCode)
-                await LoadUnassignedPbisAsync();
-        }
-        catch { }
+        var index = _unassignedPbis?.FindIndex(item => item.PbiId == pbi.PbiId) ?? -1;
+        if (index >= 0) _unassignedPbis![index] = pbi;
+        _selectedPbi = pbi;
+        return Task.CompletedTask;
     }
 
     private async Task HandlePbiDelete(int pbiId)

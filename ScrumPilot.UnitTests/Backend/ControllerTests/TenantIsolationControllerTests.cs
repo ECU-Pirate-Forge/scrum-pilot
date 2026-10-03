@@ -36,6 +36,42 @@ public class TenantIsolationControllerTests
     }
 
     [Fact]
+    public async Task PbiNonDraftList_SprintSentinel_FiltersUnassignedPbisWithoutSprintValidation()
+    {
+        var service = Substitute.For<IPbiService>();
+        var repository = Substitute.For<IPbiRepository>();
+        var expected = new List<ProductBacklogItem>
+        {
+            new() { PbiId = 7, ProjectId = 11, Title = "Unassigned" }
+        };
+        _access.CanAccessProjectAsync("user-a", 11, default).Returns(true);
+        service.GetFilteredPbisAsync(-1, null, 11, default).Returns(expected);
+        var controller = new PbiController(service, repository, _currentUser, _access);
+
+        var result = await controller.GetNonDraftPbis(11, -1, null, default);
+
+        Assert.Same(expected, Assert.IsType<OkObjectResult>(result.Result).Value);
+        await service.Received(1).GetFilteredPbisAsync(-1, null, 11, default);
+        await _access.DidNotReceive().SprintBelongsToProjectAsync(
+            Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task PbiNonDraftList_SprintSentinel_ReturnsNotFoundForInaccessibleProject()
+    {
+        var service = Substitute.For<IPbiService>();
+        var repository = Substitute.For<IPbiRepository>();
+        _access.CanAccessProjectAsync("user-a", 22, default).Returns(false);
+        var controller = new PbiController(service, repository, _currentUser, _access);
+
+        var result = await controller.GetNonDraftPbis(22, -1, null, default);
+
+        Assert.IsType<NotFoundResult>(result.Result);
+        await service.DidNotReceive().GetFilteredPbisAsync(
+            Arg.Any<int?>(), Arg.Any<int?>(), Arg.Any<int?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task PbiUpdate_UsesPersistedProject_AndCannotReparent()
     {
         var service = Substitute.For<IPbiService>();

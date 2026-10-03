@@ -575,6 +575,7 @@ else
     [Parameter] public int? ProjectId { get; set; }
     [Parameter] public EventCallback<int> OnNavigateToPbi { get; set; }
     [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public bool PersistOnSave { get; set; } = true;
 
     // Edit mode state
     private bool isEditMode = false;
@@ -843,6 +844,16 @@ else
         titleError = false;
         errorMessage = "";
         var request = BuildEditedPbi();
+        if (!PersistOnSave)
+        {
+            CopyPbi(request, PbiModel!);
+            isEditMode = false;
+            isAiSuggestion = false;
+            if (OnSave.HasDelegate)
+                await OnSave.InvokeAsync(PbiModel);
+            return;
+        }
+
         try
         {
             HttpResponseMessage response;
@@ -871,7 +882,7 @@ else
             }
 
             var saved = await response.Content.ReadFromJsonAsync<ProductBacklogItem>() ?? request;
-            PbiModel = saved;
+            CopyPbi(saved, PbiModel!);
             isEditMode = false;
             isAiSuggestion = false;
             Snackbar.Add("PBI saved.", Severity.Success);
@@ -906,6 +917,29 @@ else
         DateCreated = PbiModel.DateCreated,
         LastUpdated = DateTime.UtcNow
     };
+
+    private static void CopyPbi(ProductBacklogItem source, ProductBacklogItem target)
+    {
+        target.PbiId = source.PbiId;
+        target.ProjectId = source.ProjectId;
+        target.Type = source.Type;
+        target.EpicId = source.EpicId;
+        target.SprintId = source.SprintId;
+        target.Title = source.Title;
+        target.Description = source.Description;
+        target.Status = source.Status;
+        target.Priority = source.Priority;
+        target.StoryPoints = source.StoryPoints;
+        target.Origin = source.Origin;
+        target.IsDraft = source.IsDraft;
+        target.IsFlagged = source.IsFlagged;
+        target.AssignedToUserId = source.AssignedToUserId;
+        target.IssueLink = source.IssueLink;
+        target.DependsOnPbiId = source.DependsOnPbiId;
+        target.DateCreated = source.DateCreated;
+        target.LastUpdated = source.LastUpdated;
+        target.Comments = source.Comments;
+    }
 
     private async Task CancelEdit()
     {

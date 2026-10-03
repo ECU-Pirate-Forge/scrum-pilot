@@ -96,6 +96,38 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
             });
         }
 
+        [Fact]
+        public void CardEdit_IsKeptInOriginalModelAndUsedByLaterBatchWithoutPersistingTwice()
+        {
+            var pbis = CreatePbis("First");
+            var original = pbis[0];
+            var component = RenderModal(pbis);
+
+            FindButton(component, "Edit").Click();
+            component.Find("input").Change("Edited before batch");
+            component.FindAll("button")
+                .Single(button => button.TextContent.Trim() == "Save")
+                .Click();
+
+            component.WaitForAssertion(() =>
+            {
+                Assert.Empty(_handler.PostRequests);
+                Assert.Same(original, pbis[0]);
+                Assert.Equal("Edited before batch", original.Title);
+            });
+
+            FindButton(component, "Add Remaining to Backlog").Click();
+
+            component.WaitForAssertion(() =>
+            {
+                var request = Assert.Single(_handler.PostRequests);
+                var payload = JsonSerializer.Deserialize<List<ProductBacklogItem>>(
+                    request.Content,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                Assert.Equal("Edited before batch", Assert.Single(payload!).Title);
+            });
+        }
+
         private IRenderedComponent<MudDialogProvider> RenderModal(List<ProductBacklogItem> pbis)
         {
             var provider = Render<MudDialogProvider>();

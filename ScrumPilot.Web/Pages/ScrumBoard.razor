@@ -475,21 +475,12 @@
         await LoadItemsAsync(showLoading: false);
     }
 
-    private async Task HandlePbiSave(ProductBacklogItem pbi)
+    private Task HandlePbiSave(ProductBacklogItem pbi)
     {
-        try
-        {
-            var response = await Http.PutAsJsonAsync("api/Pbi", pbi);
-            if (response.IsSuccessStatusCode)
-            {
-                SelectedPbi = null;
-                await LoadItemsAsync(showLoading: false);
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error updating PBI: {ex.Message}");
-        }
+        var index = _items.FindIndex(item => item.PbiId == pbi.PbiId);
+        if (index >= 0) _items[index] = pbi;
+        SelectedPbi = null;
+        return Task.CompletedTask;
     }
 
     private async Task HandlePbiDelete(int pbiId)
@@ -520,11 +511,12 @@
         _newPbi = null;
     }
 
-    private async Task HandleNewPbiSaved(ProductBacklogItem saved)
+    private Task HandleNewPbiSaved(ProductBacklogItem saved)
     {
         _showNewPbiForm = false;
         _newPbi = null;
-        await LoadItemsAsync(showLoading: false);
+        _items.Add(saved);
+        return Task.CompletedTask;
     }
 
     private static IReadOnlyList<LaneDefinition> StatusLanes() =>
