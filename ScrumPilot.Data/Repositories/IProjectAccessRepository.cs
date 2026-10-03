@@ -6,6 +6,10 @@ public interface IProjectAccessRepository
 {
     Task<IReadOnlyList<Project>> GetAccessibleProjectsAsync(
         string userId,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<Project>> GetAccessibleProjectsAsync(
+        string userId,
         int organizationId,
         CancellationToken cancellationToken = default);
 
@@ -34,16 +38,19 @@ public interface IProjectAccessRepository
         int projectId,
         CancellationToken cancellationToken = default);
 
-    Task<OrganizationRole?> GetOrganizationRoleAsync(
-        int organizationId,
-        string userId,
-        CancellationToken cancellationToken = default);
-
-    Task SetAccessAsync(
+    Task<ProjectAccessMutationResult> SetAccessAsync(
         int projectId,
         string userId,
         bool hasAccess,
         string grantedByUserId,
         DateTime grantedAt,
         CancellationToken cancellationToken = default);
+}
+
+public enum ProjectAccessMutationResult
+{
+    Success,
+    ProjectNotFound,
+    TargetNotMember,
+    TargetIsOwner
 }

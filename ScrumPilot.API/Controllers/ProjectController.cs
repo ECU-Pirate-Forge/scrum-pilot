@@ -16,6 +16,23 @@ public sealed class ProjectController(
     IProjectService service,
     ICurrentUser currentUser) : ControllerBase
 {
+    /// <summary>
+    /// Temporary compatibility route for clients that do not yet select an organization.
+    /// Tasks 10/11 migrate those clients to the organization-scoped route, after which this
+    /// endpoint can be removed.
+    /// </summary>
+    [Obsolete("Tasks 10/11 clients must migrate to the organization-scoped project route.")]
+    [HttpGet("project")]
+    public Task<ActionResult<IReadOnlyList<Project>>> CompatibilityList(
+        CancellationToken cancellationToken = default) =>
+        ExecuteAsync(
+#pragma warning disable CS0618
+            () => service.GetAccessibleProjectsAsync(
+                currentUser.UserId,
+                cancellationToken),
+#pragma warning restore CS0618
+            value => Ok(value));
+
     [HttpGet("organizations/{organizationId:int}/projects")]
     public Task<ActionResult<IReadOnlyList<Project>>> List(
         int organizationId,

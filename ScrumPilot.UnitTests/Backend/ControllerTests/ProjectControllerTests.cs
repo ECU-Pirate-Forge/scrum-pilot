@@ -19,7 +19,7 @@ public sealed class ProjectControllerTests
     public ProjectControllerTests() => _currentUser.UserId.Returns("user");
 
     [Fact]
-    public void Routes_ExposeOnlyOrganizationScopedListAndRequiredProjectEndpoints()
+    public void Routes_ExposeTemporaryCompatibilityListAndRequiredProjectEndpoints()
     {
         var routes = typeof(ProjectController)
             .GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)
@@ -30,6 +30,7 @@ public sealed class ProjectControllerTests
             .ToHashSet();
 
         Assert.Contains(("GET", "organizations/{organizationId:int}/projects"), routes);
+        Assert.Contains(("GET", "project"), routes);
         Assert.Contains(("GET", "projects/{projectId:int}"), routes);
         Assert.Contains(("POST", "organizations/{organizationId:int}/projects"), routes);
         Assert.Contains(("PUT", "projects/{projectId:int}"), routes);
@@ -38,6 +39,37 @@ public sealed class ProjectControllerTests
         Assert.Contains(("PUT", "projects/{projectId:int}/members/{userId}"), routes);
         Assert.Contains(("DELETE", "projects/{projectId:int}/members/{userId}"), routes);
         Assert.DoesNotContain(("GET", string.Empty), routes);
+    }
+
+    [Fact]
+    public void CompatibilityList_IsObsoleteUntilOrganizationClientsReplaceIt()
+    {
+        var method = typeof(ProjectController).GetMethod(
+            nameof(ProjectController.CompatibilityList));
+
+        var obsolete = Assert.IsType<ObsoleteAttribute>(
+            method!.GetCustomAttribute(typeof(ObsoleteAttribute)));
+        Assert.Contains("Tasks 10/11", obsolete.Message);
+    }
+
+    [Fact]
+    public async Task CompatibilityList_UsesAuthenticatedCurrentUser()
+    {
+        var controller = CreateController();
+        var projects = new[]
+        {
+            new Project { ProjectId = 10, OrganizationId = 1, ProjectName = "Alpha" },
+            new Project { ProjectId = 20, OrganizationId = 2, ProjectName = "Beta" }
+        };
+        _service.GetAccessibleProjectsAsync("user", Arg.Any<CancellationToken>())
+            .Returns(projects);
+
+#pragma warning disable CS0618
+        var result = await controller.CompatibilityList();
+#pragma warning restore CS0618
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.Same(projects, ok.Value);
     }
 
     [Fact]

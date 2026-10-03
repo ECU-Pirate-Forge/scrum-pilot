@@ -14,6 +14,12 @@ public sealed class ProjectService(
 {
     private const int MaxNameLength = 200;
 
+    [Obsolete("Tasks 10/11 clients must migrate to the organization-scoped project route.")]
+    public Task<IReadOnlyList<Project>> GetAccessibleProjectsAsync(
+        string userId,
+        CancellationToken cancellationToken = default) =>
+        repository.GetAccessibleProjectsAsync(userId, cancellationToken);
+
     public async Task<IReadOnlyList<Project>> GetAccessibleProjectsAsync(
         string userId,
         int organizationId,
@@ -112,32 +118,44 @@ public sealed class ProjectService(
         SetProjectAccessRequest request,
         CancellationToken cancellationToken = default)
     {
-        var organizationId = await RequireProjectOwnerAsync(
+        await RequireProjectOwnerAsync(
             ownerUserId,
             projectId,
             cancellationToken);
-        var targetRole = await repository.GetOrganizationRoleAsync(
-            organizationId,
-            userId,
-            cancellationToken);
-        if (targetRole is null)
+
+        ProjectAccessMutationResult result;
+        try
         {
-            throw new ProjectValidationException(
-                "Project access can only be changed for an active member of this organization.");
+            result = await repository.SetAccessAsync(
+                projectId,
+                userId,
+                request.HasAccess,
+                ownerUserId,
+                timeProvider.GetUtcNow().UtcDateTime,
+                cancellationToken);
         }
-        if (targetRole == OrganizationRole.Owner)
+        catch (ProjectAccessConcurrencyException)
         {
             throw new ProjectConflictException(
-                "Organization owners have implicit access and cannot have explicit project access.");
+                "Project access changed during the request. Try again.");
         }
 
-        await repository.SetAccessAsync(
-            projectId,
-            userId,
-            request.HasAccess,
-            ownerUserId,
-            timeProvider.GetUtcNow().UtcDateTime,
-            cancellationToken);
+        switch (result)
+        {
+            case ProjectAccessMutationResult.Success:
+                return;
+            case ProjectAccessMutationResult.ProjectNotFound:
+                throw new ProjectNotFoundException();
+            case ProjectAccessMutationResult.TargetNotMember:
+                throw new ProjectValidationException(
+                    "Project access can only be changed for an active member of this organization.");
+            case ProjectAccessMutationResult.TargetIsOwner:
+                throw new ProjectConflictException(
+                    "Organization owners have implicit access and cannot have explicit project access.");
+            default:
+                throw new InvalidOperationException(
+                    $"Unknown project access mutation result: {result}.");
+        }
     }
 
     private async Task RequireOrganizationOwnerAsync(

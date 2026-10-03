@@ -7,6 +7,14 @@ namespace ScrumPilot.API.Services;
 /// </summary>
 public interface IProjectService
 {
+    /// <summary>
+    /// Supports current clients until Tasks 10/11 migrate to the organization-scoped route.
+    /// </summary>
+    [Obsolete("Tasks 10/11 clients must migrate to the organization-scoped project route.")]
+    Task<IReadOnlyList<Project>> GetAccessibleProjectsAsync(
+        string userId,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<Project>> GetAccessibleProjectsAsync(
         string userId,
         int organizationId,

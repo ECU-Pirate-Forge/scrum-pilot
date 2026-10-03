@@ -155,6 +155,31 @@ public sealed class ProjectAccessServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task SetAccessAsync_MapsRepositoryConcurrencyToConflict()
+    {
+        var repository = Substitute.For<IProjectAccessRepository>();
+        repository.SetAccessAsync(
+                10,
+                "member",
+                true,
+                "owner",
+                Arg.Any<DateTime>(),
+                Arg.Any<CancellationToken>())
+            .Returns<Task<ProjectAccessMutationResult>>(
+                _ => throw new ProjectAccessConcurrencyException(
+                    "concurrent",
+                    new InvalidOperationException()));
+        var service = new ProjectService(
+            repository,
+            _access,
+            new TestTimeProvider(new DateTimeOffset(2026, 10, 3, 4, 0, 0, TimeSpan.Zero)));
+        ConfigureOwnerMutation();
+
+        await Assert.ThrowsAsync<ProjectConflictException>(
+            () => service.SetAccessAsync("owner", 10, "member", new(true)));
+    }
+
+    [Fact]
     public async Task SetAccessAsync_GrantAndRevokeUpdatesExplicitAccessAndDefault()
     {
         await SeedAsync();

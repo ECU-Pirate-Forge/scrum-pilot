@@ -2,6 +2,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using ScrumPilot.API.Authorization;
 using ScrumPilot.API.Services;
 using ScrumPilot.Data.Context;
@@ -88,6 +89,16 @@ public sealed class ProjectAccessRepositoryTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task GetAccessibleProjectsAsync_AcrossOrganizationsReturnsOnlyCurrentAccess()
+    {
+        await SeedAsync();
+
+        var projects = await _repository.GetAccessibleProjectsAsync("owner");
+
+        Assert.Equal([10, 11, 30], projects.Select(x => x.ProjectId).Order());
+    }
+
+    [Fact]
     public async Task GetMembersAsync_IncludesImplicitOwnersAndExplicitOrdinaryMembers()
     {
         await SeedAsync();
@@ -118,11 +129,132 @@ public sealed class ProjectAccessRepositoryTests : IAsyncDisposable
         member.DefaultProjectId = 10;
         await _context.SaveChangesAsync();
 
-        await _repository.SetAccessAsync(10, "member", false, "owner", DateTime.UtcNow);
+        var result = await _repository.SetAccessAsync(
+            10,
+            "member",
+            false,
+            "owner",
+            DateTime.UtcNow);
 
+        Assert.Equal(ProjectAccessMutationResult.Success, result);
         Assert.False(await _context.ProjectMemberships.AnyAsync(x =>
             x.ProjectId == 10 && x.UserId == "member"));
         Assert.Null((await _context.Users.SingleAsync(x => x.Id == "member")).DefaultProjectId);
+    }
+
+    [Fact]
+    public async Task SetAccessAsync_DuplicateGrantIsIdempotent()
+    {
+        await SeedAsync();
+        var membership = await _context.ProjectMemberships.SingleAsync(x =>
+            x.ProjectId == 10 && x.UserId == "member");
+        _context.ProjectMemberships.Remove(membership);
+        await _context.SaveChangesAsync();
+
+        var first = await _repository.SetAccessAsync(
+            10,
+            "member",
+            true,
+            "owner",
+            DateTime.UtcNow);
+        var second = await _repository.SetAccessAsync(
+            10,
+            "member",
+            true,
+            "owner",
+            DateTime.UtcNow);
+
+        Assert.Equal(ProjectAccessMutationResult.Success, first);
+        Assert.Equal(ProjectAccessMutationResult.Success, second);
+        Assert.Equal(1, await _context.ProjectMemberships.CountAsync(x =>
+            x.ProjectId == 10 && x.UserId == "member"));
+    }
+
+    [Fact]
+    public async Task SetAccessAsync_TargetRemovedBeforeMutationReturnsTargetNotMember()
+    {
+        await SeedAsync();
+        var projectMembership = await _context.ProjectMemberships.SingleAsync(x =>
+            x.ProjectId == 10 && x.UserId == "member");
+        var organizationMembership = await _context.OrganizationMemberships.SingleAsync(x =>
+            x.OrganizationId == 1 && x.UserId == "member");
+        _context.ProjectMemberships.Remove(projectMembership);
+        _context.OrganizationMemberships.Remove(organizationMembership);
+        await _context.SaveChangesAsync();
+
+        var result = await _repository.SetAccessAsync(
+            10,
+            "member",
+            true,
+            "owner",
+            DateTime.UtcNow);
+
+        Assert.Equal(ProjectAccessMutationResult.TargetNotMember, result);
+        Assert.False(await _context.ProjectMemberships.AnyAsync(x =>
+            x.ProjectId == 10 && x.UserId == "member"));
+    }
+
+    [Fact]
+    public async Task SetAccessAsync_OwnerTargetConflictIsDecidedByRepository()
+    {
+        await SeedAsync();
+
+        var result = await _repository.SetAccessAsync(
+            10,
+            "owner",
+            true,
+            "owner",
+            DateTime.UtcNow);
+
+        Assert.Equal(ProjectAccessMutationResult.TargetIsOwner, result);
+        Assert.False(await _context.ProjectMemberships.AnyAsync(x =>
+            x.ProjectId == 10 && x.UserId == "owner"));
+    }
+
+    [Fact]
+    public void IsProjectMembershipUniqueViolation_RecognizesOnlyProjectMembershipPrimaryKey()
+    {
+        var matching = new DbUpdateException(
+            "save failed",
+            new PostgresException(
+                "duplicate",
+                "ERROR",
+                "ERROR",
+                PostgresErrorCodes.UniqueViolation,
+                constraintName: "PK_ProjectMemberships"));
+        var unrelated = new PostgresException(
+            "duplicate",
+            "ERROR",
+            "ERROR",
+            PostgresErrorCodes.UniqueViolation,
+            constraintName: "PK_OrganizationMemberships");
+
+        Assert.True(
+            ProjectAccessRepositoryExceptionClassifier
+                .IsProjectMembershipUniqueViolation(matching));
+        Assert.False(
+            ProjectAccessRepositoryExceptionClassifier
+                .IsProjectMembershipUniqueViolation(unrelated));
+    }
+
+    [Fact]
+    public void IsProjectMembershipUniqueViolation_RecognizesOnlyExactSqliteColumns()
+    {
+        var matching = new SqliteException(
+            "UNIQUE constraint failed: ProjectMemberships.ProjectId, ProjectMemberships.UserId",
+            19,
+            1555);
+        var unrelated = new SqliteException(
+            "UNIQUE constraint failed: OrganizationMemberships.OrganizationId, OrganizationMemberships.UserId",
+            19,
+            1555);
+
+        Assert.True(
+            ProjectAccessRepositoryExceptionClassifier
+                .IsProjectMembershipUniqueViolation(matching));
+        Assert.False(
+            ProjectAccessRepositoryExceptionClassifier
+                .IsProjectMembershipUniqueViolation(unrelated));
     }
 
     [Fact]
@@ -167,18 +299,27 @@ public sealed class ProjectAccessRepositoryTests : IAsyncDisposable
             User("deleted-owner"));
         _context.Organizations.AddRange(
             Organization(1, "Active"),
-            Organization(2, "Deleted", DateTime.UtcNow));
+            Organization(2, "Deleted", DateTime.UtcNow),
+            Organization(3, "Second active"),
+            Organization(4, "Second deleted", DateTime.UtcNow));
         _context.OrganizationMemberships.AddRange(
             Membership(1, "owner", OrganizationRole.Owner),
             Membership(1, "member", OrganizationRole.Member),
-            Membership(2, "deleted-owner", OrganizationRole.Owner));
+            Membership(2, "deleted-owner", OrganizationRole.Owner),
+            Membership(3, "owner", OrganizationRole.Member),
+            Membership(4, "owner", OrganizationRole.Member));
         _context.Projects.AddRange(
             Project(10, 1, "Alpha"),
             Project(11, 1, "Beta"),
-            Project(20, 2, "Deleted"));
+            Project(20, 2, "Deleted"),
+            Project(30, 3, "Assigned"),
+            Project(31, 3, "Unassigned"),
+            Project(40, 4, "Deleted organization"));
         _context.ProjectMemberships.AddRange(
             ProjectMembership(10, "member"),
-            ProjectMembership(10, "stale"));
+            ProjectMembership(10, "stale"),
+            ProjectMembership(30, "owner"),
+            ProjectMembership(40, "owner"));
         await _context.SaveChangesAsync();
     }
 
