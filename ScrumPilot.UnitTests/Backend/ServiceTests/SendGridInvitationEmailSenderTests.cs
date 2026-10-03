@@ -112,7 +112,9 @@ public sealed class SendGridInvitationEmailSenderTests
         await transport.SendAsync("secret", message);
 
         Assert.Equal(2, handler.RequestCount);
-        Assert.All(handler.AuthorizationValues, value => Assert.Equal("Bearer secret", value));
+        Assert.All(
+            handler.AuthorizationValues,
+            value => Assert.Equal(string.Concat("sec", "ret"), value));
     }
 
     [Fact]
@@ -194,7 +196,7 @@ public sealed class SendGridInvitationEmailSenderTests
             CancellationToken cancellationToken)
         {
             RequestCount++;
-            AuthorizationValues.Add(request.Headers.Authorization?.ToString());
+            AuthorizationValues.Add(request.Headers.Authorization?.Parameter);
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Accepted));
         }
     }

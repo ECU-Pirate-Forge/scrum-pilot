@@ -13,12 +13,19 @@ public static class OrganizationInvitationRepositoryExceptionClassifier
     private const string SqliteMembershipColumns =
         "OrganizationMemberships.OrganizationId, OrganizationMemberships.UserId";
 
-    public static bool IsTransactionConcurrency(Exception exception) =>
-        Find<PostgresException>(exception) is
+    public static bool IsTransactionConcurrency(Exception exception)
+    {
+        if (Find<PostgresException>(exception) is
+            {
+                SqlState: PostgresErrorCodes.SerializationFailure
+                    or PostgresErrorCodes.DeadlockDetected
+            })
         {
-            SqlState: PostgresErrorCodes.SerializationFailure
-                or PostgresErrorCodes.DeadlockDetected
-        };
+            return true;
+        }
+
+        return Find<SqliteException>(exception)?.SqliteErrorCode is 5 or 6;
+    }
 
     public static bool IsMembershipUniqueViolation(Exception exception)
     {

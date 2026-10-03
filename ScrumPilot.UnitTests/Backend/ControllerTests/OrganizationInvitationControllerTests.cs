@@ -1,9 +1,12 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using ScrumPilot.API.Authorization;
 using ScrumPilot.API.Controllers;
 using ScrumPilot.API.Services;
+using ScrumPilot.Data.Repositories;
 using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.UnitTests.Backend.ControllerTests;
@@ -46,6 +49,47 @@ public sealed class OrganizationInvitationControllerTests
 
         var failure = Assert.IsType<ObjectResult>(result.Result);
         Assert.Equal(StatusCodes.Status502BadGateway, failure.StatusCode);
+    }
+
+    [Fact]
+    public async Task Invite_DeliveryAuditFailureAfterSuccessfulSendReturnsCreated()
+    {
+        var repository = AuditFailingRepository();
+        var sender = Substitute.For<IInvitationEmailSender>();
+        var controller = CreateController(CreateService(repository, sender));
+
+        var result = await controller.Invite(
+            5,
+            new("member@example.com", OrganizationRole.Member));
+
+        var created = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status201Created, created.StatusCode);
+        await sender.Received(1).SendAsync(
+            "member@example.com",
+            Arg.Any<string>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Invite_DeliveryAndAuditFailuresReturnOriginalBadGateway()
+    {
+        var repository = AuditFailingRepository();
+        var sender = Substitute.For<IInvitationEmailSender>();
+        sender.SendAsync(
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>())
+            .Returns<Task>(_ => throw new InvitationDeliveryException("Provider returned 503."));
+        var controller = CreateController(CreateService(repository, sender));
+
+        var result = await controller.Invite(
+            5,
+            new("member@example.com", OrganizationRole.Member));
+
+        var failure = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status502BadGateway, failure.StatusCode);
+        var problem = Assert.IsType<ProblemDetails>(failure.Value);
+        Assert.Equal("Provider returned 503.", problem.Detail);
     }
 
     [Fact]
@@ -131,7 +175,9 @@ public sealed class OrganizationInvitationControllerTests
         Assert.IsType<UnauthorizedResult>(result.Result);
     }
 
-    private OrganizationInvitationController CreateController(bool authenticated = true)
+    private OrganizationInvitationController CreateController(
+        IOrganizationInvitationService? service = null,
+        bool authenticated = true)
     {
         var identity = authenticated
             ? new ClaimsIdentity(
@@ -141,7 +187,7 @@ public sealed class OrganizationInvitationControllerTests
                 ],
                 "test")
             : new ClaimsIdentity();
-        return new(_service)
+        return new(service ?? _service)
         {
             ControllerContext = new()
             {
@@ -151,6 +197,47 @@ public sealed class OrganizationInvitationControllerTests
                 }
             }
         };
+    }
+
+    private static IOrganizationInvitationRepository AuditFailingRepository()
+    {
+        var repository = Substitute.For<IOrganizationInvitationRepository>();
+        repository.ReplacePendingAsync(
+                Arg.Any<OrganizationInvitation>(),
+                Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                var invitation = call.ArgAt<OrganizationInvitation>(0);
+                invitation.OrganizationInvitationId = 42;
+                return invitation;
+            });
+        repository.RecordDeliveryAsync(
+                42,
+                Arg.Any<DateTime?>(),
+                Arg.Any<string?>(),
+                Arg.Any<CancellationToken>())
+            .Returns<Task>(_ => throw new InvalidOperationException("Audit write failed."));
+        return repository;
+    }
+
+    private static OrganizationInvitationService CreateService(
+        IOrganizationInvitationRepository repository,
+        IInvitationEmailSender sender)
+    {
+        var currentUser = Substitute.For<ICurrentUser>();
+        var lookup = Substitute.For<IInvitationAcceptanceUserLookup>();
+        var access = Substitute.For<IOrganizationAccessService>();
+        currentUser.UserId.Returns("owner");
+        access.IsOrganizationOwnerAsync("owner", 5, Arg.Any<CancellationToken>())
+            .Returns(true);
+        return new(
+            repository,
+            currentUser,
+            lookup,
+            access,
+            sender,
+            TimeProvider.System,
+            NullLogger<OrganizationInvitationService>.Instance);
     }
 
     private static OrganizationInvitationDto Dto() => new(

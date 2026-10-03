@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 using ScrumPilot.API.Authorization;
 using ScrumPilot.API.Services;
@@ -22,6 +23,7 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
     private readonly FakeInvitationEmailSender _sender = new();
     private readonly TestTimeProvider _clock =
         new(new DateTimeOffset(2026, 10, 3, 4, 0, 0, TimeSpan.Zero));
+    private readonly RecordingLogger<OrganizationInvitationService> _logger = new();
     private readonly OrganizationInvitationService _service;
     private int _organizationId;
 
@@ -47,7 +49,8 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
             _userLookup,
             _access,
             _sender,
-            _clock);
+            _clock,
+            _logger);
     }
 
     [Fact]
@@ -108,6 +111,54 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
         Assert.Equal(OrganizationInvitationStatus.Pending, stored.Status);
         Assert.Equal("SendGrid returned 503.", stored.DeliveryError);
         Assert.Null(stored.LastSentAt);
+    }
+
+    [Fact]
+    public async Task InviteAsync_SuccessfulDeliveryWithAuditFailureReturnsSuccessAndLogsSafely()
+    {
+        const string apiKey = "audit-api-key";
+        var repository = CreateAuditFailingRepository(apiKey);
+        var service = CreateService(repository);
+
+        var result = await service.InviteAsync(
+            5,
+            new("member@example.com", OrganizationRole.Member));
+
+        Assert.Equal(42, result.OrganizationInvitationId);
+        Assert.Equal(OrganizationInvitationStatus.Pending, result.Status);
+        Assert.Equal(1, _sender.SendCount);
+        var log = Assert.Single(_logger.Entries);
+        Assert.Equal(LogLevel.Error, log.Level);
+        Assert.Contains("42", log.Message);
+        Assert.Null(log.Exception);
+        Assert.DoesNotContain("member@example.com", log.Message);
+        Assert.DoesNotContain(_sender.Token!, log.Message);
+        Assert.DoesNotContain(apiKey, log.Message);
+    }
+
+    [Fact]
+    public async Task InviteAsync_DeliveryAndAuditFailuresPreserveOriginalDeliveryFailure()
+    {
+        const string deliveryError = "Provider returned 503.";
+        const string apiKey = "audit-api-key";
+        var repository = CreateAuditFailingRepository(apiKey);
+        var service = CreateService(repository);
+        _sender.Error = deliveryError;
+
+        var exception = await Assert.ThrowsAsync<InvitationDeliveryException>(() =>
+            service.InviteAsync(
+                5,
+                new("member@example.com", OrganizationRole.Member)));
+
+        Assert.Equal(deliveryError, exception.Message);
+        Assert.Equal(1, _sender.SendCount);
+        var log = Assert.Single(_logger.Entries);
+        Assert.Equal(LogLevel.Error, log.Level);
+        Assert.Contains("42", log.Message);
+        Assert.Null(log.Exception);
+        Assert.DoesNotContain("member@example.com", log.Message);
+        Assert.DoesNotContain(_sender.Token!, log.Message);
+        Assert.DoesNotContain(apiKey, log.Message);
     }
 
     [Fact]
@@ -277,6 +328,7 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
     [Theory]
     [InlineData("invite")]
     [InlineData("resend")]
+    [InlineData("revoke")]
     [InlineData("accept")]
     public async Task MutationConcurrencyFailureIsMappedToConflict(string operation)
     {
@@ -321,13 +373,16 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
                 Arg.Any<DateTime>(),
                 Arg.Any<CancellationToken>())
             .Returns<Task<InvitationAcceptanceResult>>(_ => throw failure);
+        repository.RevokeAsync(5, 9, Arg.Any<CancellationToken>())
+            .Returns<Task<bool>>(_ => throw failure);
         var service = new OrganizationInvitationService(
             repository,
             currentUser,
             lookup,
             access,
             _sender,
-            _clock);
+            _clock,
+            _logger);
 
         Task Action() => operation switch
         {
@@ -335,6 +390,7 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
                 5,
                 new("member@example.com", OrganizationRole.Member)),
             "resend" => service.ResendAsync(5, 9),
+            "revoke" => service.RevokeAsync(5, 9),
             _ => service.AcceptAsync(new(
                 Convert.ToBase64String(new byte[32])
                     .TrimEnd('=')
@@ -408,6 +464,41 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
             await _context.OrganizationInvitations.AnyAsync();
     }
 
+    private IOrganizationInvitationRepository CreateAuditFailingRepository(string auditSecret)
+    {
+        var repository = Substitute.For<IOrganizationInvitationRepository>();
+        repository.ReplacePendingAsync(
+                Arg.Any<OrganizationInvitation>(),
+                Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                var invitation = call.ArgAt<OrganizationInvitation>(0);
+                invitation.OrganizationInvitationId = 42;
+                return invitation;
+            });
+        repository.RecordDeliveryAsync(
+                42,
+                Arg.Any<DateTime?>(),
+                Arg.Any<string?>(),
+                Arg.Any<CancellationToken>())
+            .Returns<Task>(_ => throw new InvalidOperationException(
+                $"Audit failed for {auditSecret}, member@example.com, {_sender.Token}."));
+        _access.IsOrganizationOwnerAsync("owner", 5, Arg.Any<CancellationToken>())
+            .Returns(true);
+        return repository;
+    }
+
+    private OrganizationInvitationService CreateService(
+        IOrganizationInvitationRepository repository) =>
+        new(
+            repository,
+            _currentUser,
+            _userLookup,
+            _access,
+            _sender,
+            _clock,
+            _logger);
+
     private static ApplicationUser User(string id, string email) => new()
     {
         Id = id,
@@ -435,11 +526,13 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
     {
         public string? Token { get; private set; }
         public string? Error { get; set; }
+        public int SendCount { get; private set; }
         public bool InvitationWasPersisted { get; private set; }
         public Func<Task<bool>>? InvitationPersisted { get; set; }
 
         public async Task SendAsync(string email, string token, CancellationToken cancellationToken = default)
         {
+            SendCount++;
             Token = token;
             InvitationWasPersisted = InvitationPersisted is not null && await InvitationPersisted();
             if (Error is not null)
@@ -448,6 +541,25 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
             }
         }
     }
+
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public List<LogEntry> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter) =>
+            Entries.Add(new(logLevel, formatter(state, exception), exception));
+    }
+
+    private sealed record LogEntry(LogLevel Level, string Message, Exception? Exception);
 
     private sealed class TestTimeProvider(DateTimeOffset utcNow) : TimeProvider
     {

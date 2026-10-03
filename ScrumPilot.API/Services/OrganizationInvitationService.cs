@@ -12,7 +12,8 @@ public sealed class OrganizationInvitationService(
     IInvitationAcceptanceUserLookup userLookup,
     IOrganizationAccessService accessService,
     IInvitationEmailSender emailSender,
-    TimeProvider timeProvider) : IOrganizationInvitationService
+    TimeProvider timeProvider,
+    ILogger<OrganizationInvitationService> logger) : IOrganizationInvitationService
 {
     private static readonly TimeSpan Lifetime = TimeSpan.FromHours(72);
 
@@ -77,7 +78,11 @@ public sealed class OrganizationInvitationService(
         CancellationToken cancellationToken = default)
     {
         await RequireOwnerAsync(organizationId, cancellationToken);
-        if (!await repository.RevokeAsync(organizationId, invitationId, cancellationToken))
+        if (!await ExecuteMutationAsync(
+                () => repository.RevokeAsync(
+                    organizationId,
+                    invitationId,
+                    cancellationToken)))
         {
             throw new OrganizationNotFoundException("The pending invitation was not found.");
         }
@@ -133,24 +138,37 @@ public sealed class OrganizationInvitationService(
         try
         {
             await emailSender.SendAsync(invitation.Email, token, cancellationToken);
-            invitation.LastSentAt = UtcNow;
-            invitation.DeliveryError = null;
-            await repository.RecordDeliveryAsync(
-                invitation.OrganizationInvitationId,
-                invitation.LastSentAt,
-                null,
-                cancellationToken);
         }
         catch (InvitationDeliveryException exception)
         {
             invitation.LastSentAt = null;
             invitation.DeliveryError = exception.Message;
+            await TryRecordDeliveryAsync(invitation, cancellationToken);
+            throw;
+        }
+
+        invitation.LastSentAt = UtcNow;
+        invitation.DeliveryError = null;
+        await TryRecordDeliveryAsync(invitation, cancellationToken);
+    }
+
+    private async Task TryRecordDeliveryAsync(
+        OrganizationInvitation invitation,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
             await repository.RecordDeliveryAsync(
                 invitation.OrganizationInvitationId,
-                null,
-                exception.Message,
+                invitation.LastSentAt,
+                invitation.DeliveryError,
                 cancellationToken);
-            throw;
+        }
+        catch (Exception)
+        {
+            logger.LogError(
+                "Failed to persist the delivery audit for invitation {InvitationId}.",
+                invitation.OrganizationInvitationId);
         }
     }
 

@@ -104,21 +104,32 @@ public sealed class OrganizationInvitationRepository(ScrumPilotContext context)
         int invitationId,
         CancellationToken cancellationToken = default)
     {
-        var invitation = await context.OrganizationInvitations.SingleOrDefaultAsync(
-            x => x.OrganizationId == organizationId
-                 && x.OrganizationInvitationId == invitationId,
-            cancellationToken);
-        if (invitation is null)
+        try
         {
-            return false;
+            var invitation = await context.OrganizationInvitations.SingleOrDefaultAsync(
+                x => x.OrganizationId == organizationId
+                     && x.OrganizationInvitationId == invitationId,
+                cancellationToken);
+            if (invitation is null)
+            {
+                return false;
+            }
+            if (invitation.Status != OrganizationInvitationStatus.Pending)
+            {
+                return false;
+            }
+            invitation.Status = OrganizationInvitationStatus.Revoked;
+            await context.SaveChangesAsync(cancellationToken);
+            return true;
         }
-        if (invitation.Status != OrganizationInvitationStatus.Pending)
+        catch (Exception exception) when (
+            OrganizationInvitationRepositoryExceptionClassifier
+                .IsTransactionConcurrency(exception))
         {
-            return false;
+            throw new OrganizationInvitationConcurrencyException(
+                "The invitation was changed by another request.",
+                exception);
         }
-        invitation.Status = OrganizationInvitationStatus.Revoked;
-        await context.SaveChangesAsync(cancellationToken);
-        return true;
     }
 
     public async Task RecordDeliveryAsync(
@@ -127,12 +138,23 @@ public sealed class OrganizationInvitationRepository(ScrumPilotContext context)
         string? deliveryError,
         CancellationToken cancellationToken = default)
     {
-        var invitation = await context.OrganizationInvitations.SingleAsync(
-            x => x.OrganizationInvitationId == invitationId,
-            cancellationToken);
-        invitation.LastSentAt = sentAt;
-        invitation.DeliveryError = deliveryError;
-        await context.SaveChangesAsync(cancellationToken);
+        try
+        {
+            var invitation = await context.OrganizationInvitations.SingleAsync(
+                x => x.OrganizationInvitationId == invitationId,
+                cancellationToken);
+            invitation.LastSentAt = sentAt;
+            invitation.DeliveryError = deliveryError;
+            await context.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception exception) when (
+            OrganizationInvitationRepositoryExceptionClassifier
+                .IsTransactionConcurrency(exception))
+        {
+            throw new OrganizationInvitationConcurrencyException(
+                "The invitation was changed by another request.",
+                exception);
+        }
     }
 
     public async Task<InvitationAcceptanceResult> AcceptAsync(
