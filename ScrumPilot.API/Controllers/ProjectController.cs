@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ScrumPilot.API.Authorization;
 using ScrumPilot.API.Services;
 using ScrumPilot.Shared.Models;
 
@@ -8,49 +10,175 @@ namespace ScrumPilot.API.Controllers;
 /// Manages Project resources.
 /// </summary>
 [ApiController]
-[Route("api/[controller]")]
-public class ProjectController : ControllerBase
+[Authorize]
+[Route("api")]
+public sealed class ProjectController(
+    IProjectService service,
+    ICurrentUser currentUser) : ControllerBase
 {
-    private readonly IProjectService _svc;
+    [HttpGet("organizations/{organizationId:int}/projects")]
+    public Task<ActionResult<IReadOnlyList<Project>>> List(
+        int organizationId,
+        CancellationToken cancellationToken = default) =>
+        ExecuteAsync(
+            () => service.GetAccessibleProjectsAsync(
+                currentUser.UserId,
+                organizationId,
+                cancellationToken),
+            value => Ok(value));
 
-    /// <summary>Initialises a new instance of <see cref="ProjectController"/>.</summary>
-    public ProjectController(IProjectService svc) => _svc = svc;
+    [HttpGet("projects/{projectId:int}")]
+    public Task<ActionResult<Project>> Get(
+        int projectId,
+        CancellationToken cancellationToken = default) =>
+        ExecuteAsync(
+            () => service.GetAccessibleProjectAsync(
+                currentUser.UserId,
+                projectId,
+                cancellationToken),
+            value => Ok(value));
 
-    /// <summary>Returns all projects.</summary>
-    [HttpGet]
-    public async Task<ActionResult<IEnumerable<Project>>> GetAll()
-        => Ok(await _svc.GetAllProjectsAsync());
+    [HttpPost("organizations/{organizationId:int}/projects")]
+    public Task<ActionResult<Project>> Create(
+        int organizationId,
+        [FromBody] CreateProjectRequest request,
+        CancellationToken cancellationToken = default) =>
+        ExecuteAsync(
+            () => service.CreateAsync(
+                currentUser.UserId,
+                organizationId,
+                request,
+                cancellationToken),
+            value => CreatedAtAction(nameof(Get), new { projectId = value.ProjectId }, value));
 
-    /// <summary>Returns the project with the given ID, or 404 if not found.</summary>
-    [HttpGet("{id:int}")]
-    public async Task<ActionResult<Project>> GetById(int id)
+    [HttpPut("projects/{projectId:int}")]
+    public Task<ActionResult<Project>> Update(
+        int projectId,
+        [FromBody] UpdateProjectRequest request,
+        CancellationToken cancellationToken = default) =>
+        ExecuteAsync(
+            () => service.UpdateAsync(
+                currentUser.UserId,
+                projectId,
+                request,
+                cancellationToken),
+            value => Ok(value));
+
+    [HttpDelete("projects/{projectId:int}")]
+    public Task<IActionResult> Delete(
+        int projectId,
+        CancellationToken cancellationToken = default) =>
+        ExecuteAsync(
+            () => service.DeleteAsync(currentUser.UserId, projectId, cancellationToken),
+            NoContent);
+
+    [HttpGet("projects/{projectId:int}/members")]
+    public Task<ActionResult<IReadOnlyList<ProjectMemberAccessDto>>> GetMembers(
+        int projectId,
+        CancellationToken cancellationToken = default) =>
+        ExecuteAsync(
+            () => service.GetMembersAsync(currentUser.UserId, projectId, cancellationToken),
+            value => Ok(value));
+
+    [HttpPut("projects/{projectId:int}/members/{userId}")]
+    public Task<IActionResult> SetMemberAccess(
+        int projectId,
+        string userId,
+        [FromBody] SetProjectAccessRequest request,
+        CancellationToken cancellationToken = default) =>
+        ExecuteAsync(
+            () => service.SetAccessAsync(
+                currentUser.UserId,
+                projectId,
+                userId,
+                request,
+                cancellationToken),
+            NoContent);
+
+    [HttpDelete("projects/{projectId:int}/members/{userId}")]
+    public Task<IActionResult> RemoveMemberAccess(
+        int projectId,
+        string userId,
+        CancellationToken cancellationToken = default) =>
+        ExecuteAsync(
+            () => service.SetAccessAsync(
+                currentUser.UserId,
+                projectId,
+                userId,
+                new SetProjectAccessRequest(false),
+                cancellationToken),
+            NoContent);
+
+    private async Task<ActionResult<T>> ExecuteAsync<T>(
+        Func<Task<T>> action,
+        Func<T, ActionResult<T>> success)
     {
-        var project = await _svc.GetByIdAsync(id);
-        return project is null ? NotFound() : Ok(project);
+        if (User.Identity?.IsAuthenticated != true)
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            return success(await action());
+        }
+        catch (ProjectApplicationException exception)
+        {
+            return Map<T>(exception);
+        }
     }
 
-    /// <summary>Creates a new project and returns it at its canonical URL.</summary>
-    [HttpPost]
-    public async Task<ActionResult<Project>> Create([FromBody] Project project)
+    private async Task<IActionResult> ExecuteAsync(
+        Func<Task> action,
+        Func<IActionResult> success)
     {
-        var created = await _svc.CreateAsync(project);
-        return CreatedAtAction(nameof(GetById), new { id = created.ProjectId }, created);
+        if (User.Identity?.IsAuthenticated != true)
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            await action();
+            return success();
+        }
+        catch (ProjectApplicationException exception)
+        {
+            return Map(exception);
+        }
     }
 
-    /// <summary>Updates an existing project. Returns 400 if the route ID does not match the body.</summary>
-    [HttpPut("{id:int}")]
-    public async Task<ActionResult<Project>> Update(int id, [FromBody] Project project)
-    {
-        if (id != project.ProjectId) return BadRequest();
-        var updated = await _svc.UpdateAsync(project);
-        return Ok(updated);
-    }
+    private ActionResult<T> Map<T>(ProjectApplicationException exception) => Map(exception);
 
-    /// <summary>Deletes the project with the given ID.</summary>
-    [HttpDelete("{id:int}")]
-    public async Task<ActionResult> Delete(int id)
+    private ObjectResult Map(ProjectApplicationException exception)
     {
-        await _svc.DeleteAsync(id);
-        return NoContent();
+        var status = exception switch
+        {
+            ProjectValidationException => StatusCodes.Status400BadRequest,
+            ProjectForbiddenException => StatusCodes.Status403Forbidden,
+            ProjectNotFoundException => StatusCodes.Status404NotFound,
+            ProjectConflictException => StatusCodes.Status409Conflict,
+            _ => StatusCodes.Status500InternalServerError
+        };
+        var problem = new ProblemDetails
+        {
+            Status = status,
+            Title = status switch
+            {
+                StatusCodes.Status400BadRequest => "Invalid project request",
+                StatusCodes.Status403Forbidden => "Forbidden",
+                StatusCodes.Status404NotFound => "Project not found",
+                StatusCodes.Status409Conflict => "Project conflict",
+                _ => "Project operation failed"
+            },
+            Detail = exception.Message
+        };
+        return status switch
+        {
+            StatusCodes.Status400BadRequest => BadRequest(problem),
+            StatusCodes.Status404NotFound => NotFound(problem),
+            StatusCodes.Status409Conflict => Conflict(problem),
+            _ => StatusCode(status, problem)
+        };
     }
 }

@@ -63,6 +63,7 @@ builder.Services.AddAuthorizationBuilder()
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<PlanningPokerSessionService>();
 builder.Services.AddScoped<IProjectService, ProjectService>();
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<ISprintService, SprintService>();
 builder.Services.AddScoped<IEpicService, EpicService>();
 builder.Services.AddScoped<IMetricsDashboardService, MetricsDashboardService>();
@@ -79,7 +80,6 @@ builder.Services.AddSingleton<IValidateOptions<SendGridOptions>, SendGridOptions
 builder.Services.AddHttpClient<ISendGridTransport, SendGridTransport>();
 builder.Services.AddScoped<IInvitationEmailSender, SendGridInvitationEmailSender>();
 builder.Services.AddScoped<IOrganizationInvitationService, OrganizationInvitationService>();
-builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddHttpClient<IPbiService, PbiService>(client =>
 {
     client.Timeout = TimeSpan.FromMinutes(5);

@@ -117,17 +117,16 @@ public class OrganizationContractTests
     {
         Assert.Throws<JsonException>(
             () => JsonSerializer.Deserialize<SetProjectAccessRequest>(
-                """{"UserId":"member-id"}"""));
+                "{}"));
     }
 
     [Fact]
     public void SetProjectAccessRequest_ExplicitFalseDeserializes()
     {
         var result = JsonSerializer.Deserialize<SetProjectAccessRequest>(
-            """{"UserId":"member-id","HasAccess":false}""");
+            """{"HasAccess":false}""");
 
         Assert.NotNull(result);
-        Assert.Equal("member-id", result.UserId);
         Assert.False(result.HasAccess);
     }
 
