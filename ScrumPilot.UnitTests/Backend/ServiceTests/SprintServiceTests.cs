@@ -40,30 +40,30 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
                     IsOpen = false
                 }
             };
-            _mockRepository.GetAllSprintsAsync().Returns(expectedSprints);
+            _mockRepository.GetSprintsByProjectAsync(1).Returns(expectedSprints);
 
             // Act
-            var result = await _sprintService.GetAllSprintsAsync();
+            var result = await _sprintService.GetSprintsByProjectAsync(1);
 
             // Assert
             var actualSprints = result.ToList();
             Assert.Equal(expectedSprints.Count, actualSprints.Count);
             Assert.Equal(expectedSprints, actualSprints);
-            await _mockRepository.Received(1).GetAllSprintsAsync();
+            await _mockRepository.Received(1).GetSprintsByProjectAsync(1);
         }
 
         [Fact]
         public async Task GetAllSprintsAsync_ReturnsEmptyList_WhenNoSprints()
         {
             // Arrange
-            _mockRepository.GetAllSprintsAsync().Returns(new List<Sprint>());
+            _mockRepository.GetSprintsByProjectAsync(1).Returns(new List<Sprint>());
 
             // Act
-            var result = await _sprintService.GetAllSprintsAsync();
+            var result = await _sprintService.GetSprintsByProjectAsync(1);
 
             // Assert
             Assert.Empty(result);
-            await _mockRepository.Received(1).GetAllSprintsAsync();
+            await _mockRepository.Received(1).GetSprintsByProjectAsync(1);
         }
     }
 }

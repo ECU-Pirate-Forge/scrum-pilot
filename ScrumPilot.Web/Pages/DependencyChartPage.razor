@@ -46,6 +46,7 @@
 
 @code {
     [SupplyParameterFromQuery(Name = "sprintId")] public int? SprintId { get; set; }
+    [SupplyParameterFromQuery(Name = "projectId")] public int? ProjectId { get; set; }
 
     private List<ProductBacklogItem> _pbis = new();
     private bool _loading = true;
@@ -56,11 +57,17 @@
     {
         try
         {
+            if (!ProjectId.HasValue)
+            {
+                _error = "Select a project before viewing dependencies.";
+                return;
+            }
             if (SprintId.HasValue)
             {
                 var pbisTask = Http.GetFromJsonAsync<List<ProductBacklogItem>>(
-                    $"api/Pbi/getNonDraftPbis?sprintId={SprintId.Value}");
-                var sprintsTask = Http.GetFromJsonAsync<List<Sprint>>("api/Sprint");
+                    $"api/Pbi/getNonDraftPbis?projectId={ProjectId.Value}&sprintId={SprintId.Value}");
+                var sprintsTask = Http.GetFromJsonAsync<List<Sprint>>(
+                    $"api/Sprint?projectId={ProjectId.Value}");
 
                 _pbis = await pbisTask ?? new();
                 var sprints = await sprintsTask ?? new();
@@ -70,7 +77,7 @@
             else
             {
                 _pbis = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(
-                    "api/Pbi/getNonDraftPbis") ?? new();
+                    $"api/Pbi/getNonDraftPbis?projectId={ProjectId.Value}") ?? new();
                 _sprintLabel = "All sprints";
             }
         }

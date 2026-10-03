@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using ScrumPilot.Data.Context;
 using ScrumPilot.Data.Models;
 using ScrumPilot.Shared.Models;
 
@@ -7,9 +9,13 @@ namespace ScrumPilot.API.Services;
 public class UserSettingsService : IUserSettingsService
 {
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly ScrumPilotContext _context;
 
-    public UserSettingsService(UserManager<ApplicationUser> userManager)
-        => _userManager = userManager;
+    public UserSettingsService(UserManager<ApplicationUser> userManager, ScrumPilotContext context)
+    {
+        _userManager = userManager;
+        _context = context;
+    }
 
     public async Task<UserSettingsDto?> GetSettingsAsync(string userId)
     {
@@ -55,12 +61,25 @@ public class UserSettingsService : IUserSettingsService
         return (result.Succeeded, result.Errors.Select(e => e.Description));
     }
 
-    public Task<IEnumerable<UserSummaryDto>> GetAllUsersAsync()
-    {
-        var users = _userManager.Users
-            .OrderBy(u => u.UserName)
-            .Select(u => new UserSummaryDto { Id = u.Id, UserName = u.UserName ?? "" })
-            .AsEnumerable();
-        return Task.FromResult(users);
-    }
+    public async Task<IEnumerable<UserSummaryDto>> GetProjectUsersAsync(
+        int projectId,
+        CancellationToken cancellationToken = default) =>
+        await (
+            from user in _context.Users.AsNoTracking()
+            where _context.Projects.Any(project =>
+                project.ProjectId == projectId
+                && project.Organization != null
+                && project.Organization.DeletedAt == null
+                && (_context.OrganizationMemberships.Any(m =>
+                        m.UserId == user.Id
+                        && m.OrganizationId == project.OrganizationId
+                        && m.Role == OrganizationRole.Owner)
+                    || (_context.ProjectMemberships.Any(m =>
+                            m.ProjectId == projectId && m.UserId == user.Id)
+                        && _context.OrganizationMemberships.Any(m =>
+                            m.UserId == user.Id
+                            && m.OrganizationId == project.OrganizationId))))
+            orderby user.UserName
+            select new UserSummaryDto { Id = user.Id, UserName = user.UserName ?? "" })
+            .ToListAsync(cancellationToken);
 }

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using ScrumPilot.API.Controllers;
 using ScrumPilot.API.Services;
+using ScrumPilot.API.Authorization;
 using ScrumPilot.Shared.Models;
 using Xunit;
 
@@ -12,13 +13,20 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
     public class DashboardPreferenceControllerTests
     {
         private readonly IDashboardPreferenceService _mockService;
+        private readonly ICurrentUser _currentUser;
+        private readonly IOrganizationAccessService _access;
         private readonly DashboardPreferenceController _controller;
         private const int ProjectId = 1;
 
         public DashboardPreferenceControllerTests()
         {
             _mockService = Substitute.For<IDashboardPreferenceService>();
-            _controller = new DashboardPreferenceController(_mockService);
+            _currentUser = Substitute.For<ICurrentUser>();
+            _access = Substitute.For<IOrganizationAccessService>();
+            _currentUser.UserId.Returns("user-1");
+            _access.CanAccessProjectAsync(Arg.Any<string>(), ProjectId, Arg.Any<CancellationToken>())
+                .Returns(true);
+            _controller = new DashboardPreferenceController(_mockService, _currentUser, _access);
         }
 
         private static ControllerContext MakeControllerContext(string? userId)
@@ -70,10 +78,12 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             _controller.ControllerContext = MakeControllerContext(null);
 
             // Act
+            _access.CanAccessProjectAsync(Arg.Any<string>(), ProjectId, Arg.Any<CancellationToken>())
+                .Returns(false);
             var result = await _controller.Get(ProjectId);
 
             // Assert
-            Assert.IsType<UnauthorizedResult>(result.Result);
+            Assert.IsType<NotFoundResult>(result.Result);
             await _mockService.DidNotReceive().GetPreferencesAsync(Arg.Any<string>(), Arg.Any<int>());
         }
 
@@ -82,6 +92,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         {
             // Arrange
             _controller.ControllerContext = MakeControllerContext("user-2");
+            _currentUser.UserId.Returns("user-2");
             _mockService.GetPreferencesAsync("user-2", ProjectId).Returns(new DashboardPreferenceDto());
 
             // Act
@@ -124,10 +135,12 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             var dto = new DashboardPreferenceDto();
 
             // Act
+            _access.CanAccessProjectAsync(Arg.Any<string>(), ProjectId, Arg.Any<CancellationToken>())
+                .Returns(false);
             var result = await _controller.Put(dto, ProjectId);
 
             // Assert
-            Assert.IsType<UnauthorizedResult>(result);
+            Assert.IsType<NotFoundResult>(result);
             await _mockService.DidNotReceive().SavePreferencesAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<DashboardPreferenceDto>());
         }
 
@@ -136,6 +149,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         {
             // Arrange
             _controller.ControllerContext = MakeControllerContext("user-3");
+            _currentUser.UserId.Returns("user-3");
             var dto = new DashboardPreferenceDto
             {
                 Widgets =

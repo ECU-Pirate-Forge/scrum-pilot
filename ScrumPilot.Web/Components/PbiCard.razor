@@ -640,9 +640,10 @@ else
 
     private async Task LoadEpics()
     {
+        if (!ProjectId.HasValue) { epics = []; return; }
         try
         {
-            var url = ProjectId.HasValue ? $"api/Epic?projectId={ProjectId.Value}" : "api/Epic";
+            var url = $"api/Epic?projectId={ProjectId.Value}";
             epics = await Http.GetFromJsonAsync<List<Epic>>(url);
         }
         catch { epics = new(); }
@@ -650,9 +651,10 @@ else
 
     private async Task LoadSprints()
     {
+        if (!ProjectId.HasValue) { sprints = []; return; }
         try
         {
-            var url = ProjectId.HasValue ? $"api/Sprint?projectId={ProjectId.Value}" : "api/Sprint";
+            var url = $"api/Sprint?projectId={ProjectId.Value}";
             sprints = await Http.GetFromJsonAsync<List<Sprint>>(url);
         }
         catch { sprints = new(); }
@@ -660,17 +662,21 @@ else
 
     private async Task LoadUsers()
     {
-        try { users = await Http.GetFromJsonAsync<List<UserSummaryDto>>("api/user/all") ?? new(); }
+        try
+        {
+            users = ProjectId.HasValue
+                ? await Http.GetFromJsonAsync<List<UserSummaryDto>>($"api/user/all?projectId={ProjectId.Value}") ?? new()
+                : [];
+        }
         catch { users = new(); }
     }
 
     private async Task LoadProjectPbis()
     {
+        if (!ProjectId.HasValue) { projectPbis = []; return; }
         try
         {
-            var url = ProjectId.HasValue
-                ? $"api/Pbi/getNonDraftPbis?projectId={ProjectId.Value}"
-                : "api/Pbi/getNonDraftPbis";
+            var url = $"api/Pbi/getNonDraftPbis?projectId={ProjectId.Value}";
             projectPbis = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(url) ?? new();
         }
         catch { projectPbis = new(); }

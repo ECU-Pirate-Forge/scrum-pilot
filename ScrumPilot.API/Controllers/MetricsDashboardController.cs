@@ -1,69 +1,78 @@
 using Microsoft.AspNetCore.Mvc;
+using ScrumPilot.API.Authorization;
 using ScrumPilot.API.Services;
+using ScrumPilot.Data.Repositories;
 using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.API.Controllers;
 
-/// <summary>
-/// Provides computed sprint and project metrics consumed by the metrics dashboard widgets.
-/// </summary>
 [ApiController]
 [Route("api/metrics")]
-public class MetricsDashboardController : ControllerBase
+public class MetricsDashboardController(
+    IMetricsDashboardService service,
+    ISprintRepository sprintRepository,
+    ICurrentUser currentUser,
+    IOrganizationAccessService accessService) : ControllerBase
 {
-    private readonly IMetricsDashboardService _svc;
-
-    /// <summary>Initialises a new instance of <see cref="MetricsDashboardController"/>.</summary>
-    public MetricsDashboardController(IMetricsDashboardService svc)
-    {
-        _svc = svc;
-    }
-
-    /// <summary>Returns a high-level summary for the given sprint, or 404 if not found.</summary>
     [HttpGet("sprint-summary/{sprintId:int}")]
     public async Task<ActionResult<SprintSummaryDto>> GetSprintSummary(int sprintId)
     {
-        var result = await _svc.GetSprintSummaryAsync(sprintId);
+        if (!await CanAccessSprint(sprintId)) return NotFound();
+        var result = await service.GetSprintSummaryAsync(sprintId);
         return result is null ? NotFound() : Ok(result);
     }
 
-    /// <summary>Returns committed vs. completed story-point progress for the given sprint.</summary>
     [HttpGet("sprint-progress/{sprintId:int}")]
-    public async Task<ActionResult<SprintProgressDto>> GetSprintProgress(int sprintId)
-        => Ok(await _svc.GetSprintProgressAsync(sprintId));
+    public async Task<ActionResult<SprintProgressDto>> GetSprintProgress(int sprintId) =>
+        await SprintMetric(sprintId, service.GetSprintProgressAsync);
 
-    /// <summary>Returns daily ideal and actual burndown data points for the given sprint.</summary>
     [HttpGet("burndown/{sprintId:int}")]
-    public async Task<ActionResult<List<BurndownPoint>>> GetBurndown(int sprintId)
-        => Ok(await _svc.GetBurndownDataAsync(sprintId));
+    public async Task<ActionResult<List<BurndownPoint>>> GetBurndown(int sprintId) =>
+        await SprintMetric(sprintId, service.GetBurndownDataAsync);
 
-    /// <summary>Returns velocity data, optionally scoped to a sprint or project.</summary>
     [HttpGet("velocity")]
-    public async Task<ActionResult<List<VelocityPoint>>> GetVelocity([FromQuery] int? sprintId = null, [FromQuery] int? projectId = null)
-        => Ok(await _svc.GetVelocityDataAsync(sprintId, projectId));
+    public async Task<ActionResult<List<VelocityPoint>>> GetVelocity(
+        [FromQuery] int projectId,
+        [FromQuery] int? sprintId = null)
+    {
+        if (!await accessService.CanAccessProjectAsync(currentUser.UserId, projectId))
+            return NotFound();
+        if (sprintId.HasValue
+            && !await accessService.SprintBelongsToProjectAsync(sprintId.Value, projectId))
+            return NotFound();
+        return Ok(await service.GetVelocityDataAsync(sprintId, projectId));
+    }
 
-    /// <summary>Returns all in-progress PBIs for the given sprint as WIP table rows.</summary>
     [HttpGet("wip/{sprintId:int}")]
-    public async Task<ActionResult<List<WipItem>>> GetWip(int sprintId)
-        => Ok(await _svc.GetWipItemsAsync(sprintId));
+    public async Task<ActionResult<List<WipItem>>> GetWip(int sprintId) =>
+        await SprintMetric(sprintId, service.GetWipItemsAsync);
 
-    /// <summary>Returns daily bug creation and resolution counts for the given sprint.</summary>
     [HttpGet("bug-trend/{sprintId:int}")]
-    public async Task<ActionResult<List<BugTrendPoint>>> GetBugTrend(int sprintId)
-        => Ok(await _svc.GetBugTrendAsync(sprintId));
+    public async Task<ActionResult<List<BugTrendPoint>>> GetBugTrend(int sprintId) =>
+        await SprintMetric(sprintId, service.GetBugTrendAsync);
 
-    /// <summary>Returns average cycle-time data points for the given sprint.</summary>
     [HttpGet("cycle-time/{sprintId:int}")]
-    public async Task<ActionResult<List<CycleTimePoint>>> GetCycleTime(int sprintId)
-        => Ok(await _svc.GetCycleTimeDataAsync(sprintId));
+    public async Task<ActionResult<List<CycleTimePoint>>> GetCycleTime(int sprintId) =>
+        await SprintMetric(sprintId, service.GetCycleTimeDataAsync);
 
-    /// <summary>Returns story-point totals split by work type for each status column.</summary>
     [HttpGet("work-by-status/{sprintId:int}")]
-    public async Task<ActionResult<List<WorkByStatusPoint>>> GetWorkByStatus(int sprintId)
-        => Ok(await _svc.GetWorkByStatusAsync(sprintId));
+    public async Task<ActionResult<List<WorkByStatusPoint>>> GetWorkByStatus(int sprintId) =>
+        await SprintMetric(sprintId, service.GetWorkByStatusAsync);
 
-    /// <summary>Returns time-in-stage heat-map data for the given sprint.</summary>
     [HttpGet("time-in-stage/{sprintId:int}")]
-    public async Task<ActionResult<TimeInStageData>> GetTimeInStage(int sprintId)
-        => Ok(await _svc.GetTimeInStageDataAsync(sprintId));
+    public async Task<ActionResult<TimeInStageData>> GetTimeInStage(int sprintId) =>
+        await SprintMetric(sprintId, service.GetTimeInStageDataAsync);
+
+    private async Task<ActionResult<T>> SprintMetric<T>(int sprintId, Func<int, Task<T>> load)
+    {
+        if (!await CanAccessSprint(sprintId)) return NotFound();
+        return Ok(await load(sprintId));
+    }
+
+    private async Task<bool> CanAccessSprint(int sprintId)
+    {
+        var sprint = await sprintRepository.GetByIdAsync(sprintId);
+        return sprint is not null
+            && await accessService.CanAccessProjectAsync(currentUser.UserId, sprint.ProjectId);
+    }
 }

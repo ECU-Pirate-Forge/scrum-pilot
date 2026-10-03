@@ -25,6 +25,6 @@ public interface IUserSettingsService
     /// </summary>
     Task<(bool Succeeded, IEnumerable<string> Errors)> ChangePasswordAsync(string userId, string currentPassword, string newPassword);
 
-    /// <summary>Returns a lightweight summary of every registered user.</summary>
-    Task<IEnumerable<UserSummaryDto>> GetAllUsersAsync();
+    /// <summary>Returns users eligible for assignment in a project.</summary>
+    Task<IEnumerable<UserSummaryDto>> GetProjectUsersAsync(int projectId, CancellationToken cancellationToken = default);
 }

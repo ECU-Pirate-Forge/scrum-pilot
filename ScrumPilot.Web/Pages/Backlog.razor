@@ -413,12 +413,14 @@
         StateHasChanged();
         try
         {
-            var sprintUrl = _selectedProjectId.HasValue
-                ? $"api/Sprint?projectId={_selectedProjectId.Value}"
-                : "api/Sprint";
-            var pbiUrl = _selectedProjectId.HasValue
-                ? $"api/Pbi/getNonDraftPbis?projectId={_selectedProjectId.Value}"
-                : "api/Pbi/getNonDraftPbis";
+            if (!_selectedProjectId.HasValue)
+            {
+                _sprints = [];
+                _allPbis = [];
+                return;
+            }
+            var sprintUrl = $"api/Sprint?projectId={_selectedProjectId.Value}";
+            var pbiUrl = $"api/Pbi/getNonDraftPbis?projectId={_selectedProjectId.Value}";
 
             _sprints = await Http.GetFromJsonAsync<List<Sprint>>(sprintUrl) ?? new();
             _allPbis = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(pbiUrl) ?? new();

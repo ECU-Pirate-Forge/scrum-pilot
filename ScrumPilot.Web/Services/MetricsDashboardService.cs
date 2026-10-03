@@ -17,11 +17,6 @@ namespace ScrumPilot.Web.Services
             return await _http.GetFromJsonAsync<List<Project>>("api/project") ?? [];
         }
 
-        public async Task<List<Sprint>> GetSprintsAsync()
-        {
-            return await _http.GetFromJsonAsync<List<Sprint>>("api/sprint") ?? [];
-        }
-
         public async Task<List<Sprint>> GetSprintsByProjectAsync(int projectId)
         {
             return await _http.GetFromJsonAsync<List<Sprint>>($"api/sprint?projectId={projectId}") ?? [];
@@ -30,12 +25,9 @@ namespace ScrumPilot.Web.Services
         public async Task<List<ProductBacklogItem>> GetPbisForSprintAsync(int? sprintId, int? projectId = null)
         {
             string url;
-            if (sprintId.HasValue)
-                url = $"api/pbi/getNonDraftPbis?sprintId={sprintId.Value}";
-            else if (projectId.HasValue)
-                url = $"api/pbi/getNonDraftPbis?projectId={projectId.Value}";
-            else
-                url = "api/pbi/getNonDraftPbis";
+            if (!projectId.HasValue) return [];
+            url = $"api/pbi/getNonDraftPbis?projectId={projectId.Value}";
+            if (sprintId.HasValue) url += $"&sprintId={sprintId.Value}";
             return await _http.GetFromJsonAsync<List<ProductBacklogItem>>(url) ?? [];
         }
 
@@ -57,10 +49,10 @@ namespace ScrumPilot.Web.Services
 
         public async Task<List<VelocityPoint>> GetVelocityDataAsync(int? sprintId = null, int? projectId = null)
         {
-            var qs = new List<string>();
+            if (!projectId.HasValue) return [];
+            var qs = new List<string> { $"projectId={projectId.Value}" };
             if (sprintId.HasValue) qs.Add($"sprintId={sprintId.Value}");
-            if (projectId.HasValue) qs.Add($"projectId={projectId.Value}");
-            var url = qs.Count > 0 ? $"api/metrics/velocity?{string.Join('&', qs)}" : "api/metrics/velocity";
+            var url = $"api/metrics/velocity?{string.Join('&', qs)}";
             return await _http.GetFromJsonAsync<List<VelocityPoint>>(url) ?? [];
         }
 

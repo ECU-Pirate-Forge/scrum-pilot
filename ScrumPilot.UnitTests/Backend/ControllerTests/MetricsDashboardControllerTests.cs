@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using ScrumPilot.API.Controllers;
 using ScrumPilot.API.Services;
+using ScrumPilot.API.Authorization;
+using ScrumPilot.Data.Repositories;
 using ScrumPilot.Shared.Models;
 using Xunit;
 
@@ -15,7 +17,15 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         public MetricsDashboardControllerTests()
         {
             _mockService = Substitute.For<IMetricsDashboardService>();
-            _controller = new MetricsDashboardController(_mockService);
+            var sprints = Substitute.For<ISprintRepository>();
+            var currentUser = Substitute.For<ICurrentUser>();
+            var access = Substitute.For<IOrganizationAccessService>();
+            currentUser.UserId.Returns("test-user");
+            sprints.GetByIdAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+                .Returns(call => new Sprint { SprintId = call.ArgAt<int>(0), ProjectId = 1 });
+            access.CanAccessProjectAsync("test-user", 1, Arg.Any<CancellationToken>()).Returns(true);
+            access.SprintBelongsToProjectAsync(Arg.Any<int>(), 1, Arg.Any<CancellationToken>()).Returns(true);
+            _controller = new MetricsDashboardController(_mockService, sprints, currentUser, access);
         }
 
         // ── GetSprintSummary ────────────────────────────────────────────────────
@@ -116,16 +126,16 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
                 new("Sprint 1", 30, 28),
                 new("Sprint 2", 35, 35)
             };
-            _mockService.GetVelocityDataAsync(null).Returns(points);
+            _mockService.GetVelocityDataAsync(null, 1).Returns(points);
 
             // Act
-            var result = await _controller.GetVelocity(null);
+            var result = await _controller.GetVelocity(1, null);
 
             // Assert
             var ok = Assert.IsType<OkObjectResult>(result.Result);
             var actual = Assert.IsType<List<VelocityPoint>>(ok.Value);
             Assert.Equal(2, actual.Count);
-            await _mockService.Received(1).GetVelocityDataAsync(null);
+            await _mockService.Received(1).GetVelocityDataAsync(null, 1);
         }
 
         [Fact]
@@ -133,14 +143,14 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         {
             // Arrange
             var points = new List<VelocityPoint> { new("Sprint 2", 35, 35) };
-            _mockService.GetVelocityDataAsync(2).Returns(points);
+            _mockService.GetVelocityDataAsync(2, 1).Returns(points);
 
             // Act
-            var result = await _controller.GetVelocity(2);
+            var result = await _controller.GetVelocity(1, 2);
 
             // Assert
             var ok = Assert.IsType<OkObjectResult>(result.Result);
-            await _mockService.Received(1).GetVelocityDataAsync(2);
+            await _mockService.Received(1).GetVelocityDataAsync(2, 1);
         }
 
         // ── GetWip ──────────────────────────────────────────────────────────────

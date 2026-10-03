@@ -303,14 +303,23 @@
 
     private async Task LoadDropdownsAsync()
     {
+        if (!_selectedProjectId.HasValue)
+        {
+            _sprints = [];
+            _epics = [];
+            _users = [];
+            return;
+        }
         try
         {
-            var sprintUrl = _selectedProjectId.HasValue ? $"api/Sprint?projectId={_selectedProjectId.Value}" : "api/Sprint";
-            var epicUrl   = _selectedProjectId.HasValue ? $"api/Epic?projectId={_selectedProjectId.Value}"   : "api/Epic";
+            var sprintUrl = $"api/Sprint?projectId={_selectedProjectId.Value}";
+            var epicUrl = $"api/Epic?projectId={_selectedProjectId.Value}";
 
             _sprints = await Http.GetFromJsonAsync<List<Sprint>>(sprintUrl) ?? new();
             _epics   = await Http.GetFromJsonAsync<List<Epic>>(epicUrl)     ?? new();
-            _users   = await Http.GetFromJsonAsync<List<UserSummaryDto>>("api/user/all") ?? new();
+            _users = _selectedProjectId.HasValue
+                ? await Http.GetFromJsonAsync<List<UserSummaryDto>>($"api/user/all?projectId={_selectedProjectId.Value}") ?? new()
+                : [];
         }
         catch
         {
@@ -326,8 +335,15 @@
 
         try
         {
-            var sprintUrl = value.HasValue ? $"api/Sprint?projectId={value.Value}" : "api/Sprint";
-            var epicUrl   = value.HasValue ? $"api/Epic?projectId={value.Value}"   : "api/Epic";
+            if (!value.HasValue)
+            {
+                _sprints = [];
+                _epics = [];
+                _items = [];
+                return;
+            }
+            var sprintUrl = $"api/Sprint?projectId={value.Value}";
+            var epicUrl = $"api/Epic?projectId={value.Value}";
 
             _sprints = await Http.GetFromJsonAsync<List<Sprint>>(sprintUrl) ?? new();
             _epics   = await Http.GetFromJsonAsync<List<Epic>>(epicUrl)     ?? new();
@@ -345,6 +361,12 @@
 
     private async Task LoadItemsAsync(bool showLoading = true)
     {
+        if (!_selectedProjectId.HasValue)
+        {
+            _items = [];
+            _loading = false;
+            return;
+        }
         if (showLoading)
         {
             _loading = true;
@@ -372,9 +394,7 @@
 
     private string BuildItemUrl()
     {
-        var query = new List<string>();
-        if (_selectedProjectId.HasValue)
-            query.Add($"projectId={_selectedProjectId.Value}");
+        var query = new List<string> { $"projectId={_selectedProjectId!.Value}" };
         if (_selectedSprintId.HasValue)
             query.Add($"sprintId={_selectedSprintId.Value}");
         if (_selectedEpicId.HasValue)

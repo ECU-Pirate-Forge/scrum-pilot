@@ -2,6 +2,8 @@
 using NSubstitute;
 using ScrumPilot.API.Controllers;
 using ScrumPilot.API.Services;
+using ScrumPilot.API.Authorization;
+using ScrumPilot.Data.Repositories;
 using ScrumPilot.Shared.Models;
 using Xunit;
 
@@ -10,12 +12,42 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
     public class PbiControllerTests
     {
         private readonly IPbiService _mockPbiService;
+        private readonly IPbiRepository _repository;
+        private readonly ICurrentUser _currentUser;
+        private readonly IOrganizationAccessService _access;
         private readonly PbiController _controller;
 
         public PbiControllerTests()
         {
             _mockPbiService = Substitute.For<IPbiService>();
-            _controller = new PbiController(_mockPbiService);
+            _repository = Substitute.For<IPbiRepository>();
+            _currentUser = Substitute.For<ICurrentUser>();
+            _access = Substitute.For<IOrganizationAccessService>();
+            _currentUser.UserId.Returns("test-user");
+            _access.CanAccessProjectAsync("test-user", 1, Arg.Any<CancellationToken>()).Returns(true);
+            _access.SprintBelongsToProjectAsync(Arg.Any<int>(), 1, Arg.Any<CancellationToken>()).Returns(true);
+            _access.EpicBelongsToProjectAsync(Arg.Any<int>(), 1, Arg.Any<CancellationToken>()).Returns(true);
+            _access.UserCanBeAssignedToProjectAsync(Arg.Any<string>(), 1, Arg.Any<CancellationToken>()).Returns(true);
+            _access.PbiBelongsToProjectAsync(Arg.Any<int>(), 1, Arg.Any<CancellationToken>()).Returns(true);
+            _repository.GetByIdAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+                .Returns(call => new ProductBacklogItem
+                {
+                    PbiId = call.ArgAt<int>(0), ProjectId = 1, Title = "Existing"
+                });
+            _mockPbiService.CreatePbiAsync(Arg.Any<ProductBacklogItem>(), Arg.Any<CancellationToken>())
+                .Returns(call => call.ArgAt<ProductBacklogItem>(0));
+            _mockPbiService.CreateDraftPbiAsync(Arg.Any<ProductBacklogItem>(), Arg.Any<CancellationToken>())
+                .Returns(call => call.ArgAt<ProductBacklogItem>(0));
+            _mockPbiService.UpdatePbiAsync(Arg.Any<ProductBacklogItem>(), Arg.Any<CancellationToken>())
+                .Returns(call => call.ArgAt<ProductBacklogItem>(0));
+            _mockPbiService.CommitPbiAsync(Arg.Any<ProductBacklogItem>(), Arg.Any<CancellationToken>())
+                .Returns(call => call.ArgAt<ProductBacklogItem>(0));
+            _mockPbiService.CreatePbisAsync(
+                    Arg.Any<IEnumerable<ProductBacklogItem>>(),
+                    Arg.Any<bool>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(call => call.ArgAt<IEnumerable<ProductBacklogItem>>(0).ToList());
+            _controller = new PbiController(_mockPbiService, _repository, _currentUser, _access);
         }
 
         [Fact]
@@ -46,17 +78,17 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
                 }
             };
 
-            _mockPbiService.GetAllPbisAsync().Returns(expectedPbis);
+            _repository.GetByProjectAsync(1).Returns(expectedPbis);
 
             // Act
-            var result = await _controller.GetAllPbis();
+            var result = await _controller.GetAllPbis(1);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
             var actualPbis = Assert.IsType<List<ProductBacklogItem>>(okResult.Value);
             Assert.Equal(expectedPbis.Count, actualPbis.Count);
             Assert.Equal(expectedPbis, actualPbis);
-            await _mockPbiService.Received(1).GetAllPbisAsync();
+            await _repository.Received(1).GetByProjectAsync(1);
         }
 
         [Fact]
@@ -64,16 +96,16 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         {
             // Arrange
             var expectedPbis = new List<ProductBacklogItem>();
-            _mockPbiService.GetAllPbisAsync().Returns(expectedPbis);
+            _repository.GetByProjectAsync(1).Returns(expectedPbis);
 
             // Act
-            var result = await _controller.GetAllPbis();
+            var result = await _controller.GetAllPbis(1);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
             var actualPbis = Assert.IsType<List<ProductBacklogItem>>(okResult.Value);
             Assert.Empty(actualPbis);
-            await _mockPbiService.Received(1).GetAllPbisAsync();
+            await _repository.Received(1).GetByProjectAsync(1);
         }
 
 
@@ -99,17 +131,17 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
                 }
             };
 
-            _mockPbiService.GetDraftPbisAsync().Returns(expectedDraftStories);
+            _repository.GetByProjectAsync(1, true).Returns(expectedDraftStories);
 
             // Act
-            var result = await _controller.GetDraftPbis();
+            var result = await _controller.GetDraftPbis(1);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
             var actualStories = Assert.IsType<List<ProductBacklogItem>>(okResult.Value);
             Assert.Single(actualStories);
             Assert.True(actualStories[0].IsDraft);
-            await _mockPbiService.Received(1).GetDraftPbisAsync();
+            await _repository.Received(1).GetByProjectAsync(1, true);
         }
 
         [Fact]
@@ -117,16 +149,16 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         {
             // Arrange
             var expectedStories = new List<ProductBacklogItem>();
-            _mockPbiService.GetDraftPbisAsync().Returns(expectedStories);
+            _repository.GetByProjectAsync(1, true).Returns(expectedStories);
 
             // Act
-            var result = await _controller.GetDraftPbis();
+            var result = await _controller.GetDraftPbis(1);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
             var actualStories = Assert.IsType<List<ProductBacklogItem>>(okResult.Value);
             Assert.Empty(actualStories);
-            await _mockPbiService.Received(1).GetDraftPbisAsync();
+            await _repository.Received(1).GetByProjectAsync(1, true);
         }
 
 
@@ -304,17 +336,20 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
                 LastUpdated = DateTime.UtcNow
             };
 
-            _mockPbiService.CreatePbiAsync(inputPbi).Returns(createdPbi);
+            _mockPbiService.CreatePbiAsync(
+                Arg.Any<ProductBacklogItem>(), Arg.Any<CancellationToken>()).Returns(createdPbi);
 
             // Act
-            var result = await _controller.CreatePbi(inputPbi);
+            var result = await _controller.CreatePbi(1, inputPbi);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
             var actualPbi = Assert.IsType<ProductBacklogItem>(okResult.Value);
             Assert.Equal(createdPbi.PbiId, actualPbi.PbiId);
             Assert.Equal(createdPbi.Title, actualPbi.Title);
-            await _mockPbiService.Received(1).CreatePbiAsync(inputPbi);
+            await _mockPbiService.Received(1).CreatePbiAsync(
+                Arg.Is<ProductBacklogItem>(p => p.ProjectId == 1 && p.Title == inputPbi.Title),
+                Arg.Any<CancellationToken>());
         }
 
         [Fact]
@@ -332,8 +367,6 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
                 LastUpdated = DateTime.UtcNow
             };
 
-            _mockPbiService.UpdatePbiAsync(updatedPbi).Returns(updatedPbi);
-
             // Act
             var result = await _controller.UpdatePbi(updatedPbi);
 
@@ -343,7 +376,9 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             Assert.Equal(updatedPbi.PbiId, actualPbi.PbiId);
             Assert.Equal(updatedPbi.Title, actualPbi.Title);
             Assert.Equal(PbiStatus.InProgress, actualPbi.Status);
-            await _mockPbiService.Received(1).UpdatePbiAsync(updatedPbi);
+            await _mockPbiService.Received(1).UpdatePbiAsync(
+                Arg.Is<ProductBacklogItem>(p => p.PbiId == 1 && p.Title == updatedPbi.Title),
+                Arg.Any<CancellationToken>());
         }
 
         [Fact]
@@ -361,8 +396,6 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
                 LastUpdated = DateTime.UtcNow
             };
 
-            _mockPbiService.UpdatePbiAsync(pbi).Returns(pbi);
-
             // Act
             var result = await _controller.UpdatePbi(pbi);
 
@@ -370,7 +403,9 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
             var actualPbi = Assert.IsType<ProductBacklogItem>(okResult.Value);
             Assert.Equal(PbiStatus.InReview, actualPbi.Status);
-            await _mockPbiService.Received(1).UpdatePbiAsync(pbi);
+            await _mockPbiService.Received(1).UpdatePbiAsync(
+                Arg.Is<ProductBacklogItem>(item => item.PbiId == 2 && item.Status == PbiStatus.InReview),
+                Arg.Any<CancellationToken>());
         }
 
         [Fact]
@@ -388,8 +423,6 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
                 LastUpdated = DateTime.UtcNow
             };
 
-            _mockPbiService.UpdatePbiAsync(pbi).Returns(pbi);
-
             // Act
             var result = await _controller.UpdatePbi(pbi);
 
@@ -397,7 +430,9 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
             var actualPbi = Assert.IsType<ProductBacklogItem>(okResult.Value);
             Assert.Equal(PbiPriority.None, actualPbi.Priority);
-            await _mockPbiService.Received(1).UpdatePbiAsync(pbi);
+            await _mockPbiService.Received(1).UpdatePbiAsync(
+                Arg.Is<ProductBacklogItem>(item => item.PbiId == 3 && item.Priority == PbiPriority.None),
+                Arg.Any<CancellationToken>());
         }
 
         [Fact]
@@ -428,8 +463,6 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
                 LastUpdated = DateTime.UtcNow
             };
 
-            _mockPbiService.CommitPbiAsync(draftPbi).Returns(committedPbi);
-
             // Act
             var result = await _controller.CommitPbi(draftPbi);
 
@@ -438,7 +471,9 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             var actualPbi = Assert.IsType<ProductBacklogItem>(okResult.Value);
             Assert.Equal(committedPbi.PbiId, actualPbi.PbiId);
             Assert.False(actualPbi.IsDraft);
-            await _mockPbiService.Received(1).CommitPbiAsync(draftPbi);
+            await _mockPbiService.Received(1).CommitPbiAsync(
+                Arg.Is<ProductBacklogItem>(p => p.PbiId == 7 && !p.IsDraft),
+                Arg.Any<CancellationToken>());
         }
 
         [Fact]
@@ -457,17 +492,16 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
                 LastUpdated = DateTime.UtcNow
             };
 
-            _mockPbiService
-                .CommitPbiAsync(draftPbi)
-                .Returns(Task.FromException<ProductBacklogItem>(new KeyNotFoundException("Draft PBI not found.")));
+            _repository.GetByIdAsync(99, Arg.Any<CancellationToken>())
+                .Returns((ProductBacklogItem?)null);
 
             // Act
             var result = await _controller.CommitPbi(draftPbi);
 
             // Assert
-            var notFoundResult = Assert.IsType<NotFoundObjectResult>(result.Result);
-            Assert.Equal("Draft PBI not found.", notFoundResult.Value);
-            await _mockPbiService.Received(1).CommitPbiAsync(draftPbi);
+            Assert.IsType<NotFoundResult>(result.Result);
+            await _mockPbiService.DidNotReceive().CommitPbiAsync(
+                Arg.Any<ProductBacklogItem>(), Arg.Any<CancellationToken>());
         }
 
         [Fact]
@@ -509,17 +543,16 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
                 new ProductBacklogItem { PbiId = 1, Title = "PBI 1", IsDraft = false },
                 new ProductBacklogItem { PbiId = 2, Title = "PBI 2", IsDraft = false }
             };
-            _mockPbiService.GetNonDraftPbisAsync().Returns(expectedPbis);
+            _mockPbiService.GetFilteredPbisAsync(null, null, 1).Returns(expectedPbis);
 
             // Act
-            var result = await _controller.GetNonDraftPbis(null, null, null);
+            var result = await _controller.GetNonDraftPbis(1);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
             var actualPbis = Assert.IsType<List<ProductBacklogItem>>(okResult.Value);
             Assert.Equal(2, actualPbis.Count);
-            await _mockPbiService.Received(1).GetNonDraftPbisAsync();
-            await _mockPbiService.DidNotReceive().GetFilteredPbisAsync(Arg.Any<int?>(), Arg.Any<int?>(), Arg.Any<int?>());
+            await _mockPbiService.Received(1).GetFilteredPbisAsync(null, null, 1);
         }
 
         [Fact]
@@ -530,17 +563,16 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             {
                 new ProductBacklogItem { PbiId = 1, Title = "PBI 1", SprintId = 1 }
             };
-            _mockPbiService.GetFilteredPbisAsync(1, null, null).Returns(expectedPbis);
+            _mockPbiService.GetFilteredPbisAsync(1, null, 1).Returns(expectedPbis);
 
             // Act
-            var result = await _controller.GetNonDraftPbis(1, null, null);
+            var result = await _controller.GetNonDraftPbis(1, 1);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
             var actualPbis = Assert.IsType<List<ProductBacklogItem>>(okResult.Value);
             Assert.Single(actualPbis);
-            await _mockPbiService.Received(1).GetFilteredPbisAsync(1, null, null);
-            await _mockPbiService.DidNotReceive().GetNonDraftPbisAsync();
+            await _mockPbiService.Received(1).GetFilteredPbisAsync(1, null, 1);
         }
 
         [Fact]
@@ -551,17 +583,16 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             {
                 new ProductBacklogItem { PbiId = 1, Title = "PBI 1", EpicId = 2 }
             };
-            _mockPbiService.GetFilteredPbisAsync(null, 2, null).Returns(expectedPbis);
+            _mockPbiService.GetFilteredPbisAsync(null, 2, 1).Returns(expectedPbis);
 
             // Act
-            var result = await _controller.GetNonDraftPbis(null, 2, null);
+            var result = await _controller.GetNonDraftPbis(1, null, 2);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
             var actualPbis = Assert.IsType<List<ProductBacklogItem>>(okResult.Value);
             Assert.Single(actualPbis);
-            await _mockPbiService.Received(1).GetFilteredPbisAsync(null, 2, null);
-            await _mockPbiService.DidNotReceive().GetNonDraftPbisAsync();
+            await _mockPbiService.Received(1).GetFilteredPbisAsync(null, 2, 1);
         }
 
         [Fact]
@@ -572,10 +603,10 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             {
                 new ProductBacklogItem { PbiId = 1, Title = "PBI 1", SprintId = 1, EpicId = 2 }
             };
-            _mockPbiService.GetFilteredPbisAsync(1, 2, null).Returns(expectedPbis);
+            _mockPbiService.GetFilteredPbisAsync(1, 2, 1).Returns(expectedPbis);
 
             // Act
-            var result = await _controller.GetNonDraftPbis(1, 2, null);
+            var result = await _controller.GetNonDraftPbis(1, 1, 2);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
@@ -583,7 +614,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             Assert.Single(actualPbis);
             Assert.Equal(1, actualPbis[0].SprintId);
             Assert.Equal(2, actualPbis[0].EpicId);
-            await _mockPbiService.Received(1).GetFilteredPbisAsync(1, 2, null);
+            await _mockPbiService.Received(1).GetFilteredPbisAsync(1, 2, 1);
         }
 
         [Fact]
@@ -591,16 +622,16 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         {
             // Arrange
             var expectedPbis = new List<ProductBacklogItem>();
-            _mockPbiService.GetFilteredPbisAsync(99, 99, null).Returns(expectedPbis);
+            _mockPbiService.GetFilteredPbisAsync(99, 99, 1).Returns(expectedPbis);
 
             // Act
-            var result = await _controller.GetNonDraftPbis(99, 99, null);
+            var result = await _controller.GetNonDraftPbis(1, 99, 99);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
             var actualPbis = Assert.IsType<List<ProductBacklogItem>>(okResult.Value);
             Assert.Empty(actualPbis);
-            await _mockPbiService.Received(1).GetFilteredPbisAsync(99, 99, null);
+            await _mockPbiService.Received(1).GetFilteredPbisAsync(99, 99, 1);
         }
 
         [Fact]
@@ -611,17 +642,14 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
                 new() { Title = "First" },
                 new() { Title = "Second" }
             };
-            _mockPbiService.CreatePbiAsync(Arg.Any<ProductBacklogItem>())
-                .Returns(call => call.Arg<ProductBacklogItem>());
-
-            var result = await _controller.CreatePbis(pbis);
+            var result = await _controller.CreatePbis(1, pbis);
 
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
             var created = Assert.IsType<List<ProductBacklogItem>>(okResult.Value);
             Assert.Equal(2, created.Count);
-            Assert.All(pbis, pbi => Assert.Equal(PbiOrigin.AiGenerated, pbi.Origin));
-            await _mockPbiService.Received(2).CreatePbiAsync(Arg.Any<ProductBacklogItem>());
-            await _mockPbiService.DidNotReceive().CreateDraftPbiAsync(Arg.Any<ProductBacklogItem>());
+            Assert.All(created, pbi => Assert.Equal(PbiOrigin.AiGenerated, pbi.Origin));
+            await _mockPbiService.Received(1).CreatePbisAsync(
+                Arg.Any<IEnumerable<ProductBacklogItem>>(), false, Arg.Any<CancellationToken>());
         }
 
         [Fact]
@@ -632,16 +660,14 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
                 new() { Title = "First" },
                 new() { Title = "Second" }
             };
-            _mockPbiService.CreateDraftPbiAsync(Arg.Any<ProductBacklogItem>())
-                .Returns(call => call.Arg<ProductBacklogItem>());
-
-            var result = await _controller.CreateDraftPbis(pbis);
+            var result = await _controller.CreateDraftPbis(1, pbis);
 
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
             var created = Assert.IsType<List<ProductBacklogItem>>(okResult.Value);
             Assert.Equal(2, created.Count);
-            Assert.All(pbis, pbi => Assert.Equal(PbiOrigin.AiGenerated, pbi.Origin));
-            await _mockPbiService.Received(2).CreateDraftPbiAsync(Arg.Any<ProductBacklogItem>());
+            Assert.All(created, pbi => Assert.Equal(PbiOrigin.AiGenerated, pbi.Origin));
+            await _mockPbiService.Received(1).CreatePbisAsync(
+                Arg.Any<IEnumerable<ProductBacklogItem>>(), true, Arg.Any<CancellationToken>());
             await _mockPbiService.DidNotReceive().CreatePbiAsync(Arg.Any<ProductBacklogItem>());
         }
     }

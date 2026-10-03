@@ -18,29 +18,14 @@ namespace ScrumPilot.API.Services
             _pbiRepository = pbiRepository;
         }
 
-        public async Task<IEnumerable<ProductBacklogItem>> GetAllPbisAsync()
-        {
-            return await _pbiRepository.GetAllPbisAsync();
-        }
-
         //public async Task<IEnumerable<ProductBacklogItem>> GetActivePbisAsync(int epicId) //This is for the Discord bot - Future State
         //{
         //    return await _pbiRepository.GetActivePbisAsync(epicId);
         //}
 
-        public async Task<IEnumerable<ProductBacklogItem>> GetNonDraftPbisAsync()
+        public async Task<IEnumerable<ProductBacklogItem>> GetFilteredPbisAsync(int? sprintId, int? epicId, int? projectId = null, CancellationToken cancellationToken = default)
         {
-            return await _pbiRepository.GetNonDraftPbisAsync();
-        }
-
-        public async Task<IEnumerable<ProductBacklogItem>> GetDraftPbisAsync()
-        {
-            return await _pbiRepository.GetDraftPbisAsync();
-        }
-
-        public async Task<IEnumerable<ProductBacklogItem>> GetFilteredPbisAsync(int? sprintId, int? epicId, int? projectId = null)
-        {
-            return await _pbiRepository.GetFilteredPbisAsync(sprintId, epicId, projectId);
+            return await _pbiRepository.GetFilteredPbisAsync(sprintId, epicId, projectId, cancellationToken);
         }
 
         /// <summary>
@@ -486,21 +471,32 @@ Problem statement: {problemStatement}";
         private static string BuildDescription(AiStoryResponse response) =>
             $"{response.UserStory}\n\nAcceptance Criteria:\n{string.Join("\n", response.AcceptanceCriteria!.Select(ac => $"• {ac}"))}";
 
-        public async Task<ProductBacklogItem> CreatePbiAsync(ProductBacklogItem story)
+        public async Task<ProductBacklogItem> CreatePbiAsync(ProductBacklogItem story, CancellationToken cancellationToken = default)
         {
             story.IsDraft = false;
-            return await _pbiRepository.AddAsync(story);
+            return await _pbiRepository.AddAsync(story, cancellationToken);
         }
 
-        public async Task<ProductBacklogItem> CreateDraftPbiAsync(ProductBacklogItem story)
+        public async Task<ProductBacklogItem> CreateDraftPbiAsync(ProductBacklogItem story, CancellationToken cancellationToken = default)
         {
             story.IsDraft = true;
-            return await _pbiRepository.AddAsync(story);
+            return await _pbiRepository.AddAsync(story, cancellationToken);
         }
 
-        public async Task<ProductBacklogItem> CommitDraftPbiAsync(ProductBacklogItem draftPbi)
+        public Task<List<ProductBacklogItem>> CreatePbisAsync(
+            IEnumerable<ProductBacklogItem> stories,
+            bool draft,
+            CancellationToken cancellationToken = default)
         {
-            var existingDraft = await _pbiRepository.GetByIdAsync(draftPbi.PbiId);
+            var items = stories.ToList();
+            foreach (var story in items)
+                story.IsDraft = draft;
+            return _pbiRepository.AddRangeAsync(items, cancellationToken);
+        }
+
+        public async Task<ProductBacklogItem> CommitDraftPbiAsync(ProductBacklogItem draftPbi, CancellationToken cancellationToken = default)
+        {
+            var existingDraft = await _pbiRepository.GetByIdAsync(draftPbi.PbiId, cancellationToken);
             if (existingDraft is null || !existingDraft.IsDraft)
             {
                 throw new KeyNotFoundException("Draft PBI not found.");
@@ -509,25 +505,25 @@ Problem statement: {problemStatement}";
             existingDraft.IsDraft = false;
             existingDraft.LastUpdated = DateTime.UtcNow;
 
-            return await _pbiRepository.UpdateAsync(existingDraft);
+            return await _pbiRepository.UpdateAsync(existingDraft, cancellationToken);
         }
 
-        public async Task<ProductBacklogItem> UpdatePbiAsync(ProductBacklogItem pbi)
+        public async Task<ProductBacklogItem> UpdatePbiAsync(ProductBacklogItem pbi, CancellationToken cancellationToken = default)
         {
             pbi.LastUpdated = DateTime.UtcNow;
-            return await _pbiRepository.UpdateAsync(pbi);
+            return await _pbiRepository.UpdateAsync(pbi, cancellationToken);
         }
 
-        public async Task<bool> DeletePbiAsync(int id)
+        public async Task<bool> DeletePbiAsync(int id, CancellationToken cancellationToken = default)
         {
-            return await _pbiRepository.DeleteAsync(id);
+            return await _pbiRepository.DeleteAsync(id, cancellationToken);
         }
 
-        public async Task<ProductBacklogItem> CommitPbiAsync(ProductBacklogItem pbi)
+        public async Task<ProductBacklogItem> CommitPbiAsync(ProductBacklogItem pbi, CancellationToken cancellationToken = default)
         {
             pbi.IsDraft = false;
             pbi.LastUpdated = DateTime.UtcNow;
-            return await _pbiRepository.UpdateAsync(pbi);
+            return await _pbiRepository.UpdateAsync(pbi, cancellationToken);
         }
     }
 }

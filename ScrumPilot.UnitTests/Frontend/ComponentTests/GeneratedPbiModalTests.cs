@@ -40,7 +40,10 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
             {
                 Assert.Contains("Saved as Draft", component.Markup);
                 var request = Assert.Single(_handler.PostRequests);
-                Assert.EndsWith("api/Pbi/createDraftPbis", request.Uri, StringComparison.OrdinalIgnoreCase);
+                Assert.EndsWith(
+                    "api/Pbi/createDraftPbis?projectId=17",
+                    request.Uri,
+                    StringComparison.OrdinalIgnoreCase);
                 var payload = JsonSerializer.Deserialize<List<ProductBacklogItem>>(
                     request.Content,
                     new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
@@ -64,7 +67,10 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
             {
                 Assert.Equal(2, _handler.PostRequests.Count);
                 var request = _handler.PostRequests[1];
-                Assert.EndsWith("api/Pbi/createStories", request.Uri, StringComparison.OrdinalIgnoreCase);
+                Assert.EndsWith(
+                    "api/Pbi/createStories?projectId=17",
+                    request.Uri,
+                    StringComparison.OrdinalIgnoreCase);
                 var payload = JsonSerializer.Deserialize<List<ProductBacklogItem>>(
                     request.Content,
                     new JsonSerializerOptions { PropertyNameCaseInsensitive = true });

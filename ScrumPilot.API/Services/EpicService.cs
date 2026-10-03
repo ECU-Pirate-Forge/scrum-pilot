@@ -15,18 +15,13 @@ namespace ScrumPilot.API.Services
             _epicRepository = epicRepository;
         }
 
-        public async Task<IEnumerable<Epic>> GetAllEpicsAsync()
+        public async Task<IEnumerable<Epic>> GetEpicsByProjectAsync(int projectId, CancellationToken cancellationToken = default)
         {
-            return await _epicRepository.GetAllEpicsAsync();
+            return await _epicRepository.GetEpicsByProjectAsync(projectId, cancellationToken);
         }
 
-        public async Task<IEnumerable<Epic>> GetEpicsByProjectAsync(int projectId)
-        {
-            return await _epicRepository.GetEpicsByProjectAsync(projectId);
-        }
-
-        public Task<Epic> CreateAsync(Epic epic) => _epicRepository.CreateAsync(epic);
-        public Task<Epic> UpdateAsync(Epic epic) => _epicRepository.UpdateAsync(epic);
-        public Task DeleteAsync(int id) => _epicRepository.DeleteAsync(id);
+        public Task<Epic> CreateAsync(Epic epic, CancellationToken cancellationToken = default) => _epicRepository.CreateAsync(epic, cancellationToken);
+        public Task<Epic> UpdateAsync(Epic epic, CancellationToken cancellationToken = default) => _epicRepository.UpdateAsync(epic, cancellationToken);
+        public Task DeleteAsync(int id, CancellationToken cancellationToken = default) => _epicRepository.DeleteAsync(id, cancellationToken);
     }
 }

@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
+using ScrumPilot.API.Authorization;
 using ScrumPilot.API.Services;
 using ScrumPilot.Shared.Models;
-using System.Security.Claims;
 
 namespace ScrumPilot.API.Controllers;
 
@@ -10,40 +10,43 @@ namespace ScrumPilot.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-public class UserController : ControllerBase
+public class UserController(
+    IUserSettingsService service,
+    ICurrentUser currentUser,
+    IOrganizationAccessService accessService) : ControllerBase
 {
-    private readonly IUserSettingsService _service;
-
-    /// <summary>Initialises a new instance of <see cref="UserController"/>.</summary>
-    public UserController(IUserSettingsService service) => _service = service;
-
     /// <summary>Returns the authenticated user's profile settings.</summary>
     [HttpGet("settings")]
     public async Task<ActionResult<UserSettingsDto>> GetSettings()
     {
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (userId is null) return Unauthorized();
-
-        var dto = await _service.GetSettingsAsync(userId);
+        var dto = await service.GetSettingsAsync(currentUser.UserId);
         return dto is null ? Unauthorized() : Ok(dto);
     }
 
     /// <summary>Updates the authenticated user's profile settings.</summary>
     [HttpPut("settings")]
-    public async Task<IActionResult> UpdateSettings([FromBody] UserSettingsDto dto)
+    public async Task<IActionResult> UpdateSettings(
+        [FromBody] UserSettingsDto dto,
+        CancellationToken cancellationToken = default)
     {
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (userId is null) return Unauthorized();
-
-        var success = await _service.UpdateSettingsAsync(userId, dto);
+        if (dto.DefaultProjectId.HasValue
+            && !await accessService.CanAccessProjectAsync(
+                currentUser.UserId, dto.DefaultProjectId.Value, cancellationToken))
+            return NotFound();
+        var success = await service.UpdateSettingsAsync(currentUser.UserId, dto);
         return success ? NoContent() : BadRequest("Failed to update settings.");
     }
 
     /// <summary>Returns a lightweight summary of every registered user for assignment dropdowns.</summary>
     [HttpGet("all")]
-    public async Task<ActionResult<IEnumerable<UserSummaryDto>>> GetAllUsers()
+    public async Task<ActionResult<IEnumerable<UserSummaryDto>>> GetAllUsers(
+        [FromQuery] int projectId,
+        CancellationToken cancellationToken)
     {
-        var users = await _service.GetAllUsersAsync();
+        if (!await accessService.CanAccessProjectAsync(
+                currentUser.UserId, projectId, cancellationToken))
+            return NotFound();
+        var users = await service.GetProjectUsersAsync(projectId, cancellationToken);
         return Ok(users);
     }
 
@@ -51,10 +54,8 @@ public class UserController : ControllerBase
     [HttpPost("change-password")]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
     {
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (userId is null) return Unauthorized();
-
-        var (succeeded, errors) = await _service.ChangePasswordAsync(userId, request.CurrentPassword, request.NewPassword);
+        var (succeeded, errors) = await service.ChangePasswordAsync(
+            currentUser.UserId, request.CurrentPassword, request.NewPassword);
         return succeeded ? NoContent() : BadRequest(new { errors });
     }
 }

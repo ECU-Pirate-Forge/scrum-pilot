@@ -15,18 +15,13 @@ namespace ScrumPilot.API.Services
             _sprintRepository = sprintRepository;
         }
 
-        public async Task<IEnumerable<Sprint>> GetAllSprintsAsync()
+        public async Task<IEnumerable<Sprint>> GetSprintsByProjectAsync(int projectId, CancellationToken cancellationToken = default)
         {
-            return await _sprintRepository.GetAllSprintsAsync();
+            return await _sprintRepository.GetSprintsByProjectAsync(projectId, cancellationToken);
         }
 
-        public async Task<IEnumerable<Sprint>> GetSprintsByProjectAsync(int projectId)
-        {
-            return await _sprintRepository.GetSprintsByProjectAsync(projectId);
-        }
-
-        public Task<Sprint> CreateAsync(Sprint sprint) => _sprintRepository.CreateAsync(sprint);
-        public Task<Sprint> UpdateAsync(Sprint sprint) => _sprintRepository.UpdateAsync(sprint);
-        public Task DeleteAsync(int id) => _sprintRepository.DeleteAsync(id);
+        public Task<Sprint> CreateAsync(Sprint sprint, CancellationToken cancellationToken = default) => _sprintRepository.CreateAsync(sprint, cancellationToken);
+        public Task<Sprint> UpdateAsync(Sprint sprint, CancellationToken cancellationToken = default) => _sprintRepository.UpdateAsync(sprint, cancellationToken);
+        public Task DeleteAsync(int id, CancellationToken cancellationToken = default) => _sprintRepository.DeleteAsync(id, cancellationToken);
     }
 }

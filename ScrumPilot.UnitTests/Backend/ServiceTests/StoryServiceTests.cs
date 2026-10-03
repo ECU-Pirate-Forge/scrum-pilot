@@ -45,62 +45,6 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
         }
 
         [Fact]
-        public async Task GetAllPbisAsync_ReturnsPbisFromRepository()
-        {
-            // Arrange
-            var expectedStories = new List<ProductBacklogItem>
-            {
-                new ProductBacklogItem { PbiId = 1, Title = "Story 1", Description = "Description 1" },
-                new ProductBacklogItem { PbiId = 2, Title = "Story 2", Description = "Description 2" }
-            };
-            _mockRepository.GetAllPbisAsync().Returns(expectedStories);
-
-            // Act
-            var result = await _pbiService.GetAllPbisAsync();
-
-            // Assert
-            Assert.NotNull(result);
-            Assert.Equal(expectedStories.Count, result.Count());
-            Assert.Equal(expectedStories, result);
-            await _mockRepository.Received(1).GetAllPbisAsync();
-        }
-
-        [Fact]
-        public async Task GetAllPbisAsync_ReturnsEmptyList_WhenNoPbisExist()
-        {
-            // Arrange
-            var expectedPbis = new List<ProductBacklogItem>();
-            _mockRepository.GetAllPbisAsync().Returns(expectedPbis);
-            // Act
-            var result = await _pbiService.GetAllPbisAsync();
-
-            // Assert
-            Assert.NotNull(result);
-            Assert.Empty(result);
-            await _mockRepository.Received(1).GetAllPbisAsync();
-        }
-
-        [Fact]
-        public async Task GetDraftPbisAsync_ReturnsDraftPbisFromRepository()
-        {
-            // Arrange
-            var expectedDraftStories = new List<ProductBacklogItem>
-            {
-                new ProductBacklogItem { PbiId = 1, Title = "Draft PBI", Description = "Draft Description", IsDraft = true }
-            };
-            _mockRepository.GetDraftPbisAsync().Returns(expectedDraftStories);
-
-            // Act
-            var result = await _pbiService.GetDraftPbisAsync();
-
-            // Assert
-            Assert.NotNull(result);
-            Assert.Single(result);
-            Assert.True(result.First().IsDraft);
-            await _mockRepository.Received(1).GetDraftPbisAsync();
-        }
-
-        [Fact]
         public async Task CreatePbiAsync_CallsRepositoryAddAsync()
         {
             // Arrange

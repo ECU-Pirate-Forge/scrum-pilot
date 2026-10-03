@@ -729,7 +729,8 @@
         try
         {
             _newSprint.ProjectId = _selectedProject.ProjectId;
-            var response = await Http.PostAsJsonAsync("api/sprint", _newSprint);
+            var response = await Http.PostAsJsonAsync(
+                $"api/sprint?projectId={_selectedProject.ProjectId}", _newSprint);
             if (response.IsSuccessStatusCode)
             {
                 var sprint = await response.Content.ReadFromJsonAsync<Sprint>();
@@ -829,7 +830,8 @@
                 Name = _newEpicName,
                 DateCreated = DateTime.UtcNow
             };
-            var response = await Http.PostAsJsonAsync("api/epic", epic);
+            var response = await Http.PostAsJsonAsync(
+                $"api/epic?projectId={_selectedProject.ProjectId}", epic);
             if (response.IsSuccessStatusCode)
             {
                 var created = await response.Content.ReadFromJsonAsync<Epic>();
@@ -927,7 +929,8 @@
         {
             if (pbi.PbiId == 0)
             {
-                var response = await Http.PostAsJsonAsync("api/pbi/createStory", pbi);
+                var response = await Http.PostAsJsonAsync(
+                    $"api/pbi/createStory?projectId={_selectedProject.ProjectId}", pbi);
                 if (response.IsSuccessStatusCode)
                 {
                     var created = await response.Content.ReadFromJsonAsync<ProductBacklogItem>();

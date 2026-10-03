@@ -13,46 +13,41 @@ namespace ScrumPilot.Data.Repositories
             _context = context;
         }
 
-        public async Task<IEnumerable<Sprint>> GetAllSprintsAsync()
-        {
-            return await _context.Sprints
-                .OrderByDescending(s => s.StartDate)
-                .ToListAsync();
-        }
-
-        public async Task<IEnumerable<Sprint>> GetSprintsByProjectAsync(int projectId)
+        public async Task<IEnumerable<Sprint>> GetSprintsByProjectAsync(int projectId, CancellationToken cancellationToken = default)
         {
             return await _context.Sprints
                 .Where(s => s.ProjectId == projectId)
                 .OrderByDescending(s => s.StartDate)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
         }
 
-        public async Task<Sprint> CreateAsync(Sprint sprint)
+        public Task<Sprint?> GetByIdAsync(int id, CancellationToken cancellationToken = default) =>
+            _context.Sprints.FirstOrDefaultAsync(s => s.SprintId == id, cancellationToken);
+
+        public async Task<Sprint> CreateAsync(Sprint sprint, CancellationToken cancellationToken = default)
         {
             _context.Sprints.Add(sprint);
-            await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync(cancellationToken);
             return sprint;
         }
 
-        public async Task<Sprint> UpdateAsync(Sprint sprint)
+        public async Task<Sprint> UpdateAsync(Sprint sprint, CancellationToken cancellationToken = default)
         {
-            _context.Sprints.Update(sprint);
-            await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync(cancellationToken);
             return sprint;
         }
 
-        public async Task DeleteAsync(int id)
+        public async Task DeleteAsync(int id, CancellationToken cancellationToken = default)
         {
             await _context.Stories
                 .Where(p => p.SprintId == id)
-                .ExecuteUpdateAsync(s => s.SetProperty(p => p.SprintId, (int?)null));
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.SprintId, (int?)null), cancellationToken);
 
-            var sprint = await _context.Sprints.FindAsync(id);
+            var sprint = await _context.Sprints.FindAsync([id], cancellationToken);
             if (sprint != null)
             {
                 _context.Sprints.Remove(sprint);
-                await _context.SaveChangesAsync();
+                await _context.SaveChangesAsync(cancellationToken);
             }
         }
     }
