@@ -115,6 +115,12 @@
     private List<Project> _appBarProjects = new();
     private UserSettingsDto? _settings;
     private int _loadGeneration;
+    private readonly object _selectionPersistenceLock = new();
+    private Selection? _desiredSelection;
+    private Selection? _persistedSelection;
+    private Task _selectionWriterTask = Task.CompletedTask;
+    private bool _selectionWriterRunning;
+    private int _persistenceGeneration;
     private bool _disposed;
 
     MudTheme currentTheme = new()
@@ -200,11 +206,20 @@
         {
             var organization = OrganizationState.SelectedOrganization;
             if (organization is not null)
-                await LoadProjectsAsync(organization, _settings?.DefaultProjectId, persist: false);
+            {
+                var currentProjectId = ProjectState.SelectedProjectId;
+                var result = await LoadProjectsAsync(
+                    organization,
+                    currentProjectId,
+                    _settings?.DefaultProjectId,
+                    persist: false);
+                if (result == ProjectLoadResult.NotFound)
+                    await LoadSessionAsync(new HashSet<int> { organization.OrganizationId });
+            }
         });
     }
 
-    private async Task LoadSessionAsync(int? excludedOrganizationId = null)
+    private async Task LoadSessionAsync(IReadOnlySet<int>? rejectedOrganizationIds = null)
     {
         var generation = ++_loadGeneration;
         ClearSession(incrementGeneration: false);
@@ -217,7 +232,8 @@
                 return;
 
             _organizations = organizations
-                .Where(o => !o.IsDeleted && o.OrganizationId != excludedOrganizationId)
+                .Where(o => !o.IsDeleted
+                    && !(rejectedOrganizationIds?.Contains(o.OrganizationId) ?? false))
                 .ToList();
 
             _settings = await Http.GetFromJsonAsync<UserSettingsDto>("api/user/settings");
@@ -230,15 +246,40 @@
                 _userPreferenceLoaded = true;
             }
 
-            var organization = _settings?.DefaultOrganizationId is int defaultId
-                ? _organizations.FirstOrDefault(o => o.OrganizationId == defaultId)
-                : null;
-            organization ??= _organizations.FirstOrDefault();
-            OrganizationState.SetOrganization(organization);
+            lock (_selectionPersistenceLock)
+            {
+                _persistedSelection = _settings?.DefaultOrganizationId is int organizationId
+                    ? new Selection(organizationId, _settings.DefaultProjectId)
+                    : null;
+            }
 
-            if (organization is not null)
-                await LoadProjectsAsync(
-                    organization, _settings?.DefaultProjectId, persist: false, generation);
+            var candidates = _organizations
+                .OrderByDescending(o => o.OrganizationId == _settings?.DefaultOrganizationId)
+                .ToList();
+            var attemptedOrganizationIds = new HashSet<int>();
+            foreach (var organization in candidates)
+            {
+                if (!attemptedOrganizationIds.Add(organization.OrganizationId)
+                    || !IsCurrent(generation))
+                    continue;
+
+                OrganizationState.SetOrganization(organization);
+                var result = await LoadProjectsAsync(
+                    organization,
+                    _settings?.DefaultProjectId,
+                    fallbackProjectId: null,
+                    persist: false,
+                    generation);
+                if (result == ProjectLoadResult.Success || result == ProjectLoadResult.Failed)
+                    return;
+            }
+
+            if ((attemptedOrganizationIds.Count > 0 || rejectedOrganizationIds?.Count > 0)
+                && IsCurrent(generation))
+            {
+                ClearSession(incrementGeneration: false);
+                Snackbar.Add("Unable to load organizations and projects.", Severity.Error);
+            }
         }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
@@ -269,12 +310,19 @@
         _appBarProjects = [];
         ProjectState.Clear();
         StateHasChanged();
-        await LoadProjectsAsync(organization, _settings?.DefaultProjectId, persist: true);
+        var result = await LoadProjectsAsync(
+            organization,
+            _settings?.DefaultProjectId,
+            fallbackProjectId: null,
+            persist: true);
+        if (result == ProjectLoadResult.NotFound)
+            await LoadSessionAsync(new HashSet<int> { organization.OrganizationId });
     }
 
-    private async Task LoadProjectsAsync(
+    private async Task<ProjectLoadResult> LoadProjectsAsync(
         OrganizationSummaryDto organization,
         int? preferredProjectId,
+        int? fallbackProjectId,
         bool persist,
         int? existingGeneration = null)
     {
@@ -285,17 +333,21 @@
                 $"api/organizations/{organization.OrganizationId}/projects") ?? [];
             if (!IsCurrent(generation)
                 || OrganizationState.SelectedOrganizationId != organization.OrganizationId)
-                return;
+                return ProjectLoadResult.Failed;
 
             _appBarProjects = projects;
             var selected = preferredProjectId is int projectId
                 ? projects.FirstOrDefault(p => p.ProjectId == projectId)
                 : null;
+            selected ??= fallbackProjectId is int fallbackId
+                ? projects.FirstOrDefault(p => p.ProjectId == fallbackId)
+                : null;
             selected ??= projects.FirstOrDefault();
             ProjectState.SetProject(selected);
 
             if (persist)
-                await PersistSelectionAsync(organization.OrganizationId, selected?.ProjectId, generation);
+                await PersistLatestSelectionAsync(organization.OrganizationId, selected?.ProjectId);
+            return ProjectLoadResult.Success;
         }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
@@ -304,13 +356,14 @@
                 OrganizationState.Clear();
                 _appBarProjects = [];
                 ProjectState.Clear();
-                await LoadSessionAsync(organization.OrganizationId);
             }
+            return ProjectLoadResult.NotFound;
         }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
             if (IsCurrent(generation))
                 ClearSession();
+            return ProjectLoadResult.Failed;
         }
         catch (Exception)
         {
@@ -320,6 +373,7 @@
                 ProjectState.Clear();
                 Snackbar.Add("Unable to load projects.", Severity.Error);
             }
+            return ProjectLoadResult.Failed;
         }
         finally
         {
@@ -333,41 +387,95 @@
         if (!_appBarProjects.Any(p => p.ProjectId == project.ProjectId))
             return;
 
-        var generation = ++_loadGeneration;
+        _loadGeneration++;
         ProjectState.SetProject(project);
         if (OrganizationState.SelectedOrganizationId is int organizationId)
-            await PersistSelectionAsync(organizationId, project.ProjectId, generation);
+            await PersistLatestSelectionAsync(organizationId, project.ProjectId);
     }
 
-    private async Task PersistSelectionAsync(int organizationId, int? projectId, int generation)
+    private Task PersistLatestSelectionAsync(int organizationId, int? projectId)
     {
-        if (_settings is null || !IsCurrent(generation))
-            return;
-
-        try
+        lock (_selectionPersistenceLock)
         {
-            var latest = await Http.GetFromJsonAsync<UserSettingsDto>("api/user/settings");
-            if (latest is null || !IsCurrent(generation))
-                return;
-
-            var merged = new UserSettingsDto
+            _desiredSelection = new Selection(organizationId, projectId);
+            if (!_selectionWriterRunning)
             {
-                Email = latest.Email,
-                DiscordUsername = latest.DiscordUsername,
-                UiPreference = latest.UiPreference,
-                DefaultOrganizationId = organizationId,
-                DefaultProjectId = projectId
-            };
+                _selectionWriterRunning = true;
+                _selectionWriterTask = RunSelectionWriterAsync(_persistenceGeneration);
+            }
 
-            var response = await Http.PutAsJsonAsync("api/user/settings", merged);
-            response.EnsureSuccessStatusCode();
-            if (IsCurrent(generation))
-                _settings = merged;
+            return _selectionWriterTask;
         }
-        catch (Exception)
+    }
+
+    private async Task RunSelectionWriterAsync(int persistenceGeneration)
+    {
+        while (true)
         {
-            if (IsCurrent(generation))
+            Selection target;
+            lock (_selectionPersistenceLock)
+            {
+                if (_disposed || _desiredSelection is not Selection desired
+                    || desired == _persistedSelection)
+                {
+                    _selectionWriterRunning = false;
+                    return;
+                }
+
+                persistenceGeneration = _persistenceGeneration;
+                target = desired;
+            }
+
+            try
+            {
+                var latest = await Http.GetFromJsonAsync<UserSettingsDto>("api/user/settings")
+                    ?? _settings
+                    ?? new UserSettingsDto();
+                lock (_selectionPersistenceLock)
+                {
+                    if (persistenceGeneration != _persistenceGeneration)
+                        continue;
+                    if (_desiredSelection is Selection latestDesired)
+                        target = latestDesired;
+                }
+
+                var merged = new UserSettingsDto
+                {
+                    Email = latest.Email,
+                    DiscordUsername = latest.DiscordUsername,
+                    UiPreference = latest.UiPreference,
+                    DefaultOrganizationId = target.OrganizationId,
+                    DefaultProjectId = target.ProjectId
+                };
+
+                var response = await Http.PutAsJsonAsync("api/user/settings", merged);
+                response.EnsureSuccessStatusCode();
+
+                lock (_selectionPersistenceLock)
+                {
+                    if (persistenceGeneration != _persistenceGeneration)
+                        continue;
+
+                    _persistedSelection = target;
+                    _settings = merged;
+                }
+            }
+            catch (Exception)
+            {
+                var retryLatest = false;
+                lock (_selectionPersistenceLock)
+                {
+                    if (persistenceGeneration != _persistenceGeneration)
+                        continue;
+                    retryLatest = _desiredSelection is Selection desired && desired != target;
+                    if (!retryLatest)
+                        _selectionWriterRunning = false;
+                }
+
                 Snackbar.Add("Unable to save your organization and project selection.", Severity.Error);
+                if (!retryLatest)
+                    return;
+            }
         }
     }
 
@@ -380,6 +488,14 @@
         _organizations = [];
         _appBarProjects = [];
         _settings = null;
+        _isDarkMode = false;
+        _userPreferenceLoaded = false;
+        lock (_selectionPersistenceLock)
+        {
+            _persistenceGeneration++;
+            _desiredSelection = null;
+            _persistedSelection = null;
+        }
         OrganizationState.Clear();
         ProjectState.Clear();
     }
@@ -415,7 +531,21 @@
     {
         _disposed = true;
         _loadGeneration++;
+        lock (_selectionPersistenceLock)
+        {
+            _persistenceGeneration++;
+            _desiredSelection = null;
+        }
         AuthStateProvider.AuthenticationStateChanged -= OnAuthStateChanged;
         ProjectState.OnProjectListChanged -= OnProjectListChanged;
+    }
+
+    private readonly record struct Selection(int OrganizationId, int? ProjectId);
+
+    private enum ProjectLoadResult
+    {
+        Success,
+        NotFound,
+        Failed
     }
 }

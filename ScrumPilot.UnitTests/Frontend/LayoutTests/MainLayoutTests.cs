@@ -273,6 +273,170 @@ public class MainLayoutTests : BunitContext
         });
     }
 
+    [Fact]
+    public async Task Startup_WhenEveryOrganizationIsStale_AttemptsEachOnceAndStops()
+    {
+        _handler.Respond("api/organizations", new[]
+        {
+            Organization(1, "First"),
+            Organization(2, "Second")
+        });
+        _handler.Respond("api/user/settings", new UserSettingsDto
+        {
+            DefaultOrganizationId = 1
+        });
+        _handler.RespondStatus(
+            "api/organizations/1/projects", HttpMethod.Get, HttpStatusCode.NotFound);
+        _handler.RespondStatus(
+            "api/organizations/2/projects", HttpMethod.Get, HttpStatusCode.NotFound);
+
+        var cut = Render<MainLayout>();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Null(Services.GetRequiredService<OrganizationStateService>().SelectedOrganization);
+            Assert.Null(Services.GetRequiredService<ProjectStateService>().SelectedProject);
+            Assert.Contains("Unable to load organizations and projects.", cut.Markup);
+            Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(
+                cut.Markup, "Unable to load organizations and projects\\.").Count);
+            Assert.Equal(1, _handler.Requests.Count(r => r == "api/organizations/1/projects"));
+            Assert.Equal(1, _handler.Requests.Count(r => r == "api/organizations/2/projects"));
+        });
+        var requestCount = _handler.Requests.Count;
+
+        await Task.Delay(100, Xunit.TestContext.Current.CancellationToken);
+
+        Assert.Equal(requestCount, _handler.Requests.Count);
+    }
+
+    [Fact]
+    public async Task RapidProjectChanges_SerializeWritesAndPersistLatestSelectionLast()
+    {
+        _handler.Respond("api/organizations", new[] { Organization(1, "Organization") });
+        _handler.Respond("api/user/settings", new UserSettingsDto
+        {
+            Email = "keep@example.com",
+            DefaultOrganizationId = 1,
+            DefaultProjectId = 11
+        });
+        _handler.Respond("api/organizations/1/projects", new[]
+        {
+            Project(11, 1, "First"),
+            Project(12, 1, "Second"),
+            Project(13, 1, "Third")
+        });
+        var firstPut = new TaskCompletionSource<HttpResponseMessage>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var activePuts = 0;
+        var maximumActivePuts = 0;
+        var putCount = 0;
+        _handler.RespondAsync("api/user/settings", HttpMethod.Put, async _ =>
+        {
+            var active = Interlocked.Increment(ref activePuts);
+            maximumActivePuts = Math.Max(maximumActivePuts, active);
+            var currentPut = Interlocked.Increment(ref putCount);
+            try
+            {
+                return currentPut == 1
+                    ? await firstPut.Task
+                    : new HttpResponseMessage(HttpStatusCode.NoContent);
+            }
+            finally
+            {
+                Interlocked.Decrement(ref activePuts);
+            }
+        });
+        var cut = Render<MainLayout>();
+        cut.FindAll("button").Single(button => button.TextContent.Contains("First")).Click();
+        var second = cut.FindComponents<MudMenuItem>()
+            .Single(item => item.Markup.Contains("Second"));
+        var third = cut.FindComponents<MudMenuItem>()
+            .Single(item => item.Markup.Contains("Third"));
+
+        Task secondSelection = Task.CompletedTask;
+        await cut.InvokeAsync(() =>
+        {
+            secondSelection = second.Instance.OnClick.InvokeAsync(new MouseEventArgs());
+        });
+        cut.WaitForAssertion(() => Assert.Single(_handler.JsonBodies));
+
+        Task thirdSelection = Task.CompletedTask;
+        var thirdDispatch = cut.InvokeAsync(() =>
+        {
+            thirdSelection = third.Instance.OnClick.InvokeAsync(new MouseEventArgs());
+        });
+        cut.WaitForAssertion(() =>
+            Assert.Equal(13, Services.GetRequiredService<ProjectStateService>().SelectedProjectId));
+        Assert.Single(_handler.JsonBodies);
+
+        firstPut.SetResult(new HttpResponseMessage(HttpStatusCode.NoContent));
+        await Task.WhenAll(secondSelection, thirdDispatch);
+        await thirdSelection;
+
+        Assert.Equal(2, _handler.JsonBodies.Count);
+        Assert.Equal(12, _handler.JsonBodies[0].DefaultProjectId);
+        Assert.Equal(13, _handler.JsonBodies[1].DefaultProjectId);
+        Assert.Equal(1, maximumActivePuts);
+    }
+
+    [Fact]
+    public void ProjectListRefresh_PreservesCurrentSelectionBeforeStoredDefault()
+    {
+        _handler.Respond("api/organizations", new[] { Organization(1, "Organization") });
+        _handler.Respond("api/user/settings", new UserSettingsDto
+        {
+            DefaultOrganizationId = 1,
+            DefaultProjectId = 11
+        });
+        _handler.Respond("api/organizations/1/projects", new[]
+        {
+            Project(11, 1, "Default"),
+            Project(12, 1, "Current")
+        });
+        var cut = Render<MainLayout>();
+        Services.GetRequiredService<ProjectStateService>()
+            .SetProject(Project(12, 1, "Current"));
+
+        Services.GetRequiredService<ProjectStateService>().NotifyProjectListChanged();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(2, _handler.Requests.Count(
+                r => r == "api/organizations/1/projects"));
+            Assert.Equal(12, Services.GetRequiredService<ProjectStateService>().SelectedProjectId);
+        });
+    }
+
+    [Fact]
+    public async Task ProjectChange_WhenSettingsAreNull_PersistsSelectionFromNewSettings()
+    {
+        _handler.Respond("api/organizations", new[] { Organization(1, "Organization") });
+        _handler.RespondAsync("api/user/settings", HttpMethod.Get, _ =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create<UserSettingsDto?>(null)
+            }));
+        _handler.Respond("api/organizations/1/projects", new[]
+        {
+            Project(11, 1, "First"),
+            Project(12, 1, "Second")
+        });
+        _handler.RespondStatus("api/user/settings", HttpMethod.Put, HttpStatusCode.NoContent);
+        var cut = Render<MainLayout>();
+        cut.FindAll("button").Single(button => button.TextContent.Contains("First")).Click();
+        var second = cut.FindComponents<MudMenuItem>()
+            .Single(item => item.Markup.Contains("Second"));
+
+        await cut.InvokeAsync(() => second.Instance.OnClick.InvokeAsync(new MouseEventArgs()));
+
+        cut.WaitForAssertion(() =>
+        {
+            var saved = Assert.Single(_handler.JsonBodies);
+            Assert.Equal(1, saved.DefaultOrganizationId);
+            Assert.Equal(12, saved.DefaultProjectId);
+        });
+    }
+
     private static OrganizationSummaryDto Organization(int id, string name) =>
         new(id, name, OrganizationRole.Member, false);
 
@@ -321,6 +485,12 @@ public class MainLayoutTests : BunitContext
             string route,
             Func<CancellationToken, Task<HttpResponseMessage>> response) =>
             _responses[(HttpMethod.Get, route)] = response;
+
+        public void RespondAsync(
+            string route,
+            HttpMethod method,
+            Func<CancellationToken, Task<HttpResponseMessage>> response) =>
+            _responses[(method, route)] = response;
 
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
