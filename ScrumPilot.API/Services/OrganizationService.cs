@@ -28,7 +28,7 @@ public sealed class OrganizationService(
                ?? throw new OrganizationNotFoundException();
     }
 
-    public async Task<OrganizationSummaryDto> CreateAsync(
+    public async Task<OrganizationCreatedDto> CreateAsync(
         CreateOrganizationRequest request,
         CancellationToken cancellationToken = default)
     {

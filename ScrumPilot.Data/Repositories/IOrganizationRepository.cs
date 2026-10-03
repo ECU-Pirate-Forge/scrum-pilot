@@ -40,7 +40,7 @@ public interface IOrganizationRepository
         int organizationId,
         string userId,
         CancellationToken cancellationToken = default);
-    Task<OrganizationSummaryDto> CreateAsync(
+    Task<OrganizationCreatedDto> CreateAsync(
         string name,
         string normalizedName,
         string initialOwnerUserId,

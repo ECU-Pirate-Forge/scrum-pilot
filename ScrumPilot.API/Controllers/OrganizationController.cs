@@ -18,15 +18,12 @@ public sealed class OrganizationController(IOrganizationService service) : Contr
             value => Ok(value));
 
     [HttpPost]
-    public Task<ActionResult<OrganizationSummaryDto>> Create(
+    public Task<ActionResult<OrganizationCreatedDto>> Create(
         [FromBody] CreateOrganizationRequest request,
         CancellationToken cancellationToken = default) =>
         ExecuteAsync(
             () => service.CreateAsync(request, cancellationToken),
-            value => CreatedAtAction(
-                nameof(Get),
-                new { organizationId = value.OrganizationId },
-                value));
+            value => StatusCode(StatusCodes.Status201Created, value));
 
     [HttpGet("{organizationId:int}")]
     public Task<ActionResult<OrganizationSummaryDto>> Get(

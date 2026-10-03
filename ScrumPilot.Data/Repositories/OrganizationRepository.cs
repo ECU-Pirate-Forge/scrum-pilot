@@ -1,5 +1,7 @@
 using System.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.Sqlite;
+using Npgsql;
 using ScrumPilot.Data.Context;
 using ScrumPilot.Shared.Models;
 
@@ -69,7 +71,7 @@ public sealed class OrganizationRepository(ScrumPilotContext context) : IOrganiz
                  && x.Role == OrganizationRole.Owner,
             cancellationToken);
 
-    public async Task<OrganizationSummaryDto> CreateAsync(
+    public async Task<OrganizationCreatedDto> CreateAsync(
         string name,
         string normalizedName,
         string initialOwnerUserId,
@@ -99,13 +101,13 @@ public sealed class OrganizationRepository(ScrumPilotContext context) : IOrganiz
             await context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
-        catch (DbUpdateException exception)
+        catch (DbUpdateException exception) when (IsNormalizedNameUniqueViolation(exception))
         {
             throw new OrganizationRepositoryConflictException(
                 "The organization could not be created because its name is reserved.",
                 exception);
         }
-        return new(organization.OrganizationId, organization.Name, OrganizationRole.Owner, false);
+        return new(organization.OrganizationId, organization.Name, initialOwnerUserId);
     }
 
     public async Task<OrganizationMutationResult> RenameAsync(
@@ -129,7 +131,7 @@ public sealed class OrganizationRepository(ScrumPilotContext context) : IOrganiz
 
         organization.Name = name;
         organization.NormalizedName = normalizedName;
-        return await SaveMutationAsync(cancellationToken);
+        return await SaveMutationAsync(cancellationToken, translateNameConflict: true);
     }
 
     public async Task<OrganizationMutationResult> SoftDeleteAsync(
@@ -323,7 +325,8 @@ public sealed class OrganizationRepository(ScrumPilotContext context) : IOrganiz
             cancellationToken);
 
     private async Task<OrganizationMutationResult> SaveMutationAsync(
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool translateNameConflict = false)
     {
         try
         {
@@ -334,9 +337,28 @@ public sealed class OrganizationRepository(ScrumPilotContext context) : IOrganiz
         {
             return OrganizationMutationResult.ConcurrencyConflict;
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException exception)
+            when (translateNameConflict && IsNormalizedNameUniqueViolation(exception))
         {
             return OrganizationMutationResult.NameConflict;
         }
     }
+
+    private static bool IsNormalizedNameUniqueViolation(DbUpdateException exception) =>
+        exception.InnerException switch
+        {
+            PostgresException postgresException =>
+                postgresException.SqlState == PostgresErrorCodes.UniqueViolation
+                && string.Equals(
+                    postgresException.ConstraintName,
+                    "IX_Organizations_NormalizedName",
+                    StringComparison.Ordinal),
+            SqliteException sqliteException =>
+                sqliteException.SqliteErrorCode == 19
+                && sqliteException.SqliteExtendedErrorCode == 2067
+                && sqliteException.Message.Contains(
+                    "Organizations.NormalizedName",
+                    StringComparison.OrdinalIgnoreCase),
+            _ => false
+        };
 }

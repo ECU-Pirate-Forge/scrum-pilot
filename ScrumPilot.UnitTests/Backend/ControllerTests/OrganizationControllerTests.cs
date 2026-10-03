@@ -23,18 +23,20 @@ public sealed class OrganizationControllerTests
     }
 
     [Fact]
-    public async Task Create_ReturnsCreatedAtGet()
+    public async Task Create_WhenCreatorDiffersFromOwner_ReturnsTruthfulCreatedBodyWithoutLocation()
     {
         var controller = CreateController();
-        var request = new CreateOrganizationRequest("Pirate Forge", "owner");
-        var dto = new OrganizationSummaryDto(7, "Pirate Forge", OrganizationRole.Owner, false);
+        var request = new CreateOrganizationRequest("Pirate Forge", "initial-owner");
+        var dto = new OrganizationCreatedDto(7, "Pirate Forge", "initial-owner");
         _service.CreateAsync(request, Arg.Any<CancellationToken>()).Returns(dto);
 
         var result = await controller.Create(request);
 
-        var created = Assert.IsType<CreatedAtActionResult>(result.Result);
-        Assert.Equal(nameof(OrganizationController.Get), created.ActionName);
-        Assert.Equal(7, created.RouteValues!["organizationId"]);
+        var created = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status201Created, created.StatusCode);
+        Assert.Same(dto, created.Value);
+        Assert.Null(created.GetType().GetProperty("Location"));
+        Assert.Null(typeof(OrganizationCreatedDto).GetProperty("Role"));
     }
 
     [Fact]

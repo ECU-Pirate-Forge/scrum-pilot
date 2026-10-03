@@ -6,7 +6,7 @@ public interface IOrganizationService
 {
     Task<IReadOnlyList<OrganizationSummaryDto>> ListAsync(CancellationToken cancellationToken = default);
     Task<OrganizationSummaryDto> GetAsync(int organizationId, CancellationToken cancellationToken = default);
-    Task<OrganizationSummaryDto> CreateAsync(
+    Task<OrganizationCreatedDto> CreateAsync(
         CreateOrganizationRequest request,
         CancellationToken cancellationToken = default);
     Task<OrganizationSummaryDto> RenameAsync(

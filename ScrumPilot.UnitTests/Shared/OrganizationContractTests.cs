@@ -63,6 +63,15 @@ public class OrganizationContractTests
     }
 
     [Fact]
+    public void OrganizationCreatedDto_IdentifiesInitialOwnerWithoutCallerRole()
+    {
+        var result = new OrganizationCreatedDto(7, "Pirate Forge", "initial-owner");
+
+        Assert.Equal("initial-owner", result.InitialOwnerUserId);
+        Assert.Null(typeof(OrganizationCreatedDto).GetProperty("Role"));
+    }
+
+    [Fact]
     public void InviteOrganizationMemberRequest_MissingRoleThrowsJsonException()
     {
         Assert.Throws<JsonException>(

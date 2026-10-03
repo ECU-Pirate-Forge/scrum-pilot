@@ -65,6 +65,85 @@ public sealed class OrganizationRepositoryTests
             && x.Role == OrganizationRole.Owner));
     }
 
+    [Fact]
+    public async Task CreateAsync_DuplicateNormalizedName_TranslatesNameConflict()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<ScrumPilotContext>().UseSqlite(connection).Options;
+        await using var context = new ScrumPilotContext(options);
+        await context.Database.EnsureCreatedAsync();
+        context.Users.Add(User("owner"));
+        context.Organizations.Add(new Organization
+        {
+            Name = "Existing",
+            NormalizedName = "EXISTING",
+            CreatedAt = DateTime.UtcNow
+        });
+        await context.SaveChangesAsync();
+        var repository = new OrganizationRepository(context);
+
+        await Assert.ThrowsAsync<OrganizationRepositoryConflictException>(() =>
+            repository.CreateAsync(
+                "Existing",
+                "EXISTING",
+                "owner",
+                DateTime.UtcNow));
+    }
+
+    [Fact]
+    public async Task CreateAsync_UnrelatedForeignKeyFailure_PropagatesDbUpdateException()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<ScrumPilotContext>().UseSqlite(connection).Options;
+        await using var context = new ScrumPilotContext(options);
+        await context.Database.EnsureCreatedAsync();
+        var repository = new OrganizationRepository(context);
+
+        var exception = await Assert.ThrowsAsync<DbUpdateException>(() =>
+            repository.CreateAsync(
+                "New organization",
+                "NEW ORGANIZATION",
+                "missing-owner",
+                DateTime.UtcNow));
+
+        Assert.IsNotType<OrganizationRepositoryConflictException>(exception);
+    }
+
+    [Fact]
+    public async Task UpdateMemberRoleAsync_UnrelatedUniqueFailure_PropagatesDbUpdateException()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<ScrumPilotContext>().UseSqlite(connection).Options;
+        await using var context = new ScrumPilotContext(options);
+        await context.Database.EnsureCreatedAsync();
+        var owner = User("owner");
+        var member = User("member");
+        context.Users.AddRange(owner, member);
+        var organization = new Organization
+        {
+            Name = "Role update",
+            NormalizedName = "ROLE UPDATE",
+            CreatedAt = DateTime.UtcNow
+        };
+        context.Organizations.Add(organization);
+        await context.SaveChangesAsync();
+        context.OrganizationMemberships.AddRange(
+            Membership(organization.OrganizationId, owner.Id, OrganizationRole.Owner),
+            Membership(organization.OrganizationId, member.Id, OrganizationRole.Member));
+        await context.SaveChangesAsync();
+        member.NormalizedUserName = owner.NormalizedUserName;
+        var repository = new OrganizationRepository(context);
+
+        await Assert.ThrowsAsync<DbUpdateException>(() =>
+            repository.UpdateMemberRoleAsync(
+                organization.OrganizationId,
+                member.Id,
+                OrganizationRole.Owner));
+    }
+
     private static ApplicationUser User(string id) => new()
     {
         Id = id,

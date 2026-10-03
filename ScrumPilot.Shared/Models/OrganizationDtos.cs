@@ -13,6 +13,15 @@ public record OrganizationSummaryDto(
     OrganizationRole Role,
     bool IsDeleted);
 
+/// <summary>Result of creating an organization and assigning its first owner.</summary>
+/// <param name="OrganizationId">Unique organization identifier.</param>
+/// <param name="Name">Organization display name.</param>
+/// <param name="InitialOwnerUserId">Identity identifier of the first owner.</param>
+public record OrganizationCreatedDto(
+    int OrganizationId,
+    string Name,
+    string InitialOwnerUserId);
+
 /// <summary>Request to create an organization and assign its first owner.</summary>
 /// <param name="Name">Organization display name.</param>
 /// <param name="InitialOwnerUserId">Identity identifier of the first owner.</param>

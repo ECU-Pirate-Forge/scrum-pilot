@@ -53,7 +53,7 @@ public sealed class OrganizationServiceTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task CreateAsync_AdminNormalizesNameAndCreatesInitialOwner()
+    public async Task CreateAsync_AdminCreatorDiffersFromOwner_ReturnsTruthfulCreationResult()
     {
         await SeedUserAsync("creator");
         await SeedUserAsync("owner");
@@ -62,6 +62,8 @@ public sealed class OrganizationServiceTests : IAsyncDisposable
         var result = await _service.CreateAsync(new("  Pirate Forge  ", "owner"));
 
         Assert.Equal("Pirate Forge", result.Name);
+        Assert.Equal("owner", result.InitialOwnerUserId);
+        Assert.Null(result.GetType().GetProperty("Role"));
         Assert.Equal(
             "PIRATE FORGE",
             await _context.Organizations.Select(x => x.NormalizedName).SingleAsync());
