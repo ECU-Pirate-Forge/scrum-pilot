@@ -12,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using ScrumPilot.Data.Repositories;
 using System.Text;
+using ScrumPilot.API.Authorization;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -65,6 +66,11 @@ builder.Services.AddScoped<IEpicService, EpicService>();
 builder.Services.AddScoped<IMetricsDashboardService, MetricsDashboardService>();
 builder.Services.AddScoped<IDashboardPreferenceService, DashboardPreferenceService>();
 builder.Services.AddScoped<IUserSettingsService, UserSettingsService>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUser, CurrentUser>();
+builder.Services.AddScoped<IOrganizationAccessService, OrganizationAccessService>();
+builder.Services.AddScoped<IOrganizationService, OrganizationService>();
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddHttpClient<IPbiService, PbiService>(client =>
 {
     client.Timeout = TimeSpan.FromMinutes(5);
