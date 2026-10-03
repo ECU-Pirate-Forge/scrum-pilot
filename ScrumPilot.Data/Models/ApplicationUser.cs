@@ -16,5 +16,14 @@ namespace ScrumPilot.Data.Models
 
         /// <summary>The project automatically selected when this user logs in.</summary>
         public int? DefaultProjectId { get; set; }
+
+        /// <summary>The organization automatically selected when this user logs in.</summary>
+        public int? DefaultOrganizationId { get; set; }
+
+        /// <summary>The organizations this user belongs to.</summary>
+        public ICollection<OrganizationMembership> OrganizationMemberships { get; set; } = [];
+
+        /// <summary>The projects this user can access through an explicit grant.</summary>
+        public ICollection<ProjectMembership> ProjectMemberships { get; set; } = [];
     }
 }

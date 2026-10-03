@@ -21,6 +21,10 @@ namespace ScrumPilot.Data.Context
         public DbSet<MessageTranscript> MessageTranscripts { get; set; }
         public DbSet<PbiStatusHistory> PbiStatusHistories { get; set; }
         public DbSet<UserDashboardPreference> UserDashboardPreferences { get; set; }
+        public DbSet<Organization> Organizations { get; set; }
+        public DbSet<OrganizationMembership> OrganizationMemberships { get; set; }
+        public DbSet<ProjectMembership> ProjectMemberships { get; set; }
+        public DbSet<OrganizationInvitation> OrganizationInvitations { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -30,6 +34,96 @@ namespace ScrumPilot.Data.Context
             modelBuilder.Entity<ApplicationUser>(entity =>
             {
                 entity.Property(e => e.UiPreference).HasConversion<string>().HasDefaultValue(UiPreference.Light);
+                entity.Property(e => e.DefaultOrganizationId).IsRequired(false);
+                entity.Property(e => e.DefaultProjectId).IsRequired(false);
+                entity.HasOne<Organization>()
+                    .WithMany()
+                    .HasForeignKey(e => e.DefaultOrganizationId)
+                    .OnDelete(DeleteBehavior.SetNull);
+                entity.HasOne<Project>()
+                    .WithMany()
+                    .HasForeignKey(e => e.DefaultProjectId)
+                    .OnDelete(DeleteBehavior.SetNull);
+            });
+
+            modelBuilder.Entity<Organization>(entity =>
+            {
+                entity.ToTable("Organizations");
+                entity.HasKey(e => e.OrganizationId);
+                entity.Property(e => e.OrganizationId).ValueGeneratedOnAdd();
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.NormalizedName).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.CreatedAt).IsRequired();
+                entity.Property(e => e.DeletedAt).IsRequired(false);
+                entity.Property(e => e.RowVersion).IsRequired().IsConcurrencyToken();
+                entity.HasIndex(e => e.NormalizedName).IsUnique();
+            });
+
+            modelBuilder.Entity<OrganizationMembership>(entity =>
+            {
+                entity.ToTable("OrganizationMemberships");
+                entity.HasKey(e => new { e.OrganizationId, e.UserId });
+                entity.Property(e => e.UserId).IsRequired();
+                entity.Property(e => e.Role).HasConversion<string>().IsRequired();
+                entity.Property(e => e.JoinedAt).IsRequired();
+                entity.HasOne(e => e.Organization)
+                    .WithMany(e => e.OrganizationMemberships)
+                    .HasForeignKey(e => e.OrganizationId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne<ApplicationUser>()
+                    .WithMany(e => e.OrganizationMemberships)
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<ProjectMembership>(entity =>
+            {
+                entity.ToTable("ProjectMemberships");
+                entity.HasKey(e => new { e.ProjectId, e.UserId });
+                entity.Property(e => e.UserId).IsRequired();
+                entity.Property(e => e.GrantedAt).IsRequired();
+                entity.Property(e => e.GrantedByUserId).IsRequired();
+                entity.HasOne<Project>()
+                    .WithMany()
+                    .HasForeignKey(e => e.ProjectId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne<ApplicationUser>()
+                    .WithMany(e => e.ProjectMemberships)
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne<ApplicationUser>()
+                    .WithMany()
+                    .HasForeignKey(e => e.GrantedByUserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<OrganizationInvitation>(entity =>
+            {
+                entity.ToTable("OrganizationInvitations");
+                entity.HasKey(e => e.OrganizationInvitationId);
+                entity.Property(e => e.OrganizationInvitationId).ValueGeneratedOnAdd();
+                entity.Property(e => e.Email).IsRequired().HasMaxLength(320);
+                entity.Property(e => e.NormalizedEmail).IsRequired().HasMaxLength(320);
+                entity.Property(e => e.TokenHash).IsRequired().HasMaxLength(64);
+                entity.Property(e => e.InvitedByUserId).IsRequired();
+                entity.Property(e => e.Role).HasConversion<string>().IsRequired();
+                entity.Property(e => e.Status).HasConversion<string>().IsRequired();
+                entity.Property(e => e.CreatedAt).IsRequired();
+                entity.Property(e => e.ExpiresAt).IsRequired();
+                entity.Property(e => e.AcceptedAt).IsRequired(false);
+                entity.Property(e => e.LastSentAt).IsRequired(false);
+                entity.Property(e => e.DeliveryError).IsRequired(false);
+                entity.HasOne<Organization>()
+                    .WithMany()
+                    .HasForeignKey(e => e.OrganizationId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne<ApplicationUser>()
+                    .WithMany()
+                    .HasForeignKey(e => e.InvitedByUserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasIndex(e => new { e.OrganizationId, e.NormalizedEmail, e.Status });
+                entity.HasIndex(e => e.TokenHash).IsUnique();
+                entity.HasIndex(e => e.ExpiresAt);
             });
 
             modelBuilder.Entity<Project>(entity =>
@@ -38,6 +132,12 @@ namespace ScrumPilot.Data.Context
                 entity.HasKey(e => e.ProjectId);
                 entity.Property(e => e.ProjectId).ValueGeneratedOnAdd();
                 entity.Property(e => e.ProjectName).IsRequired();
+                entity.Property(e => e.OrganizationId).IsRequired();
+                entity.HasIndex(e => e.OrganizationId);
+                entity.HasOne(e => e.Organization)
+                    .WithMany(e => e.Projects)
+                    .HasForeignKey(e => e.OrganizationId)
+                    .OnDelete(DeleteBehavior.Restrict);
             });
 
             // Configure ProductBacklogItem entity
@@ -118,6 +218,14 @@ namespace ScrumPilot.Data.Context
                 entity.ToTable("UserDashboardPreferences");
                 entity.HasKey(e => new { e.UserId, e.ProjectId });
                 entity.Property(e => e.PreferencesJson).HasColumnType("TEXT");
+                entity.HasOne<ApplicationUser>()
+                    .WithMany()
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne<Project>()
+                    .WithMany()
+                    .HasForeignKey(e => e.ProjectId)
+                    .OnDelete(DeleteBehavior.Cascade);
             });
 
             modelBuilder.Entity<AudioTranscript>(entity =>
