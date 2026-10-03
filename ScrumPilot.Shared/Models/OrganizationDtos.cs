@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace ScrumPilot.Shared.Models;
 
 /// <summary>Organization details shown in organization lists.</summary>
@@ -23,11 +25,14 @@ public record RenameOrganizationRequest(string Name);
 /// <summary>Request to invite an email address to an organization.</summary>
 /// <param name="Email">Email address to invite.</param>
 /// <param name="Role">Role assigned when the invitation is accepted.</param>
-public record InviteOrganizationMemberRequest(string Email, OrganizationRole Role);
+public record InviteOrganizationMemberRequest(
+    string Email,
+    [property: JsonRequired] OrganizationRole Role);
 
 /// <summary>Request to change an organization member's role.</summary>
 /// <param name="Role">New role for the member.</param>
-public record UpdateOrganizationMemberRoleRequest(OrganizationRole Role);
+public record UpdateOrganizationMemberRoleRequest(
+    [property: JsonRequired] OrganizationRole Role);
 
 /// <summary>Request to accept an organization invitation.</summary>
 /// <param name="Token">Raw token supplied by the recipient for one-time verification.</param>

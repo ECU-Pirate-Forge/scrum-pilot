@@ -63,6 +63,66 @@ public class OrganizationContractTests
     }
 
     [Fact]
+    public void InviteOrganizationMemberRequest_MissingRoleThrowsJsonException()
+    {
+        Assert.Throws<JsonException>(
+            () => JsonSerializer.Deserialize<InviteOrganizationMemberRequest>(
+                """{"Email":"member@example.com"}"""));
+    }
+
+    [Theory]
+    [InlineData(OrganizationRole.Owner)]
+    [InlineData(OrganizationRole.Member)]
+    public void InviteOrganizationMemberRequest_ExplicitRoleDeserializes(OrganizationRole role)
+    {
+        var json = $$"""{"Email":"member@example.com","Role":{{(int)role}}}""";
+
+        var result = JsonSerializer.Deserialize<InviteOrganizationMemberRequest>(json);
+
+        Assert.NotNull(result);
+        Assert.Equal(role, result.Role);
+    }
+
+    [Fact]
+    public void UpdateOrganizationMemberRoleRequest_MissingRoleThrowsJsonException()
+    {
+        Assert.Throws<JsonException>(
+            () => JsonSerializer.Deserialize<UpdateOrganizationMemberRoleRequest>("{}"));
+    }
+
+    [Theory]
+    [InlineData(OrganizationRole.Owner)]
+    [InlineData(OrganizationRole.Member)]
+    public void UpdateOrganizationMemberRoleRequest_ExplicitRoleDeserializes(OrganizationRole role)
+    {
+        var json = $$"""{"Role":{{(int)role}}}""";
+
+        var result = JsonSerializer.Deserialize<UpdateOrganizationMemberRoleRequest>(json);
+
+        Assert.NotNull(result);
+        Assert.Equal(role, result.Role);
+    }
+
+    [Fact]
+    public void SetProjectAccessRequest_MissingHasAccessThrowsJsonException()
+    {
+        Assert.Throws<JsonException>(
+            () => JsonSerializer.Deserialize<SetProjectAccessRequest>(
+                """{"UserId":"member-id"}"""));
+    }
+
+    [Fact]
+    public void SetProjectAccessRequest_ExplicitFalseDeserializes()
+    {
+        var result = JsonSerializer.Deserialize<SetProjectAccessRequest>(
+            """{"UserId":"member-id","HasAccess":false}""");
+
+        Assert.NotNull(result);
+        Assert.Equal("member-id", result.UserId);
+        Assert.False(result.HasAccess);
+    }
+
+    [Fact]
     public void UserSettingsDto_DefaultOrganizationIdRoundTrips()
     {
         var settings = new UserSettingsDto { DefaultOrganizationId = 17 };

@@ -22,7 +22,7 @@ public class OrganizationInvitation
     public required string InvitedByUserId { get; set; }
 
     /// <summary>Role assigned when the invitation is accepted.</summary>
-    public OrganizationRole Role { get; set; }
+    public required OrganizationRole Role { get; set; }
 
     /// <summary>Current invitation lifecycle state.</summary>
     public OrganizationInvitationStatus Status { get; set; }
