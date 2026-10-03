@@ -56,10 +56,7 @@ public sealed class AdminUserSearchControllerTests
         var userManager = Substitute.For<UserManager<ApplicationUser>>(
             Substitute.For<IUserStore<ApplicationUser>>(),
             null, null, null, null, null, null, null, null);
-        var service = new UserSettingsService(
-            userManager,
-            context,
-            new OrganizationAccessService(context));
+        var service = new UserSettingsService(userManager, context);
 
         var tooShort = await service.SearchUsersAsync("a", 100);
         var matches = await service.SearchUsersAsync(" aLiCe ", 100);

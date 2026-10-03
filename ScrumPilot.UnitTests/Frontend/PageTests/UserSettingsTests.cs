@@ -128,6 +128,81 @@ public sealed class UserSettingsTests : BunitContext
         Assert.Contains("The selected defaults are not available.", cut.Markup);
     }
 
+    [Fact]
+    public async Task ChangingOrganizationIgnoresProjectsFromOlderRequestCompletingLast()
+    {
+        _handler.Respond("api/user/settings", new UserSettingsDto());
+        _handler.Respond("api/organizations", new[]
+        {
+            Organization(1, "First"),
+            Organization(2, "Second")
+        });
+        var first = new TaskCompletionSource<HttpResponseMessage>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var second = new TaskCompletionSource<HttpResponseMessage>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _handler.RespondAsync("api/organizations/1/projects", _ => first.Task);
+        _handler.RespondAsync("api/organizations/2/projects", _ => second.Task);
+        var cut = Render<UserSettings>();
+        var organizationSelect = cut.FindComponents<MudSelect<int?>>()
+            .Single(select => select.Instance.Label == "Default Organization");
+
+        var firstChange = cut.InvokeAsync(
+            () => organizationSelect.Instance.ValueChanged.InvokeAsync(1));
+        Assert.Contains("api/organizations/1/projects", _handler.Requests);
+        var secondChange = cut.InvokeAsync(
+            () => organizationSelect.Instance.ValueChanged.InvokeAsync(2));
+        second.SetResult(JsonResponse(new[] { Project(21, 2, "Second Project") }));
+        await secondChange;
+        var projectSelect = cut.FindComponents<MudSelect<int?>>()
+            .Single(select => select.Instance.Label == "Default Project");
+        await cut.InvokeAsync(
+            () => projectSelect.Instance.ValueChanged.InvokeAsync(21));
+        first.SetResult(JsonResponse(new[] { Project(11, 1, "Stale Project") }));
+        await firstChange;
+
+        Assert.Contains("Second Project", cut.Markup);
+        Assert.DoesNotContain("Stale Project", cut.Markup);
+    }
+
+    [Fact]
+    public async Task ChangingOrganizationIgnoresErrorFromOlderRequest()
+    {
+        _handler.Respond("api/user/settings", new UserSettingsDto());
+        _handler.Respond("api/organizations", new[]
+        {
+            Organization(1, "First"),
+            Organization(2, "Second")
+        });
+        var first = new TaskCompletionSource<HttpResponseMessage>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var second = new TaskCompletionSource<HttpResponseMessage>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _handler.RespondAsync("api/organizations/1/projects", _ => first.Task);
+        _handler.RespondAsync("api/organizations/2/projects", _ => second.Task);
+        var cut = Render<UserSettings>();
+        var organizationSelect = cut.FindComponents<MudSelect<int?>>()
+            .Single(select => select.Instance.Label == "Default Organization");
+
+        var firstChange = cut.InvokeAsync(
+            () => organizationSelect.Instance.ValueChanged.InvokeAsync(1));
+        var secondChange = cut.InvokeAsync(
+            () => organizationSelect.Instance.ValueChanged.InvokeAsync(2));
+        second.SetResult(JsonResponse(new[] { Project(21, 2, "Second Project") }));
+        await secondChange;
+        var projectSelect = cut.FindComponents<MudSelect<int?>>()
+            .Single(select => select.Instance.Label == "Default Project");
+        await cut.InvokeAsync(
+            () => projectSelect.Instance.ValueChanged.InvokeAsync(21));
+        first.SetResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+        await firstChange;
+
+        Assert.Contains("Second Project", cut.Markup);
+        Assert.DoesNotContain(
+            "Failed to load projects for the selected organization.",
+            cut.Markup);
+    }
+
     private static OrganizationSummaryDto Organization(int id, string name) =>
         new(id, name, OrganizationRole.Member, false);
 
@@ -138,6 +213,9 @@ public sealed class UserSettingsTests : BunitContext
             OrganizationId = organizationId,
             ProjectName = name
         };
+
+    private static HttpResponseMessage JsonResponse<T>(T value) where T : notnull =>
+        new(HttpStatusCode.OK) { Content = JsonContent.Create(value) };
 
     private sealed class RecordingHttpHandler : HttpMessageHandler
     {
@@ -153,6 +231,11 @@ public sealed class UserSettingsTests : BunitContext
         public void RespondStatus(string route, HttpMethod method, HttpStatusCode statusCode) =>
             _responses[(method, route)] = _ =>
                 Task.FromResult(new HttpResponseMessage(statusCode));
+
+        public void RespondAsync(
+            string route,
+            Func<CancellationToken, Task<HttpResponseMessage>> response) =>
+            _responses[(HttpMethod.Get, route)] = response;
 
         public void RespondJson<T>(
             string route,

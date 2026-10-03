@@ -14,18 +14,7 @@ public static class OrganizationInvitationRepositoryExceptionClassifier
         "OrganizationMemberships.OrganizationId, OrganizationMemberships.UserId";
 
     public static bool IsTransactionConcurrency(Exception exception)
-    {
-        if (Find<PostgresException>(exception) is
-            {
-                SqlState: PostgresErrorCodes.SerializationFailure
-                    or PostgresErrorCodes.DeadlockDetected
-            })
-        {
-            return true;
-        }
-
-        return Find<SqliteException>(exception)?.SqliteErrorCode is 5 or 6;
-    }
+        => TransactionConcurrencyExceptionClassifier.IsConcurrencyConflict(exception);
 
     public static bool IsMembershipUniqueViolation(Exception exception)
     {

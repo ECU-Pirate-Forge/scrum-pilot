@@ -57,4 +57,28 @@ public sealed class UserSettingsControllerTests
 
         Assert.IsType<NoContentResult>(result);
     }
+
+    [Fact]
+    public async Task UpdateSettings_MapsTransactionConflictToConflictResponse()
+    {
+        var service = Substitute.For<IUserSettingsService>();
+        var currentUser = Substitute.For<ICurrentUser>();
+        currentUser.UserId.Returns("user");
+        service.UpdateSettingsAsync(
+                "user",
+                Arg.Any<UserSettingsDto>(),
+                Arg.Any<CancellationToken>())
+            .Returns(UserSettingsUpdateResult.Conflict(
+                "Settings changed concurrently. Please reload and try again."));
+        var controller = new UserController(
+            service,
+            currentUser,
+            Substitute.For<IOrganizationAccessService>());
+
+        var result = await controller.UpdateSettings(new UserSettingsDto());
+
+        var conflict = Assert.IsType<ConflictObjectResult>(result);
+        var json = JsonSerializer.Serialize(conflict.Value);
+        Assert.Contains("reload and try again", json);
+    }
 }

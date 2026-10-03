@@ -1,4 +1,5 @@
 @page "/user-settings"
+@implements IDisposable
 @inject HttpClient Http
 @inject ScrumPilot.Web.Services.ProjectStateService ProjectState
 @inject NavigationManager Navigation
@@ -194,6 +195,8 @@
     private bool _savingSettings;
     private string? _settingsError;
     private bool _settingsSuccess;
+    private CancellationTokenSource? _projectLoadCts;
+    private long _projectLoadGeneration;
 
     protected override async Task OnInitializedAsync()
     {
@@ -210,7 +213,10 @@
                 && _organizations.Any(organization =>
                     organization.OrganizationId == _settings.DefaultOrganizationId.Value))
             {
-                await LoadProjectsAsync(_settings.DefaultOrganizationId.Value);
+                var projects = await LoadProjectsAsync(
+                    _settings.DefaultOrganizationId.Value,
+                    CancellationToken.None);
+                _projects = projects ?? [];
                 if (_settings.DefaultProjectId.HasValue
                     && _projects.All(project =>
                         project.ProjectId != _settings.DefaultProjectId.Value))
@@ -241,6 +247,10 @@
 
     private async Task OnDefaultOrganizationChangedAsync(int? organizationId)
     {
+        _projectLoadCts?.Cancel();
+        _projectLoadCts?.Dispose();
+        _projectLoadCts = null;
+        var generation = ++_projectLoadGeneration;
         _settings.DefaultOrganizationId = organizationId;
         _settings.DefaultProjectId = null;
         _projects = [];
@@ -248,22 +258,54 @@
         _settingsSuccess = false;
         if (organizationId.HasValue)
         {
+            var cts = new CancellationTokenSource();
+            _projectLoadCts = cts;
             try
             {
-                await LoadProjectsAsync(organizationId.Value);
+                var projects = await LoadProjectsAsync(
+                    organizationId.Value,
+                    cts.Token);
+                if (IsCurrentProjectLoad(organizationId.Value, generation, cts))
+                {
+                    _projects = projects ?? [];
+                }
+            }
+            catch (OperationCanceledException) when (cts.IsCancellationRequested)
+            {
             }
             catch (HttpRequestException)
             {
-                _settingsError = "Failed to load projects for the selected organization.";
+                if (IsCurrentProjectLoad(organizationId.Value, generation, cts))
+                {
+                    _settingsError =
+                        "Failed to load projects for the selected organization.";
+                }
+            }
+            finally
+            {
+                if (ReferenceEquals(_projectLoadCts, cts))
+                {
+                    _projectLoadCts = null;
+                }
+                cts.Dispose();
             }
         }
     }
 
-    private async Task LoadProjectsAsync(int organizationId)
-    {
-        _projects = await Http.GetFromJsonAsync<List<Project>>(
-            $"api/organizations/{organizationId}/projects") ?? [];
-    }
+    private Task<List<Project>?> LoadProjectsAsync(
+        int organizationId,
+        CancellationToken cancellationToken) =>
+        Http.GetFromJsonAsync<List<Project>>(
+            $"api/organizations/{organizationId}/projects",
+            cancellationToken);
+
+    private bool IsCurrentProjectLoad(
+        int organizationId,
+        long generation,
+        CancellationTokenSource cts) =>
+        generation == _projectLoadGeneration
+        && ReferenceEquals(_projectLoadCts, cts)
+        && _settings.DefaultOrganizationId == organizationId;
 
     private async Task SavePasswordAsync()
     {
@@ -350,4 +392,12 @@
 
     private record PasswordErrorResponse(IEnumerable<string>? Errors);
     private record SettingsErrorResponse(IEnumerable<string>? Errors);
+
+    public void Dispose()
+    {
+        ++_projectLoadGeneration;
+        _projectLoadCts?.Cancel();
+        _projectLoadCts?.Dispose();
+        _projectLoadCts = null;
+    }
 }

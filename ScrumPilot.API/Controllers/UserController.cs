@@ -35,7 +35,9 @@ public class UserController(
             dto,
             cancellationToken);
         if (!result.UserFound) return Unauthorized();
-        return result.Succeeded ? NoContent() : BadRequest(new { errors = result.Errors });
+        if (result.Succeeded) return NoContent();
+        var error = new { errors = result.Errors };
+        return result.IsConflict ? Conflict(error) : BadRequest(error);
     }
 
     /// <summary>Returns a lightweight summary of every registered user for assignment dropdowns.</summary>

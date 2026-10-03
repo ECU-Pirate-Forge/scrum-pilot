@@ -1,8 +1,10 @@
+using System.Data;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using ScrumPilot.API.Authorization;
 using ScrumPilot.Data.Context;
 using ScrumPilot.Data.Models;
+using ScrumPilot.Data.Repositories;
 using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.API.Services;
@@ -11,16 +13,13 @@ public class UserSettingsService : IUserSettingsService
 {
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ScrumPilotContext _context;
-    private readonly IOrganizationAccessService _accessService;
 
     public UserSettingsService(
         UserManager<ApplicationUser> userManager,
-        ScrumPilotContext context,
-        IOrganizationAccessService accessService)
+        ScrumPilotContext context)
     {
         _userManager = userManager;
         _context = context;
-        _accessService = accessService;
     }
 
     public async Task<UserSettingsDto?> GetSettingsAsync(string userId)
@@ -43,63 +42,82 @@ public class UserSettingsService : IUserSettingsService
         UserSettingsDto dto,
         CancellationToken cancellationToken = default)
     {
-        var user = await _userManager.FindByIdAsync(userId);
-        if (user is null) return UserSettingsUpdateResult.NotFound;
-
-        if (dto.Email is not null
-            && !string.Equals(dto.Email, user.Email, StringComparison.OrdinalIgnoreCase))
+        try
         {
-            return UserSettingsUpdateResult.Validation(
-                "Email changes require a confirmed-email workflow, which is not currently available.");
-        }
+            await using var transaction = await _context.Database.BeginTransactionAsync(
+                IsolationLevel.Serializable,
+                cancellationToken);
+            var user = await _context.Users.SingleOrDefaultAsync(
+                candidate => candidate.Id == userId,
+                cancellationToken);
+            if (user is null) return UserSettingsUpdateResult.NotFound;
 
-        if (dto.DefaultProjectId.HasValue && !dto.DefaultOrganizationId.HasValue)
-        {
-            return UserSettingsUpdateResult.Validation(
-                "A default organization is required when selecting a default project.");
-        }
+            if (dto.Email is not null
+                && !string.Equals(dto.Email, user.Email, StringComparison.OrdinalIgnoreCase))
+            {
+                return UserSettingsUpdateResult.Validation(
+                    "Email changes require a confirmed-email workflow, which is not currently available.");
+            }
 
-        if (dto.DefaultOrganizationId.HasValue
-            && !await _accessService.IsOrganizationMemberAsync(
-                userId,
-                dto.DefaultOrganizationId.Value,
-                cancellationToken))
-        {
-            return UserSettingsUpdateResult.Validation(
-                "The selected default organization is not available.");
-        }
+            if (dto.DefaultProjectId.HasValue && !dto.DefaultOrganizationId.HasValue)
+            {
+                return UserSettingsUpdateResult.Validation(
+                    "A default organization is required when selecting a default project.");
+            }
 
-        if (dto.DefaultProjectId.HasValue)
-        {
-            var projectOrganizationId =
-                await _accessService.GetOrganizationIdForProjectAsync(
-                    dto.DefaultProjectId.Value,
+            var hasOrganizationAccess = !dto.DefaultOrganizationId.HasValue
+                || await _context.OrganizationMemberships.AnyAsync(
+                    membership =>
+                        membership.UserId == userId
+                        && membership.OrganizationId == dto.DefaultOrganizationId.Value
+                        && membership.Organization != null
+                        && membership.Organization.DeletedAt == null,
                     cancellationToken);
-            if (projectOrganizationId != dto.DefaultOrganizationId)
+            if (!hasOrganizationAccess)
             {
                 return UserSettingsUpdateResult.Validation(
-                    "The selected default project does not belong to the selected organization.");
+                    "The selected default organization is not available.");
             }
 
-            if (!await _accessService.CanAccessProjectAsync(
-                userId,
-                dto.DefaultProjectId.Value,
-                cancellationToken))
+            if (dto.DefaultProjectId.HasValue)
             {
-                return UserSettingsUpdateResult.Validation(
-                    "The selected default project is not available.");
+                var hasProjectAccess = await _context.Projects.AnyAsync(
+                    project =>
+                        project.ProjectId == dto.DefaultProjectId.Value
+                        && project.OrganizationId == dto.DefaultOrganizationId!.Value
+                        && project.Organization != null
+                        && project.Organization.DeletedAt == null
+                        && _context.OrganizationMemberships.Any(membership =>
+                            membership.UserId == userId
+                            && membership.OrganizationId == project.OrganizationId
+                            && (membership.Role == OrganizationRole.Owner
+                                || _context.ProjectMemberships.Any(projectMembership =>
+                                    projectMembership.ProjectId == project.ProjectId
+                                    && projectMembership.UserId == userId))),
+                    cancellationToken);
+                if (!hasProjectAccess)
+                {
+                    return UserSettingsUpdateResult.Validation(
+                        "The selected default project is not available.");
+                }
             }
+
+            user.DiscordUsername = dto.DiscordUsername;
+            user.UiPreference = dto.UiPreference;
+            user.DefaultOrganizationId = dto.DefaultOrganizationId;
+            user.DefaultProjectId = dto.DefaultProjectId;
+
+            await _context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return UserSettingsUpdateResult.Success;
         }
-
-        user.DiscordUsername = dto.DiscordUsername;
-        user.UiPreference = dto.UiPreference;
-        user.DefaultOrganizationId = dto.DefaultOrganizationId;
-        user.DefaultProjectId = dto.DefaultProjectId;
-
-        var result = await _userManager.UpdateAsync(user);
-        return result.Succeeded
-            ? UserSettingsUpdateResult.Success
-            : UserSettingsUpdateResult.Failure(result.Errors.Select(error => error.Description));
+        catch (Exception exception) when (
+            TransactionConcurrencyExceptionClassifier
+                .IsConcurrencyConflict(exception))
+        {
+            return UserSettingsUpdateResult.Conflict(
+                "Settings changed concurrently. Please reload and try again.");
+        }
     }
 
     public async Task<(bool Succeeded, IEnumerable<string> Errors)> ChangePasswordAsync(

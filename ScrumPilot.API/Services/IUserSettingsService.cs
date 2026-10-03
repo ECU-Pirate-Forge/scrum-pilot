@@ -40,16 +40,20 @@ public interface IUserSettingsService
 public sealed record UserSettingsUpdateResult(
     bool Succeeded,
     bool UserFound,
+    bool IsConflict,
     IReadOnlyList<string> Errors)
 {
-    public static UserSettingsUpdateResult Success { get; } = new(true, true, []);
+    public static UserSettingsUpdateResult Success { get; } = new(true, true, false, []);
 
     public static UserSettingsUpdateResult NotFound { get; } =
-        new(false, false, ["User not found."]);
+        new(false, false, false, ["User not found."]);
 
     public static UserSettingsUpdateResult Validation(string error) =>
-        new(false, true, [error]);
+        new(false, true, false, [error]);
+
+    public static UserSettingsUpdateResult Conflict(string error) =>
+        new(false, true, true, [error]);
 
     public static UserSettingsUpdateResult Failure(IEnumerable<string> errors) =>
-        new(false, true, errors.ToArray());
+        new(false, true, false, errors.ToArray());
 }

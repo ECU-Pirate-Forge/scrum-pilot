@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using NSubstitute;
 using ScrumPilot.API.Authorization;
 using ScrumPilot.API.Services;
@@ -20,6 +21,10 @@ public sealed class UserSettingsServiceTests
         bool explicitProjectAccess)
     {
         await using var fixture = await Fixture.CreateAsync(role, explicitProjectAccess);
+        var normalizedUserName = fixture.User.NormalizedUserName;
+        var normalizedEmail = fixture.User.NormalizedEmail;
+        var securityStamp = fixture.User.SecurityStamp;
+        var concurrencyStamp = fixture.User.ConcurrencyStamp;
 
         var result = await fixture.Service.UpdateSettingsAsync("user", new UserSettingsDto
         {
@@ -31,6 +36,13 @@ public sealed class UserSettingsServiceTests
         Assert.True(result.Succeeded);
         Assert.Equal(fixture.OrganizationId, fixture.User.DefaultOrganizationId);
         Assert.Equal(fixture.ProjectId, fixture.User.DefaultProjectId);
+        var persisted = await fixture.ReadPersistedUserAsync();
+        Assert.Equal(normalizedUserName, persisted.NormalizedUserName);
+        Assert.Equal(normalizedEmail, persisted.NormalizedEmail);
+        Assert.Equal(securityStamp, persisted.SecurityStamp);
+        Assert.Equal(concurrencyStamp, persisted.ConcurrencyStamp);
+        await fixture.UserManager.DidNotReceive()
+            .UpdateAsync(Arg.Any<ApplicationUser>());
     }
 
     [Fact]
@@ -158,6 +170,139 @@ public sealed class UserSettingsServiceTests
             .UpdateAsync(Arg.Any<ApplicationUser>());
     }
 
+    [Fact]
+    public async Task UpdateSettingsAsync_ConcurrentMembershipRevocationNeverSavesInaccessibleDefaults()
+    {
+        var databasePath = Path.Combine(
+            Directory.GetCurrentDirectory(),
+            $"user-settings-concurrency-{Guid.NewGuid():N}.db");
+        var connectionString = $"Data Source={databasePath};Default Timeout=1";
+
+        try
+        {
+            var baseOptions = new DbContextOptionsBuilder<ScrumPilotContext>()
+                .UseSqlite(connectionString)
+                .Options;
+            int organizationId;
+            int projectId;
+            await using (var setup = new ScrumPilotContext(baseOptions))
+            {
+                await setup.Database.EnsureCreatedAsync();
+                await setup.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;");
+                setup.Users.Add(new ApplicationUser
+                {
+                    Id = "user",
+                    UserName = "user",
+                    NormalizedUserName = "USER",
+                    Email = "original@example.com",
+                    NormalizedEmail = "ORIGINAL@EXAMPLE.COM"
+                });
+                var organization = new Organization
+                {
+                    Name = "Organization",
+                    NormalizedName = "ORGANIZATION",
+                    CreatedAt = DateTime.UtcNow
+                };
+                setup.Organizations.Add(organization);
+                await setup.SaveChangesAsync();
+                var project = new Project
+                {
+                    OrganizationId = organization.OrganizationId,
+                    ProjectName = "Project"
+                };
+                setup.Projects.Add(project);
+                setup.OrganizationMemberships.Add(new OrganizationMembership
+                {
+                    OrganizationId = organization.OrganizationId,
+                    UserId = "user",
+                    Role = OrganizationRole.Owner,
+                    JoinedAt = DateTime.UtcNow
+                });
+                await setup.SaveChangesAsync();
+                organizationId = organization.OrganizationId;
+                projectId = project.ProjectId;
+            }
+
+            var interceptor = new RevokeMembershipBeforeSaveInterceptor(
+                baseOptions,
+                organizationId,
+                "user");
+            var serviceOptions = new DbContextOptionsBuilder<ScrumPilotContext>()
+                .UseSqlite(connectionString)
+                .AddInterceptors(interceptor)
+                .Options;
+            await using var context = new ScrumPilotContext(serviceOptions);
+            var userManager = Substitute.For<UserManager<ApplicationUser>>(
+                Substitute.For<IUserStore<ApplicationUser>>(),
+                null, null, null, null, null, null, null, null);
+            userManager.FindByIdAsync("user").Returns(_ =>
+                context.Users.SingleAsync(user => user.Id == "user"));
+            userManager.UpdateAsync(Arg.Any<ApplicationUser>())
+                .Returns(async _ =>
+                {
+                    await context.SaveChangesAsync();
+                    return IdentityResult.Success;
+                });
+            var service = new UserSettingsService(userManager, context);
+
+            var result = await service.UpdateSettingsAsync("user", new UserSettingsDto
+            {
+                Email = "original@example.com",
+                DefaultOrganizationId = organizationId,
+                DefaultProjectId = projectId
+            });
+
+            Assert.False(result.Succeeded);
+            Assert.True(interceptor.Attempted);
+            await using var verification = new ScrumPilotContext(baseOptions);
+            var saved = await verification.Users.AsNoTracking()
+                .SingleAsync(user => user.Id == "user");
+            var membershipExists = await verification.OrganizationMemberships.AnyAsync(
+                membership => membership.UserId == "user"
+                              && membership.OrganizationId == organizationId);
+            Assert.True(
+                membershipExists
+                || (saved.DefaultOrganizationId is null && saved.DefaultProjectId is null));
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            File.Delete(databasePath);
+            File.Delete($"{databasePath}-shm");
+            File.Delete($"{databasePath}-wal");
+        }
+    }
+
+    private sealed class RevokeMembershipBeforeSaveInterceptor(
+        DbContextOptions<ScrumPilotContext> options,
+        int organizationId,
+        string userId) : SaveChangesInterceptor
+    {
+        private int _invoked;
+
+        public bool Attempted { get; private set; }
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Exchange(ref _invoked, 1) != 0)
+            {
+                return result;
+            }
+
+            Attempted = true;
+            await using var revocationContext = new ScrumPilotContext(options);
+            await revocationContext.OrganizationMemberships
+                .Where(membership =>
+                    membership.OrganizationId == organizationId
+                    && membership.UserId == userId)
+                .ExecuteDeleteAsync(cancellationToken);
+            return result;
+        }
+    }
+
     private sealed class Fixture : IAsyncDisposable
     {
         private readonly SqliteConnection _connection;
@@ -179,10 +324,7 @@ public sealed class UserSettingsServiceTests
             OrganizationId = organizationId;
             OtherOrganizationId = otherOrganizationId;
             ProjectId = projectId;
-            Service = new UserSettingsService(
-                userManager,
-                context,
-                new OrganizationAccessService(context));
+            Service = new UserSettingsService(userManager, context);
         }
 
         public UserSettingsService Service { get; }
@@ -191,6 +333,9 @@ public sealed class UserSettingsServiceTests
         public int OrganizationId { get; }
         public int OtherOrganizationId { get; }
         public int ProjectId { get; }
+
+        public Task<ApplicationUser> ReadPersistedUserAsync() =>
+            _context.Users.AsNoTracking().SingleAsync(user => user.Id == User.Id);
 
         public static async Task<Fixture> CreateAsync(
             OrganizationRole? role = null,
