@@ -133,4 +133,103 @@ public sealed class OrganizationManagementTests : FrontendTestBase
         Assert.Contains("api/organizations/7/projects", HttpRequests);
         Assert.DoesNotContain("Add Project", cut.Markup);
     }
+
+    [Fact]
+    public void Project_management_loads_when_organization_is_selected_after_initial_render()
+    {
+        HttpResponseFactory = _ => Json(Array.Empty<Project>());
+        var state = Services.GetRequiredService<OrganizationStateService>();
+        var cut = Render<ProjectManagement>();
+
+        Assert.Empty(HttpRequests);
+        cut.InvokeAsync(() => state.SetOrganization(
+            new OrganizationSummaryDto(7, "Forge", OrganizationRole.Owner, false)));
+        cut.WaitForState(() => cut.Markup.Contains("Add Project", StringComparison.Ordinal));
+
+        Assert.Contains("api/organizations/7/projects", HttpRequests);
+        Assert.Contains("Add Project", cut.Markup);
+    }
+
+    [Fact]
+    public async Task Project_management_ignores_delayed_response_from_previous_organization()
+    {
+        var delayed = new TaskCompletionSource<HttpResponseMessage>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        HttpResponseFactoryAsync = (request, _) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path.EndsWith("/organizations/1/projects", StringComparison.Ordinal))
+                return delayed.Task;
+            return Task.FromResult(Json(Array.Empty<Project>()));
+        };
+        var state = Services.GetRequiredService<OrganizationStateService>();
+        state.SetOrganization(new OrganizationSummaryDto(1, "A", OrganizationRole.Owner, false));
+        var cut = Render<ProjectManagement>();
+        cut.WaitForState(() => HttpRequests.Contains("api/organizations/1/projects"));
+
+        await cut.InvokeAsync(() => state.SetOrganization(
+            new OrganizationSummaryDto(2, "B", OrganizationRole.Member, false)));
+        cut.WaitForState(() => HttpRequests.Contains("api/organizations/2/projects"));
+        delayed.SetResult(Json(new[] { new Project { ProjectId = 10, ProjectName = "A project" } }));
+        await cut.InvokeAsync(() => Task.Delay(10));
+
+        Assert.DoesNotContain("A project", cut.Markup);
+        Assert.DoesNotContain("Add Project", cut.Markup);
+        Assert.Null(Services.GetRequiredService<ProjectStateService>().SelectedProjectId);
+    }
+
+    [Fact]
+    public void Members_and_project_access_do_not_reload_for_unchanged_parameters()
+    {
+        HttpResponseFactory = request => request.RequestUri!.AbsolutePath.Contains("/projects/", StringComparison.Ordinal)
+            ? Json(Array.Empty<ProjectMemberAccessDto>())
+            : request.RequestUri.AbsolutePath.EndsWith("/invitations", StringComparison.Ordinal)
+                ? Json(Array.Empty<OrganizationInvitationDto>())
+                : Json(Array.Empty<OrganizationMemberDto>());
+        var members = Render<OrganizationMembers>(parameters => parameters
+            .Add(component => component.OrganizationId, 7)
+            .Add(component => component.CanManage, true));
+        members.WaitForState(() => HttpRequestLog.Count == 2);
+        members.Render();
+        var access = Render<ProjectAccessEditor>(parameters => parameters
+            .Add(component => component.ProjectId, 12)
+            .Add(component => component.CanManage, true));
+        access.WaitForState(() => HttpRequestLog.Count == 3);
+        access.Render();
+
+        Assert.Equal(3, HttpRequestLog.Count);
+    }
+
+    [Fact]
+    public void Organization_details_preserves_dirty_name_during_unrelated_render()
+    {
+        var organization = new OrganizationSummaryDto(7, "Forge", OrganizationRole.Owner, false);
+        var cut = Render<OrganizationDetails>(parameters =>
+            parameters.Add(component => component.Organization, organization));
+        cut.Find("input").Change("Edited locally");
+
+        cut.Render();
+
+        Assert.Equal("Edited locally", cut.Find("input").GetAttribute("value"));
+    }
+
+    [Fact]
+    public async Task Project_access_transport_failure_is_shown_without_reloading()
+    {
+        HttpResponseFactory = request =>
+        {
+            if (request.Method == HttpMethod.Get)
+                return Json(new[] { new ProjectMemberAccessDto("member", OrganizationRole.Member, false) });
+            throw new HttpRequestException("offline");
+        };
+        var cut = Render<ProjectAccessEditor>(parameters => parameters
+            .Add(component => component.ProjectId, 12)
+            .Add(component => component.CanManage, true));
+        cut.WaitForState(() => cut.Markup.Contains("member"));
+
+        await cut.Find("button[data-user='member']").ClickAsync(new());
+
+        Assert.Contains("Unable to update project access", cut.Markup);
+        Assert.Single(HttpRequestLog.Where(request => request.Method == HttpMethod.Get));
+    }
 }

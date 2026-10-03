@@ -35,14 +35,20 @@
 
     private async Task MutateAsync(Func<Task<HttpResponseMessage>> action, string fallback)
     {
-        var response = await action();
-        if (!response.IsSuccessStatusCode)
+        _error = null;
+        try
         {
-            try { _error = (await response.Content.ReadFromJsonAsync<ProblemDetails>())?.Detail ?? fallback; }
-            catch { _error = fallback; }
-            return;
+            var response = await action();
+            if (!response.IsSuccessStatusCode)
+            {
+                try { _error = (await response.Content.ReadFromJsonAsync<ProblemDetails>())?.Detail ?? fallback; }
+                catch { _error = fallback; }
+                return;
+            }
+            _error = null;
+            await Changed.InvokeAsync();
         }
-        await Changed.InvokeAsync();
+        catch (HttpRequestException) { _error = fallback; }
     }
     private sealed class ProblemDetails { public string? Detail { get; set; } }
 }

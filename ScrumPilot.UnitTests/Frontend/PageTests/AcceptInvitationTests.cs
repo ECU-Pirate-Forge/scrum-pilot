@@ -29,10 +29,18 @@ public sealed class AcceptInvitationTests : FrontendTestBase
     {
         Authorization.SetAuthorized("member");
         HttpResponseFactory = request => request.Method == HttpMethod.Post
-            ? new HttpResponseMessage(HttpStatusCode.NoContent)
+            ? new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"organizationId":7}""")
+            }
             : new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent("""[{"organizationId":7,"name":"Forge","role":1,"isDeleted":false}]""")
+                Content = new StringContent("""
+                    [
+                      {"organizationId":4,"name":"Other","role":1,"isDeleted":false},
+                      {"organizationId":7,"name":"Forge","role":1,"isDeleted":false}
+                    ]
+                    """)
             };
         var navigation = Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();
         navigation.NavigateTo("/accept-invitation?token=one-time");

@@ -66,11 +66,20 @@
     private List<OrganizationMemberDto> _members = [];
     private List<OrganizationInvitationDto> _invitations = [];
     private CancellationTokenSource? _loadCancellation;
+    private (int OrganizationId, bool CanManage)? _lastParameterKey;
     private string _email = "";
     private OrganizationRole _inviteRole = OrganizationRole.Member;
     private string? _error;
 
     protected override async Task OnParametersSetAsync()
+    {
+        var key = (OrganizationId, CanManage);
+        if (_lastParameterKey == key) return;
+        _lastParameterKey = key;
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
     {
         _loadCancellation?.Cancel();
         _loadCancellation?.Dispose();
@@ -80,6 +89,7 @@
 
     private async Task LoadAsync(CancellationToken token)
     {
+        _error = null;
         try
         {
             _members = await Http.GetFromJsonAsync<List<OrganizationMemberDto>>(
@@ -90,6 +100,7 @@
                 ? await Http.GetFromJsonAsync<List<OrganizationInvitationDto>>(
                     $"api/organizations/{OrganizationId}/invitations", token) ?? []
                 : [];
+            _error = null;
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
         catch (HttpRequestException) { _error = "Unable to load organization members."; }
@@ -97,45 +108,70 @@
 
     private async Task InviteAsync()
     {
+        _error = null;
         if (string.IsNullOrWhiteSpace(_email)) { _error = "Email is required."; return; }
-        var response = await Http.PostAsJsonAsync($"api/organizations/{OrganizationId}/invitations",
-            new InviteOrganizationMemberRequest(_email.Trim(), _inviteRole));
-        if (!response.IsSuccessStatusCode) { _error = await ErrorAsync(response, "Unable to send invitation."); return; }
-        _email = "";
-        await LoadAsync(CancellationToken.None);
+        try
+        {
+            var response = await Http.PostAsJsonAsync($"api/organizations/{OrganizationId}/invitations",
+                new InviteOrganizationMemberRequest(_email.Trim(), _inviteRole));
+            if (!response.IsSuccessStatusCode) { _error = await ErrorAsync(response, "Unable to send invitation."); return; }
+            _email = "";
+            await ReloadAsync();
+        }
+        catch (HttpRequestException) { _error = "Unable to send invitation."; }
     }
 
     private async Task ChangeRoleAsync(OrganizationMemberDto member, OrganizationRole role)
     {
-        var response = await Http.PutAsJsonAsync(
-            $"api/organizations/{OrganizationId}/members/{Uri.EscapeDataString(member.UserId)}/role",
-            new UpdateOrganizationMemberRoleRequest(role));
-        if (!response.IsSuccessStatusCode) { _error = await ErrorAsync(response, "Unable to change the member role."); return; }
-        await LoadAsync(CancellationToken.None);
+        _error = null;
+        try
+        {
+            var response = await Http.PutAsJsonAsync(
+                $"api/organizations/{OrganizationId}/members/{Uri.EscapeDataString(member.UserId)}/role",
+                new UpdateOrganizationMemberRoleRequest(role));
+            if (!response.IsSuccessStatusCode) { _error = await ErrorAsync(response, "Unable to change the member role."); return; }
+            await ReloadAsync();
+        }
+        catch (HttpRequestException) { _error = "Unable to change the member role."; }
     }
 
     private async Task RemoveAsync(OrganizationMemberDto member)
     {
-        var response = await Http.DeleteAsync(
-            $"api/organizations/{OrganizationId}/members/{Uri.EscapeDataString(member.UserId)}");
-        if (!response.IsSuccessStatusCode) { _error = await ErrorAsync(response, "Unable to remove the member."); return; }
-        await LoadAsync(CancellationToken.None);
+        _error = null;
+        try
+        {
+            var response = await Http.DeleteAsync(
+                $"api/organizations/{OrganizationId}/members/{Uri.EscapeDataString(member.UserId)}");
+            if (!response.IsSuccessStatusCode) { _error = await ErrorAsync(response, "Unable to remove the member."); return; }
+            await ReloadAsync();
+        }
+        catch (HttpRequestException) { _error = "Unable to remove the member."; }
     }
 
     private async Task ResendAsync(OrganizationInvitationDto invitation)
     {
-        var response = await Http.PostAsync(
-            $"api/organizations/{OrganizationId}/invitations/{invitation.OrganizationInvitationId}/resend", null);
-        if (!response.IsSuccessStatusCode) _error = await ErrorAsync(response, "Unable to resend the invitation.");
-        else await LoadAsync(CancellationToken.None);
+        _error = null;
+        try
+        {
+            var response = await Http.PostAsync(
+                $"api/organizations/{OrganizationId}/invitations/{invitation.OrganizationInvitationId}/resend", null);
+            if (!response.IsSuccessStatusCode) _error = await ErrorAsync(response, "Unable to resend the invitation.");
+            else await ReloadAsync();
+        }
+        catch (HttpRequestException) { _error = "Unable to resend the invitation."; }
     }
 
     private async Task RevokeAsync(OrganizationInvitationDto invitation)
     {
-        var response = await Http.DeleteAsync(
-            $"api/organizations/{OrganizationId}/invitations/{invitation.OrganizationInvitationId}");
-        if (!response.IsSuccessStatusCode) _error = await ErrorAsync(response, "Unable to revoke the invitation.");
-        else await LoadAsync(CancellationToken.None);
+        _error = null;
+        try
+        {
+            var response = await Http.DeleteAsync(
+                $"api/organizations/{OrganizationId}/invitations/{invitation.OrganizationInvitationId}");
+            if (!response.IsSuccessStatusCode) _error = await ErrorAsync(response, "Unable to revoke the invitation.");
+            else await ReloadAsync();
+        }
+        catch (HttpRequestException) { _error = "Unable to revoke the invitation."; }
     }
 
     private static async Task<string> ErrorAsync(HttpResponseMessage response, string fallback)

@@ -88,7 +88,7 @@ public sealed class OrganizationInvitationService(
         }
     }
 
-    public async Task AcceptAsync(
+    public async Task<AcceptedOrganizationDto> AcceptAsync(
         AcceptOrganizationInvitationRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -113,15 +113,15 @@ public sealed class OrganizationInvitationService(
             normalizedEmail,
             UtcNow,
             cancellationToken));
-        switch (result)
+        switch (result.Status)
         {
-            case InvitationAcceptanceResult.Success:
-                return;
-            case InvitationAcceptanceResult.EmailMismatch:
+            case InvitationAcceptanceStatus.Success when result.OrganizationId.HasValue:
+                return new AcceptedOrganizationDto(result.OrganizationId.Value);
+            case InvitationAcceptanceStatus.EmailMismatch:
                 throw new OrganizationForbiddenException(
                     "The invitation cannot be accepted by this account.");
-            case InvitationAcceptanceResult.Expired:
-            case InvitationAcceptanceResult.ExistingMember:
+            case InvitationAcceptanceStatus.Expired:
+            case InvitationAcceptanceStatus.ExistingMember:
                 throw new OrganizationConflictException(
                     "The invitation cannot be accepted.");
             default:

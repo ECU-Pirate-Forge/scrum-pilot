@@ -36,7 +36,27 @@ public interface IOrganizationInvitationRepository
         CancellationToken cancellationToken = default);
 }
 
-public enum InvitationAcceptanceResult
+public readonly record struct InvitationAcceptanceResult(
+    InvitationAcceptanceStatus Status,
+    int? OrganizationId = null)
+{
+    public static InvitationAcceptanceResult Succeeded(int organizationId) =>
+        new(InvitationAcceptanceStatus.Success, organizationId);
+
+    public static InvitationAcceptanceResult Invalid =>
+        new(InvitationAcceptanceStatus.Invalid);
+
+    public static InvitationAcceptanceResult EmailMismatch =>
+        new(InvitationAcceptanceStatus.EmailMismatch);
+
+    public static InvitationAcceptanceResult Expired =>
+        new(InvitationAcceptanceStatus.Expired);
+
+    public static InvitationAcceptanceResult ExistingMember =>
+        new(InvitationAcceptanceStatus.ExistingMember);
+}
+
+public enum InvitationAcceptanceStatus
 {
     Success,
     Invalid,

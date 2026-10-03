@@ -7,7 +7,7 @@
     {
         <MudText Typo="Typo.h6" Class="mt-4">Rename organization</MudText>
         <div class="d-flex gap-2 align-center">
-            <MudTextField @bind-Value="_name" Label="Organization name" />
+            <MudTextField T="string" Value="_name" ValueChanged="OnNameChanged" Label="Organization name" />
             <MudButton data-action="rename" OnClick="RenameAsync" Disabled="_busy">Rename</MudButton>
         </div>
     }
@@ -24,8 +24,28 @@
     private string _name = "";
     private string? _error;
     private bool _busy;
+    private bool _dirty;
+    private int? _sourceOrganizationId;
+    private string? _sourceName;
 
-    protected override void OnParametersSet() => _name = Organization.Name;
+    protected override void OnParametersSet()
+    {
+        var organizationChanged = _sourceOrganizationId != Organization.OrganizationId;
+        var sourceNameChanged = !string.Equals(_sourceName, Organization.Name, StringComparison.Ordinal);
+        if (organizationChanged || (sourceNameChanged && !_dirty))
+        {
+            _name = Organization.Name;
+            _dirty = false;
+        }
+        _sourceOrganizationId = Organization.OrganizationId;
+        _sourceName = Organization.Name;
+    }
+
+    private void OnNameChanged(string value)
+    {
+        _name = value;
+        _dirty = !string.Equals(value, _sourceName, StringComparison.Ordinal);
+    }
 
     private async Task RenameAsync()
     {
@@ -39,7 +59,14 @@
                 new RenameOrganizationRequest(_name.Trim()));
             if (!response.IsSuccessStatusCode) { _error = await ErrorAsync(response, "Unable to rename the organization."); return; }
             var updated = await response.Content.ReadFromJsonAsync<OrganizationSummaryDto>();
-            if (updated is not null) await OrganizationChanged.InvokeAsync(updated);
+            if (updated is not null)
+            {
+                _name = updated.Name;
+                _sourceName = updated.Name;
+                _dirty = false;
+                _error = null;
+                await OrganizationChanged.InvokeAsync(updated);
+            }
         }
         catch (HttpRequestException) { _error = "Unable to rename the organization."; }
         finally { _busy = false; }

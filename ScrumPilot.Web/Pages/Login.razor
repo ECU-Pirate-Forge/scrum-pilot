@@ -139,17 +139,75 @@
         var success = await AuthService.LoginAsync(_model);
 
         if (success)
-            Navigation.NavigateTo(IsSafeLocalUrl(ReturnUrl) ? ReturnUrl! : "/");
+            Navigation.NavigateTo(GetSafeReturnUrl(ReturnUrl));
         else
             _errorMessage = "Invalid username or password.";
 
         _isLoading = false;
     }
 
-    private static bool IsSafeLocalUrl(string? url) =>
-        !string.IsNullOrWhiteSpace(url)
-        && url.StartsWith("/", StringComparison.Ordinal)
-        && !url.StartsWith("//", StringComparison.Ordinal)
-        && !url.StartsWith("/\\", StringComparison.Ordinal)
-        && !Uri.TryCreate(url, UriKind.Absolute, out _);
+    private string GetSafeReturnUrl(string? url)
+    {
+        if (string.IsNullOrEmpty(url))
+            return "/";
+
+        var canonical = url;
+        for (var depth = 0; depth < 4; depth++)
+        {
+            if (canonical.Length == 0
+                || canonical[0] != '/'
+                || canonical.StartsWith("//", StringComparison.Ordinal)
+                || canonical.StartsWith("/\\", StringComparison.Ordinal)
+                || canonical.Any(character =>
+                    character == '\\'
+                    || char.IsControl(character)
+                    || char.IsWhiteSpace(character))
+                || Uri.TryCreate(canonical, UriKind.Absolute, out _))
+            {
+                return "/";
+            }
+
+            string decoded;
+            try
+            {
+                decoded = Uri.UnescapeDataString(canonical);
+            }
+            catch (UriFormatException)
+            {
+                return "/";
+            }
+
+            if (decoded == canonical)
+                break;
+
+            canonical = decoded;
+        }
+
+        if (canonical.Contains('%', StringComparison.Ordinal))
+            return "/";
+
+        var baseUri = new Uri(Navigation.BaseUri, UriKind.Absolute);
+        if (!Uri.TryCreate(baseUri, canonical, out var resolved)
+            || !string.Equals(resolved.Scheme, baseUri.Scheme, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(resolved.Host, baseUri.Host, StringComparison.OrdinalIgnoreCase)
+            || resolved.Port != baseUri.Port)
+        {
+            return "/";
+        }
+
+        var basePath = baseUri.AbsolutePath.EndsWith("/", StringComparison.Ordinal)
+            ? baseUri.AbsolutePath
+            : $"{baseUri.AbsolutePath}/";
+        if (basePath != "/"
+            && !resolved.AbsolutePath.StartsWith(basePath, StringComparison.Ordinal))
+        {
+            return "/";
+        }
+
+        var safeRelative = resolved.PathAndQuery + resolved.Fragment;
+        return safeRelative.StartsWith("/", StringComparison.Ordinal)
+            && !safeRelative.StartsWith("//", StringComparison.Ordinal)
+            ? safeRelative
+            : "/";
+    }
 }

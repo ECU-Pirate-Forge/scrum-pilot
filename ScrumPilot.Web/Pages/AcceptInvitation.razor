@@ -55,9 +55,31 @@ else
 
         if (response.IsSuccessStatusCode)
         {
-            var organizations = await Http.GetFromJsonAsync<List<OrganizationSummaryDto>>("api/organizations") ?? [];
-            OrganizationState.SetOrganization(organizations.FirstOrDefault());
-            Navigation.NavigateTo("/organization-management", replace: true);
+            var accepted = await response.Content.ReadFromJsonAsync<AcceptedOrganizationDto>();
+            if (accepted is null)
+            {
+                _message = "The invitation could not be accepted. Try again.";
+                _severity = Severity.Error;
+                return;
+            }
+
+            try
+            {
+                var organizations = await Http.GetFromJsonAsync<List<OrganizationSummaryDto>>("api/organizations") ?? [];
+                var organization = organizations.FirstOrDefault(
+                    item => item.OrganizationId == accepted.OrganizationId);
+                if (organization is not null)
+                {
+                    OrganizationState.SetOrganization(organization);
+                    Navigation.NavigateTo("/organization-management", replace: true);
+                    return;
+                }
+            }
+            catch (HttpRequestException)
+            {
+            }
+
+            Navigation.NavigateTo("/organization-management", forceLoad: true, replace: true);
             return;
         }
         _severity = Severity.Error;

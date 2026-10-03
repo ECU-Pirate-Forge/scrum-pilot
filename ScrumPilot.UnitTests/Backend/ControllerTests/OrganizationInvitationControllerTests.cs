@@ -97,11 +97,28 @@ public sealed class OrganizationInvitationControllerTests
     {
         var controller = CreateController();
         _service.AcceptAsync(Arg.Any<AcceptOrganizationInvitationRequest>(), Arg.Any<CancellationToken>())
-            .Returns<Task>(_ => throw new OrganizationConflictException("Cannot accept."));
+            .Returns<Task<AcceptedOrganizationDto>>(_ =>
+                throw new OrganizationConflictException("Cannot accept."));
 
         var result = await controller.Accept(new("token"));
 
-        Assert.IsType<ConflictObjectResult>(result);
+        Assert.IsType<ConflictObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Accept_SuccessReturnsAcceptedOrganization()
+    {
+        var controller = CreateController();
+        var accepted = new AcceptedOrganizationDto(5);
+        _service.AcceptAsync(
+                Arg.Any<AcceptOrganizationInvitationRequest>(),
+                Arg.Any<CancellationToken>())
+            .Returns(accepted);
+
+        var result = await controller.Accept(new("token"));
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.Same(accepted, ok.Value);
     }
 
     [Theory]
@@ -114,11 +131,11 @@ public sealed class OrganizationInvitationControllerTests
         _service.AcceptAsync(
                 Arg.Any<AcceptOrganizationInvitationRequest>(),
                 Arg.Any<CancellationToken>())
-            .Returns<Task>(_ => throw exception);
+            .Returns<Task<AcceptedOrganizationDto>>(_ => throw exception);
 
         var result = await controller.Accept(new("token"));
 
-        var failure = Assert.IsAssignableFrom<ObjectResult>(result);
+        var failure = Assert.IsAssignableFrom<ObjectResult>(result.Result);
         Assert.Equal(expectedStatus, failure.StatusCode);
     }
 

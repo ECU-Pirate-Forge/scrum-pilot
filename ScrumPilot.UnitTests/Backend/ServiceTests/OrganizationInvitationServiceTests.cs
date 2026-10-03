@@ -286,10 +286,11 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
         _currentUser.UserId.Returns("member");
         _currentUser.Email.Returns("stale@example.com");
 
-        await _service.AcceptAsync(new(_sender.Token!));
+        var accepted = await _service.AcceptAsync(new(_sender.Token!));
 
         Assert.True(await _context.OrganizationMemberships.AnyAsync(x =>
             x.OrganizationId == _organizationId && x.UserId == "member"));
+        Assert.Equal(_organizationId, accepted.OrganizationId);
     }
 
     [Fact]

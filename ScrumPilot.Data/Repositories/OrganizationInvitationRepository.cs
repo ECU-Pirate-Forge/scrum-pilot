@@ -211,7 +211,7 @@ public sealed class OrganizationInvitationRepository(ScrumPilotContext context)
                 invitation.AcceptedAt = utcNow;
                 await context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
-                return InvitationAcceptanceResult.Success;
+                return InvitationAcceptanceResult.Succeeded(invitation.OrganizationId);
             }
         }
         catch (Exception exception) when (

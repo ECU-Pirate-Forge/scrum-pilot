@@ -24,23 +24,41 @@
     [Parameter] public bool CanManage { get; set; }
     private List<ProjectMemberAccessDto> _members = [];
     private string? _error;
+    private (int ProjectId, bool CanManage)? _lastParameterKey;
 
-    protected override Task OnParametersSetAsync() => LoadAsync();
+    protected override Task OnParametersSetAsync()
+    {
+        var key = (ProjectId, CanManage);
+        if (_lastParameterKey == key) return Task.CompletedTask;
+        _lastParameterKey = key;
+        return LoadAsync();
+    }
 
     private async Task LoadAsync()
     {
-        try { _members = await Http.GetFromJsonAsync<List<ProjectMemberAccessDto>>($"api/projects/{ProjectId}/members") ?? []; }
+        _error = null;
+        try
+        {
+            _members = await Http.GetFromJsonAsync<List<ProjectMemberAccessDto>>(
+                $"api/projects/{ProjectId}/members") ?? [];
+            _error = null;
+        }
         catch (HttpRequestException) { _error = "Unable to load project access."; }
     }
 
     private async Task ToggleAsync(ProjectMemberAccessDto member)
     {
+        _error = null;
         var grant = !member.HasExplicitAccess;
-        var response = grant
-            ? await Http.PutAsJsonAsync($"api/projects/{ProjectId}/members/{Uri.EscapeDataString(member.UserId)}",
-                new SetProjectAccessRequest(true))
-            : await Http.DeleteAsync($"api/projects/{ProjectId}/members/{Uri.EscapeDataString(member.UserId)}");
-        if (!response.IsSuccessStatusCode) _error = "Unable to update project access.";
-        else await LoadAsync();
+        try
+        {
+            var response = grant
+                ? await Http.PutAsJsonAsync($"api/projects/{ProjectId}/members/{Uri.EscapeDataString(member.UserId)}",
+                    new SetProjectAccessRequest(true))
+                : await Http.DeleteAsync($"api/projects/{ProjectId}/members/{Uri.EscapeDataString(member.UserId)}");
+            if (!response.IsSuccessStatusCode) _error = "Unable to update project access.";
+            else await LoadAsync();
+        }
+        catch (HttpRequestException) { _error = "Unable to update project access."; }
     }
 }

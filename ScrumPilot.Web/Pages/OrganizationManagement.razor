@@ -18,6 +18,10 @@
         {
             <MudTextField @bind-Value="_ownerQuery" Label="Search initial owner by username or email" />
             <MudButton OnClick="SearchOwnersAsync">Search users</MudButton>
+            @if (!string.IsNullOrWhiteSpace(_searchFeedback))
+            {
+                <MudAlert Severity="Severity.Info" Dense="true">@_searchFeedback</MudAlert>
+            }
             <MudSelect @bind-Value="_initialOwnerId" Label="Initial owner user ID">
                 @foreach (var user in _ownerResults)
                 {
@@ -64,7 +68,8 @@ else
     private List<UserSummaryDto> _ownerResults = [];
     private string _newName = "";
     private string? _error;
-    private CancellationTokenSource _cancellation = new();
+    private string? _searchFeedback;
+    private CancellationTokenSource? _cancellation;
     private bool _disposed;
 
     protected override async Task OnInitializedAsync()
@@ -82,20 +87,33 @@ else
         if (_disposed) return;
         _ = InvokeAsync(async () =>
         {
-            try { await ReloadAsync(); }
-            catch (OperationCanceledException) { }
+            if (_disposed) return;
+            await ReloadAsync();
+            if (!_disposed) StateHasChanged();
         });
     }
 
     private async Task ReloadAsync()
     {
-        _cancellation.Cancel();
-        _cancellation.Dispose();
-        _cancellation = new();
-        var token = _cancellation.Token;
+        if (_disposed) return;
+
+        var cancellation = new CancellationTokenSource();
+        var previousCancellation = _cancellation;
+        _cancellation = cancellation;
+        previousCancellation?.Cancel();
+        previousCancellation?.Dispose();
+        if (_disposed)
+        {
+            cancellation.Cancel();
+            cancellation.Dispose();
+            return;
+        }
+
+        var token = cancellation.Token;
         try
         {
             var organizations = await Http.GetFromJsonAsync<List<OrganizationSummaryDto>>("api/organizations", token) ?? [];
+            if (_disposed || cancellation != _cancellation) return;
             var selectedId = OrganizationState.SelectedOrganizationId;
             _selected = organizations.FirstOrDefault(x => x.OrganizationId == selectedId)
                 ?? organizations.FirstOrDefault();
@@ -108,37 +126,61 @@ else
             _projects = _selected is null ? [] :
                 await Http.GetFromJsonAsync<List<Project>>(
                     $"api/organizations/{_selected.OrganizationId}/projects", token) ?? [];
+            if (_disposed || cancellation != _cancellation) return;
             _error = null;
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
-        catch (HttpRequestException) { _error = "Unable to load organization management."; }
+        catch (HttpRequestException)
+        {
+            if (!_disposed && cancellation == _cancellation)
+                _error = "Unable to load organization management.";
+        }
     }
 
     private async Task CreateAsync()
     {
+        _error = null;
         var ownerId = _useCurrentUser ? _currentUserId : _initialOwnerId.Trim();
         if (string.IsNullOrWhiteSpace(_newName) || string.IsNullOrWhiteSpace(ownerId))
         {
             _error = "Organization name and initial owner are required.";
             return;
         }
-        var response = await Http.PostAsJsonAsync("api/organizations",
-            new CreateOrganizationRequest(_newName.Trim(), ownerId));
-        if (!response.IsSuccessStatusCode) { _error = "Unable to create the organization."; return; }
-        _newName = "";
-        await ReloadAsync();
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/organizations",
+                new CreateOrganizationRequest(_newName.Trim(), ownerId));
+            if (!response.IsSuccessStatusCode) { _error = "Unable to create the organization."; return; }
+            _newName = "";
+            _error = null;
+            await ReloadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _error = "Unable to create the organization.";
+        }
     }
 
     private async Task SearchOwnersAsync()
     {
+        _searchFeedback = null;
         if (_ownerQuery.Trim().Length < 2)
         {
-            _error = "Enter at least two characters to search.";
+            _ownerResults = [];
+            _searchFeedback = "Enter at least two characters to search.";
             return;
         }
-        _ownerResults = await Http.GetFromJsonAsync<List<UserSummaryDto>>(
-            $"api/User/admin-search?query={Uri.EscapeDataString(_ownerQuery.Trim())}") ?? [];
-        _error = _ownerResults.Count == 0 ? "No matching users found." : null;
+        try
+        {
+            _ownerResults = await Http.GetFromJsonAsync<List<UserSummaryDto>>(
+                $"api/User/admin-search?query={Uri.EscapeDataString(_ownerQuery.Trim())}") ?? [];
+            _searchFeedback = _ownerResults.Count == 0 ? "No matching users found." : null;
+        }
+        catch (HttpRequestException)
+        {
+            _ownerResults = [];
+            _searchFeedback = "Unable to search users.";
+        }
     }
 
     private void UpdateSelected(OrganizationSummaryDto organization)
@@ -151,7 +193,9 @@ else
     {
         _disposed = true;
         OrganizationState.OnChange -= OnOrganizationChanged;
-        _cancellation.Cancel();
-        _cancellation.Dispose();
+        var cancellation = _cancellation;
+        _cancellation = null;
+        cancellation?.Cancel();
+        cancellation?.Dispose();
     }
 }

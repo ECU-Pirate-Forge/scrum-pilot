@@ -16,6 +16,7 @@ namespace ScrumPilot.UnitTests.Frontend
         protected readonly List<(HttpMethod Method, string Url)> HttpRequestLog = [];
         protected HttpStatusCode HttpResponseStatusCode { get; set; } = HttpStatusCode.OK;
         protected Func<HttpRequestMessage, HttpResponseMessage>? HttpResponseFactory { get; set; }
+        protected Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? HttpResponseFactoryAsync { get; set; }
         protected dynamic Authorization { get; }
         protected IAuthService AuthService { get; }
 
@@ -26,7 +27,8 @@ namespace ScrumPilot.UnitTests.Frontend
                 HttpRequests,
                 HttpRequestLog,
                 () => HttpResponseStatusCode,
-                request => HttpResponseFactory?.Invoke(request)))
+                request => HttpResponseFactory?.Invoke(request),
+                (request, cancellationToken) => HttpResponseFactoryAsync?.Invoke(request, cancellationToken)))
             {
                 BaseAddress = new Uri("https://localhost/")
             };
@@ -59,19 +61,24 @@ namespace ScrumPilot.UnitTests.Frontend
             List<string> requests,
             List<(HttpMethod Method, string Url)> requestLog,
             Func<HttpStatusCode> getStatusCode,
-            Func<HttpRequestMessage, HttpResponseMessage?> createResponse) : HttpMessageHandler
+            Func<HttpRequestMessage, HttpResponseMessage?> createResponse,
+            Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>?> createResponseAsync) : HttpMessageHandler
         {
-            protected override Task<HttpResponseMessage> SendAsync(
+            protected override async Task<HttpResponseMessage> SendAsync(
                 HttpRequestMessage request,
                 CancellationToken cancellationToken)
             {
                 var url = request.RequestUri!.PathAndQuery.TrimStart('/');
                 requests.Add(url);
                 requestLog.Add((request.Method, url));
-                return Task.FromResult(createResponse(request) ?? new HttpResponseMessage(getStatusCode())
+                var asynchronousResponse = createResponseAsync(request, cancellationToken);
+                if (asynchronousResponse is not null)
+                    return await asynchronousResponse;
+
+                return createResponse(request) ?? new HttpResponseMessage(getStatusCode())
                 {
                     Content = new StringContent("[]", System.Text.Encoding.UTF8, "application/json")
-                });
+                };
             }
         }
     }

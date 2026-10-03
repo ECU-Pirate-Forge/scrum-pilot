@@ -1,4 +1,5 @@
 @page "/project-management"
+@implements IDisposable
 @inject HttpClient Http
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
@@ -562,30 +563,85 @@
     // PBI dialog state
     private bool _pbiDialogVisible;
     private ProductBacklogItem? _dialogPbi;
+    private CancellationTokenSource? _organizationLoadCancellation;
+    private long _organizationGeneration;
+    private bool _disposed;
 
-    protected override async Task OnInitializedAsync()
+    protected override Task OnInitializedAsync()
     {
+        OrganizationState.OnChange += OnOrganizationChanged;
+        return ReloadForOrganizationAsync();
+    }
+
+    private void OnOrganizationChanged()
+    {
+        if (_disposed) return;
+        _ = InvokeAsync(async () =>
+        {
+            if (_disposed) return;
+            await ReloadForOrganizationAsync();
+            if (!_disposed) StateHasChanged();
+        });
+    }
+
+    private async Task ReloadForOrganizationAsync()
+    {
+        if (_disposed) return;
+
+        var selectedProjectId = ProjectState.SelectedProjectId;
+        var generation = ++_organizationGeneration;
+        var cancellation = new CancellationTokenSource();
+        var previousCancellation = _organizationLoadCancellation;
+        _organizationLoadCancellation = cancellation;
+        previousCancellation?.Cancel();
+        previousCancellation?.Dispose();
+        ResetOrganizationData();
+
+        var organizationId = OrganizationState.SelectedOrganizationId;
+        if (!organizationId.HasValue)
+            return;
+
         try
         {
-            if (!OrganizationState.SelectedOrganizationId.HasValue)
+            var projects = await Http.GetFromJsonAsync<List<Project>>(
+                $"api/organizations/{organizationId.Value}/projects",
+                cancellation.Token) ?? [];
+            if (_disposed
+                || cancellation.IsCancellationRequested
+                || generation != _organizationGeneration
+                || OrganizationState.SelectedOrganizationId != organizationId)
             {
-                Snackbar.Add("Select an organization before managing projects.", Severity.Warning);
                 return;
             }
-            _projects = await Http.GetFromJsonAsync<List<Project>>(
-                $"api/organizations/{OrganizationState.SelectedOrganizationId.Value}/projects") ?? new();
-            if (ProjectState.SelectedProjectId.HasValue)
-            {
-                var match = _projects.FirstOrDefault(p => p.ProjectId == ProjectState.SelectedProjectId);
-                if (match != null)
-                    await SelectProject(match);
-            }
+
+            _projects = projects;
+            var match = selectedProjectId.HasValue
+                ? projects.FirstOrDefault(project => project.ProjectId == selectedProjectId.Value)
+                : null;
+            if (match is not null)
+                await SelectProject(match);
         }
-        catch
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        catch (HttpRequestException)
         {
-            _projects = new();
-            Snackbar.Add("Failed to load projects.", Severity.Error);
+            if (generation == _organizationGeneration)
+                Snackbar.Add("Failed to load projects.", Severity.Error);
         }
+    }
+
+    private void ResetOrganizationData()
+    {
+        _projects = [];
+        _selectedProject = null;
+        _sprints = [];
+        _epics = [];
+        _pbis = [];
+        _selectedSprintId = null;
+        _storyFilterSprintId = null;
+        _storyFilterEpicId = null;
+        _pbiDialogVisible = false;
+        _dialogPbi = null;
+        ProjectState.SetProject(null);
     }
 
     private async Task SelectProject(Project project)
@@ -609,48 +665,82 @@
     private async Task LoadSprints()
     {
         if (_selectedProject == null) return;
+        var projectId = _selectedProject.ProjectId;
+        var generation = _organizationGeneration;
         try
         {
-            _sprints = await Http.GetFromJsonAsync<List<Sprint>>($"api/sprint?projectId={_selectedProject.ProjectId}") ?? new();
+            var sprints = await Http.GetFromJsonAsync<List<Sprint>>($"api/sprint?projectId={projectId}") ?? [];
+            if (!_disposed
+                && generation == _organizationGeneration
+                && _selectedProject?.ProjectId == projectId)
+            {
+                _sprints = sprints;
+            }
         }
-        catch
+        catch (HttpRequestException)
         {
-            _sprints = new();
-            Snackbar.Add("Failed to load sprints.", Severity.Error);
+            if (generation == _organizationGeneration)
+            {
+                _sprints = [];
+                Snackbar.Add("Failed to load sprints.", Severity.Error);
+            }
         }
     }
 
     private async Task LoadEpics()
     {
         if (_selectedProject == null) return;
+        var projectId = _selectedProject.ProjectId;
+        var generation = _organizationGeneration;
         try
         {
-            _epics = await Http.GetFromJsonAsync<List<Epic>>($"api/epic?projectId={_selectedProject.ProjectId}") ?? new();
+            var epics = await Http.GetFromJsonAsync<List<Epic>>($"api/epic?projectId={projectId}") ?? [];
+            if (!_disposed
+                && generation == _organizationGeneration
+                && _selectedProject?.ProjectId == projectId)
+            {
+                _epics = epics;
+            }
         }
-        catch
+        catch (HttpRequestException)
         {
-            _epics = new();
-            Snackbar.Add("Failed to load epics.", Severity.Error);
+            if (generation == _organizationGeneration)
+            {
+                _epics = [];
+                Snackbar.Add("Failed to load epics.", Severity.Error);
+            }
         }
     }
 
     private async Task LoadStories()
     {
         if (_selectedProject == null) return;
+        var projectId = _selectedProject.ProjectId;
+        var generation = _organizationGeneration;
         _loadingStories = true;
         try
         {
-            var url = $"api/pbi/getNonDraftPbis?projectId={_selectedProject.ProjectId}";
+            var url = $"api/pbi/getNonDraftPbis?projectId={projectId}";
             if (_storyFilterSprintId.HasValue) url += $"&sprintId={_storyFilterSprintId}";
             if (_storyFilterEpicId.HasValue) url += $"&epicId={_storyFilterEpicId}";
-            _pbis = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(url) ?? new();
+            var pbis = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(url) ?? [];
+            if (!_disposed
+                && generation == _organizationGeneration
+                && _selectedProject?.ProjectId == projectId)
+            {
+                _pbis = pbis;
+            }
         }
-        catch
+        catch (HttpRequestException)
         {
-            _pbis = new();
-            Snackbar.Add("Failed to load stories.", Severity.Error);
+            if (generation == _organizationGeneration)
+            {
+                _pbis = [];
+                Snackbar.Add("Failed to load stories.", Severity.Error);
+            }
         }
-        _loadingStories = false;
+        if (generation == _organizationGeneration)
+            _loadingStories = false;
     }
 
     // --- Project CRUD ---
@@ -675,8 +765,12 @@
                 ProjectState.NotifyProjectListChanged();
                 Snackbar.Add("Project created.", Severity.Success);
             }
+            else
+            {
+                Snackbar.Add("Failed to create project.", Severity.Error);
+            }
         }
-        catch { Snackbar.Add("Failed to create project.", Severity.Error); }
+        catch (HttpRequestException) { Snackbar.Add("Failed to create project.", Severity.Error); }
         _saving = false;
     }
 
@@ -708,8 +802,12 @@
                 ProjectState.NotifyProjectListChanged();
                 Snackbar.Add("Project deleted.", Severity.Info);
             }
+            else
+            {
+                Snackbar.Add("Failed to delete project.", Severity.Error);
+            }
         }
-        catch { Snackbar.Add("Failed to delete project.", Severity.Error); }
+        catch (HttpRequestException) { Snackbar.Add("Failed to delete project.", Severity.Error); }
     }
 
     private void StartRenameProject(Project project)
@@ -725,12 +823,16 @@
         _saving = true;
         try
         {
-            project.ProjectName = _editingProjectName;
-            project.Description = string.IsNullOrWhiteSpace(_editingProjectDescription) ? null : _editingProjectDescription;
+            var projectName = _editingProjectName;
+            var description = string.IsNullOrWhiteSpace(_editingProjectDescription)
+                ? null
+                : _editingProjectDescription;
             var response = await Http.PutAsJsonAsync($"api/projects/{project.ProjectId}",
-                new UpdateProjectRequest(project.ProjectName, project.Description));
+                new UpdateProjectRequest(projectName, description));
             if (response.IsSuccessStatusCode)
             {
+                project.ProjectName = projectName;
+                project.Description = description;
                 _editingProjectId = null;
                 if (_selectedProject?.ProjectId == project.ProjectId)
                     _selectedProject.ProjectName = project.ProjectName;
@@ -742,7 +844,7 @@
                 Snackbar.Add("Failed to rename project.", Severity.Error);
             }
         }
-        catch { Snackbar.Add("Failed to rename project.", Severity.Error); }
+        catch (HttpRequestException) { Snackbar.Add("Failed to rename project.", Severity.Error); }
         _saving = false;
     }
 
@@ -770,8 +872,12 @@
                 _showAddSprint = false;
                 Snackbar.Add("Sprint created.", Severity.Success);
             }
+            else
+            {
+                Snackbar.Add("Failed to create sprint.", Severity.Error);
+            }
         }
-        catch { Snackbar.Add("Failed to create sprint.", Severity.Error); }
+        catch (HttpRequestException) { Snackbar.Add("Failed to create sprint.", Severity.Error); }
         _saving = false;
     }
 
@@ -821,8 +927,12 @@
                 _editingSprint = null;
                 Snackbar.Add("Sprint updated.", Severity.Success);
             }
+            else
+            {
+                Snackbar.Add("Failed to update sprint.", Severity.Error);
+            }
         }
-        catch { Snackbar.Add("Failed to update sprint.", Severity.Error); }
+        catch (HttpRequestException) { Snackbar.Add("Failed to update sprint.", Severity.Error); }
         _saving = false;
     }
 
@@ -843,8 +953,12 @@
                 Snackbar.Add("Sprint deleted. Stories were unassigned.", Severity.Info);
                 await LoadStories();
             }
+            else
+            {
+                Snackbar.Add("Failed to delete sprint.", Severity.Error);
+            }
         }
-        catch { Snackbar.Add("Failed to delete sprint.", Severity.Error); }
+        catch (HttpRequestException) { Snackbar.Add("Failed to delete sprint.", Severity.Error); }
     }
 
     // --- Epic CRUD ---
@@ -871,8 +985,12 @@
                 _showAddEpic = false;
                 Snackbar.Add("Epic created.", Severity.Success);
             }
+            else
+            {
+                Snackbar.Add("Failed to create epic.", Severity.Error);
+            }
         }
-        catch { Snackbar.Add("Failed to create epic.", Severity.Error); }
+        catch (HttpRequestException) { Snackbar.Add("Failed to create epic.", Severity.Error); }
         _saving = false;
     }
 
@@ -889,16 +1007,28 @@
         _saving = true;
         try
         {
-            epic.Name = _editingEpicName;
-            var response = await Http.PutAsJsonAsync($"api/epic/{epic.EpicId}", epic);
+            var name = _editingEpicName;
+            var updatedEpic = new Epic
+            {
+                EpicId = epic.EpicId,
+                ProjectId = epic.ProjectId,
+                Name = name,
+                DateCreated = epic.DateCreated
+            };
+            var response = await Http.PutAsJsonAsync($"api/epic/{epic.EpicId}", updatedEpic);
             if (response.IsSuccessStatusCode)
             {
+                epic.Name = name;
                 _editingEpicId = null;
                 _editingEpicName = "";
                 Snackbar.Add("Epic updated.", Severity.Success);
             }
+            else
+            {
+                Snackbar.Add("Failed to update epic.", Severity.Error);
+            }
         }
-        catch { Snackbar.Add("Failed to update epic.", Severity.Error); }
+        catch (HttpRequestException) { Snackbar.Add("Failed to update epic.", Severity.Error); }
         _saving = false;
     }
 
@@ -919,8 +1049,12 @@
                 Snackbar.Add("Epic deleted. Stories were unassigned.", Severity.Info);
                 await LoadStories();
             }
+            else
+            {
+                Snackbar.Add("Failed to delete epic.", Severity.Error);
+            }
         }
-        catch { Snackbar.Add("Failed to delete epic.", Severity.Error); }
+        catch (HttpRequestException) { Snackbar.Add("Failed to delete epic.", Severity.Error); }
     }
 
     // --- Story CRUD ---
@@ -1014,6 +1148,15 @@
     {
         _storyFilterEpicId = epicId;
         await LoadStories();
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        OrganizationState.OnChange -= OnOrganizationChanged;
+        _organizationLoadCancellation?.Cancel();
+        _organizationLoadCancellation?.Dispose();
+        _organizationLoadCancellation = null;
     }
 
     private string FormatDateRange(DateTime? start, DateTime? end)

@@ -47,6 +47,10 @@ public record UpdateOrganizationMemberRoleRequest(
 /// <param name="Token">Raw token supplied by the recipient for one-time verification.</param>
 public record AcceptOrganizationInvitationRequest(string Token);
 
+/// <summary>Result returned after an organization invitation is accepted.</summary>
+/// <param name="OrganizationId">Identifier of the organization the user joined.</param>
+public record AcceptedOrganizationDto(int OrganizationId);
+
 /// <summary>Public projection of an organization member.</summary>
 /// <param name="OrganizationId">Organization identifier.</param>
 /// <param name="UserId">Member's Identity identifier.</param>

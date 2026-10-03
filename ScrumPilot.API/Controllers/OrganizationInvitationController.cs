@@ -52,10 +52,12 @@ public sealed class OrganizationInvitationController(
                 cancellationToken));
 
     [HttpPost("~/api/organization-invitations/accept")]
-    public Task<IActionResult> Accept(
+    public Task<ActionResult<AcceptedOrganizationDto>> Accept(
         [FromBody] AcceptOrganizationInvitationRequest request,
         CancellationToken cancellationToken = default) =>
-        ExecuteAsync(() => service.AcceptAsync(request, cancellationToken));
+        ExecuteAsync(
+            () => service.AcceptAsync(request, cancellationToken),
+            value => Ok(value));
 
     private async Task<ActionResult<T>> ExecuteAsync<T>(
         Func<Task<T>> action,

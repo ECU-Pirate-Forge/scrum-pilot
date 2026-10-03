@@ -12,8 +12,17 @@ public sealed class LoginReturnUrlTests : FrontendTestBase
 {
     [Theory]
     [InlineData("/accept-invitation?token=value", "/accept-invitation?token=value")]
+    [InlineData("/accept-invitation?token=invitation-token", "/accept-invitation?token=invitation-token")]
     [InlineData("//evil.example/path", "/")]
+    [InlineData("/\\evil.example/path", "/")]
+    [InlineData("\\\\evil.example/path", "/")]
     [InlineData("https://evil.example/path", "/")]
+    [InlineData(" \t/accept-invitation", "/")]
+    [InlineData("/accept-invitation\r\n", "/")]
+    [InlineData("/%5cevil.example", "/")]
+    [InlineData("/%255cevil.example", "/")]
+    [InlineData("/%252fevil.example", "/")]
+    [InlineData("/%252F%252Fevil.example", "/")]
     public async Task Successful_login_honors_only_safe_local_return_urls(string returnUrl, string expected)
     {
         AuthService.LoginAsync(Arg.Any<LoginRequest>()).Returns(true);

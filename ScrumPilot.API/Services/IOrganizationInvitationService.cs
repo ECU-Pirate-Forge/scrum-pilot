@@ -19,7 +19,7 @@ public interface IOrganizationInvitationService
         int organizationId,
         int invitationId,
         CancellationToken cancellationToken = default);
-    Task AcceptAsync(
+    Task<AcceptedOrganizationDto> AcceptAsync(
         AcceptOrganizationInvitationRequest request,
         CancellationToken cancellationToken = default);
 }
