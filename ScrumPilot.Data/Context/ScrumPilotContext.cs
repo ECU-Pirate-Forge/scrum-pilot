@@ -271,17 +271,35 @@ namespace ScrumPilot.Data.Context
         }
 
         public override int SaveChanges()
+            => SaveChanges(acceptAllChangesOnSuccess: true);
+
+        public override int SaveChanges(bool acceptAllChangesOnSuccess)
         {
-            TrackStatusChanges();
-            UpdateTimestamps();
-            return base.SaveChanges();
+            PrepareChangesForSave();
+            return base.SaveChanges(acceptAllChangesOnSuccess);
         }
 
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+            => await SaveChangesAsync(acceptAllChangesOnSuccess: true, cancellationToken);
+
+        public override async Task<int> SaveChangesAsync(
+            bool acceptAllChangesOnSuccess,
+            CancellationToken cancellationToken = default)
+        {
+            PrepareChangesForSave();
+            return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+
+        private void PrepareChangesForSave()
         {
             TrackStatusChanges();
             UpdateTimestamps();
-            return await base.SaveChangesAsync(cancellationToken);
+
+            foreach (var entry in ChangeTracker.Entries<Organization>()
+                         .Where(e => e.State is EntityState.Added or EntityState.Modified))
+            {
+                entry.Property(e => e.RowVersion).CurrentValue = Guid.NewGuid().ToByteArray();
+            }
         }
 
         private void TrackStatusChanges()

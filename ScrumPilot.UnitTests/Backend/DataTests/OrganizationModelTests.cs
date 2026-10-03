@@ -79,6 +79,64 @@ public sealed class OrganizationModelTests : IDisposable
     }
 
     [Fact]
+    public void SaveChanges_AssignsTokenToAddedOrganization()
+    {
+        var organization = CreateOrganization("New Organization");
+        _context.Organizations.Add(organization);
+
+        _context.SaveChanges();
+
+        Assert.NotEmpty(organization.RowVersion);
+    }
+
+    [Fact]
+    public async Task SaveChangesAsync_RotatesTokenWhenOrganizationIsUpdated()
+    {
+        var organization = CreateOrganization("Original Organization");
+        _context.Organizations.Add(organization);
+        await _context.SaveChangesAsync();
+        var originalToken = organization.RowVersion.ToArray();
+
+        organization.Name = "Updated Organization";
+        organization.NormalizedName = "UPDATED ORGANIZATION";
+        await _context.SaveChangesAsync();
+
+        Assert.NotEmpty(organization.RowVersion);
+        Assert.NotEqual(originalToken, organization.RowVersion);
+    }
+
+    [Fact]
+    public async Task SaveChangesAsync_ThrowsWhenOrganizationWasUpdatedByAnotherContext()
+    {
+        var databaseName = $"organization-concurrency-{Guid.NewGuid():N}";
+        var connectionString = $"Data Source={databaseName};Mode=Memory;Cache=Shared";
+        await using var keepAliveConnection = new SqliteConnection(connectionString);
+        await keepAliveConnection.OpenAsync();
+        var options = new DbContextOptionsBuilder<ScrumPilotContext>()
+            .UseSqlite(connectionString)
+            .Options;
+
+        await using (var setupContext = new ScrumPilotContext(options))
+        {
+            await setupContext.Database.EnsureCreatedAsync();
+            setupContext.Organizations.Add(CreateOrganization("Shared Organization"));
+            await setupContext.SaveChangesAsync();
+        }
+
+        await using var firstContext = new ScrumPilotContext(options);
+        await using var secondContext = new ScrumPilotContext(options);
+        var firstOrganization = await firstContext.Organizations.SingleAsync();
+        var secondOrganization = await secondContext.Organizations.SingleAsync();
+
+        firstOrganization.Name = "First Update";
+        await firstContext.SaveChangesAsync();
+        secondOrganization.Name = "Second Update";
+
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(
+            () => secondContext.SaveChangesAsync());
+    }
+
+    [Fact]
     public void EnumProperties_UseStringConversions()
     {
         AssertStringConversion<OrganizationMembership>(nameof(OrganizationMembership.Role));
@@ -185,6 +243,14 @@ public sealed class OrganizationModelTests : IDisposable
     }
 
     private IEntityType Entity<TEntity>() => _model.FindEntityType(typeof(TEntity))!;
+
+    private static Organization CreateOrganization(string name) =>
+        new()
+        {
+            Name = name,
+            NormalizedName = name.ToUpperInvariant(),
+            CreatedAt = DateTime.UtcNow
+        };
 
     private static void AssertRequiredMaxLength(IEntityType entity, string propertyName, int maxLength)
     {
