@@ -3,19 +3,25 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using MudBlazor;
 using MudBlazor.Services;
-using NSubstitute;
 using ScrumPilot.Web.Services;
+using System.Net;
 
 namespace ScrumPilot.UnitTests.Frontend
 {
     public abstract class FrontendTestBase : BunitContext
     {
         protected readonly HttpClient MockHttpClient;
+        protected readonly List<string> HttpRequests = [];
+        protected HttpStatusCode HttpResponseStatusCode { get; set; } = HttpStatusCode.OK;
 
         protected FrontendTestBase()
         {
             Services.AddMudServices();
-            MockHttpClient = Substitute.For<HttpClient>();
+            MockHttpClient = new HttpClient(new RecordingHandler(
+                HttpRequests, () => HttpResponseStatusCode))
+            {
+                BaseAddress = new Uri("https://localhost/")
+            };
             Services.AddSingleton(MockHttpClient);
 
             // Register auth so components that inject AuthenticationStateProvider
@@ -37,6 +43,21 @@ namespace ScrumPilot.UnitTests.Frontend
             // can register with the shared IPopoverService during initialisation.
             Render<MudPopoverProvider>();
         }
+
+        private sealed class RecordingHandler(
+            List<string> requests,
+            Func<HttpStatusCode> getStatusCode) : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(
+                HttpRequestMessage request,
+                CancellationToken cancellationToken)
+            {
+                requests.Add(request.RequestUri!.PathAndQuery.TrimStart('/'));
+                return Task.FromResult(new HttpResponseMessage(getStatusCode())
+                {
+                    Content = new StringContent("[]", System.Text.Encoding.UTF8, "application/json")
+                });
+            }
+        }
     }
 }
-

@@ -30,7 +30,9 @@ public class TenantIsolationControllerTests
         var result = await controller.GetAllPbis(22, default);
 
         Assert.IsType<NotFoundResult>(result.Result);
-        await service.DidNotReceive().GetFilteredPbisAsync(Arg.Any<int?>(), Arg.Any<int?>(), Arg.Any<int?>());
+        await _access.Received(1).CanAccessProjectAsync("user-a", 22, default);
+        await repository.DidNotReceive().GetByProjectAsync(
+            Arg.Any<int>(), Arg.Any<bool?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -54,6 +56,7 @@ public class TenantIsolationControllerTests
 
         Assert.Equal(11, Assert.IsType<ProductBacklogItem>(
             Assert.IsType<OkObjectResult>(result.Result).Value).ProjectId);
+        await _access.Received(1).CanAccessProjectAsync("user-a", 11, default);
     }
 
     [Fact]
@@ -67,6 +70,7 @@ public class TenantIsolationControllerTests
         var result = await controller.GetAllSprints(22, default);
 
         Assert.IsType<NotFoundResult>(result.Result);
+        await _access.Received(1).CanAccessProjectAsync("user-a", 22, default);
         await service.DidNotReceive().GetSprintsByProjectAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
@@ -127,6 +131,7 @@ public class TenantIsolationControllerTests
         var result = await controller.Get(22, default);
 
         Assert.IsType<NotFoundResult>(result.Result);
+        await _access.Received(1).CanAccessProjectAsync("user-a", 22, default);
         await service.DidNotReceive().GetPreferencesAsync(Arg.Any<string>(), Arg.Any<int>());
     }
 
@@ -145,6 +150,8 @@ public class TenantIsolationControllerTests
         });
 
         Assert.IsType<NotFoundResult>(result.Result);
+        await _access.Received(1).CanAccessProjectAsync("user-a", 11, default);
+        await _access.Received(1).EpicBelongsToProjectAsync(22, 11, default);
         await service.DidNotReceive().CreatePbiAsync(
             Arg.Any<ProductBacklogItem>(), Arg.Any<CancellationToken>());
     }
@@ -166,6 +173,9 @@ public class TenantIsolationControllerTests
         ]);
 
         Assert.IsType<NotFoundResult>(result.Result);
+        await _access.Received(1).CanAccessProjectAsync("user-a", 11, default);
+        await _access.Received(1).EpicBelongsToProjectAsync(1, 11, default);
+        await _access.Received(1).EpicBelongsToProjectAsync(22, 11, default);
         await service.DidNotReceive().CreatePbisAsync(
             Arg.Any<IEnumerable<ProductBacklogItem>>(),
             Arg.Any<bool>(),
@@ -209,6 +219,7 @@ public class TenantIsolationControllerTests
         var result = await controller.GetSprintProgress(22);
 
         Assert.IsType<NotFoundResult>(result.Result);
+        await _access.Received(1).CanAccessProjectAsync("user-a", 22, default);
         await service.DidNotReceive().GetSprintProgressAsync(Arg.Any<int>());
     }
 
@@ -222,6 +233,7 @@ public class TenantIsolationControllerTests
         var result = await controller.GetAllUsers(22, default);
 
         Assert.IsType<NotFoundResult>(result.Result);
+        await _access.Received(1).CanAccessProjectAsync("user-a", 22, default);
         await service.DidNotReceive().GetProjectUsersAsync(
             Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
@@ -239,6 +251,7 @@ public class TenantIsolationControllerTests
         });
 
         Assert.IsType<NotFoundResult>(result);
+        await _access.Received(1).CanAccessProjectAsync("user-a", 22, default);
         await service.DidNotReceive().UpdateSettingsAsync(
             Arg.Any<string>(), Arg.Any<UserSettingsDto>());
     }

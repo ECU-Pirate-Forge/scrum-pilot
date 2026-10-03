@@ -2,6 +2,7 @@
 @using System.Security.Claims
 @inject HttpClient Http
 @inject IDialogService DialogService
+@inject ISnackbar Snackbar
 @inject AuthenticationStateProvider AuthState
 
 @if (PbiModel != null)
@@ -839,29 +840,72 @@ else
             return;
         }
 
-        PbiModel!.Title            = editTitle;
-        PbiModel.Description       = editDescription;
-        PbiModel.Type              = editType;
-        PbiModel.Status            = editStatus;
-        PbiModel.Priority          = editPriority;
-        PbiModel.StoryPoints       = editStoryPoints;
-        PbiModel.EpicId            = editEpicId;
-        PbiModel.SprintId          = editSprintId;
-        PbiModel.AssignedToUserId  = editAssignedToUserId;
-        PbiModel.IssueLink         = string.IsNullOrWhiteSpace(editIssueLink) ? null : editIssueLink.Trim();
-        PbiModel.DependsOnPbiId    = editDependsOnPbi?.PbiId;
-        PbiModel.LastUpdated       = DateTime.Now;
-
         titleError = false;
         errorMessage = "";
-        isEditMode = false;
-        isAiSuggestion = false;
-
-        if (OnSave.HasDelegate)
+        var request = BuildEditedPbi();
+        try
         {
-            await OnSave.InvokeAsync(PbiModel);
+            HttpResponseMessage response;
+            if (request.PbiId == 0)
+            {
+                if (!ProjectId.HasValue)
+                {
+                    errorMessage = "Save failed: Select a project first.";
+                    Snackbar.Add(errorMessage, Severity.Error);
+                    return;
+                }
+
+                response = await Http.PostAsJsonAsync(
+                    $"api/Pbi/createStory?projectId={ProjectId.Value}", request);
+            }
+            else
+            {
+                response = await Http.PutAsJsonAsync("api/Pbi", request);
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                errorMessage = "Save failed. Your changes were not applied.";
+                Snackbar.Add(errorMessage, Severity.Error);
+                return;
+            }
+
+            var saved = await response.Content.ReadFromJsonAsync<ProductBacklogItem>() ?? request;
+            PbiModel = saved;
+            isEditMode = false;
+            isAiSuggestion = false;
+            Snackbar.Add("PBI saved.", Severity.Success);
+            if (OnSave.HasDelegate)
+                await OnSave.InvokeAsync(saved);
+        }
+        catch
+        {
+            errorMessage = "Save failed. Unable to connect to the server.";
+            Snackbar.Add(errorMessage, Severity.Error);
         }
     }
+
+    private ProductBacklogItem BuildEditedPbi() => new()
+    {
+        PbiId = PbiModel!.PbiId,
+        ProjectId = PbiModel.ProjectId,
+        Type = editType,
+        EpicId = editEpicId,
+        SprintId = editSprintId,
+        Title = editTitle,
+        Description = editDescription,
+        Status = editStatus,
+        Priority = editPriority,
+        StoryPoints = editStoryPoints,
+        Origin = PbiModel.Origin,
+        IsDraft = PbiModel.IsDraft,
+        IsFlagged = PbiModel.IsFlagged,
+        AssignedToUserId = editAssignedToUserId,
+        IssueLink = string.IsNullOrWhiteSpace(editIssueLink) ? null : editIssueLink.Trim(),
+        DependsOnPbiId = editDependsOnPbi?.PbiId ?? editDependsOnPbiId,
+        DateCreated = PbiModel.DateCreated,
+        LastUpdated = DateTime.UtcNow
+    };
 
     private async Task CancelEdit()
     {

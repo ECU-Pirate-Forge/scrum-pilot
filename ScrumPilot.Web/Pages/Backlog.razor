@@ -1,5 +1,6 @@
 @page "/backlog"
 @inject HttpClient Http
+@inject ISnackbar Snackbar
 @inject ScrumPilot.Web.Services.ProjectStateService ProjectState
 @inject ScrumPilot.Web.Services.MetricsDashboardService MetricsSvc
 @implements IDisposable
@@ -501,17 +502,24 @@
     private async Task AssignToSprint(ProductBacklogItem pbi, int? sprintId)
     {
         var original = pbi.SprintId;
+        var originalLastUpdated = pbi.LastUpdated;
         pbi.SprintId = sprintId;
         pbi.LastUpdated = DateTime.UtcNow;
         try
         {
             var response = await Http.PutAsJsonAsync("api/Pbi", pbi);
             if (!response.IsSuccessStatusCode)
+            {
                 pbi.SprintId = original;
+                pbi.LastUpdated = originalLastUpdated;
+                Snackbar.Add("Failed to update the PBI sprint.", Severity.Error);
+            }
         }
         catch
         {
             pbi.SprintId = original;
+            pbi.LastUpdated = originalLastUpdated;
+            Snackbar.Add("Unable to update the PBI sprint.", Severity.Error);
         }
         StateHasChanged();
     }
@@ -520,23 +528,12 @@
 
     private void ClosePbiDetails() => SelectedPbi = null;
 
-    private async Task HandlePbiSave(ProductBacklogItem pbi)
+    private Task HandlePbiSave(ProductBacklogItem pbi)
     {
-        try
-        {
-            var response = await Http.PutAsJsonAsync("api/Pbi", pbi);
-            if (response.IsSuccessStatusCode)
-            {
-                SelectedPbi = null;
-                var updated = await response.Content.ReadFromJsonAsync<ProductBacklogItem>();
-                if (updated is not null)
-                {
-                    var idx = _allPbis.FindIndex(p => p.PbiId == updated.PbiId);
-                    if (idx >= 0) _allPbis[idx] = updated;
-                }
-            }
-        }
-        catch { }
+        SelectedPbi = null;
+        var idx = _allPbis.FindIndex(item => item.PbiId == pbi.PbiId);
+        if (idx >= 0) _allPbis[idx] = pbi;
+        return Task.CompletedTask;
     }
 
     private Task HandlePbiDelete(int pbiId)

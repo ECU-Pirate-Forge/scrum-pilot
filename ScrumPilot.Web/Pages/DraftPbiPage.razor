@@ -1,4 +1,7 @@
 @page "/draft-stories"
+@inject HttpClient Http
+@inject ScrumPilot.Web.Services.ProjectStateService ProjectState
+@implements IDisposable
 
 <PageTitle>Draft PBIs</PageTitle>
 
@@ -24,7 +27,13 @@
         </MudAlert>
     }
 
-@if (draftPbis == null)
+@if (!_selectedProjectId.HasValue)
+{
+    <MudAlert Severity="Severity.Info" Icon="@Icons.Material.Filled.Info" Class="pa-6">
+        <MudText Typo="Typo.h6">Select a project to view its draft PBIs.</MudText>
+    </MudAlert>
+}
+else if (draftPbis == null)
 {
     <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center" Style="min-height: 400px;">
         <MudProgressCircular Indeterminate="true" Size="Size.Large" />
@@ -149,27 +158,42 @@ else
     private readonly HashSet<int> _committingPbiIds = new();
     private string _commitErrorMessage = string.Empty;
     private string _commitSuccessMessage = string.Empty;
-
-    [Inject]
-    private HttpClient Http { get; set; } = default!;
+    private int? _selectedProjectId;
 
     protected override async Task OnInitializedAsync()
     {
-        // Load draft stories directly from API
-        draftPbis = await GetdraftPbisAsync();
+        _selectedProjectId = ProjectState.SelectedProjectId;
+        ProjectState.OnChange += HandleProjectChanged;
+        await LoadDraftPbisAsync();
     }
 
-    private async Task<List<ProductBacklogItem>> GetdraftPbisAsync()
+    public void Dispose() => ProjectState.OnChange -= HandleProjectChanged;
+
+    private void HandleProjectChanged()
     {
+        _ = InvokeAsync(async () =>
+        {
+            _selectedProjectId = ProjectState.SelectedProjectId;
+            await LoadDraftPbisAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadDraftPbisAsync()
+    {
+        draftPbis = null;
+        if (!_selectedProjectId.HasValue)
+            return;
+
         try
         {
-            var response = await Http.GetFromJsonAsync<List<ProductBacklogItem>>("api/Pbi/getdraftPbis");
-            return response ?? new List<ProductBacklogItem>();
+            draftPbis = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(
+                $"api/Pbi/getDraftPbis?projectId={_selectedProjectId.Value}") ?? [];
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error loading draft stories: {ex.Message}");
-            return new List<ProductBacklogItem>();
+            draftPbis = [];
         }
     }
 
@@ -206,26 +230,16 @@ else
     }
 
     /// Saves the modified pbi by calling the update API endpoint
-    private async Task HandleModifySave(ProductBacklogItem pbi)
+    private Task HandleModifySave(ProductBacklogItem pbi)
     {
-        try
+        var index = draftPbis?.FindIndex(s => s.PbiId == pbi.PbiId) ?? -1;
+        if (index >= 0)
         {
-            var response = await Http.PutAsJsonAsync("api/Pbi", pbi);
-            if (response.IsSuccessStatusCode)
-            {
-                var index = draftPbis?.FindIndex(s => s.PbiId == pbi.PbiId) ?? -1;
-                if (index >= 0)
-                {
-                    draftPbis![index] = pbi;
-                }
-                modifyingPbi = null;
-                StateHasChanged();
-            }
+            draftPbis![index] = pbi;
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error updating pbi: {ex.Message}");
-        }
+        modifyingPbi = null;
+        StateHasChanged();
+        return Task.CompletedTask;
     }
 
     /// Rejects and deletes a draft pbi by calling the delete API endpoint

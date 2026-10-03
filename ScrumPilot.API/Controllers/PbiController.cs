@@ -14,6 +14,8 @@ public class PbiController(
     ICurrentUser currentUser,
     IOrganizationAccessService accessService) : ControllerBase
 {
+    public const int MaxBulkCreateBatchSize = 100;
+
     [HttpGet("getAllPbis")]
     public async Task<ActionResult<IEnumerable<ProductBacklogItem>>> GetAllPbis(
         [FromQuery] int projectId,
@@ -71,9 +73,8 @@ public class PbiController(
     {
         var existing = await AuthorizedPbi(request.PbiId, cancellationToken);
         if (existing is null) return NotFound();
-        if (!await RelatedIdsBelongToProject(
-                existing.ProjectId, request.SprintId, request.EpicId,
-                request.AssignedToUserId, request.DependsOnPbiId, cancellationToken))
+        request.SprintId = NormalizeSprintId(request.SprintId);
+        if (!await ChangedRelatedIdsBelongToProject(existing, request, cancellationToken))
             return NotFound();
         ApplyMutableFields(existing, request);
         return Ok(await pbiService.ImprovePbiAsync(existing));
@@ -125,9 +126,8 @@ public class PbiController(
     {
         var existing = await AuthorizedPbi(request.PbiId, cancellationToken);
         if (existing is null) return NotFound();
-        if (!await RelatedIdsBelongToProject(
-                existing.ProjectId, request.SprintId, request.EpicId,
-                request.AssignedToUserId, request.DependsOnPbiId, cancellationToken))
+        request.SprintId = NormalizeSprintId(request.SprintId);
+        if (!await ChangedRelatedIdsBelongToProject(existing, request, cancellationToken))
             return NotFound();
 
         ApplyMutableFields(existing, request);
@@ -149,6 +149,7 @@ public class PbiController(
         CancellationToken cancellationToken)
     {
         if (!await CanAccess(projectId, cancellationToken)) return NotFound();
+        request.SprintId = NormalizeSprintId(request.SprintId);
         if (!await RelatedIdsBelongToProject(
                 projectId, request.SprintId, request.EpicId,
                 request.AssignedToUserId, request.DependsOnPbiId, cancellationToken))
@@ -167,14 +168,15 @@ public class PbiController(
         bool draft,
         CancellationToken cancellationToken)
     {
+        if (requests.Count > MaxBulkCreateBatchSize)
+            return BadRequest($"A maximum of {MaxBulkCreateBatchSize} PBIs can be created at once.");
         if (!await CanAccess(projectId, cancellationToken)) return NotFound();
+
         foreach (var request in requests)
-        {
-            if (!await RelatedIdsBelongToProject(
-                    projectId, request.SprintId, request.EpicId,
-                    request.AssignedToUserId, request.DependsOnPbiId, cancellationToken))
-                return NotFound();
-        }
+            request.SprintId = NormalizeSprintId(request.SprintId);
+
+        if (!await DistinctRelatedIdsBelongToProject(requests, projectId, cancellationToken))
+            return NotFound();
 
         var items = requests.Select(request => NewPbi(request, projectId, PbiOrigin.AiGenerated));
         return Ok(await pbiService.CreatePbisAsync(items, draft, cancellationToken));
@@ -197,7 +199,7 @@ public class PbiController(
         int? dependsOnPbiId,
         CancellationToken cancellationToken)
     {
-        if (sprintId.HasValue && sprintId != -1
+        if (sprintId.HasValue
             && !await accessService.SprintBelongsToProjectAsync(sprintId.Value, projectId, cancellationToken))
             return false;
         if (epicId.HasValue
@@ -209,6 +211,56 @@ public class PbiController(
         return !dependsOnPbiId.HasValue
             || await accessService.PbiBelongsToProjectAsync(dependsOnPbiId.Value, projectId, cancellationToken);
     }
+
+    private async Task<bool> ChangedRelatedIdsBelongToProject(
+        ProductBacklogItem existing,
+        ProductBacklogItem request,
+        CancellationToken cancellationToken)
+    {
+        var projectId = existing.ProjectId;
+        if (request.SprintId != existing.SprintId && request.SprintId.HasValue
+            && !await accessService.SprintBelongsToProjectAsync(
+                request.SprintId.Value, projectId, cancellationToken))
+            return false;
+        if (request.EpicId != existing.EpicId && request.EpicId.HasValue
+            && !await accessService.EpicBelongsToProjectAsync(
+                request.EpicId.Value, projectId, cancellationToken))
+            return false;
+        if (request.AssignedToUserId != existing.AssignedToUserId
+            && request.AssignedToUserId is not null
+            && !await accessService.UserCanBeAssignedToProjectAsync(
+                request.AssignedToUserId, projectId, cancellationToken))
+            return false;
+        return request.DependsOnPbiId == existing.DependsOnPbiId
+            || !request.DependsOnPbiId.HasValue
+            || await accessService.PbiBelongsToProjectAsync(
+                request.DependsOnPbiId.Value, projectId, cancellationToken);
+    }
+
+    private async Task<bool> DistinctRelatedIdsBelongToProject(
+        IEnumerable<ProductBacklogItem> requests,
+        int projectId,
+        CancellationToken cancellationToken)
+    {
+        var items = requests.ToList();
+        foreach (var sprintId in items.Where(x => x.SprintId.HasValue).Select(x => x.SprintId!.Value).Distinct())
+            if (!await accessService.SprintBelongsToProjectAsync(sprintId, projectId, cancellationToken))
+                return false;
+        foreach (var epicId in items.Where(x => x.EpicId.HasValue).Select(x => x.EpicId!.Value).Distinct())
+            if (!await accessService.EpicBelongsToProjectAsync(epicId, projectId, cancellationToken))
+                return false;
+        foreach (var userId in items.Select(x => x.AssignedToUserId)
+                     .Where(x => x is not null).Cast<string>().Distinct(StringComparer.Ordinal))
+            if (!await accessService.UserCanBeAssignedToProjectAsync(userId, projectId, cancellationToken))
+                return false;
+        foreach (var pbiId in items.Where(x => x.DependsOnPbiId.HasValue)
+                     .Select(x => x.DependsOnPbiId!.Value).Distinct())
+            if (!await accessService.PbiBelongsToProjectAsync(pbiId, projectId, cancellationToken))
+                return false;
+        return true;
+    }
+
+    private static int? NormalizeSprintId(int? sprintId) => sprintId == -1 ? null : sprintId;
 
     private static ProductBacklogItem NewPbi(
         ProductBacklogItem request,

@@ -39,15 +39,25 @@ namespace ScrumPilot.Data.Repositories
 
         public async Task DeleteAsync(int id, CancellationToken cancellationToken = default)
         {
-            await _context.Stories
-                .Where(p => p.SprintId == id)
-                .ExecuteUpdateAsync(s => s.SetProperty(p => p.SprintId, (int?)null), cancellationToken);
-
-            var sprint = await _context.Sprints.FindAsync([id], cancellationToken);
-            if (sprint != null)
+            await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            try
             {
-                _context.Sprints.Remove(sprint);
-                await _context.SaveChangesAsync(cancellationToken);
+                await _context.Stories
+                    .Where(p => p.SprintId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(p => p.SprintId, (int?)null), cancellationToken);
+
+                var sprint = await _context.Sprints.FindAsync([id], cancellationToken);
+                if (sprint != null)
+                {
+                    _context.Sprints.Remove(sprint);
+                    await _context.SaveChangesAsync(cancellationToken);
+                }
+                await transaction.CommitAsync(cancellationToken);
+            }
+            catch
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+                throw;
             }
         }
     }

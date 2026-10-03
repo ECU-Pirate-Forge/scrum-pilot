@@ -127,5 +127,31 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
             Assert.DoesNotContain("Flag this PBI", component.Markup);
             Assert.Contains("Bug", component.Markup);
         }
+
+        [Fact]
+        public void PbiCard_FailedSave_KeepsEditModeAndDoesNotNotifyParent()
+        {
+            HttpResponseStatusCode = System.Net.HttpStatusCode.BadRequest;
+            var pbi = CreateTestPbi();
+            var notified = false;
+            var component = Render<PbiCard>(parameters => parameters
+                .Add(p => p.PbiModel, pbi)
+                .Add(p => p.ProjectId, 1)
+                .Add(p => p.StartInEditMode, true)
+                .Add(p => p.OnSave, _ => notified = true));
+
+            component.FindAll("button")
+                .Single(button => button.TextContent.Trim() == "Save")
+                .Click();
+
+            component.WaitForAssertion(() =>
+            {
+                Assert.Contains("Save failed. Your changes were not applied.", component.Markup);
+                Assert.Contains(component.FindAll("button"),
+                    button => button.TextContent.Trim() == "Save");
+                Assert.False(notified);
+                Assert.Equal("Test pbi", pbi.Title);
+            });
+        }
     }
 }

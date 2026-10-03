@@ -353,6 +353,20 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         }
 
         [Fact]
+        public async Task CreatePbi_NormalizesAllSprintsSentinelToUnassigned()
+        {
+            var request = new ProductBacklogItem { Title = "Unassigned", SprintId = -1 };
+
+            await _controller.CreatePbi(1, request);
+
+            await _mockPbiService.Received(1).CreatePbiAsync(
+                Arg.Is<ProductBacklogItem>(p => p.SprintId == null),
+                Arg.Any<CancellationToken>());
+            await _access.DidNotReceive().SprintBelongsToProjectAsync(
+                Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
         public async Task UpdatePbi_ReturnsOkResult_WithUpdatedPbi()
         {
             // Arrange
@@ -379,6 +393,71 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             await _mockPbiService.Received(1).UpdatePbiAsync(
                 Arg.Is<ProductBacklogItem>(p => p.PbiId == 1 && p.Title == updatedPbi.Title),
                 Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
+        public async Task UpdatePbi_NormalizesAllSprintsSentinelToUnassigned()
+        {
+            var request = new ProductBacklogItem { PbiId = 1, Title = "Updated", SprintId = -1 };
+
+            await _controller.UpdatePbi(request);
+
+            await _mockPbiService.Received(1).UpdatePbiAsync(
+                Arg.Is<ProductBacklogItem>(p => p.SprintId == null),
+                Arg.Any<CancellationToken>());
+            await _access.DidNotReceive().SprintBelongsToProjectAsync(
+                Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
+        public async Task UpdatePbi_DoesNotRevalidateUnchangedStaleAssignee()
+        {
+            _repository.GetByIdAsync(8, Arg.Any<CancellationToken>()).Returns(
+                new ProductBacklogItem
+                {
+                    PbiId = 8, ProjectId = 1, Title = "Old", AssignedToUserId = "stale-user"
+                });
+            _access.UserCanBeAssignedToProjectAsync(
+                "stale-user", 1, Arg.Any<CancellationToken>()).Returns(false);
+
+            var result = await _controller.UpdatePbi(new ProductBacklogItem
+            {
+                PbiId = 8,
+                ProjectId = 999,
+                Title = "New",
+                Status = PbiStatus.InProgress,
+                AssignedToUserId = "stale-user"
+            });
+
+            Assert.IsType<OkObjectResult>(result.Result);
+            await _access.DidNotReceive().UserCanBeAssignedToProjectAsync(
+                Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+            await _mockPbiService.Received(1).UpdatePbiAsync(
+                Arg.Is<ProductBacklogItem>(p => p.ProjectId == 1 && p.Title == "New"),
+                Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
+        public async Task UpdatePbi_RejectsExplicitlyChangedInaccessibleAssignee()
+        {
+            _repository.GetByIdAsync(8, Arg.Any<CancellationToken>()).Returns(
+                new ProductBacklogItem
+                {
+                    PbiId = 8, ProjectId = 1, Title = "Old", AssignedToUserId = "old-user"
+                });
+            _access.UserCanBeAssignedToProjectAsync(
+                "foreign-user", 1, Arg.Any<CancellationToken>()).Returns(false);
+
+            var result = await _controller.UpdatePbi(new ProductBacklogItem
+            {
+                PbiId = 8, Title = "New", AssignedToUserId = "foreign-user"
+            });
+
+            Assert.IsType<NotFoundResult>(result.Result);
+            await _access.Received(1).UserCanBeAssignedToProjectAsync(
+                "foreign-user", 1, Arg.Any<CancellationToken>());
+            await _mockPbiService.DidNotReceive().UpdatePbiAsync(
+                Arg.Any<ProductBacklogItem>(), Arg.Any<CancellationToken>());
         }
 
         [Fact]
@@ -669,6 +748,55 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             await _mockPbiService.Received(1).CreatePbisAsync(
                 Arg.Any<IEnumerable<ProductBacklogItem>>(), true, Arg.Any<CancellationToken>());
             await _mockPbiService.DidNotReceive().CreatePbiAsync(Arg.Any<ProductBacklogItem>());
+        }
+
+        [Fact]
+        public async Task CreatePbis_ValidatesEachDistinctRelatedIdOnce()
+        {
+            var requests = new List<ProductBacklogItem>
+            {
+                new()
+                {
+                    Title = "First", SprintId = 2, EpicId = 3,
+                    AssignedToUserId = "user-2", DependsOnPbiId = 4
+                },
+                new()
+                {
+                    Title = "Second", SprintId = 2, EpicId = 3,
+                    AssignedToUserId = "user-2", DependsOnPbiId = 4
+                }
+            };
+
+            var result = await _controller.CreatePbis(1, requests);
+
+            Assert.IsType<OkObjectResult>(result.Result);
+            await _access.Received(1).SprintBelongsToProjectAsync(
+                2, 1, Arg.Any<CancellationToken>());
+            await _access.Received(1).EpicBelongsToProjectAsync(
+                3, 1, Arg.Any<CancellationToken>());
+            await _access.Received(1).UserCanBeAssignedToProjectAsync(
+                "user-2", 1, Arg.Any<CancellationToken>());
+            await _access.Received(1).PbiBelongsToProjectAsync(
+                4, 1, Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
+        public async Task CreatePbis_RejectsOverLimitBeforeAccessOrPersistence()
+        {
+            var requests = Enumerable.Range(0, PbiController.MaxBulkCreateBatchSize + 1)
+                .Select(index => new ProductBacklogItem { Title = $"PBI {index}" })
+                .ToList();
+
+            var result = await _controller.CreatePbis(1, requests);
+
+            var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
+            Assert.Contains(PbiController.MaxBulkCreateBatchSize.ToString(), badRequest.Value?.ToString());
+            await _access.DidNotReceive().CanAccessProjectAsync(
+                Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+            await _mockPbiService.DidNotReceive().CreatePbisAsync(
+                Arg.Any<IEnumerable<ProductBacklogItem>>(),
+                Arg.Any<bool>(),
+                Arg.Any<CancellationToken>());
         }
     }
 }
