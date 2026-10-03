@@ -26,13 +26,15 @@ public class PlanningPokerHub(
             : null;
     }
 
-    private async Task RemoveFromSessionAsync(PlanningPokerSessionKey? expectedKey = null)
+    private async Task RemoveFromSessionAsync(
+        PlanningPokerSessionKey? expectedKey = null,
+        bool ensureGroupRemoval = false)
     {
         var removedKey = session.RemoveParticipant(Context.ConnectionId, expectedKey);
-        if (!removedKey.HasValue)
+        if (!removedKey.HasValue && (!ensureGroupRemoval || !expectedKey.HasValue))
             return;
 
-        var group = GroupName(removedKey.Value);
+        var group = GroupName(removedKey ?? expectedKey!.Value);
         Exception? groupRemovalException = null;
         try
         {
@@ -46,16 +48,19 @@ public class PlanningPokerHub(
             groupRemovalException = ex;
         }
 
-        try
+        if (removedKey.HasValue)
         {
-            await Clients.Group(group).SendAsync(
-                "UserLeft",
-                Context.ConnectionId,
-                CancellationToken.None);
-        }
-        catch (Exception)
-        {
-            // Session state is already clean; fanout is best effort.
+            try
+            {
+                await Clients.Group(group).SendAsync(
+                    "UserLeft",
+                    Context.ConnectionId,
+                    CancellationToken.None);
+            }
+            catch (Exception)
+            {
+                // Session state is already clean; fanout is best effort.
+            }
         }
 
         if (groupRemovalException is not null)
@@ -152,6 +157,24 @@ public class PlanningPokerHub(
         {
             await RemoveFromSessionAsync(sessionKey);
             throw;
+        }
+
+        try
+        {
+            canAccess = await accessService.CanAccessProjectAsync(
+                userId,
+                projectId,
+                cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            canAccess = false;
+        }
+
+        if (!canAccess || session.GetSessionKey(Context.ConnectionId) != sessionKey)
+        {
+            await RemoveFromSessionAsync(sessionKey, ensureGroupRemoval: true);
+            throw new HubException(ProjectNotFoundMessage);
         }
 
         var state = session.GetStateForSession(sessionKey);

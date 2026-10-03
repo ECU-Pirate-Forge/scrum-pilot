@@ -45,13 +45,122 @@ public class PlanningPokerHubTests
     }
 
     [Fact]
+    public async Task JoinSession_AccessRevokedBeforeRegistration_LeavesNoStateGroupOrJoinMessages()
+    {
+        var setup = CreateHub();
+        var groups = new TrackingGroupManager();
+        setup.Hub.Groups = groups;
+        var organizationLookupStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseOrganizationLookup = new TaskCompletionSource<int?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var accessCall = 0;
+        setup.Access.CanAccessProjectAsync("user-1", 7, setup.CancellationToken)
+            .Returns(_ => Task.FromResult(Interlocked.Increment(ref accessCall) == 1));
+        setup.Access.GetOrganizationIdForProjectAsync(7, setup.CancellationToken)
+            .Returns(async _ =>
+            {
+                organizationLookupStarted.TrySetResult();
+                return await releaseOrganizationLookup.Task;
+            });
+        var evictor = CreateEvictor(setup, groups);
+
+        var join = setup.Hub.JoinSession("ignored", projectId: 7);
+        await organizationLookupStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await evictor.EvictUserFromProjectAsync("user-1", 7);
+        Assert.Null(setup.Service.GetSessionKey(ConnectionId));
+        releaseOrganizationLookup.SetResult(3);
+
+        var exception = await Assert.ThrowsAsync<HubException>(() => join);
+
+        Assert.Equal("Project not found.", exception.Message);
+        Assert.Null(setup.Service.GetSessionKey(ConnectionId));
+        Assert.False(groups.IsMember(ConnectionId, Group));
+        await AssertNoJoinMessagesAsync(setup);
+    }
+
+    [Fact]
+    public async Task JoinSession_AccessRevokedAfterRegistrationBeforeGroupAdd_LeavesNoStateGroupOrJoinMessages()
+    {
+        var setup = CreateHub();
+        var groupAddStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseGroupAdd = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var groups = new TrackingGroupManager
+        {
+            BeforeAddAsync = async (_, _, _) =>
+            {
+                groupAddStarted.TrySetResult();
+                await releaseGroupAdd.Task;
+            }
+        };
+        setup.Hub.Groups = groups;
+        var accessCall = 0;
+        setup.Access.CanAccessProjectAsync("user-1", 7, setup.CancellationToken)
+            .Returns(_ => Task.FromResult(Interlocked.Increment(ref accessCall) == 1));
+        var evictor = CreateEvictor(setup, groups);
+
+        var join = setup.Hub.JoinSession("ignored", projectId: 7);
+        await groupAddStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(SessionKey, setup.Service.GetSessionKey(ConnectionId));
+        await evictor.EvictUserFromProjectAsync("user-1", 7);
+        releaseGroupAdd.SetResult();
+
+        var exception = await Assert.ThrowsAsync<HubException>(() => join);
+
+        Assert.Equal("Project not found.", exception.Message);
+        Assert.Null(setup.Service.GetSessionKey(ConnectionId));
+        Assert.False(groups.IsMember(ConnectionId, Group));
+        await AssertNoJoinMessagesAsync(setup);
+    }
+
+    [Fact]
+    public async Task JoinSession_AccessRevokedAfterGroupAddBeforePostCheck_LeavesNoStateGroupOrJoinMessages()
+    {
+        var setup = CreateHub();
+        var groups = new TrackingGroupManager();
+        setup.Hub.Groups = groups;
+        var postCheckStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releasePostCheck = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var accessCall = 0;
+        setup.Access.CanAccessProjectAsync("user-1", 7, setup.CancellationToken)
+            .Returns(_ => Interlocked.Increment(ref accessCall) == 1
+                ? Task.FromResult(true)
+                : CompletePostCheckAsync());
+        var evictor = CreateEvictor(setup, groups);
+
+        var join = setup.Hub.JoinSession("ignored", projectId: 7);
+        await postCheckStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(SessionKey, setup.Service.GetSessionKey(ConnectionId));
+        Assert.True(groups.IsMember(ConnectionId, Group));
+        await evictor.EvictUserFromProjectAsync("user-1", 7);
+        releasePostCheck.SetResult(false);
+
+        var exception = await Assert.ThrowsAsync<HubException>(() => join);
+
+        Assert.Equal("Project not found.", exception.Message);
+        Assert.Null(setup.Service.GetSessionKey(ConnectionId));
+        Assert.False(groups.IsMember(ConnectionId, Group));
+        await AssertNoJoinMessagesAsync(setup);
+
+        async Task<bool> CompletePostCheckAsync()
+        {
+            postCheckStarted.TrySetResult();
+            return await releasePostCheck.Task;
+        }
+    }
+
+    [Fact]
     public async Task JoinSession_UsesAuthenticatedNameAndOrganizationScopedGroup()
     {
         var setup = CreateHub();
 
         await setup.Hub.JoinSession("Untrusted", projectId: 7);
 
-        await setup.Access.Received(1).CanAccessProjectAsync(
+        await setup.Access.Received(2).CanAccessProjectAsync(
             "user-1", 7, setup.CancellationToken);
         await setup.Access.Received(1).GetOrganizationIdForProjectAsync(
             7, setup.CancellationToken);
@@ -337,6 +446,30 @@ public class PlanningPokerHubTests
         return setup;
     }
 
+    private static PlanningPokerConnectionEvictor CreateEvictor(
+        HubSetup setup,
+        IGroupManager groups)
+    {
+        var hubContext = Substitute.For<IHubContext<PlanningPokerHub>>();
+        var clients = Substitute.For<IHubClients>();
+        clients.Group(Arg.Any<string>()).Returns(setup.GroupClient);
+        hubContext.Clients.Returns(clients);
+        hubContext.Groups.Returns(groups);
+        return new PlanningPokerConnectionEvictor(setup.Service, hubContext);
+    }
+
+    private static async Task AssertNoJoinMessagesAsync(HubSetup setup)
+    {
+        await setup.CallerClient.DidNotReceive().SendCoreAsync(
+            "ReceiveSessionState",
+            Arg.Any<object?[]>(),
+            Arg.Any<CancellationToken>());
+        await setup.OthersClient.DidNotReceive().SendCoreAsync(
+            "UserJoined",
+            Arg.Any<object?[]>(),
+            Arg.Any<CancellationToken>());
+    }
+
     private static HubSetup CreateHub(bool authenticated = true, bool canAccess = true)
     {
         var cancellationToken = new CancellationTokenSource().Token;
@@ -375,7 +508,14 @@ public class PlanningPokerHubTests
         };
 
         return new HubSetup(
-            hub, service, access, groups, groupClient, cancellationToken);
+            hub,
+            service,
+            access,
+            groups,
+            groupClient,
+            callerClient,
+            othersClient,
+            cancellationToken);
     }
 
     private sealed record HubSetup(
@@ -384,5 +524,43 @@ public class PlanningPokerHubTests
         IOrganizationAccessService Access,
         IGroupManager Groups,
         IClientProxy GroupClient,
+        ISingleClientProxy CallerClient,
+        IClientProxy OthersClient,
         CancellationToken CancellationToken);
+
+    private sealed class TrackingGroupManager : IGroupManager
+    {
+        private readonly HashSet<(string ConnectionId, string GroupName)> _memberships = [];
+        private readonly object _lock = new();
+
+        public Func<string, string, CancellationToken, Task>? BeforeAddAsync { get; init; }
+
+        public async Task AddToGroupAsync(
+            string connectionId,
+            string groupName,
+            CancellationToken cancellationToken = default)
+        {
+            if (BeforeAddAsync is not null)
+                await BeforeAddAsync(connectionId, groupName, cancellationToken);
+
+            lock (_lock)
+                _memberships.Add((connectionId, groupName));
+        }
+
+        public Task RemoveFromGroupAsync(
+            string connectionId,
+            string groupName,
+            CancellationToken cancellationToken = default)
+        {
+            lock (_lock)
+                _memberships.Remove((connectionId, groupName));
+            return Task.CompletedTask;
+        }
+
+        public bool IsMember(string connectionId, string groupName)
+        {
+            lock (_lock)
+                return _memberships.Contains((connectionId, groupName));
+        }
+    }
 }
