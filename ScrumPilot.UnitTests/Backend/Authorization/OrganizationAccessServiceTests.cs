@@ -63,6 +63,13 @@ public sealed class OrganizationAccessServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task CanAccessProject_DeniesStaleProjectMembershipInOneQuery()
+    {
+        Assert.False(await _service.CanAccessProjectAsync("stale-member", 10));
+        Assert.Equal(1, _queryCounter.Count);
+    }
+
+    [Fact]
     public async Task CanAccessProject_DeniesForeignOrganizationAndMissingProject()
     {
         Assert.False(await _service.CanAccessProjectAsync("foreign-owner", 10));
@@ -119,6 +126,18 @@ public sealed class OrganizationAccessServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task UserCanBeAssignedToProject_DeniesStaleProjectMembership()
+    {
+        Assert.False(await _service.UserCanBeAssignedToProjectAsync("stale-member", 10));
+    }
+
+    [Fact]
+    public async Task IsOrganizationOwner_DeniesGlobalAdminWithoutOwnerMembership()
+    {
+        Assert.False(await _service.IsOrganizationOwnerAsync("admin", 1));
+    }
+
+    [Fact]
     public async Task CancellationToken_IsPropagatedToEfQueries()
     {
         using var cancellation = new CancellationTokenSource();
@@ -136,7 +155,8 @@ public sealed class OrganizationAccessServiceTests : IAsyncLifetime
             User("outsider"),
             User("foreign-owner"),
             User("deleted-owner"),
-            User("admin"));
+            User("admin"),
+            User("stale-member"));
         _context.Roles.Add(
             new IdentityRole
             {
@@ -160,11 +180,18 @@ public sealed class OrganizationAccessServiceTests : IAsyncLifetime
             Project(11, 1),
             Project(20, 2),
             Project(30, 3));
-        _context.ProjectMemberships.Add(
+        _context.ProjectMemberships.AddRange(
             new ProjectMembership
             {
                 ProjectId = 10,
                 UserId = "member",
+                GrantedByUserId = "owner",
+                GrantedAt = DateTime.UtcNow
+            },
+            new ProjectMembership
+            {
+                ProjectId = 10,
+                UserId = "stale-member",
                 GrantedByUserId = "owner",
                 GrantedAt = DateTime.UtcNow
             });

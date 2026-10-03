@@ -55,7 +55,12 @@ public sealed class OrganizationAccessService(ScrumPilotContext context)
                         || context.ProjectMemberships.Any(
                             membership =>
                                 membership.ProjectId == project.ProjectId
-                                && membership.UserId == userId)),
+                                && membership.UserId == userId
+                                && context.OrganizationMemberships.Any(
+                                    organizationMembership =>
+                                        organizationMembership.OrganizationId
+                                            == project.OrganizationId
+                                        && organizationMembership.UserId == userId))),
                 cancellationToken);
 
     public Task<int?> GetOrganizationIdForProjectAsync(
