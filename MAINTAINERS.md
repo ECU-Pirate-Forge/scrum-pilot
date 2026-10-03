@@ -50,8 +50,7 @@ The candidate should typically demonstrate:
 - Familiarity with the project architecture and standards.
 
 3. Maintainer vote:
-Existing maintainers vote publicly or in a recorded decision thread.
-A simple majority approves unless the team defines a stricter rule.
+Brian Dietrick (BDFL) approves all maintainers.
 
 4. Trial period:
 The candidate serves as a probationary maintainer for 30-90 days with scoped permissions.
@@ -69,13 +68,18 @@ A maintainer may be moved to inactive or removed status when:
 
 ## Current Maintainers
 
-Update this section whenever maintainership changes.
-
 | Name | GitHub | Since | Area/Notes |
 | --- | --- | --- | --- |
-| Tyler Bao | tbao23 | Jan 2026 | Lead Developer |
-| James Davis | jmd5493 | Jan 2026 | Developer / DevOps |
 | Brian Dietrick | bdietrick | Jan 2026 | BDFL |
+| James Davis | jmd5493 | Jan 2026 | Developer / DevOps |
+
+
+
+## Previous Maintainers
+| Name | GitHub | From | To | Area/Notes |
+| --- | --- | --- | --- | --- |
+| Tyler Bao | tbao23 | Jan 2026 | Aug 2026 | Lead Developer / Rest In Peace my friend |
+
 
 
 ## Updating This Page
@@ -84,5 +88,5 @@ When maintainer status changes:
 
 1. Update Current Maintainers.
 2. Move former maintainers into Previous Maintainers with end dates.
-3. Add a short note in CHANGELOG.md (if applicable).
-4. Reference the decision issue or pull request in the Notes column.
+
+

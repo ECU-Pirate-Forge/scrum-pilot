@@ -32,30 +32,30 @@ public sealed class DatabaseSeederBootstrapTests
     }
 
     [Fact]
-    public async Task SeedUsersAsync_CreatesAndReconcilesTylerAsConfirmedAdmin()
+    public async Task SeedUsersAsync_CreatesAndReconcilesBrianAsConfirmedAdmin()
     {
         await using var database = await IdentityTestDatabase.CreateAsync();
 
         var created = await DatabaseSeeder.SeedUsersAsync(database.UserManager, database.RoleManager);
-        var tyler = Assert.IsType<ApplicationUser>(
-            await database.UserManager.FindByEmailAsync("Tyler@scrumpilot.xyz"));
+        var brian = Assert.IsType<ApplicationUser>(
+            await database.UserManager.FindByEmailAsync("Brian@scrumpilot.xyz"));
 
-        Assert.True(tyler.EmailConfirmed);
-        Assert.True(await database.UserManager.IsInRoleAsync(tyler, "Admin"));
-        Assert.Contains(tyler.Id, created);
+        Assert.True(brian.EmailConfirmed);
+        Assert.True(await database.UserManager.IsInRoleAsync(brian, "Admin"));
+        Assert.Contains(brian.Id, created);
 
-        await database.UserManager.AddToRoleAsync(tyler, "Developer");
-        await database.UserManager.RemoveFromRoleAsync(tyler, "Admin");
-        tyler.EmailConfirmed = false;
-        await database.UserManager.UpdateAsync(tyler);
+        await database.UserManager.AddToRoleAsync(brian, "Developer");
+        await database.UserManager.RemoveFromRoleAsync(brian, "Admin");
+        brian.EmailConfirmed = false;
+        await database.UserManager.UpdateAsync(brian);
 
         created = await DatabaseSeeder.SeedUsersAsync(database.UserManager, database.RoleManager);
-        tyler = Assert.IsType<ApplicationUser>(
-            await database.UserManager.FindByEmailAsync("Tyler@scrumpilot.xyz"));
+        brian = Assert.IsType<ApplicationUser>(
+            await database.UserManager.FindByEmailAsync("Brian@scrumpilot.xyz"));
 
-        Assert.True(tyler.EmailConfirmed);
-        Assert.True(await database.UserManager.IsInRoleAsync(tyler, "Admin"));
-        Assert.True(await database.UserManager.IsInRoleAsync(tyler, "Developer"));
+        Assert.True(brian.EmailConfirmed);
+        Assert.True(await database.UserManager.IsInRoleAsync(brian, "Admin"));
+        Assert.True(await database.UserManager.IsInRoleAsync(brian, "Developer"));
         Assert.Empty(created);
     }
 
@@ -83,7 +83,7 @@ public sealed class DatabaseSeederBootstrapTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             () => DatabaseSeeder.SeedUsersAsync(database.UserManager, database.RoleManager));
 
-        Assert.Contains("Unable to create seeded user Tyler@scrumpilot.xyz", exception.Message);
+        Assert.Contains("Unable to create seeded user Brian@scrumpilot.xyz", exception.Message);
         Assert.DoesNotContain("Password1234!", exception.Message);
     }
 
@@ -401,8 +401,12 @@ public sealed class DatabaseSeederBootstrapTests
             seedScope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>(),
             seedScope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>());
 
+  
+        // await Task.WhenAll(
+        //     bootstrapper.RunAsync(createdUserIds),
+        //     bootstrapper.RunAsync(createdUserIds));
+
         await Task.WhenAll(
-            bootstrapper.RunAsync(createdUserIds),
             bootstrapper.RunAsync(createdUserIds));
 
         await using var scope = database.Provider.CreateAsyncScope();
