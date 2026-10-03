@@ -10,4 +10,7 @@ public class UserSummaryDto
 
     /// <summary>The user's login/display name.</summary>
     public string UserName { get; set; } = "";
+
+    /// <summary>The user's email address when exposed to global administrators.</summary>
+    public string? Email { get; set; }
 }

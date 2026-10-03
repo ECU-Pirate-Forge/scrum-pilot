@@ -1,80 +1,277 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using ScrumPilot.API.Authorization;
 using ScrumPilot.API.Services;
 using ScrumPilot.Shared.Models.PlanningPoker;
 
 namespace ScrumPilot.API.Hubs;
 
 [Authorize]
-public class PlanningPokerHub : Hub
+public class PlanningPokerHub(
+    PlanningPokerSessionService session,
+    IOrganizationAccessService accessService) : Hub
 {
-    private readonly PlanningPokerSessionService _session;
+    private const string ProjectNotFoundMessage = "Project not found.";
+    private const string PbiNotFoundMessage = "Product backlog item not found.";
 
-    public PlanningPokerHub(PlanningPokerSessionService session)
+    internal static string GroupName(PlanningPokerSessionKey key) =>
+        $"planning-poker-{key.OrganizationId}-{key.ProjectId}";
+
+    private string? GetAuthenticatedUserId()
     {
-        _session = session;
+        var principal = Context.User;
+        return principal?.Identity?.IsAuthenticated == true
+            ? principal.FindFirstValue(ClaimTypes.NameIdentifier)
+            : null;
     }
 
-    private static string GroupName(int projectId) => $"planning-poker-{projectId}";
+    private async Task RemoveFromSessionAsync(
+        PlanningPokerSessionKey? expectedKey = null,
+        bool ensureGroupRemoval = false)
+    {
+        var removedKey = session.RemoveParticipant(Context.ConnectionId, expectedKey);
+        if (!removedKey.HasValue && (!ensureGroupRemoval || !expectedKey.HasValue))
+            return;
+
+        var group = GroupName(removedKey ?? expectedKey!.Value);
+        Exception? groupRemovalException = null;
+        try
+        {
+            await Groups.RemoveFromGroupAsync(
+                Context.ConnectionId,
+                group,
+                CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            groupRemovalException = ex;
+        }
+
+        if (removedKey.HasValue)
+        {
+            try
+            {
+                await Clients.Group(group).SendAsync(
+                    "UserLeft",
+                    Context.ConnectionId,
+                    CancellationToken.None);
+            }
+            catch (Exception)
+            {
+                // Session state is already clean; fanout is best effort.
+            }
+        }
+
+        if (groupRemovalException is not null)
+        {
+            Context.Abort();
+            throw new HubException(ProjectNotFoundMessage);
+        }
+    }
+
+    private async Task<PlanningPokerSessionKey?> GetAuthorizedSessionKeyAsync()
+    {
+        var sessionKey = session.GetSessionKey(Context.ConnectionId);
+        if (!sessionKey.HasValue)
+            return null;
+
+        var userId = GetAuthenticatedUserId();
+        var canAccess = false;
+        if (!string.IsNullOrWhiteSpace(userId))
+        {
+            try
+            {
+                canAccess = await accessService.CanAccessProjectAsync(
+                    userId,
+                    sessionKey.Value.ProjectId,
+                    Context.ConnectionAborted);
+            }
+            catch (OperationCanceledException)
+            {
+                // Treat an interrupted authorization check as denied.
+            }
+        }
+
+        if (canAccess)
+            return sessionKey;
+
+        await RemoveFromSessionAsync(sessionKey);
+        throw new HubException(ProjectNotFoundMessage);
+    }
 
     public async Task JoinSession(string displayName, int projectId)
     {
-        _session.AddParticipant(Context.ConnectionId, displayName, projectId);
-        var group = GroupName(projectId);
-        await Groups.AddToGroupAsync(Context.ConnectionId, group);
+        var cancellationToken = Context.ConnectionAborted;
+        var principal = Context.User;
+        var userId = GetAuthenticatedUserId();
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            await RemoveFromSessionAsync();
+            throw new HubException(ProjectNotFoundMessage);
+        }
 
-        var state = _session.GetStateForProject(projectId);
-        await Clients.Caller.SendAsync("ReceiveSessionState", state);
+        bool canAccess;
+        try
+        {
+            canAccess = await accessService.CanAccessProjectAsync(
+                userId,
+                projectId,
+                cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            await RemoveFromSessionAsync();
+            throw new HubException(ProjectNotFoundMessage);
+        }
+
+        if (!canAccess)
+        {
+            await RemoveFromSessionAsync();
+            throw new HubException(ProjectNotFoundMessage);
+        }
+
+        var organizationId = await accessService.GetOrganizationIdForProjectAsync(
+            projectId,
+            cancellationToken);
+        if (!organizationId.HasValue)
+        {
+            await RemoveFromSessionAsync();
+            throw new HubException(ProjectNotFoundMessage);
+        }
+
+        await RemoveFromSessionAsync();
+
+        var sessionKey = new PlanningPokerSessionKey(organizationId.Value, projectId);
+        var trustedDisplayName = principal?.Identity?.Name;
+        if (string.IsNullOrWhiteSpace(trustedDisplayName))
+            trustedDisplayName = userId;
+
+        session.AddParticipant(Context.ConnectionId, userId, trustedDisplayName, sessionKey);
+        var group = GroupName(sessionKey);
+        try
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, group, cancellationToken);
+        }
+        catch
+        {
+            await RemoveFromSessionAsync(sessionKey);
+            throw;
+        }
+
+        try
+        {
+            canAccess = await accessService.CanAccessProjectAsync(
+                userId,
+                projectId,
+                cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            canAccess = false;
+        }
+
+        if (!canAccess || session.GetSessionKey(Context.ConnectionId) != sessionKey)
+        {
+            await RemoveFromSessionAsync(sessionKey, ensureGroupRemoval: true);
+            throw new HubException(ProjectNotFoundMessage);
+        }
+
+        var state = session.GetStateForSession(sessionKey);
+        await Clients.Caller.SendAsync("ReceiveSessionState", state, cancellationToken);
 
         var newParticipant = new ParticipantState
         {
             ConnectionId = Context.ConnectionId,
-            DisplayName = displayName,
+            DisplayName = trustedDisplayName,
             HasVoted = false
         };
-        await Clients.OthersInGroup(group).SendAsync("UserJoined", newParticipant);
+        await Clients.OthersInGroup(group).SendAsync(
+            "UserJoined",
+            newParticipant,
+            CancellationToken.None);
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        var projectId = _session.RemoveParticipant(Context.ConnectionId);
-        if (projectId.HasValue)
-            await Clients.Group(GroupName(projectId.Value)).SendAsync("UserLeft", Context.ConnectionId);
+        var sessionKey = session.RemoveParticipant(Context.ConnectionId);
+        if (sessionKey.HasValue)
+        {
+            await Clients.Group(GroupName(sessionKey.Value)).SendAsync(
+                "UserLeft",
+                Context.ConnectionId,
+                CancellationToken.None);
+        }
         await base.OnDisconnectedAsync(exception);
     }
 
     public async Task SelectCard(int? points)
     {
-        var projectId = _session.GetProjectId(Context.ConnectionId);
-        if (!projectId.HasValue) return;
-        _session.SetVote(Context.ConnectionId, points);
-        await Clients.Group(GroupName(projectId.Value)).SendAsync("CardSelected", Context.ConnectionId);
+        var sessionKey = await GetAuthorizedSessionKeyAsync();
+        if (!sessionKey.HasValue) return;
+        session.SetVote(Context.ConnectionId, points);
+        await Clients.Group(GroupName(sessionKey.Value)).SendAsync(
+            "CardSelected",
+            Context.ConnectionId,
+            CancellationToken.None);
     }
 
     public async Task RevealCards()
     {
-        var projectId = _session.GetProjectId(Context.ConnectionId);
-        if (!projectId.HasValue) return;
-        _session.Reveal(Context.ConnectionId);
-        var state = _session.GetStateForProject(projectId.Value, includeVotes: true);
-        await Clients.Group(GroupName(projectId.Value)).SendAsync("CardsRevealed", state);
+        var sessionKey = await GetAuthorizedSessionKeyAsync();
+        if (!sessionKey.HasValue) return;
+        session.Reveal(Context.ConnectionId);
+        var state = session.GetStateForSession(sessionKey.Value, includeVotes: true);
+        await Clients.Group(GroupName(sessionKey.Value)).SendAsync(
+            "CardsRevealed",
+            state,
+            CancellationToken.None);
     }
 
     public async Task SelectPbi(int? pbiId)
     {
-        var projectId = _session.GetProjectId(Context.ConnectionId);
-        if (!projectId.HasValue) return;
-        _session.SetCurrentPbi(Context.ConnectionId, pbiId);
-        var state = _session.GetStateForProject(projectId.Value);
-        await Clients.Group(GroupName(projectId.Value)).SendAsync("PbiSelected", state);
+        var sessionKey = await GetAuthorizedSessionKeyAsync();
+        if (!sessionKey.HasValue) return;
+        if (pbiId.HasValue
+            && !await accessService.PbiBelongsToProjectAsync(
+                pbiId.Value,
+                sessionKey.Value.ProjectId,
+                Context.ConnectionAborted))
+        {
+            throw new HubException(PbiNotFoundMessage);
+        }
+
+        session.SetCurrentPbi(Context.ConnectionId, pbiId);
+        var state = session.GetStateForSession(sessionKey.Value);
+        await Clients.Group(GroupName(sessionKey.Value)).SendAsync(
+            "PbiSelected",
+            state,
+            CancellationToken.None);
+    }
+
+    public async Task ClearPbiIfSelected(int expectedPbiId)
+    {
+        var sessionKey = await GetAuthorizedSessionKeyAsync();
+        if (!sessionKey.HasValue) return;
+
+        var state = session.ClearCurrentPbiIfSelected(Context.ConnectionId, expectedPbiId);
+        if (state is null) return;
+
+        await Clients.Group(GroupName(sessionKey.Value)).SendAsync(
+            "PbiSelected",
+            state,
+            CancellationToken.None);
     }
 
     public async Task ResetVoting()
     {
-        var projectId = _session.GetProjectId(Context.ConnectionId);
-        if (!projectId.HasValue) return;
-        _session.Reset(Context.ConnectionId);
-        var state = _session.GetStateForProject(projectId.Value);
-        await Clients.Group(GroupName(projectId.Value)).SendAsync("VotingReset", state);
+        var sessionKey = await GetAuthorizedSessionKeyAsync();
+        if (!sessionKey.HasValue) return;
+        session.Reset(Context.ConnectionId);
+        var state = session.GetStateForSession(sessionKey.Value);
+        await Clients.Group(GroupName(sessionKey.Value)).SendAsync(
+            "VotingReset",
+            state,
+            CancellationToken.None);
     }
 }

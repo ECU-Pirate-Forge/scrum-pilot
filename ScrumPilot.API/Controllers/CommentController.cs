@@ -1,101 +1,83 @@
 using Microsoft.AspNetCore.Mvc;
+using ScrumPilot.API.Authorization;
 using ScrumPilot.Data.Repositories;
 using ScrumPilot.Shared.Models;
 
-namespace ScrumPilot.API.Controllers
+namespace ScrumPilot.API.Controllers;
+
+[ApiController]
+[Route("api/comments")]
+[Produces("application/json")]
+public class CommentController(
+    ICommentRepository commentRepository,
+    IPbiRepository pbiRepository,
+    ICurrentUser currentUser,
+    IOrganizationAccessService accessService) : ControllerBase
 {
-    /// <summary>
-    /// Manages comments associated with Product Backlog Items.
-    /// </summary>
-    [ApiController]
-    [Route("api/comments")]
-    [Produces("application/json")]
-    public class CommentController : ControllerBase
+    [HttpGet("pbi/{pbiId:int}")]
+    public async Task<ActionResult<IEnumerable<Comment>>> GetCommentsByPbiId(
+        int pbiId,
+        CancellationToken cancellationToken = default)
     {
-        private readonly ICommentRepository _commentRepository;
+        if (await AuthorizedPbi(pbiId, cancellationToken) is null) return NotFound();
+        return Ok(await commentRepository.GetByPbiIdAsync(pbiId, cancellationToken));
+    }
 
-        /// <summary>
-        /// Initializes a new instance of <see cref="CommentController"/>.
-        /// </summary>
-        /// <param name="commentRepository">The comment repository.</param>
-        public CommentController(ICommentRepository commentRepository)
+    [HttpPost]
+    public async Task<ActionResult<Comment>> AddComment(
+        [FromBody] Comment request,
+        CancellationToken cancellationToken = default)
+    {
+        if (await AuthorizedPbi(request.PbiId, cancellationToken) is null) return NotFound();
+        var comment = new Comment
         {
-            _commentRepository = commentRepository;
-        }
+            PbiId = request.PbiId,
+            UserId = currentUser.UserId,
+            Body = request.Body,
+            CreatedDate = DateTime.UtcNow
+        };
+        var created = await commentRepository.AddAsync(comment, cancellationToken);
+        return CreatedAtAction(nameof(GetCommentsByPbiId), new { pbiId = created.PbiId }, created);
+    }
 
-        /// <summary>
-        /// Retrieves all comments for a given PBI.
-        /// </summary>
-        /// <param name="pbiId">The ID of the Product Backlog Item.</param>
-        /// <returns>A list of comments ordered by most recent first.</returns>
-        /// <response code="200">Returns the list of comments.</response>
-        [HttpGet("pbi/{pbiId:int}")]
-        [ProducesResponseType(typeof(IEnumerable<Comment>), StatusCodes.Status200OK)]
-        public async Task<ActionResult<IEnumerable<Comment>>> GetCommentsByPbiId(int pbiId)
-        {
-            var comments = await _commentRepository.GetByPbiIdAsync(pbiId);
-            return Ok(comments);
-        }
+    [HttpPut("{commentId:int}")]
+    public async Task<ActionResult<Comment>> EditComment(
+        int commentId,
+        [FromBody] Comment request,
+        CancellationToken cancellationToken = default)
+    {
+        if (commentId != request.CommentId) return BadRequest();
+        var existing = await commentRepository.GetByIdAsync(commentId, cancellationToken);
+        if (existing is null
+            || existing.UserId != currentUser.UserId
+            || await AuthorizedPbi(existing.PbiId, cancellationToken) is null)
+            return NotFound();
 
-        /// <summary>
-        /// Creates a new comment on a PBI.
-        /// </summary>
-        /// <param name="comment">The comment to create.</param>
-        /// <returns>The newly created comment.</returns>
-        /// <response code="201">Returns the created comment.</response>
-        /// <response code="400">If the request body is invalid.</response>
-        [HttpPost]
-        [ProducesResponseType(typeof(Comment), StatusCodes.Status201Created)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        public async Task<ActionResult<Comment>> AddComment([FromBody] Comment comment)
-        {
-            comment.CreatedDate = DateTime.UtcNow;
-            var created = await _commentRepository.AddAsync(comment);
-            return CreatedAtAction(nameof(GetCommentsByPbiId), new { pbiId = created.PbiId }, created);
-        }
+        existing.Body = request.Body;
+        return Ok(await commentRepository.UpdateAsync(existing, cancellationToken));
+    }
 
-        /// <summary>
-        /// Updates the body of an existing comment.
-        /// </summary>
-        /// <param name="commentId">The ID of the comment to update.</param>
-        /// <param name="comment">The updated comment data.</param>
-        /// <returns>The updated comment.</returns>
-        /// <response code="200">Returns the updated comment.</response>
-        /// <response code="400">If the route ID does not match the body ID.</response>
-        /// <response code="404">If no comment with the given ID exists.</response>
-        [HttpPut("{commentId:int}")]
-        [ProducesResponseType(typeof(Comment), StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<ActionResult<Comment>> EditComment(int commentId, [FromBody] Comment comment)
-        {
-            if (commentId != comment.CommentId)
-                return BadRequest();
+    [HttpDelete("{commentId:int}")]
+    public async Task<IActionResult> DeleteComment(int commentId, CancellationToken cancellationToken = default)
+    {
+        var existing = await commentRepository.GetByIdAsync(commentId, cancellationToken);
+        if (existing is null
+            || existing.UserId != currentUser.UserId
+            || await AuthorizedPbi(existing.PbiId, cancellationToken) is null)
+            return NotFound();
 
-            var existing = await _commentRepository.GetByPbiIdAsync(comment.PbiId);
-            if (!existing.Any(c => c.CommentId == commentId))
-                return NotFound();
+        return await commentRepository.DeleteAsync(commentId, cancellationToken)
+            ? NoContent()
+            : NotFound();
+    }
 
-            var updated = await _commentRepository.UpdateAsync(comment);
-            return Ok(updated);
-        }
-
-        /// <summary>
-        /// Deletes a comment by ID.
-        /// </summary>
-        /// <param name="commentId">The ID of the comment to delete.</param>
-        /// <returns>No content on success.</returns>
-        /// <response code="204">The comment was deleted successfully.</response>
-        /// <response code="404">If no comment with the given ID exists.</response>
-        [HttpDelete("{commentId:int}")]
-        [ProducesResponseType(StatusCodes.Status204NoContent)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> DeleteComment(int commentId)
-        {
-            var result = await _commentRepository.DeleteAsync(commentId);
-            if (!result)
-                return NotFound();
-            return NoContent();
-        }
+    private async Task<ProductBacklogItem?> AuthorizedPbi(int pbiId, CancellationToken cancellationToken)
+    {
+        var pbi = await pbiRepository.GetByIdAsync(pbiId, cancellationToken);
+        return pbi is not null
+            && await accessService.CanAccessProjectAsync(
+                currentUser.UserId, pbi.ProjectId, cancellationToken)
+            ? pbi
+            : null;
     }
 }

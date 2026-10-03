@@ -1,5 +1,5 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
+using ScrumPilot.API.Authorization;
 using ScrumPilot.API.Services;
 using ScrumPilot.Shared.Models;
 
@@ -10,29 +10,34 @@ namespace ScrumPilot.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/dashboard-preferences")]
-public class DashboardPreferenceController : ControllerBase
+public class DashboardPreferenceController(
+    IDashboardPreferenceService svc,
+    ICurrentUser currentUser,
+    IOrganizationAccessService accessService) : ControllerBase
 {
-    private readonly IDashboardPreferenceService _svc;
-
-    /// <summary>Initialises a new instance of <see cref="DashboardPreferenceController"/>.</summary>
-    public DashboardPreferenceController(IDashboardPreferenceService svc) => _svc = svc;
-
     /// <summary>Returns the authenticated user's saved dashboard preferences for the given project.</summary>
     [HttpGet]
-    public async Task<ActionResult<DashboardPreferenceDto>> Get([FromQuery] int projectId)
+    public async Task<ActionResult<DashboardPreferenceDto>> Get(
+        [FromQuery] int projectId,
+        CancellationToken cancellationToken = default)
     {
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (userId is null) return Unauthorized();
-        return Ok(await _svc.GetPreferencesAsync(userId, projectId));
+        if (!await accessService.CanAccessProjectAsync(
+                currentUser.UserId, projectId, cancellationToken))
+            return NotFound();
+        return Ok(await svc.GetPreferencesAsync(currentUser.UserId, projectId));
     }
 
     /// <summary>Saves (insert or update) the authenticated user's dashboard preferences for the given project.</summary>
     [HttpPut]
-    public async Task<IActionResult> Put([FromBody] DashboardPreferenceDto dto, [FromQuery] int projectId)
+    public async Task<IActionResult> Put(
+        [FromBody] DashboardPreferenceDto dto,
+        [FromQuery] int projectId,
+        CancellationToken cancellationToken = default)
     {
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (userId is null) return Unauthorized();
-        await _svc.SavePreferencesAsync(userId, projectId, dto);
+        if (!await accessService.CanAccessProjectAsync(
+                currentUser.UserId, projectId, cancellationToken))
+            return NotFound();
+        await svc.SavePreferencesAsync(currentUser.UserId, projectId, dto);
         return NoContent();
     }
 }

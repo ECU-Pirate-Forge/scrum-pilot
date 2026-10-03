@@ -1,0 +1,107 @@
+@implements IDisposable
+@inject HttpClient Http
+
+<MudPaper Class="pa-4 mb-4">
+    <MudText Typo="Typo.h6">Project access</MudText>
+    @foreach (var member in _members)
+    {
+        var isOwner = member.OrganizationRole == OrganizationRole.Owner;
+        <div class="d-flex align-center gap-2 my-2">
+            <MudText Style="flex:1">@member.UserId (@(isOwner ? "Owner — implicit access" : member.HasExplicitAccess ? "Access granted" : "No access"))</MudText>
+            @if (CanManage)
+            {
+                <MudButton data-user="@member.UserId" Disabled="@isOwner"
+                           OnClick="@(() => ToggleAsync(member))">
+                    @(member.HasExplicitAccess ? "Remove access" : "Grant access")
+                </MudButton>
+            }
+        </div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_error)) { <MudAlert Severity="Severity.Error">@_error</MudAlert> }
+</MudPaper>
+
+@code {
+    [Parameter] public int ProjectId { get; set; }
+    [Parameter] public bool CanManage { get; set; }
+    private List<ProjectMemberAccessDto> _members = [];
+    private string? _error;
+    private (int ProjectId, bool CanManage)? _lastParameterKey;
+    private CancellationTokenSource? _loadCancellation;
+    private long _generation;
+    private bool _disposed;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var key = (ProjectId, CanManage);
+        if (_lastParameterKey == key) return;
+        _lastParameterKey = key;
+        await LoadAsync(key);
+    }
+
+    private async Task LoadAsync((int ProjectId, bool CanManage) key)
+    {
+        if (_disposed || _lastParameterKey != key) return;
+
+        var generation = ++_generation;
+        _loadCancellation?.Cancel();
+        _loadCancellation?.Dispose();
+        _loadCancellation = new();
+        var token = _loadCancellation.Token;
+        _members = [];
+        _error = null;
+        try
+        {
+            var members = await Http.GetFromJsonAsync<List<ProjectMemberAccessDto>>(
+                $"api/projects/{key.ProjectId}/members", token) ?? [];
+            if (!IsCurrent(key, generation)) return;
+            _members = members;
+            _error = null;
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (HttpRequestException) when (IsCurrent(key, generation))
+        {
+            _error = "Unable to load project access.";
+        }
+    }
+
+    private async Task ToggleAsync(ProjectMemberAccessDto member)
+    {
+        var key = (ProjectId, CanManage);
+        var generation = _generation;
+        if (!key.CanManage || !IsCurrent(key, generation)) return;
+
+        _error = null;
+        var grant = !member.HasExplicitAccess;
+        try
+        {
+            var response = grant
+                ? await Http.PutAsJsonAsync($"api/projects/{key.ProjectId}/members/{Uri.EscapeDataString(member.UserId)}",
+                    new SetProjectAccessRequest(true))
+                : await Http.DeleteAsync($"api/projects/{key.ProjectId}/members/{Uri.EscapeDataString(member.UserId)}");
+            if (!IsCurrent(key, generation)) return;
+            if (!response.IsSuccessStatusCode)
+                _error = "Unable to update project access.";
+            else
+                await LoadAsync(key);
+        }
+        catch (HttpRequestException)
+        {
+            if (IsCurrent(key, generation))
+                _error = "Unable to update project access.";
+        }
+    }
+
+    private bool IsCurrent((int ProjectId, bool CanManage) key, long generation) =>
+        !_disposed
+        && generation == _generation
+        && _lastParameterKey == key
+        && (ProjectId, CanManage) == key;
+
+    public void Dispose()
+    {
+        _disposed = true;
+        _generation++;
+        _loadCancellation?.Cancel();
+        _loadCancellation?.Dispose();
+    }
+}

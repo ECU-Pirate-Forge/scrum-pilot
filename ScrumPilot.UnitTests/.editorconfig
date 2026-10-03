@@ -1,0 +1,5 @@
+[*.cs]
+# dotnet format cannot apply solution-wide fixes for these xUnit advisories.
+dotnet_diagnostic.xUnit1051.severity = none
+dotnet_diagnostic.xUnit2013.severity = none
+dotnet_diagnostic.xUnit2031.severity = none

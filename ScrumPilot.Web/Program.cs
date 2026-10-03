@@ -23,7 +23,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 // Read ApiBaseUrl from appsettings.json
 // var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? "http://localhost:5219/";
 
-var apiBaseUrl = Environment.GetEnvironmentVariable("WEBAPI_HTTPS") ?? builder.Configuration["ApiBaseUrl"] ;
+var apiBaseUrl = Environment.GetEnvironmentVariable("WEBAPI_HTTPS") ?? builder.Configuration["ApiBaseUrl"];
 
 // HttpClient that automatically attaches the JWT Bearer token to every request
 builder.Services.AddTransient<AuthHeaderHandler>();
@@ -33,7 +33,7 @@ builder.Services.AddScoped(sp =>
     sp.GetRequiredService<IHttpClientFactory>().CreateClient("API"));
 builder.Services.AddApexCharts();
 builder.Services.AddScoped<ScrumPilot.Web.Services.MetricsDashboardService>();
-builder.Services.AddSingleton<ScrumPilot.Web.Services.ProjectStateService>();
+builder.Services.AddScoped<ProjectStateService>();
+builder.Services.AddScoped<OrganizationStateService>();
 
 await builder.Build().RunAsync();
-

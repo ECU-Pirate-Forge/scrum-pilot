@@ -51,7 +51,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             var start = DateTime.UtcNow.Date.AddDays(-3);
             var end = DateTime.UtcNow.Date.AddDays(11);
             var sprint = MakeSprint(1, "Deliver login", start, end);
-            _mockSprints.GetAllSprintsAsync().Returns(new List<Sprint> { sprint });
+            _mockSprints.GetByIdAsync(1).Returns(sprint);
 
             // Act
             var result = await _service.GetSprintSummaryAsync(1);
@@ -69,7 +69,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
         public async Task GetSprintSummaryAsync_WhenSprintNotFound_ReturnsNull()
         {
             // Arrange
-            _mockSprints.GetAllSprintsAsync().Returns(new List<Sprint>());
+            _mockSprints.GetByIdAsync(99).Returns((Sprint?)null);
 
             // Act
             var result = await _service.GetSprintSummaryAsync(99);
@@ -90,7 +90,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
                 EndDate = DateTime.UtcNow.Date.AddDays(14),
                 IsOpen = true
             };
-            _mockSprints.GetAllSprintsAsync().Returns(new List<Sprint> { sprint });
+            _mockSprints.GetByIdAsync(5).Returns(sprint);
 
             // Act
             var result = await _service.GetSprintSummaryAsync(5);
@@ -146,7 +146,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
         public async Task GetBurndownDataAsync_WhenSprintNotFound_ReturnsEmptyList()
         {
             // Arrange
-            _mockSprints.GetAllSprintsAsync().Returns(new List<Sprint>());
+            _mockSprints.GetByIdAsync(99).Returns((Sprint?)null);
 
             // Act
             var result = await _service.GetBurndownDataAsync(99);
@@ -160,7 +160,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
         {
             // Arrange
             var sprint = new Sprint { SprintId = 1, SprintGoal = "No dates", StartDate = null, EndDate = null };
-            _mockSprints.GetAllSprintsAsync().Returns(new List<Sprint> { sprint });
+            _mockSprints.GetByIdAsync(1).Returns(sprint);
 
             // Act
             var result = await _service.GetBurndownDataAsync(1);
@@ -176,7 +176,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             var start = DateTime.UtcNow.Date.AddDays(-7);
             var end = DateTime.UtcNow.Date.AddDays(7);
             var sprint = MakeSprint(1, "Sprint 1", start, end);
-            _mockSprints.GetAllSprintsAsync().Returns(new List<Sprint> { sprint });
+            _mockSprints.GetByIdAsync(1).Returns(sprint);
             _mockPbis.GetFilteredPbisAsync(1, null).Returns(new List<ProductBacklogItem>
             {
                 MakePbi(1, PbiStatus.Done, PbiPoints.Five),

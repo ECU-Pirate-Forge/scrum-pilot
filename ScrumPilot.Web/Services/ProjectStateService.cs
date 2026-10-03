@@ -3,7 +3,7 @@ using ScrumPilot.Shared.Models;
 namespace ScrumPilot.Web.Services;
 
 /// <summary>
-/// Singleton service that tracks the currently selected project across all pages
+/// Scoped service that tracks the currently selected project across all pages
 /// and raises events so subscribed components can react to project changes.
 /// </summary>
 public class ProjectStateService
@@ -26,6 +26,9 @@ public class ProjectStateService
         SelectedProject = project;
         OnChange?.Invoke();
     }
+
+    /// <summary>Clears the active project and notifies selection subscribers.</summary>
+    public void Clear() => SetProject(null);
 
     /// <summary>Triggers <see cref="OnProjectListChanged"/> to signal that the project list should be refreshed.</summary>
     public void NotifyProjectListChanged() => OnProjectListChanged?.Invoke();

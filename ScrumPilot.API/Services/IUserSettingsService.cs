@@ -14,10 +14,12 @@ public interface IUserSettingsService
     Task<UserSettingsDto?> GetSettingsAsync(string userId);
 
     /// <summary>
-    /// Applies the supplied <paramref name="dto"/> to the user's profile.
-    /// Returns <c>true</c> on success.
+    /// Validates and applies the supplied <paramref name="dto"/> to the user's profile.
     /// </summary>
-    Task<bool> UpdateSettingsAsync(string userId, UserSettingsDto dto);
+    Task<UserSettingsUpdateResult> UpdateSettingsAsync(
+        string userId,
+        UserSettingsDto dto,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Changes the user's password after verifying <paramref name="currentPassword"/>.
@@ -25,6 +27,33 @@ public interface IUserSettingsService
     /// </summary>
     Task<(bool Succeeded, IEnumerable<string> Errors)> ChangePasswordAsync(string userId, string currentPassword, string newPassword);
 
-    /// <summary>Returns a lightweight summary of every registered user.</summary>
-    Task<IEnumerable<UserSummaryDto>> GetAllUsersAsync();
+    /// <summary>Returns users eligible for assignment in a project.</summary>
+    Task<IEnumerable<UserSummaryDto>> GetProjectUsersAsync(int projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>Returns a bounded user search used only by global administrators.</summary>
+    Task<IReadOnlyList<UserSummaryDto>> SearchUsersAsync(
+        string query,
+        int limit,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record UserSettingsUpdateResult(
+    bool Succeeded,
+    bool UserFound,
+    bool IsConflict,
+    IReadOnlyList<string> Errors)
+{
+    public static UserSettingsUpdateResult Success { get; } = new(true, true, false, []);
+
+    public static UserSettingsUpdateResult NotFound { get; } =
+        new(false, false, false, ["User not found."]);
+
+    public static UserSettingsUpdateResult Validation(string error) =>
+        new(false, true, false, [error]);
+
+    public static UserSettingsUpdateResult Conflict(string error) =>
+        new(false, true, true, [error]);
+
+    public static UserSettingsUpdateResult Failure(IEnumerable<string> errors) =>
+        new(false, true, false, errors.ToArray());
 }

@@ -3,29 +3,48 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using MudBlazor;
 using MudBlazor.Services;
-using NSubstitute;
 using ScrumPilot.Web.Services;
+using System.Net;
+using NSubstitute;
 
 namespace ScrumPilot.UnitTests.Frontend
 {
     public abstract class FrontendTestBase : BunitContext
     {
         protected readonly HttpClient MockHttpClient;
+        protected readonly List<string> HttpRequests = [];
+        protected readonly List<(HttpMethod Method, string Url)> HttpRequestLog = [];
+        protected HttpStatusCode HttpResponseStatusCode { get; set; } = HttpStatusCode.OK;
+        protected Func<HttpRequestMessage, HttpResponseMessage>? HttpResponseFactory { get; set; }
+        protected Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? HttpResponseFactoryAsync { get; set; }
+        protected dynamic Authorization { get; }
+        protected IAuthService AuthService { get; }
 
         protected FrontendTestBase()
         {
             Services.AddMudServices();
-            MockHttpClient = Substitute.For<HttpClient>();
+            MockHttpClient = new HttpClient(new RecordingHandler(
+                HttpRequests,
+                HttpRequestLog,
+                () => HttpResponseStatusCode,
+                request => HttpResponseFactory?.Invoke(request),
+                (request, cancellationToken) => HttpResponseFactoryAsync?.Invoke(request, cancellationToken)))
+            {
+                BaseAddress = new Uri("https://localhost/")
+            };
             Services.AddSingleton(MockHttpClient);
 
             // Register auth so components that inject AuthenticationStateProvider
             // (Home, PbiCard, CommentThread, etc.) don't throw MissingBunitAuthorizationException.
             // Uses bUnit's own test-double extension, not the ASP.NET Core one.
-            this.AddAuthorization();
+            Authorization = this.AddAuthorization();
 
             // Register ProjectStateService so pages that inject it
             // (ScrumBoard, SwimLanes, Backlog, PbiGeneration, etc.) can be rendered.
-            Services.AddSingleton<ProjectStateService>();
+            Services.AddScoped<ProjectStateService>();
+            Services.AddScoped<OrganizationStateService>();
+            AuthService = Substitute.For<IAuthService>();
+            Services.AddSingleton(AuthService);
 
             // Register MetricsDashboardService so Backlog (and other pages that inject it) can be rendered.
             Services.AddSingleton(new MetricsDashboardService(MockHttpClient));
@@ -37,6 +56,30 @@ namespace ScrumPilot.UnitTests.Frontend
             // can register with the shared IPopoverService during initialisation.
             Render<MudPopoverProvider>();
         }
+
+        private sealed class RecordingHandler(
+            List<string> requests,
+            List<(HttpMethod Method, string Url)> requestLog,
+            Func<HttpStatusCode> getStatusCode,
+            Func<HttpRequestMessage, HttpResponseMessage?> createResponse,
+            Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>?> createResponseAsync) : HttpMessageHandler
+        {
+            protected override async Task<HttpResponseMessage> SendAsync(
+                HttpRequestMessage request,
+                CancellationToken cancellationToken)
+            {
+                var url = request.RequestUri!.PathAndQuery.TrimStart('/');
+                requests.Add(url);
+                requestLog.Add((request.Method, url));
+                var asynchronousResponse = createResponseAsync(request, cancellationToken);
+                if (asynchronousResponse is not null)
+                    return await asynchronousResponse;
+
+                return createResponse(request) ?? new HttpResponseMessage(getStatusCode())
+                {
+                    Content = new StringContent("[]", System.Text.Encoding.UTF8, "application/json")
+                };
+            }
+        }
     }
 }
-

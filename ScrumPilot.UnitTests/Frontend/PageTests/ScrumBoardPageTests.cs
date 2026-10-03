@@ -1,5 +1,11 @@
 using Bunit;
+using Microsoft.Extensions.DependencyInjection;
+using ScrumPilot.Shared.Models;
+using ScrumPilot.Web.Components;
 using ScrumPilot.Web.Pages;
+using ScrumPilot.Web.Services;
+using System.Net;
+using System.Net.Http.Json;
 using Xunit;
 
 namespace ScrumPilot.UnitTests.Frontend.PageTests
@@ -119,5 +125,73 @@ namespace ScrumPilot.UnitTests.Frontend.PageTests
             Assert.DoesNotContain("column-none", markup);
             Assert.DoesNotContain("column-high", markup);
         }
+
+        [Fact]
+        public void ScrumBoardPage_SuccessfulCardSave_PerformsOneMutationThenReloadsFilteredItems()
+        {
+            var original = new ProductBacklogItem
+            {
+                PbiId = 42,
+                ProjectId = 7,
+                Title = "Moved story",
+                Description = "Before",
+                Status = PbiStatus.ToDo,
+                Priority = PbiPriority.Medium,
+                DateCreated = DateTime.UtcNow,
+                LastUpdated = DateTime.UtcNow
+            };
+            var itemGetCount = 0;
+            HttpResponseFactory = request =>
+            {
+                var url = request.RequestUri!.PathAndQuery.TrimStart('/');
+                if (request.Method == HttpMethod.Get &&
+                    url.StartsWith("api/Pbi/getNonDraftPbis", StringComparison.OrdinalIgnoreCase))
+                {
+                    itemGetCount++;
+                    return JsonResponse(itemGetCount == 1
+                        ? new[] { original }
+                        : Array.Empty<ProductBacklogItem>());
+                }
+
+                if (request.Method == HttpMethod.Put &&
+                    url.Equals("api/Pbi", StringComparison.OrdinalIgnoreCase))
+                {
+                    return JsonResponse(original);
+                }
+
+                return JsonResponse(Array.Empty<object>());
+            };
+            Services.GetRequiredService<ProjectStateService>().SetProject(
+                new Project { ProjectId = 7, ProjectName = "Project" });
+
+            var component = Render<ScrumBoard>();
+            component.WaitForAssertion(() => Assert.Contains("Moved story", component.Markup));
+            component.FindComponents<MudBlazor.MudButton>()
+                .Single(button => button.Markup.Contains("View Details"))
+                .Find("button")
+                .Click();
+            var card = component.FindComponent<PbiCard>();
+            card.FindAll("button")
+                .Single(button => button.TextContent.Trim() == "Edit")
+                .Click();
+
+            var requestsBeforeSave = HttpRequestLog.Count;
+            card.Find("input").Change("Moved story");
+            card.FindAll("button")
+                .Single(button => button.TextContent.Trim() == "Save")
+                .Click();
+
+            component.WaitForAssertion(() =>
+            {
+                var saveRequests = HttpRequestLog.Skip(requestsBeforeSave).ToList();
+                Assert.Single(saveRequests.Where(entry => entry.Method == HttpMethod.Put));
+                Assert.Single(saveRequests.Where(entry => entry.Method == HttpMethod.Get));
+                Assert.DoesNotContain("Moved story", component.Markup);
+                Assert.Contains("No PBIs match the selected filters.", component.Markup);
+            });
+        }
+
+        private static HttpResponseMessage JsonResponse<T>(T value) =>
+            new(HttpStatusCode.OK) { Content = JsonContent.Create(value) };
     }
 }
