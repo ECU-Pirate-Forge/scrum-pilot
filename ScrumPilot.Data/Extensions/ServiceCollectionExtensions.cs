@@ -62,6 +62,7 @@ namespace ScrumPilot.Data.Extensions
             services.AddScoped<IOrganizationRepository, OrganizationRepository>();
             services.AddScoped<IOrganizationInvitationRepository, OrganizationInvitationRepository>();
             services.AddScoped<OrganizationBootstrapValidator>();
+            services.AddSingleton<PirateForgeBootstrapper>();
 
             return services;
         }

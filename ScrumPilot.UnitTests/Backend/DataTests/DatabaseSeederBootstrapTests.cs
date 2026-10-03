@@ -3,6 +3,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using ScrumPilot.Data.Context;
 using ScrumPilot.Data.Extensions;
 using ScrumPilot.Data.Models;
@@ -57,6 +58,34 @@ public sealed class DatabaseSeederBootstrapTests
     }
 
     [Fact]
+    public async Task SeedUsersAsync_RoleCreationFailureThrowsActionableError()
+    {
+        await using var database = await IdentityTestDatabase.CreateAsync(
+            services => services.AddScoped<IRoleValidator<IdentityRole>, RejectingRoleValidator>());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => DatabaseSeeder.SeedUsersAsync(database.UserManager, database.RoleManager));
+
+        Assert.Contains("Unable to create seeded role Admin", exception.Message);
+        Assert.Contains(RejectingRoleValidator.ErrorDescription, exception.Message);
+        Assert.DoesNotContain("Password1234!", exception.Message);
+    }
+
+    [Fact]
+    public async Task SeedUsersAsync_UserCreationFailureThrowsActionableError()
+    {
+        await using var database = await IdentityTestDatabase.CreateAsync(
+            services => services.Configure<IdentityOptions>(
+                options => options.Password.RequiredLength = 100));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => DatabaseSeeder.SeedUsersAsync(database.UserManager, database.RoleManager));
+
+        Assert.Contains("Unable to create seeded user Tyler@scrumpilot.xyz", exception.Message);
+        Assert.DoesNotContain("Password1234!", exception.Message);
+    }
+
+    [Fact]
     public async Task SeedProjectDataAsync_AssignsEveryNewProjectToPirateForge()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -69,6 +98,48 @@ public sealed class DatabaseSeederBootstrapTests
         var projects = await database.Context.Projects.AsNoTracking().ToListAsync();
         Assert.Equal(4, projects.Count);
         Assert.All(projects, project => Assert.Equal(organization.OrganizationId, project.OrganizationId));
+    }
+
+    [Fact]
+    public async Task SeedProjectDataAsync_ScopesProjectNamesAndScrumPilotDataToPirateForge()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var context = database.Context;
+        var pirateForge = await AddOrganizationAsync(context);
+        var otherOrganization = new Organization
+        {
+            Name = "Other",
+            NormalizedName = "OTHER",
+            CreatedAt = BootstrapTime
+        };
+        context.Organizations.Add(otherOrganization);
+        await context.SaveChangesAsync();
+        foreach (var name in new[] { "ScrumPilot", "Pulse", "FormFlow", "Sunflower Tracker" })
+        {
+            await AddProjectAsync(context, otherOrganization.OrganizationId, name);
+        }
+
+        await DatabaseSeeder.SeedProjectDataAsync(context);
+
+        Assert.Equal(
+            4,
+            await context.Projects.CountAsync(x => x.OrganizationId == pirateForge.OrganizationId));
+        Assert.Equal(
+            4,
+            await context.Projects.CountAsync(x => x.OrganizationId == otherOrganization.OrganizationId));
+        Assert.Equal(
+            5,
+            await context.Sprints.CountAsync(
+                x => context.Projects
+                    .Where(project => project.OrganizationId == pirateForge.OrganizationId)
+                    .Select(project => project.ProjectId)
+                    .Contains(x.ProjectId)));
+        Assert.False(
+            await context.Sprints.AnyAsync(
+                x => context.Projects
+                    .Where(project => project.OrganizationId == otherOrganization.OrganizationId)
+                    .Select(project => project.ProjectId)
+                    .Contains(x.ProjectId)));
     }
 
     [Fact]
@@ -137,6 +208,158 @@ public sealed class DatabaseSeederBootstrapTests
     }
 
     [Fact]
+    public async Task SeedPirateForgeMembershipsAsync_NoOwnerRollsBackNewDataAndRetryCompletes()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var context = database.Context;
+        var organization = await AddOrganizationAsync(context);
+        var project = await AddProjectAsync(context, organization.OrganizationId, "ScrumPilot");
+        await AddRoleAsync(context, "admin-role", "Admin", "ADMIN");
+        await AddUsersAsync(context, "legacy-member", "new-admin", "new-member");
+        context.OrganizationMemberships.Add(
+            Membership(organization.OrganizationId, "legacy-member", OrganizationRole.Member));
+        await context.SaveChangesAsync();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => DatabaseSeeder.SeedPirateForgeMembershipsAsync(
+                context,
+                new FixedTimeProvider(BootstrapTime)));
+
+        Assert.Equal(OrganizationBootstrapValidator.MissingOwnerMessage, exception.Message);
+        Assert.Equal(
+            ["legacy-member"],
+            await context.OrganizationMemberships.AsNoTracking()
+                .OrderBy(x => x.UserId)
+                .Select(x => x.UserId)
+                .ToArrayAsync());
+        Assert.Empty(await context.ProjectMemberships.AsNoTracking().ToListAsync());
+
+        context.UserRoles.Add(
+            new IdentityUserRole<string> { UserId = "new-admin", RoleId = "admin-role" });
+        await context.SaveChangesAsync();
+
+        await DatabaseSeeder.SeedPirateForgeMembershipsAsync(
+            context,
+            new FixedTimeProvider(BootstrapTime));
+
+        Assert.Equal(
+            OrganizationRole.Owner,
+            await MembershipRoleAsync(context, organization.OrganizationId, "new-admin"));
+        Assert.Equal(
+            OrganizationRole.Member,
+            await MembershipRoleAsync(context, organization.OrganizationId, "new-member"));
+        Assert.Equal([project.ProjectId], await ProjectIdsAsync(context, "new-member"));
+        Assert.Empty(await ProjectIdsAsync(context, "legacy-member"));
+    }
+
+    [Fact]
+    public async Task SoftDeletedPirateForge_BootstrapAndValidationLeaveSeedDataUntouched()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var context = database.Context;
+        var organization = await AddOrganizationAsync(context);
+        var project = await AddProjectAsync(context, organization.OrganizationId, "Existing");
+        await AddUsersAsync(context, "historical-owner", "unassigned-user");
+        context.OrganizationMemberships.Add(
+            Membership(organization.OrganizationId, "historical-owner", OrganizationRole.Owner));
+        organization.DeletedAt = BootstrapTime;
+        await context.SaveChangesAsync();
+
+        var returnedOrganization = await DatabaseSeeder.SeedPirateForgeOrganizationAsync(
+            context,
+            new FixedTimeProvider(BootstrapTime.AddDays(1)));
+        await DatabaseSeeder.SeedProjectDataAsync(context);
+        await DatabaseSeeder.SeedPirateForgeMembershipsAsync(
+            context,
+            new FixedTimeProvider(BootstrapTime.AddDays(1)));
+        await new OrganizationBootstrapValidator(context).ValidateAsync();
+
+        Assert.Equal(BootstrapTime, returnedOrganization.DeletedAt);
+        Assert.Equal(
+            ["Existing"],
+            await context.Projects.AsNoTracking()
+                .Where(x => x.OrganizationId == organization.OrganizationId)
+                .Select(x => x.ProjectName)
+                .ToArrayAsync());
+        Assert.Equal(
+            ["historical-owner"],
+            await context.OrganizationMemberships.AsNoTracking()
+                .Where(x => x.OrganizationId == organization.OrganizationId)
+                .Select(x => x.UserId)
+                .ToArrayAsync());
+        Assert.Empty(await context.ProjectMemberships.AsNoTracking().ToListAsync());
+        Assert.Equal(project.ProjectId, await context.Projects.Select(x => x.ProjectId).SingleAsync());
+    }
+
+    [Theory]
+    [InlineData(PostgresErrorCodes.SerializationFailure)]
+    [InlineData(PostgresErrorCodes.UniqueViolation)]
+    public void BootstrapRetryClassifier_RecognizesPostgresRaceErrors(string sqlState)
+    {
+        var exception = new DbUpdateException(
+            "bootstrap failed",
+            new PostgresException("race", "ERROR", "ERROR", sqlState));
+
+        Assert.True(PirateForgeBootstrapExceptionClassifier.IsRetryable(exception));
+    }
+
+    [Theory]
+    [InlineData(5, 5)]
+    [InlineData(6, 6)]
+    [InlineData(19, 1555)]
+    [InlineData(19, 2067)]
+    public void BootstrapRetryClassifier_RecognizesSqliteRaceErrors(
+        int primaryErrorCode,
+        int extendedErrorCode)
+    {
+        var exception = new DbUpdateException(
+            "bootstrap failed",
+            new SqliteException("race", primaryErrorCode, extendedErrorCode));
+
+        Assert.True(PirateForgeBootstrapExceptionClassifier.IsRetryable(exception));
+    }
+
+    [Fact]
+    public void BootstrapRetryClassifier_RejectsUnrelatedErrors()
+    {
+        Assert.False(
+            PirateForgeBootstrapExceptionClassifier.IsRetryable(
+                new SqliteException("foreign key failed", 19, 787)));
+        Assert.False(
+            PirateForgeBootstrapExceptionClassifier.IsRetryable(
+                new InvalidOperationException("application failure")));
+    }
+
+    [Fact]
+    public async Task RunAsync_ConcurrentContextsProduceOneCompleteBootstrap()
+    {
+        await using var database = await BootstrapTestDatabase.CreateAsync();
+        var bootstrapper = database.Provider.GetRequiredService<PirateForgeBootstrapper>();
+
+        await Task.WhenAll(bootstrapper.RunAsync(), bootstrapper.RunAsync());
+
+        await using var scope = database.Provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<ScrumPilotContext>();
+        var organization = await context.Organizations.AsNoTracking().SingleAsync();
+        Assert.Equal("PIRATE FORGE", organization.NormalizedName);
+        Assert.Null(organization.DeletedAt);
+        Assert.Equal(
+            4,
+            await context.Projects.CountAsync(
+                x => x.OrganizationId == organization.OrganizationId));
+        Assert.Equal(
+            8,
+            await context.OrganizationMemberships.CountAsync(
+                x => x.OrganizationId == organization.OrganizationId));
+        Assert.Equal(
+            1,
+            await context.OrganizationMemberships.CountAsync(
+                x => x.OrganizationId == organization.OrganizationId
+                     && x.Role == OrganizationRole.Owner));
+        Assert.Equal(5, await context.Sprints.CountAsync());
+    }
+
+    [Fact]
     public async Task ValidateAsync_NoOwnerThrowsActionableMessage()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -184,6 +407,8 @@ public sealed class DatabaseSeederBootstrapTests
         using var scope = provider.CreateScope();
         Assert.IsType<OrganizationBootstrapValidator>(
             scope.ServiceProvider.GetRequiredService<OrganizationBootstrapValidator>());
+        Assert.IsType<PirateForgeBootstrapper>(
+            scope.ServiceProvider.GetRequiredService<PirateForgeBootstrapper>());
     }
 
     private static async Task<Organization> AddOrganizationAsync(ScrumPilotContext context)
@@ -331,7 +556,8 @@ public sealed class DatabaseSeederBootstrapTests
         public UserManager<ApplicationUser> UserManager { get; }
         public RoleManager<IdentityRole> RoleManager { get; }
 
-        public static async Task<IdentityTestDatabase> CreateAsync()
+        public static async Task<IdentityTestDatabase> CreateAsync(
+            Action<IServiceCollection>? configureServices = null)
         {
             var connection = new SqliteConnection("Data Source=:memory:;Foreign Keys=True");
             await connection.OpenAsync();
@@ -341,6 +567,7 @@ public sealed class DatabaseSeederBootstrapTests
             services.AddIdentityCore<ApplicationUser>()
                 .AddRoles<IdentityRole>()
                 .AddEntityFrameworkStores<ScrumPilotContext>();
+            configureServices?.Invoke(services);
             var provider = services.BuildServiceProvider();
             var scope = provider.CreateAsyncScope();
             await scope.ServiceProvider.GetRequiredService<ScrumPilotContext>().Database.EnsureCreatedAsync();
@@ -357,6 +584,69 @@ public sealed class DatabaseSeederBootstrapTests
             await _scope.DisposeAsync();
             await _provider.DisposeAsync();
             await _connection.DisposeAsync();
+        }
+    }
+
+    private sealed class RejectingRoleValidator : IRoleValidator<IdentityRole>
+    {
+        public const string ErrorDescription = "role creation rejected for test";
+
+        public Task<IdentityResult> ValidateAsync(
+            RoleManager<IdentityRole> manager,
+            IdentityRole role) =>
+            Task.FromResult(
+                IdentityResult.Failed(new IdentityError { Description = ErrorDescription }));
+    }
+
+    private sealed class BootstrapTestDatabase : IAsyncDisposable
+    {
+        private readonly SqliteConnection _anchorConnection;
+
+        private BootstrapTestDatabase(
+            SqliteConnection anchorConnection,
+            ServiceProvider provider)
+        {
+            _anchorConnection = anchorConnection;
+            Provider = provider;
+        }
+
+        public ServiceProvider Provider { get; }
+
+        public static async Task<BootstrapTestDatabase> CreateAsync()
+        {
+            var databaseName = $"bootstrap-{Guid.NewGuid():N}";
+            var connectionString = new SqliteConnectionStringBuilder
+            {
+                DataSource = databaseName,
+                Mode = SqliteOpenMode.Memory,
+                Cache = SqliteCacheMode.Shared,
+                DefaultTimeout = 1
+            }.ToString();
+            var anchorConnection = new SqliteConnection(connectionString);
+            await anchorConnection.OpenAsync();
+
+            var services = new ServiceCollection();
+            services.AddLogging();
+            services.AddDbContext<ScrumPilotContext>(
+                options => options.UseSqlite(connectionString));
+            services.AddIdentityCore<ApplicationUser>()
+                .AddRoles<IdentityRole>()
+                .AddEntityFrameworkStores<ScrumPilotContext>();
+            services.AddSingleton<TimeProvider>(new FixedTimeProvider(BootstrapTime));
+            services.AddSingleton<PirateForgeBootstrapper>();
+            services.AddScoped<OrganizationBootstrapValidator>();
+            var provider = services.BuildServiceProvider();
+            await using var scope = provider.CreateAsyncScope();
+            await scope.ServiceProvider
+                .GetRequiredService<ScrumPilotContext>()
+                .Database.EnsureCreatedAsync();
+            return new(anchorConnection, provider);
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await Provider.DisposeAsync();
+            await _anchorConnection.DisposeAsync();
         }
     }
 }

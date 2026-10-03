@@ -17,7 +17,6 @@ public sealed class OrganizationBootstrapValidator(ScrumPilotContext context)
                     on organization.OrganizationId equals membership.OrganizationId
                 join user in context.Users on membership.UserId equals user.Id
                 where organization.NormalizedName == "PIRATE FORGE"
-                      && organization.DeletedAt == null
                       && membership.Role == OrganizationRole.Owner
                 select user.Id)
             .AnyAsync(cancellationToken);

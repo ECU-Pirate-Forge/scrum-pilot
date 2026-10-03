@@ -123,15 +123,7 @@ using (var scope = app.Services.CreateScope())
     // Seed database with initial data (seeders are idempotent)
     await DatabaseSeeder.SeedDatabaseAsync(context);
 
-    // Seed Identity users and roles
-    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-    var timeProvider = scope.ServiceProvider.GetRequiredService<TimeProvider>();
-    await DatabaseSeeder.SeedUsersAsync(userManager, roleManager);
-    await DatabaseSeeder.SeedPirateForgeOrganizationAsync(context, timeProvider);
-    await DatabaseSeeder.SeedProjectDataAsync(context);
-    await DatabaseSeeder.SeedPirateForgeMembershipsAsync(context, timeProvider);
-    await scope.ServiceProvider.GetRequiredService<OrganizationBootstrapValidator>().ValidateAsync();
+    await scope.ServiceProvider.GetRequiredService<PirateForgeBootstrapper>().RunAsync();
 }
 
 // Configure the HTTP request pipeline.
