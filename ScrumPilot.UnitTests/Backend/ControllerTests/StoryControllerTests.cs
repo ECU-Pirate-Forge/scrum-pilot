@@ -150,6 +150,17 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
                     Origin = PbiOrigin.AiGenerated,
                     DateCreated = DateTime.UtcNow,
                     LastUpdated = DateTime.UtcNow
+                },
+                new ProductBacklogItem
+                {
+                    PbiId = 2,
+                    Title = "Password Recovery Story",
+                    Description = "Second generated story description",
+                    Status = PbiStatus.ToDo,
+                    Priority = PbiPriority.Medium,
+                    Origin = PbiOrigin.AiGenerated,
+                    DateCreated = DateTime.UtcNow,
+                    LastUpdated = DateTime.UtcNow
                 }
             };
 
@@ -161,6 +172,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
             var actualStories = Assert.IsType<List<ProductBacklogItem>>(okResult.Value);
+            Assert.Equal(2, actualStories.Count);
             Assert.Equal(expectedStories[0].PbiId, actualStories[0].PbiId);
             Assert.Equal(expectedStories[0].Title, actualStories[0].Title);
             Assert.Equal(expectedStories[0].Origin, actualStories[0].Origin);
@@ -211,7 +223,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             var result = await _controller.GenerateAiPbis(problemStatements);
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
-            Assert.Equal($"Failed to generate AI story: {exceptionMessage}", badRequestResult.Value);
+            Assert.Equal($"Failed to generate AI PBIs: {exceptionMessage}", badRequestResult.Value);
             await _mockPbiService.Received(1).GenerateAiPbis(problemStatements);
         }
 
@@ -589,6 +601,48 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             var actualPbis = Assert.IsType<List<ProductBacklogItem>>(okResult.Value);
             Assert.Empty(actualPbis);
             await _mockPbiService.Received(1).GetFilteredPbisAsync(99, 99, null);
+        }
+
+        [Fact]
+        public async Task CreatePbis_PersistsEveryItemAsAiGeneratedBacklogPbi()
+        {
+            var pbis = new List<ProductBacklogItem>
+            {
+                new() { Title = "First" },
+                new() { Title = "Second" }
+            };
+            _mockPbiService.CreatePbiAsync(Arg.Any<ProductBacklogItem>())
+                .Returns(call => call.Arg<ProductBacklogItem>());
+
+            var result = await _controller.CreatePbis(pbis);
+
+            var okResult = Assert.IsType<OkObjectResult>(result.Result);
+            var created = Assert.IsType<List<ProductBacklogItem>>(okResult.Value);
+            Assert.Equal(2, created.Count);
+            Assert.All(pbis, pbi => Assert.Equal(PbiOrigin.AiGenerated, pbi.Origin));
+            await _mockPbiService.Received(2).CreatePbiAsync(Arg.Any<ProductBacklogItem>());
+            await _mockPbiService.DidNotReceive().CreateDraftPbiAsync(Arg.Any<ProductBacklogItem>());
+        }
+
+        [Fact]
+        public async Task CreateDraftPbis_PersistsEveryItemAsAiGeneratedDraftPbi()
+        {
+            var pbis = new List<ProductBacklogItem>
+            {
+                new() { Title = "First" },
+                new() { Title = "Second" }
+            };
+            _mockPbiService.CreateDraftPbiAsync(Arg.Any<ProductBacklogItem>())
+                .Returns(call => call.Arg<ProductBacklogItem>());
+
+            var result = await _controller.CreateDraftPbis(pbis);
+
+            var okResult = Assert.IsType<OkObjectResult>(result.Result);
+            var created = Assert.IsType<List<ProductBacklogItem>>(okResult.Value);
+            Assert.Equal(2, created.Count);
+            Assert.All(pbis, pbi => Assert.Equal(PbiOrigin.AiGenerated, pbi.Origin));
+            await _mockPbiService.Received(2).CreateDraftPbiAsync(Arg.Any<ProductBacklogItem>());
+            await _mockPbiService.DidNotReceive().CreatePbiAsync(Arg.Any<ProductBacklogItem>());
         }
     }
 }

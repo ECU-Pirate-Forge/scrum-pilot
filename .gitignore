@@ -502,3 +502,5 @@ ScrumPilot.Web/wwwroot/appsettings.Development.json
 summaries/
 chat-state.json
 data/mood-scores.json
+# Playwright CLI output (may contain credentials)
+.playwright-cli/

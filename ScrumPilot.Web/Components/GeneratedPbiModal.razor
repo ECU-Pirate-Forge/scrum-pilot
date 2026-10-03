@@ -1,51 +1,92 @@
-@using System.Text
-@using System.Text.Json
+@using System.Net.Http.Json
 @inject HttpClient Http
 @inject ISnackbar Snackbar
 
 <MudDialog>
     <DialogContent>
         <MudStack Spacing="2">
-            @if (PBIs is not null && PBIs.Count > 0)
+            @if (_items.Count > 0)
             {
+                var currentItem = _items[_currentPbiIndex];
+
                 <MudText Typo="Typo.h5" Align="Align.Center">Generated PBIs</MudText>
 
-                <PbiCard PbiModel="@PBIs[_currentStoryIndex]" />
+                <div class="generated-pbi-status">
+                    <MudChip T="string"
+                             Color="@GetStateColor(currentItem.State)"
+                             Variant="Variant.Filled">
+                        @GetStateLabel(currentItem.State)
+                    </MudChip>
+                </div>
 
-                <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center" Class="sg-nav-row">
+                <PbiCard PbiModel="@currentItem.Pbi"
+                         ProjectId="@ProjectId"
+                         ReadOnly="@(currentItem.State != GeneratedPbiSaveState.Pending)" />
+
+                <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center" Class="generated-pbi-navigation">
                     <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
                                    Color="Color.Primary"
-                                   OnClick="ShowPreviousStory"
-                                   Disabled="@(_currentStoryIndex == 0)"
-                                   AriaLabel="Show previous story" />
+                                   OnClick="ShowPreviousPbi"
+                                   Disabled="@(_currentPbiIndex == 0 || _isCommitting)"
+                                   AriaLabel="Show previous PBI" />
 
-                    <MudText Typo="Typo.subtitle1" Class="sg-nav-position">
-                        @($"{_currentStoryIndex + 1} of {PBIs.Count}")
+                    <MudText Typo="Typo.subtitle1" Class="generated-pbi-position">
+                        @($"{_currentPbiIndex + 1} of {_items.Count}")
                     </MudText>
 
                     <MudIconButton Icon="@Icons.Material.Filled.ArrowForward"
                                    Color="Color.Primary"
-                                   OnClick="ShowNextStory"
-                                   Disabled="@(_currentStoryIndex >= PBIs.Count - 1)"
-                                   AriaLabel="Show next story" />
+                                   OnClick="ShowNextPbi"
+                                   Disabled="@(_currentPbiIndex >= _items.Count - 1 || _isCommitting)"
+                                   AriaLabel="Show next PBI" />
                 </MudStack>
 
-                <MudStack Row="true" Justify="Justify.Center" Spacing="2">
-                    <MudButton Variant="Variant.Filled"
-                               Color="Color.Warning"
-                               StartIcon="@Icons.Material.Filled.Drafts"
-                               OnClick="CommitAllAsDrafts"
-                               Disabled="@_isCommitting">
-                        Commit All as Drafts
-                    </MudButton>
-                    <MudButton Variant="Variant.Filled"
-                               Color="Color.Success"
-                               StartIcon="@Icons.Material.Filled.PlaylistAdd"
-                               OnClick="CommitAllToBacklog"
-                               Disabled="@_isCommitting">
-                        Commit All to Backlog
-                    </MudButton>
-                </MudStack>
+                @if (currentItem.State == GeneratedPbiSaveState.Pending)
+                {
+                    <div class="generated-pbi-actions">
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Warning"
+                                   StartIcon="@Icons.Material.Filled.Drafts"
+                                   OnClick="SaveCurrentAsDraft"
+                                   Disabled="@_isCommitting">
+                            Save as Draft
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Success"
+                                   StartIcon="@Icons.Material.Filled.PlaylistAdd"
+                                   OnClick="SaveCurrentToBacklog"
+                                   Disabled="@_isCommitting">
+                            Add to Backlog
+                        </MudButton>
+                    </div>
+                }
+
+                @if (PendingCount > 0)
+                {
+                    <MudDivider />
+                    <div class="generated-pbi-actions">
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Warning"
+                                   StartIcon="@Icons.Material.Filled.Drafts"
+                                   OnClick="SaveRemainingAsDrafts"
+                                   Disabled="@_isCommitting">
+                            @($"Save Remaining as Drafts ({PendingCount})")
+                        </MudButton>
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Success"
+                                   StartIcon="@Icons.Material.Filled.PlaylistAdd"
+                                   OnClick="SaveRemainingToBacklog"
+                                   Disabled="@_isCommitting">
+                            @($"Add Remaining to Backlog ({PendingCount})")
+                        </MudButton>
+                    </div>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Success" Variant="Variant.Outlined">
+                        All generated PBIs have been saved.
+                    </MudAlert>
+                }
             }
             else
             {
@@ -58,57 +99,94 @@
 </MudDialog>
 
 @code {
-    [CascadingParameter]
-    private IMudDialogInstance MudDialog { get; set; } = default!;
-
     [Parameter]
     public List<ProductBacklogItem> PBIs { get; set; } = new();
 
     [Parameter]
     public int? ProjectId { get; set; }
 
-    private int _currentStoryIndex = 0;
-    private bool _isCommitting = false;
+    private readonly List<GeneratedPbiReviewItem> _items = new();
+    private List<ProductBacklogItem>? _initializedPbis;
+    private int _currentPbiIndex;
+    private bool _isCommitting;
+    private int PendingCount => _items.Count(item => item.State == GeneratedPbiSaveState.Pending);
 
-    private async Task CommitAllAsDrafts()
+    protected override void OnParametersSet()
     {
-        await CommitStories("api/Pbi/createDraftPbis", "PBIs saved as drafts.");
+        if (ReferenceEquals(_initializedPbis, PBIs))
+        {
+            return;
+        }
+
+        _initializedPbis = PBIs;
+        _items.Clear();
+        _items.AddRange(PBIs.Select(pbi => new GeneratedPbiReviewItem(pbi)));
+        _currentPbiIndex = 0;
     }
 
-    private async Task CommitAllToBacklog()
-    {
-        await CommitStories("api/Pbi/createStories", "PBIs committed to backlog.");
-    }
+    private Task SaveCurrentAsDraft() =>
+        SaveItems([_items[_currentPbiIndex]], true);
 
-    private async Task CommitStories(string endpoint, string successMessage)
+    private Task SaveCurrentToBacklog() =>
+        SaveItems([_items[_currentPbiIndex]], false);
+
+    private Task SaveRemainingAsDrafts() =>
+        SaveItems(GetPendingItems(), true);
+
+    private Task SaveRemainingToBacklog() =>
+        SaveItems(GetPendingItems(), false);
+
+    private List<GeneratedPbiReviewItem> GetPendingItems() =>
+        _items.Where(item => item.State == GeneratedPbiSaveState.Pending).ToList();
+
+    private async Task SaveItems(List<GeneratedPbiReviewItem> items, bool asDraft)
     {
+        if (_isCommitting || items.Count == 0)
+        {
+            return;
+        }
+
         _isCommitting = true;
         try
         {
-            if (ProjectId.HasValue)
+            foreach (var item in items)
             {
-                foreach (var story in PBIs)
-                    story.ProjectId = ProjectId.Value;
+                if (ProjectId.HasValue)
+                {
+                    item.Pbi.ProjectId = ProjectId.Value;
+                }
             }
 
-            var json = JsonSerializer.Serialize(PBIs);
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
-            var response = await Http.PostAsync(endpoint, content);
+            var endpoint = asDraft ? "api/Pbi/createDraftPbis" : "api/Pbi/createStories";
+            var response = await Http.PostAsJsonAsync(endpoint, items.Select(item => item.Pbi).ToList());
 
-            if (response.IsSuccessStatusCode)
-            {
-                Snackbar.Add(successMessage, Severity.Success);
-                MudDialog.Close();
-            }
-            else
+            if (!response.IsSuccessStatusCode)
             {
                 var error = await response.Content.ReadAsStringAsync();
-                    Snackbar.Add($"Failed to commit PBIs: {error}", Severity.Error);
+                Snackbar.Add($"Failed to save PBIs: {error}", Severity.Error);
+                return;
             }
+
+            var savedState = asDraft
+                ? GeneratedPbiSaveState.SavedAsDraft
+                : GeneratedPbiSaveState.AddedToBacklog;
+            foreach (var item in items)
+            {
+                item.State = savedState;
+            }
+
+            var destination = asDraft ? "as drafts" : "to the backlog";
+            Snackbar.Add(
+                $"{items.Count} PBI{(items.Count == 1 ? "" : "s")} saved {destination}.",
+                Severity.Success);
         }
-        catch (Exception ex)
+        catch (HttpRequestException ex)
         {
-            Snackbar.Add($"An error occurred: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Network error while saving PBIs: {ex.Message}", Severity.Error);
+        }
+        catch (TaskCanceledException)
+        {
+            Snackbar.Add("Saving PBIs timed out. Please try again.", Severity.Error);
         }
         finally
         {
@@ -116,15 +194,46 @@
         }
     }
 
-    private void ShowPreviousStory()
+    private void ShowPreviousPbi()
     {
-        if (_currentStoryIndex > 0)
-            _currentStoryIndex--;
+        if (_currentPbiIndex > 0)
+        {
+            _currentPbiIndex--;
+        }
     }
 
-    private void ShowNextStory()
+    private void ShowNextPbi()
     {
-        if (_currentStoryIndex < PBIs.Count - 1)
-            _currentStoryIndex++;
+        if (_currentPbiIndex < _items.Count - 1)
+        {
+            _currentPbiIndex++;
+        }
+    }
+
+    private static Color GetStateColor(GeneratedPbiSaveState state) => state switch
+    {
+        GeneratedPbiSaveState.SavedAsDraft => Color.Warning,
+        GeneratedPbiSaveState.AddedToBacklog => Color.Success,
+        _ => Color.Info
+    };
+
+    private static string GetStateLabel(GeneratedPbiSaveState state) => state switch
+    {
+        GeneratedPbiSaveState.SavedAsDraft => "Saved as Draft",
+        GeneratedPbiSaveState.AddedToBacklog => "Added to Backlog",
+        _ => "Pending Review"
+    };
+
+    private sealed class GeneratedPbiReviewItem(ProductBacklogItem pbi)
+    {
+        public ProductBacklogItem Pbi { get; } = pbi;
+        public GeneratedPbiSaveState State { get; set; }
+    }
+
+    private enum GeneratedPbiSaveState
+    {
+        Pending,
+        SavedAsDraft,
+        AddedToBacklog
     }
 }

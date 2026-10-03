@@ -1,6 +1,8 @@
 <Solution>
   <Project Path="ScrumPilot.API/ScrumPilot.API.csproj" />
+  <Project Path="ScrumPilot.AppHost/ScrumPilot.AppHost.csproj" />
   <Project Path="ScrumPilot.Data/ScrumPilot.Data.csproj" />
+  <Project Path="ScrumPilot.ServiceDefaults/ScrumPilot.ServiceDefaults.csproj" />
   <Project Path="ScrumPilot.Shared/ScrumPilot.Shared.csproj" />
   <Project Path="ScrumPilot.UnitTests/ScrumPilot.UnitTests.csproj" />
   <Project Path="ScrumPilot.Web/ScrumPilot.Web.csproj" />

@@ -59,8 +59,8 @@ namespace ScrumPilot.API.Controllers
         }
 
         /// <summary>
-        /// Calls the configured AI provider for each problem statement and returns
-        /// the generated draft PBIs without persisting them.
+        /// Calls the configured AI provider for each problem statement, flattens all returned
+        /// PBI arrays, and returns the generated draft PBIs without persisting them.
         /// </summary>
         /// <param name="problemStatements">One or more non-empty problem statements to generate stories from.</param>
         [HttpPost("generateAiPbis")]
@@ -79,7 +79,7 @@ namespace ScrumPilot.API.Controllers
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest($"Failed to generate AI story: {ex.Message}");
+                return BadRequest($"Failed to generate AI PBIs: {ex.Message}");
             }
             catch (HttpRequestException ex)
             {
@@ -96,7 +96,7 @@ namespace ScrumPilot.API.Controllers
         }
 
         /// <summary>
-        /// Rewrites and improves an existing PBI using the configured AI provider.
+        /// Rewrites and improves an existing PBI using the configured AI provider's one-item array response.
         /// Returns the improved PBI without persisting changes.
         /// </summary>
         [HttpPost("ImprovePbi")]
