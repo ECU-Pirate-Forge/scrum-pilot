@@ -1,5 +1,6 @@
 @page "/planning-poker"
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.SignalR
 @using Microsoft.AspNetCore.SignalR.Client
 @using ScrumPilot.Shared.Models.PlanningPoker
 @inject HttpClient Http
@@ -8,6 +9,8 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IConfiguration Configuration
 @inject ScrumPilot.Web.Services.ProjectStateService ProjectState
+@inject ILogger<PlanningPoker> Logger
+@inject ISnackbar Snackbar
 @implements IAsyncDisposable
 
 <div class="pp-page">
@@ -429,13 +432,35 @@
 
     private async Task HandlePbiSave(ProductBacklogItem pbi)
     {
+        var capturedPbiId = _currentPbiId;
+        var capturedProjectId = ProjectState.SelectedProjectId;
+        var capturedHub = _hub;
+
         await LoadUnassignedPbisAsync();
-        _selectedPbi = _unassignedPbis?.FirstOrDefault(item => item.PbiId == pbi.PbiId);
-        if (_selectedPbi is null)
+
+        if (!PlanningPokerSaveGuard.ShouldClearSelection(
+                pbi.PbiId,
+                capturedPbiId,
+                capturedProjectId,
+                capturedHub,
+                _currentPbiId,
+                ProjectState.SelectedProjectId,
+                _hub,
+                _unassignedPbis?.Select(item => item.PbiId).ToArray() ?? []))
+            return;
+
+        _selectedPbi = null;
+        _currentPbiId = null;
+
+        try
         {
-            _currentPbiId = null;
-            if (_isConnected)
-                await _hub!.SendAsync("SelectPbi", (int?)null);
+            if (capturedHub?.State == HubConnectionState.Connected)
+                await capturedHub.SendAsync("SelectPbi", (int?)null);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException or HubException)
+        {
+            Logger.LogWarning(ex, "PBI {PbiId} was saved after the planning poker connection closed.", pbi.PbiId);
+            Snackbar.Add("PBI saved, but the planning poker session disconnected.", Severity.Warning);
         }
     }
 
