@@ -16,4 +16,7 @@ public class UserSettingsDto
 
     /// <summary>The project ID to load automatically when the user logs in.</summary>
     public int? DefaultProjectId { get; set; }
+
+    /// <summary>The organization ID to load automatically when the user logs in.</summary>
+    public int? DefaultOrganizationId { get; set; }
 }
