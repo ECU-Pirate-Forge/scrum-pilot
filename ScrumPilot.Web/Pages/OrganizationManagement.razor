@@ -88,8 +88,16 @@ else
         _ = InvokeAsync(async () =>
         {
             if (_disposed) return;
-            await ReloadAsync();
-            if (!_disposed) StateHasChanged();
+            try
+            {
+                await ReloadAsync();
+                if (!_disposed) StateHasChanged();
+            }
+            catch (Exception) when (!_disposed)
+            {
+                _error = "Unable to reload organization management.";
+                StateHasChanged();
+            }
         });
     }
 

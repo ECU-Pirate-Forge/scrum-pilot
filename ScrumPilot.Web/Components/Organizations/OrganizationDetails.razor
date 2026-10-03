@@ -27,6 +27,7 @@
     private bool _dirty;
     private int? _sourceOrganizationId;
     private string? _sourceName;
+    private long _organizationGeneration;
 
     protected override void OnParametersSet()
     {
@@ -36,6 +37,12 @@
         {
             _name = Organization.Name;
             _dirty = false;
+        }
+        if (organizationChanged)
+        {
+            _organizationGeneration++;
+            _error = null;
+            _busy = false;
         }
         _sourceOrganizationId = Organization.OrganizationId;
         _sourceName = Organization.Name;
@@ -50,16 +57,25 @@
     private async Task RenameAsync()
     {
         if (string.IsNullOrWhiteSpace(_name)) { _error = "Organization name is required."; return; }
+        var organizationId = Organization.OrganizationId;
+        var generation = _organizationGeneration;
+        var name = _name.Trim();
         _busy = true;
         _error = null;
         try
         {
             var response = await Http.PutAsJsonAsync(
-                $"api/organizations/{Organization.OrganizationId}",
-                new RenameOrganizationRequest(_name.Trim()));
-            if (!response.IsSuccessStatusCode) { _error = await ErrorAsync(response, "Unable to rename the organization."); return; }
+                $"api/organizations/{organizationId}",
+                new RenameOrganizationRequest(name));
+            if (!IsCurrent(generation, organizationId)) return;
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await ErrorAsync(response, "Unable to rename the organization.");
+                if (IsCurrent(generation, organizationId)) _error = error;
+                return;
+            }
             var updated = await response.Content.ReadFromJsonAsync<OrganizationSummaryDto>();
-            if (updated is not null)
+            if (IsCurrent(generation, organizationId) && updated is not null)
             {
                 _name = updated.Name;
                 _sourceName = updated.Name;
@@ -68,9 +84,21 @@
                 await OrganizationChanged.InvokeAsync(updated);
             }
         }
-        catch (HttpRequestException) { _error = "Unable to rename the organization."; }
-        finally { _busy = false; }
+        catch (HttpRequestException)
+        {
+            if (IsCurrent(generation, organizationId))
+                _error = "Unable to rename the organization.";
+        }
+        finally
+        {
+            if (IsCurrent(generation, organizationId)) _busy = false;
+        }
     }
+
+    private bool IsCurrent(long generation, int organizationId) =>
+        generation == _organizationGeneration
+        && _sourceOrganizationId == organizationId
+        && Organization.OrganizationId == organizationId;
 
     private static async Task<string> ErrorAsync(HttpResponseMessage response, string fallback)
     {

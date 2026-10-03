@@ -563,6 +563,8 @@
     // PBI dialog state
     private bool _pbiDialogVisible;
     private ProductBacklogItem? _dialogPbi;
+    private long _dialogOrganizationGeneration;
+    private int? _dialogOrganizationId;
     private CancellationTokenSource? _organizationLoadCancellation;
     private long _organizationGeneration;
     private bool _disposed;
@@ -579,8 +581,15 @@
         _ = InvokeAsync(async () =>
         {
             if (_disposed) return;
-            await ReloadForOrganizationAsync();
-            if (!_disposed) StateHasChanged();
+            try
+            {
+                await ReloadForOrganizationAsync();
+                if (!_disposed) StateHasChanged();
+            }
+            catch (Exception) when (!_disposed)
+            {
+                Snackbar.Add("Failed to reload organization projects.", Severity.Error);
+            }
         });
     }
 
@@ -633,16 +642,38 @@
     {
         _projects = [];
         _selectedProject = null;
+        _showAddProject = false;
+        _newProjectName = "";
+        _newProjectDescription = "";
+        _editingProjectId = null;
+        _editingProjectName = "";
+        _editingProjectDescription = "";
+        _saving = false;
         _sprints = [];
+        _showAddSprint = false;
+        _newSprint = new();
+        _editingSprintId = null;
+        _editingSprint = null;
         _epics = [];
+        _showAddEpic = false;
+        _newEpicName = "";
+        _editingEpicId = null;
+        _editingEpicName = "";
         _pbis = [];
         _selectedSprintId = null;
         _storyFilterSprintId = null;
         _storyFilterEpicId = null;
         _pbiDialogVisible = false;
         _dialogPbi = null;
+        _dialogOrganizationGeneration = 0;
+        _dialogOrganizationId = null;
         ProjectState.SetProject(null);
     }
+
+    private bool IsCurrent(long generation, int organizationId) =>
+        !_disposed
+        && generation == _organizationGeneration
+        && OrganizationState.SelectedOrganizationId == organizationId;
 
     private async Task SelectProject(Project project)
     {
@@ -748,16 +779,22 @@
     private async Task SaveNewProject()
     {
         if (string.IsNullOrWhiteSpace(_newProjectName)) return;
+        var organizationId = OrganizationState.SelectedOrganizationId;
+        if (!organizationId.HasValue) return;
+        var generation = _organizationGeneration;
+        var name = _newProjectName;
+        var description = _newProjectDescription;
         _saving = true;
         try
         {
-            if (!OrganizationState.SelectedOrganizationId.HasValue) return;
             var created = await Http.PostAsJsonAsync(
-                $"api/organizations/{OrganizationState.SelectedOrganizationId.Value}/projects",
-                new CreateProjectRequest(_newProjectName, _newProjectDescription));
+                $"api/organizations/{organizationId.Value}/projects",
+                new CreateProjectRequest(name, description));
+            if (!IsCurrent(generation, organizationId.Value)) return;
             if (created.IsSuccessStatusCode)
             {
                 var project = await created.Content.ReadFromJsonAsync<Project>();
+                if (!IsCurrent(generation, organizationId.Value)) return;
                 if (project != null) _projects.Add(project);
                 _newProjectName = "";
                 _newProjectDescription = "";
@@ -770,23 +807,34 @@
                 Snackbar.Add("Failed to create project.", Severity.Error);
             }
         }
-        catch (HttpRequestException) { Snackbar.Add("Failed to create project.", Severity.Error); }
-        _saving = false;
+        catch (HttpRequestException)
+        {
+            if (IsCurrent(generation, organizationId.Value))
+                Snackbar.Add("Failed to create project.", Severity.Error);
+        }
+        finally
+        {
+            if (IsCurrent(generation, organizationId.Value)) _saving = false;
+        }
     }
 
     private async Task ConfirmDeleteProject(Project project)
     {
+        var organizationId = OrganizationState.SelectedOrganizationId;
+        if (!organizationId.HasValue) return;
+        var generation = _organizationGeneration;
         bool? confirmed = await DialogService.ShowMessageBox(
             "Delete Project",
             $"Are you sure you want to delete \"{project.ProjectName}\"? This cannot be undone.",
             yesText: "Delete",
             cancelText: "Cancel");
 
-        if (confirmed != true) return;
+        if (confirmed != true || !IsCurrent(generation, organizationId.Value)) return;
 
         try
         {
             var response = await Http.DeleteAsync($"api/projects/{project.ProjectId}");
+            if (!IsCurrent(generation, organizationId.Value)) return;
             if (response.IsSuccessStatusCode)
             {
                 _projects.Remove(project);
@@ -807,7 +855,11 @@
                 Snackbar.Add("Failed to delete project.", Severity.Error);
             }
         }
-        catch (HttpRequestException) { Snackbar.Add("Failed to delete project.", Severity.Error); }
+        catch (HttpRequestException)
+        {
+            if (IsCurrent(generation, organizationId.Value))
+                Snackbar.Add("Failed to delete project.", Severity.Error);
+        }
     }
 
     private void StartRenameProject(Project project)
@@ -820,6 +872,9 @@
     private async Task SaveRenameProject(Project project)
     {
         if (string.IsNullOrWhiteSpace(_editingProjectName)) return;
+        var organizationId = OrganizationState.SelectedOrganizationId;
+        if (!organizationId.HasValue) return;
+        var generation = _organizationGeneration;
         _saving = true;
         try
         {
@@ -829,6 +884,7 @@
                 : _editingProjectDescription;
             var response = await Http.PutAsJsonAsync($"api/projects/{project.ProjectId}",
                 new UpdateProjectRequest(projectName, description));
+            if (!IsCurrent(generation, organizationId.Value)) return;
             if (response.IsSuccessStatusCode)
             {
                 project.ProjectName = projectName;
@@ -844,8 +900,15 @@
                 Snackbar.Add("Failed to rename project.", Severity.Error);
             }
         }
-        catch (HttpRequestException) { Snackbar.Add("Failed to rename project.", Severity.Error); }
-        _saving = false;
+        catch (HttpRequestException)
+        {
+            if (IsCurrent(generation, organizationId.Value))
+                Snackbar.Add("Failed to rename project.", Severity.Error);
+        }
+        finally
+        {
+            if (IsCurrent(generation, organizationId.Value)) _saving = false;
+        }
     }
 
     // --- Sprint CRUD ---
@@ -858,15 +921,30 @@
             Snackbar.Add("Sprint Title is required.", Severity.Warning);
             return;
         }
+        var organizationId = OrganizationState.SelectedOrganizationId;
+        if (!organizationId.HasValue) return;
+        var generation = _organizationGeneration;
+        var projectId = _selectedProject.ProjectId;
+        var newSprint = new Sprint
+        {
+            ProjectId = projectId,
+            SprintTitle = _newSprint.SprintTitle,
+            SprintGoal = _newSprint.SprintGoal,
+            StartDate = _newSprint.StartDate,
+            EndDate = _newSprint.EndDate,
+            IsOpen = _newSprint.IsOpen,
+            DateClosed = _newSprint.DateClosed
+        };
         _saving = true;
         try
         {
-            _newSprint.ProjectId = _selectedProject.ProjectId;
             var response = await Http.PostAsJsonAsync(
-                $"api/sprint?projectId={_selectedProject.ProjectId}", _newSprint);
+                $"api/sprint?projectId={projectId}", newSprint);
+            if (!IsCurrent(generation, organizationId.Value)) return;
             if (response.IsSuccessStatusCode)
             {
                 var sprint = await response.Content.ReadFromJsonAsync<Sprint>();
+                if (!IsCurrent(generation, organizationId.Value)) return;
                 if (sprint != null) _sprints.Insert(0, sprint);
                 _newSprint = new();
                 _showAddSprint = false;
@@ -877,8 +955,15 @@
                 Snackbar.Add("Failed to create sprint.", Severity.Error);
             }
         }
-        catch (HttpRequestException) { Snackbar.Add("Failed to create sprint.", Severity.Error); }
-        _saving = false;
+        catch (HttpRequestException)
+        {
+            if (IsCurrent(generation, organizationId.Value))
+                Snackbar.Add("Failed to create sprint.", Severity.Error);
+        }
+        finally
+        {
+            if (IsCurrent(generation, organizationId.Value)) _saving = false;
+        }
     }
 
     private void CancelAddSprint()
@@ -911,13 +996,19 @@
             Snackbar.Add("Sprint Title is required.", Severity.Warning);
             return;
         }
+        var organizationId = OrganizationState.SelectedOrganizationId;
+        if (!organizationId.HasValue) return;
+        var generation = _organizationGeneration;
+        var editingSprint = _editingSprint;
         _saving = true;
         try
         {
-            var response = await Http.PutAsJsonAsync($"api/sprint/{_editingSprint.SprintId}", _editingSprint);
+            var response = await Http.PutAsJsonAsync($"api/sprint/{editingSprint.SprintId}", editingSprint);
+            if (!IsCurrent(generation, organizationId.Value)) return;
             if (response.IsSuccessStatusCode)
             {
                 var updated = await response.Content.ReadFromJsonAsync<Sprint>();
+                if (!IsCurrent(generation, organizationId.Value)) return;
                 if (updated != null)
                 {
                     var idx = _sprints.FindIndex(s => s.SprintId == updated.SprintId);
@@ -932,8 +1023,15 @@
                 Snackbar.Add("Failed to update sprint.", Severity.Error);
             }
         }
-        catch (HttpRequestException) { Snackbar.Add("Failed to update sprint.", Severity.Error); }
-        _saving = false;
+        catch (HttpRequestException)
+        {
+            if (IsCurrent(generation, organizationId.Value))
+                Snackbar.Add("Failed to update sprint.", Severity.Error);
+        }
+        finally
+        {
+            if (IsCurrent(generation, organizationId.Value)) _saving = false;
+        }
     }
 
     private void CancelEditSprint()
@@ -944,21 +1042,30 @@
 
     private async Task DeleteSprint(Sprint sprint)
     {
+        var organizationId = OrganizationState.SelectedOrganizationId;
+        if (!organizationId.HasValue) return;
+        var generation = _organizationGeneration;
         try
         {
             var response = await Http.DeleteAsync($"api/sprint/{sprint.SprintId}");
+            if (!IsCurrent(generation, organizationId.Value)) return;
             if (response.IsSuccessStatusCode)
             {
                 _sprints.Remove(sprint);
                 Snackbar.Add("Sprint deleted. Stories were unassigned.", Severity.Info);
                 await LoadStories();
+                if (!IsCurrent(generation, organizationId.Value)) return;
             }
             else
             {
                 Snackbar.Add("Failed to delete sprint.", Severity.Error);
             }
         }
-        catch (HttpRequestException) { Snackbar.Add("Failed to delete sprint.", Severity.Error); }
+        catch (HttpRequestException)
+        {
+            if (IsCurrent(generation, organizationId.Value))
+                Snackbar.Add("Failed to delete sprint.", Severity.Error);
+        }
     }
 
     // --- Epic CRUD ---
@@ -966,20 +1073,27 @@
     private async Task SaveNewEpic()
     {
         if (_selectedProject == null || string.IsNullOrWhiteSpace(_newEpicName)) return;
+        var organizationId = OrganizationState.SelectedOrganizationId;
+        if (!organizationId.HasValue) return;
+        var generation = _organizationGeneration;
+        var projectId = _selectedProject.ProjectId;
+        var epicName = _newEpicName;
         _saving = true;
         try
         {
             var epic = new Epic
             {
-                ProjectId = _selectedProject.ProjectId,
-                Name = _newEpicName,
+                ProjectId = projectId,
+                Name = epicName,
                 DateCreated = DateTime.UtcNow
             };
             var response = await Http.PostAsJsonAsync(
-                $"api/epic?projectId={_selectedProject.ProjectId}", epic);
+                $"api/epic?projectId={projectId}", epic);
+            if (!IsCurrent(generation, organizationId.Value)) return;
             if (response.IsSuccessStatusCode)
             {
                 var created = await response.Content.ReadFromJsonAsync<Epic>();
+                if (!IsCurrent(generation, organizationId.Value)) return;
                 if (created != null) _epics.Add(created);
                 _newEpicName = "";
                 _showAddEpic = false;
@@ -990,8 +1104,15 @@
                 Snackbar.Add("Failed to create epic.", Severity.Error);
             }
         }
-        catch (HttpRequestException) { Snackbar.Add("Failed to create epic.", Severity.Error); }
-        _saving = false;
+        catch (HttpRequestException)
+        {
+            if (IsCurrent(generation, organizationId.Value))
+                Snackbar.Add("Failed to create epic.", Severity.Error);
+        }
+        finally
+        {
+            if (IsCurrent(generation, organizationId.Value)) _saving = false;
+        }
     }
 
     private void StartEditEpic(Epic epic)
@@ -1004,6 +1125,9 @@
     {
         var epic = _epics.FirstOrDefault(e => e.EpicId == _editingEpicId);
         if (epic == null || string.IsNullOrWhiteSpace(_editingEpicName)) return;
+        var organizationId = OrganizationState.SelectedOrganizationId;
+        if (!organizationId.HasValue) return;
+        var generation = _organizationGeneration;
         _saving = true;
         try
         {
@@ -1016,6 +1140,7 @@
                 DateCreated = epic.DateCreated
             };
             var response = await Http.PutAsJsonAsync($"api/epic/{epic.EpicId}", updatedEpic);
+            if (!IsCurrent(generation, organizationId.Value)) return;
             if (response.IsSuccessStatusCode)
             {
                 epic.Name = name;
@@ -1028,8 +1153,15 @@
                 Snackbar.Add("Failed to update epic.", Severity.Error);
             }
         }
-        catch (HttpRequestException) { Snackbar.Add("Failed to update epic.", Severity.Error); }
-        _saving = false;
+        catch (HttpRequestException)
+        {
+            if (IsCurrent(generation, organizationId.Value))
+                Snackbar.Add("Failed to update epic.", Severity.Error);
+        }
+        finally
+        {
+            if (IsCurrent(generation, organizationId.Value)) _saving = false;
+        }
     }
 
     private void CancelEditEpic()
@@ -1040,21 +1172,30 @@
 
     private async Task DeleteEpic(Epic epic)
     {
+        var organizationId = OrganizationState.SelectedOrganizationId;
+        if (!organizationId.HasValue) return;
+        var generation = _organizationGeneration;
         try
         {
             var response = await Http.DeleteAsync($"api/epic/{epic.EpicId}");
+            if (!IsCurrent(generation, organizationId.Value)) return;
             if (response.IsSuccessStatusCode)
             {
                 _epics.Remove(epic);
                 Snackbar.Add("Epic deleted. Stories were unassigned.", Severity.Info);
                 await LoadStories();
+                if (!IsCurrent(generation, organizationId.Value)) return;
             }
             else
             {
                 Snackbar.Add("Failed to delete epic.", Severity.Error);
             }
         }
-        catch (HttpRequestException) { Snackbar.Add("Failed to delete epic.", Severity.Error); }
+        catch (HttpRequestException)
+        {
+            if (IsCurrent(generation, organizationId.Value))
+                Snackbar.Add("Failed to delete epic.", Severity.Error);
+        }
     }
 
     // --- Story CRUD ---
@@ -1062,6 +1203,8 @@
     private void AddNewStory()
     {
         if (_selectedProject == null) return;
+        var organizationId = OrganizationState.SelectedOrganizationId;
+        if (!organizationId.HasValue) return;
         _dialogPbi = new ProductBacklogItem
         {
             PbiId = 0,
@@ -1073,12 +1216,18 @@
             DateCreated = DateTime.UtcNow,
             LastUpdated = DateTime.UtcNow
         };
+        _dialogOrganizationGeneration = _organizationGeneration;
+        _dialogOrganizationId = organizationId.Value;
         _pbiDialogVisible = true;
     }
 
     private void OpenEditPbiDialog(ProductBacklogItem pbi)
     {
+        var organizationId = OrganizationState.SelectedOrganizationId;
+        if (!organizationId.HasValue) return;
         _dialogPbi = pbi;
+        _dialogOrganizationGeneration = _organizationGeneration;
+        _dialogOrganizationId = organizationId.Value;
         _pbiDialogVisible = true;
     }
 
@@ -1086,18 +1235,28 @@
     {
         _pbiDialogVisible = false;
         _dialogPbi = null;
+        _dialogOrganizationGeneration = 0;
+        _dialogOrganizationId = null;
     }
 
     private async Task HandlePbiSaveFromDialog(ProductBacklogItem pbi)
     {
+        var generation = _dialogOrganizationGeneration;
+        var organizationId = _dialogOrganizationId;
+        if (!organizationId.HasValue || !IsCurrent(generation, organizationId.Value)) return;
         var wasExisting = _pbis.Any(item => item.PbiId == pbi.PbiId);
         await LoadStories();
+        if (!IsCurrent(generation, organizationId.Value)) return;
         ClosePbiDialog();
         Snackbar.Add(wasExisting ? "Story updated." : "Story created.", Severity.Success);
     }
 
     private Task HandlePbiDeleteFromDialog(int id)
     {
+        var generation = _dialogOrganizationGeneration;
+        var organizationId = _dialogOrganizationId;
+        if (!organizationId.HasValue || !IsCurrent(generation, organizationId.Value))
+            return Task.CompletedTask;
         var pbi = _pbis.FirstOrDefault(p => p.PbiId == id);
         if (pbi != null) _pbis.Remove(pbi);
         ClosePbiDialog();
@@ -1106,21 +1265,29 @@
 
     private async Task DeletePbiDirect(ProductBacklogItem pbi)
     {
+        var organizationId = OrganizationState.SelectedOrganizationId;
+        if (!organizationId.HasValue) return;
+        var generation = _organizationGeneration;
         bool? confirmed = await DialogService.ShowMessageBox(
             "Delete Story",
             $"Delete \"{pbi.Title}\"? This cannot be undone.",
             yesText: "Delete", cancelText: "Cancel");
-        if (confirmed != true) return;
+        if (confirmed != true || !IsCurrent(generation, organizationId.Value)) return;
         try
         {
             var response = await Http.DeleteAsync($"api/pbi/{pbi.PbiId}");
+            if (!IsCurrent(generation, organizationId.Value)) return;
             if (response.IsSuccessStatusCode)
             {
                 _pbis.Remove(pbi);
                 Snackbar.Add("Story deleted.", Severity.Info);
             }
         }
-        catch { Snackbar.Add("Failed to delete story.", Severity.Error); }
+        catch (HttpRequestException)
+        {
+            if (IsCurrent(generation, organizationId.Value))
+                Snackbar.Add("Failed to delete story.", Severity.Error);
+        }
     }
 
     private static Color GetPbiPriorityColor(PbiPriority priority) => priority switch

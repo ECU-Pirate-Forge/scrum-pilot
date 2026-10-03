@@ -55,11 +55,27 @@ else
 
         if (response.IsSuccessStatusCode)
         {
-            var accepted = await response.Content.ReadFromJsonAsync<AcceptedOrganizationDto>();
+            _redirecting = true;
+            Navigation.NavigateTo("/accept-invitation", replace: true);
+
+            AcceptedOrganizationDto? accepted;
+            try
+            {
+                accepted = await response.Content.ReadFromJsonAsync<AcceptedOrganizationDto>();
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                accepted = null;
+            }
+            catch (NotSupportedException)
+            {
+                accepted = null;
+            }
+
             if (accepted is null)
             {
-                _message = "The invitation could not be accepted. Try again.";
-                _severity = Severity.Error;
+                _message = "The invitation was accepted, but this page could not refresh your organization. Refresh the page to continue.";
+                _severity = Severity.Warning;
                 return;
             }
 
@@ -76,6 +92,12 @@ else
                 }
             }
             catch (HttpRequestException)
+            {
+            }
+            catch (System.Text.Json.JsonException)
+            {
+            }
+            catch (NotSupportedException)
             {
             }
 

@@ -2,16 +2,16 @@
 
 <MudPaper Class="pa-4 mb-4" Style="border:1px solid var(--mud-palette-error)">
     <MudText Typo="Typo.h6" Color="Color.Error">Danger zone</MudText>
-    <MudCheckBox @bind-Value="_confirmLeave" Label="Confirm leaving this organization" />
-    <MudButton data-action="leave" Color="Color.Error" Disabled="@(!_confirmLeave)" OnClick="LeaveAsync">Leave organization</MudButton>
+    <MudCheckBox @bind-Value="ConfirmLeaveValue" Label="Confirm leaving this organization" />
+    <MudButton data-action="leave" Color="Color.Error" Disabled="@(_busy || !_confirmLeave || _leaveOrganizationId != Organization.OrganizationId)" OnClick="LeaveAsync">Leave organization</MudButton>
     @if (Organization.Role == OrganizationRole.Owner && !Organization.IsDeleted)
     {
-        <MudCheckBox @bind-Value="_confirmDelete" Label="Confirm deleting this organization" />
-        <MudButton data-action="delete" Color="Color.Error" Disabled="@(!_confirmDelete)" OnClick="DeleteAsync">Delete organization</MudButton>
+        <MudCheckBox @bind-Value="ConfirmDeleteValue" Label="Confirm deleting this organization" />
+        <MudButton data-action="delete" Color="Color.Error" Disabled="@(_busy || !_confirmDelete || _deleteOrganizationId != Organization.OrganizationId)" OnClick="DeleteAsync">Delete organization</MudButton>
     }
     @if (Organization.IsDeleted)
     {
-        <MudButton data-action="restore" OnClick="RestoreAsync">Restore organization</MudButton>
+        <MudButton data-action="restore" Disabled="_busy" OnClick="RestoreAsync">Restore organization</MudButton>
     }
     @if (!string.IsNullOrWhiteSpace(_error)) { <MudAlert Severity="Severity.Error" Class="mt-2">@_error</MudAlert> }
 </MudPaper>
@@ -21,34 +21,92 @@
     [Parameter] public EventCallback Changed { get; set; }
     private bool _confirmLeave;
     private bool _confirmDelete;
+    private bool _busy;
     private string? _error;
+    private int? _sourceOrganizationId;
+    private int? _leaveOrganizationId;
+    private int? _deleteOrganizationId;
+
+    protected override void OnParametersSet()
+    {
+        if (_sourceOrganizationId == Organization.OrganizationId) return;
+
+        _sourceOrganizationId = Organization.OrganizationId;
+        _confirmLeave = false;
+        _confirmDelete = false;
+        _leaveOrganizationId = null;
+        _deleteOrganizationId = null;
+        _error = null;
+        _busy = false;
+    }
+
+    private bool ConfirmLeaveValue
+    {
+        get => _confirmLeave;
+        set
+        {
+            _confirmLeave = value;
+            _leaveOrganizationId = value ? Organization.OrganizationId : null;
+        }
+    }
+
+    private bool ConfirmDeleteValue
+    {
+        get => _confirmDelete;
+        set
+        {
+            _confirmDelete = value;
+            _deleteOrganizationId = value ? Organization.OrganizationId : null;
+        }
+    }
 
     private Task LeaveAsync() => MutateAsync(
-        () => Http.PostAsync($"api/organizations/{Organization.OrganizationId}/leave", null),
+        organizationId => Http.PostAsync($"api/organizations/{organizationId}/leave", null),
         "Unable to leave the organization.");
     private Task DeleteAsync() => MutateAsync(
-        () => Http.DeleteAsync($"api/organizations/{Organization.OrganizationId}"),
+        organizationId => Http.DeleteAsync($"api/organizations/{organizationId}"),
         "Unable to delete the organization.");
     private Task RestoreAsync() => MutateAsync(
-        () => Http.PostAsync($"api/organizations/{Organization.OrganizationId}/restore", null),
+        organizationId => Http.PostAsync($"api/organizations/{organizationId}/restore", null),
         "Unable to restore the organization.");
 
-    private async Task MutateAsync(Func<Task<HttpResponseMessage>> action, string fallback)
+    private async Task MutateAsync(Func<int, Task<HttpResponseMessage>> action, string fallback)
     {
+        var organizationId = Organization.OrganizationId;
+        _busy = true;
         _error = null;
         try
         {
-            var response = await action();
+            var response = await action(organizationId);
+            if (!IsCurrent(organizationId)) return;
             if (!response.IsSuccessStatusCode)
             {
-                try { _error = (await response.Content.ReadFromJsonAsync<ProblemDetails>())?.Detail ?? fallback; }
-                catch { _error = fallback; }
+                string error;
+                try { error = (await response.Content.ReadFromJsonAsync<ProblemDetails>())?.Detail ?? fallback; }
+                catch { error = fallback; }
+                if (IsCurrent(organizationId)) _error = error;
                 return;
             }
+
+            _confirmLeave = false;
+            _confirmDelete = false;
+            _leaveOrganizationId = null;
+            _deleteOrganizationId = null;
             _error = null;
             await Changed.InvokeAsync();
         }
-        catch (HttpRequestException) { _error = fallback; }
+        catch (HttpRequestException)
+        {
+            if (IsCurrent(organizationId)) _error = fallback;
+        }
+        finally
+        {
+            if (IsCurrent(organizationId)) _busy = false;
+        }
     }
+
+    private bool IsCurrent(int organizationId) =>
+        _sourceOrganizationId == organizationId && Organization.OrganizationId == organizationId;
+
     private sealed class ProblemDetails { public string? Detail { get; set; } }
 }

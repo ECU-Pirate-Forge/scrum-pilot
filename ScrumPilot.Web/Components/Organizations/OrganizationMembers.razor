@@ -67,6 +67,8 @@
     private List<OrganizationInvitationDto> _invitations = [];
     private CancellationTokenSource? _loadCancellation;
     private (int OrganizationId, bool CanManage)? _lastParameterKey;
+    private long _generation;
+    private bool _disposed;
     private string _email = "";
     private OrganizationRole _inviteRole = OrganizationRole.Member;
     private string? _error;
@@ -76,103 +78,127 @@
         var key = (OrganizationId, CanManage);
         if (_lastParameterKey == key) return;
         _lastParameterKey = key;
-        await ReloadAsync();
+        await ReloadAsync(key);
     }
 
-    private async Task ReloadAsync()
+    private async Task ReloadAsync((int OrganizationId, bool CanManage) key)
     {
+        if (_disposed || _lastParameterKey != key) return;
+
+        var generation = ++_generation;
         _loadCancellation?.Cancel();
         _loadCancellation?.Dispose();
         _loadCancellation = new();
-        await LoadAsync(_loadCancellation.Token);
+        _members = [];
+        _invitations = [];
+        _confirmedMembers.Clear();
+        _error = null;
+        await LoadAsync(key, generation, _loadCancellation.Token);
     }
 
-    private async Task LoadAsync(CancellationToken token)
+    private async Task LoadAsync(
+        (int OrganizationId, bool CanManage) key,
+        long generation,
+        CancellationToken token)
     {
-        _error = null;
         try
         {
-            _members = await Http.GetFromJsonAsync<List<OrganizationMemberDto>>(
-                $"api/organizations/{OrganizationId}/members", token) ?? [];
+            var members = await Http.GetFromJsonAsync<List<OrganizationMemberDto>>(
+                $"api/organizations/{key.OrganizationId}/members", token) ?? [];
+            if (!IsCurrent(key, generation)) return;
+
+            _members = members;
             _confirmedMembers.Clear();
             foreach (var member in _members) _confirmedMembers[member.UserId] = false;
-            _invitations = CanManage
+
+            var invitations = key.CanManage
                 ? await Http.GetFromJsonAsync<List<OrganizationInvitationDto>>(
-                    $"api/organizations/{OrganizationId}/invitations", token) ?? []
+                    $"api/organizations/{key.OrganizationId}/invitations", token) ?? []
                 : [];
+            if (!IsCurrent(key, generation)) return;
+
+            _invitations = invitations;
             _error = null;
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
-        catch (HttpRequestException) { _error = "Unable to load organization members."; }
+        catch (HttpRequestException) when (IsCurrent(key, generation))
+        {
+            _error = "Unable to load organization members.";
+        }
     }
 
     private async Task InviteAsync()
     {
-        _error = null;
         if (string.IsNullOrWhiteSpace(_email)) { _error = "Email is required."; return; }
-        try
-        {
-            var response = await Http.PostAsJsonAsync($"api/organizations/{OrganizationId}/invitations",
-                new InviteOrganizationMemberRequest(_email.Trim(), _inviteRole));
-            if (!response.IsSuccessStatusCode) { _error = await ErrorAsync(response, "Unable to send invitation."); return; }
-            _email = "";
-            await ReloadAsync();
-        }
-        catch (HttpRequestException) { _error = "Unable to send invitation."; }
+        var email = _email.Trim();
+        var role = _inviteRole;
+        await MutateAsync(
+            organizationId => Http.PostAsJsonAsync($"api/organizations/{organizationId}/invitations",
+                new InviteOrganizationMemberRequest(email, role)),
+            "Unable to send invitation.",
+            () => _email = "");
     }
 
-    private async Task ChangeRoleAsync(OrganizationMemberDto member, OrganizationRole role)
+    private Task ChangeRoleAsync(OrganizationMemberDto member, OrganizationRole role) =>
+        MutateAsync(
+            organizationId => Http.PutAsJsonAsync(
+                $"api/organizations/{organizationId}/members/{Uri.EscapeDataString(member.UserId)}/role",
+                new UpdateOrganizationMemberRoleRequest(role)),
+            "Unable to change the member role.");
+
+    private Task RemoveAsync(OrganizationMemberDto member) =>
+        MutateAsync(
+            organizationId => Http.DeleteAsync(
+                $"api/organizations/{organizationId}/members/{Uri.EscapeDataString(member.UserId)}"),
+            "Unable to remove the member.");
+
+    private Task ResendAsync(OrganizationInvitationDto invitation) =>
+        MutateAsync(
+            organizationId => Http.PostAsync(
+                $"api/organizations/{organizationId}/invitations/{invitation.OrganizationInvitationId}/resend", null),
+            "Unable to resend the invitation.");
+
+    private Task RevokeAsync(OrganizationInvitationDto invitation) =>
+        MutateAsync(
+            organizationId => Http.DeleteAsync(
+                $"api/organizations/{organizationId}/invitations/{invitation.OrganizationInvitationId}"),
+            "Unable to revoke the invitation.");
+
+    private async Task MutateAsync(
+        Func<int, Task<HttpResponseMessage>> action,
+        string fallback,
+        Action? onSuccess = null)
     {
+        var key = (OrganizationId, CanManage);
+        var generation = _generation;
+        if (!key.CanManage || !IsCurrent(key, generation)) return;
+
         _error = null;
         try
         {
-            var response = await Http.PutAsJsonAsync(
-                $"api/organizations/{OrganizationId}/members/{Uri.EscapeDataString(member.UserId)}/role",
-                new UpdateOrganizationMemberRoleRequest(role));
-            if (!response.IsSuccessStatusCode) { _error = await ErrorAsync(response, "Unable to change the member role."); return; }
-            await ReloadAsync();
+            var response = await action(key.OrganizationId);
+            if (!IsCurrent(key, generation)) return;
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await ErrorAsync(response, fallback);
+                if (IsCurrent(key, generation)) _error = error;
+                return;
+            }
+
+            onSuccess?.Invoke();
+            await ReloadAsync(key);
         }
-        catch (HttpRequestException) { _error = "Unable to change the member role."; }
+        catch (HttpRequestException)
+        {
+            if (IsCurrent(key, generation)) _error = fallback;
+        }
     }
 
-    private async Task RemoveAsync(OrganizationMemberDto member)
-    {
-        _error = null;
-        try
-        {
-            var response = await Http.DeleteAsync(
-                $"api/organizations/{OrganizationId}/members/{Uri.EscapeDataString(member.UserId)}");
-            if (!response.IsSuccessStatusCode) { _error = await ErrorAsync(response, "Unable to remove the member."); return; }
-            await ReloadAsync();
-        }
-        catch (HttpRequestException) { _error = "Unable to remove the member."; }
-    }
-
-    private async Task ResendAsync(OrganizationInvitationDto invitation)
-    {
-        _error = null;
-        try
-        {
-            var response = await Http.PostAsync(
-                $"api/organizations/{OrganizationId}/invitations/{invitation.OrganizationInvitationId}/resend", null);
-            if (!response.IsSuccessStatusCode) _error = await ErrorAsync(response, "Unable to resend the invitation.");
-            else await ReloadAsync();
-        }
-        catch (HttpRequestException) { _error = "Unable to resend the invitation."; }
-    }
-
-    private async Task RevokeAsync(OrganizationInvitationDto invitation)
-    {
-        _error = null;
-        try
-        {
-            var response = await Http.DeleteAsync(
-                $"api/organizations/{OrganizationId}/invitations/{invitation.OrganizationInvitationId}");
-            if (!response.IsSuccessStatusCode) _error = await ErrorAsync(response, "Unable to revoke the invitation.");
-            else await ReloadAsync();
-        }
-        catch (HttpRequestException) { _error = "Unable to revoke the invitation."; }
-    }
+    private bool IsCurrent((int OrganizationId, bool CanManage) key, long generation) =>
+        !_disposed
+        && generation == _generation
+        && _lastParameterKey == key
+        && (OrganizationId, CanManage) == key;
 
     private static async Task<string> ErrorAsync(HttpResponseMessage response, string fallback)
     {
@@ -180,6 +206,12 @@
         catch { return fallback; }
     }
 
-    public void Dispose() { _loadCancellation?.Cancel(); _loadCancellation?.Dispose(); }
+    public void Dispose()
+    {
+        _disposed = true;
+        _generation++;
+        _loadCancellation?.Cancel();
+        _loadCancellation?.Dispose();
+    }
     private sealed class ProblemDetails { public string? Detail { get; set; } }
 }

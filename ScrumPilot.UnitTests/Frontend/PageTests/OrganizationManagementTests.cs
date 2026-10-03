@@ -98,10 +98,41 @@ public sealed class OrganizationManagementTests : FrontendTestBase
         foreach (var checkbox in cut.FindAll("input[type='checkbox']"))
             checkbox.Change(true);
         await cut.Find("button[data-action='leave']").ClickAsync(new());
+        cut.FindAll("input[type='checkbox']")[1].Change(true);
         await cut.Find("button[data-action='delete']").ClickAsync(new());
 
         Assert.Contains(HttpRequestLog, x => x.Method == HttpMethod.Post && x.Url == "api/organizations/7/leave");
         Assert.Contains(HttpRequestLog, x => x.Method == HttpMethod.Delete && x.Url == "api/organizations/7");
+    }
+
+    [Fact]
+    public async Task Danger_zone_resets_confirmation_and_ignores_completion_after_organization_changes()
+    {
+        var delayed = new TaskCompletionSource<HttpResponseMessage>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        HttpResponseFactoryAsync = (_, _) => delayed.Task;
+        var changed = 0;
+        var cut = Render<OrganizationDangerZone>(parameters => parameters
+            .Add(component => component.Organization,
+                new OrganizationSummaryDto(1, "A", OrganizationRole.Owner, false))
+            .Add(component => component.Changed, () => changed++));
+        cut.FindAll("input[type='checkbox']")[0].Change(true);
+        var leave = cut.Find("button[data-action='leave']");
+        var mutation = leave.ClickAsync(new());
+
+        cut.Render(parameters => parameters
+            .Add(component => component.Organization,
+                new OrganizationSummaryDto(2, "B", OrganizationRole.Owner, false))
+            .Add(component => component.Changed, () => changed++));
+
+        Assert.True(cut.Find("button[data-action='leave']").HasAttribute("disabled"));
+        Assert.True(cut.Find("button[data-action='delete']").HasAttribute("disabled"));
+
+        delayed.SetResult(new HttpResponseMessage(HttpStatusCode.NoContent));
+        await mutation;
+
+        Assert.Equal(0, changed);
+        Assert.DoesNotContain("Unable", cut.Markup);
     }
 
     [Fact]
@@ -179,6 +210,158 @@ public sealed class OrganizationManagementTests : FrontendTestBase
     }
 
     [Fact]
+    public void Organization_members_ignores_delayed_load_from_previous_organization()
+    {
+        var delayed = new TaskCompletionSource<HttpResponseMessage>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        HttpResponseFactoryAsync = (request, _) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path.EndsWith("/organizations/1/members", StringComparison.Ordinal))
+                return delayed.Task;
+            if (path.EndsWith("/organizations/2/members", StringComparison.Ordinal))
+                return Task.FromResult(Json(new[]
+                {
+                    new OrganizationMemberDto(2, "member-b", OrganizationRole.Member, DateTime.UtcNow)
+                }));
+            return Task.FromResult(Json(Array.Empty<OrganizationInvitationDto>()));
+        };
+        var cut = Render<OrganizationMembers>(parameters => parameters
+            .Add(component => component.OrganizationId, 1)
+            .Add(component => component.CanManage, true));
+        cut.WaitForState(() => HttpRequests.Contains("api/organizations/1/members"));
+
+        cut.Render(parameters => parameters
+            .Add(component => component.OrganizationId, 2)
+            .Add(component => component.CanManage, true));
+        cut.WaitForState(() => cut.Markup.Contains("member-b", StringComparison.Ordinal));
+        delayed.SetResult(Json(new[]
+        {
+            new OrganizationMemberDto(1, "member-a", OrganizationRole.Member, DateTime.UtcNow)
+        }));
+        cut.WaitForAssertion(() => Assert.DoesNotContain("member-a", cut.Markup));
+
+        Assert.Contains("member-b", cut.Markup);
+        Assert.Contains("api/organizations/2/invitations", HttpRequests);
+        Assert.DoesNotContain("api/organizations/1/invitations", HttpRequests);
+    }
+
+    [Fact]
+    public void Project_access_ignores_delayed_load_from_previous_project()
+    {
+        var delayed = new TaskCompletionSource<HttpResponseMessage>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        HttpResponseFactoryAsync = (request, _) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            return path.EndsWith("/projects/1/members", StringComparison.Ordinal)
+                ? delayed.Task
+                : Task.FromResult(Json(new[]
+                {
+                    new ProjectMemberAccessDto("member-b", OrganizationRole.Member, false)
+                }));
+        };
+        var cut = Render<ProjectAccessEditor>(parameters => parameters
+            .Add(component => component.ProjectId, 1)
+            .Add(component => component.CanManage, true));
+        cut.WaitForState(() => HttpRequests.Contains("api/projects/1/members"));
+
+        cut.Render(parameters => parameters
+            .Add(component => component.ProjectId, 2)
+            .Add(component => component.CanManage, true));
+        cut.WaitForState(() => cut.Markup.Contains("member-b", StringComparison.Ordinal));
+        delayed.SetResult(Json(new[]
+        {
+            new ProjectMemberAccessDto("member-a", OrganizationRole.Member, false)
+        }));
+        cut.WaitForAssertion(() => Assert.DoesNotContain("member-a", cut.Markup));
+
+        Assert.Contains("member-b", cut.Markup);
+    }
+
+    [Fact]
+    public async Task Organization_members_ignores_delayed_mutation_after_organization_changes()
+    {
+        var delayed = new TaskCompletionSource<HttpResponseMessage>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        HttpResponseFactoryAsync = (request, _) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (request.Method == HttpMethod.Put && path.Contains("/organizations/1/", StringComparison.Ordinal))
+                return delayed.Task;
+            if (path.EndsWith("/invitations", StringComparison.Ordinal))
+                return Task.FromResult(Json(Array.Empty<OrganizationInvitationDto>()));
+            var organizationId = path.Contains("/organizations/1/", StringComparison.Ordinal) ? 1 : 2;
+            return Task.FromResult(Json(new[]
+            {
+                new OrganizationMemberDto(
+                    organizationId,
+                    organizationId == 1 ? "member-a" : "member-b",
+                    OrganizationRole.Member,
+                    DateTime.UtcNow)
+            }));
+        };
+        var cut = Render<OrganizationMembers>(parameters => parameters
+            .Add(component => component.OrganizationId, 1)
+            .Add(component => component.CanManage, true));
+        cut.WaitForState(() => cut.Markup.Contains("member-a", StringComparison.Ordinal));
+        cut.Find("input[type='checkbox']").Change(true);
+        var mutation = cut.Find("button[data-action='promote']").ClickAsync(new());
+
+        cut.Render(parameters => parameters
+            .Add(component => component.OrganizationId, 2)
+            .Add(component => component.CanManage, true));
+        cut.WaitForState(() => cut.Markup.Contains("member-b", StringComparison.Ordinal));
+        delayed.SetResult(new HttpResponseMessage(HttpStatusCode.NoContent));
+        await mutation;
+
+        Assert.Contains("member-b", cut.Markup);
+        Assert.DoesNotContain("member-a", cut.Markup);
+        Assert.DoesNotContain("Unable", cut.Markup);
+        Assert.Single(HttpRequestLog, request =>
+            request.Method == HttpMethod.Get && request.Url == "api/organizations/1/members");
+    }
+
+    [Fact]
+    public async Task Project_access_ignores_delayed_mutation_after_project_changes()
+    {
+        var delayed = new TaskCompletionSource<HttpResponseMessage>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        HttpResponseFactoryAsync = (request, _) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (request.Method == HttpMethod.Put && path.Contains("/projects/1/", StringComparison.Ordinal))
+                return delayed.Task;
+            var projectId = path.Contains("/projects/1/", StringComparison.Ordinal) ? 1 : 2;
+            return Task.FromResult(Json(new[]
+            {
+                new ProjectMemberAccessDto(
+                    projectId == 1 ? "member-a" : "member-b",
+                    OrganizationRole.Member,
+                    false)
+            }));
+        };
+        var cut = Render<ProjectAccessEditor>(parameters => parameters
+            .Add(component => component.ProjectId, 1)
+            .Add(component => component.CanManage, true));
+        cut.WaitForState(() => cut.Markup.Contains("member-a", StringComparison.Ordinal));
+        var mutation = cut.Find("button[data-user='member-a']").ClickAsync(new());
+
+        cut.Render(parameters => parameters
+            .Add(component => component.ProjectId, 2)
+            .Add(component => component.CanManage, true));
+        cut.WaitForState(() => cut.Markup.Contains("member-b", StringComparison.Ordinal));
+        delayed.SetResult(new HttpResponseMessage(HttpStatusCode.NoContent));
+        await mutation;
+
+        Assert.Contains("member-b", cut.Markup);
+        Assert.DoesNotContain("member-a", cut.Markup);
+        Assert.DoesNotContain("Unable", cut.Markup);
+        Assert.Single(HttpRequestLog, request =>
+            request.Method == HttpMethod.Get && request.Url == "api/projects/1/members");
+    }
+
+    [Fact]
     public void Members_and_project_access_do_not_reload_for_unchanged_parameters()
     {
         HttpResponseFactory = request => request.RequestUri!.AbsolutePath.Contains("/projects/", StringComparison.Ordinal)
@@ -211,6 +394,69 @@ public sealed class OrganizationManagementTests : FrontendTestBase
         cut.Render();
 
         Assert.Equal("Edited locally", cut.Find("input").GetAttribute("value"));
+    }
+
+    [Fact]
+    public async Task Organization_details_ignores_delayed_rename_after_organization_changes()
+    {
+        var delayed = new TaskCompletionSource<HttpResponseMessage>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        HttpResponseFactoryAsync = (_, _) => delayed.Task;
+        var changed = 0;
+        var cut = Render<OrganizationDetails>(parameters => parameters
+            .Add(component => component.Organization,
+                new OrganizationSummaryDto(1, "A", OrganizationRole.Owner, false))
+            .Add(component => component.OrganizationChanged,
+                (OrganizationSummaryDto _) => changed++));
+        cut.Find("input").Change("Renamed A");
+        var mutation = cut.Find("button[data-action='rename']").ClickAsync(new());
+
+        cut.Render(parameters => parameters
+            .Add(component => component.Organization,
+                new OrganizationSummaryDto(2, "B", OrganizationRole.Owner, false))
+            .Add(component => component.OrganizationChanged,
+                (OrganizationSummaryDto _) => changed++));
+        delayed.SetResult(Json(new OrganizationSummaryDto(1, "Renamed A", OrganizationRole.Owner, false)));
+        await mutation;
+
+        Assert.Equal("B", cut.Find("input").GetAttribute("value"));
+        Assert.Equal(0, changed);
+    }
+
+    [Fact]
+    public async Task Project_management_ignores_delayed_create_after_organization_changes()
+    {
+        var delayed = new TaskCompletionSource<HttpResponseMessage>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        HttpResponseFactoryAsync = (request, _) =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (request.Method == HttpMethod.Post
+                && path.EndsWith("/organizations/1/projects", StringComparison.Ordinal))
+            {
+                return delayed.Task;
+            }
+
+            return Task.FromResult(Json(Array.Empty<Project>()));
+        };
+        var state = Services.GetRequiredService<OrganizationStateService>();
+        state.SetOrganization(new OrganizationSummaryDto(1, "A", OrganizationRole.Owner, false));
+        var cut = Render<ProjectManagement>();
+        cut.WaitForState(() => cut.Markup.Contains("Add Project", StringComparison.Ordinal));
+        cut.Find("button[title='Add Project']").Click();
+        cut.Find("input").Change("A project");
+        var mutation = cut.FindAll("button").Single(button => button.TextContent.Trim() == "Save")
+            .ClickAsync(new());
+
+        await cut.InvokeAsync(() => state.SetOrganization(
+            new OrganizationSummaryDto(2, "B", OrganizationRole.Member, false)));
+        cut.WaitForState(() => HttpRequests.Contains("api/organizations/2/projects"));
+        delayed.SetResult(Json(new Project { ProjectId = 10, ProjectName = "A project" }, HttpStatusCode.Created));
+        await mutation;
+
+        Assert.DoesNotContain("A project", cut.Markup);
+        Assert.DoesNotContain("Add Project", cut.Markup);
+        Assert.Null(Services.GetRequiredService<ProjectStateService>().SelectedProjectId);
     }
 
     [Fact]

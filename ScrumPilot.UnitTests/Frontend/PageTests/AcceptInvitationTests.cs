@@ -54,6 +54,29 @@ public sealed class AcceptInvitationTests : FrontendTestBase
     }
 
     [Theory]
+    [InlineData("")]
+    [InlineData("{")]
+    public void Successful_acceptance_with_unreadable_payload_removes_consumed_token(string payload)
+    {
+        Authorization.SetAuthorized("member");
+        HttpResponseFactory = _ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(payload)
+        };
+        var navigation = Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();
+        navigation.NavigateTo("/accept-invitation?token=one-time");
+
+        var exception = Record.Exception(() =>
+        {
+            Render<AcceptInvitation>();
+            Assert.DoesNotContain("token=", navigation.Uri);
+        });
+
+        Assert.Null(exception);
+        Assert.DoesNotContain("token=", navigation.Uri);
+    }
+
+    [Theory]
     [InlineData(HttpStatusCode.BadRequest, "expired")]
     [InlineData(HttpStatusCode.Conflict, "already")]
     public void Failed_acceptance_shows_actionable_message(HttpStatusCode status, string expected)
