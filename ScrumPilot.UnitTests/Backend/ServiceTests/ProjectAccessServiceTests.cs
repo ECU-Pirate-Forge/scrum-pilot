@@ -15,6 +15,8 @@ public sealed class ProjectAccessServiceTests : IAsyncDisposable
     private readonly SqliteConnection _connection = new("Data Source=:memory:");
     private readonly ScrumPilotContext _context;
     private readonly IOrganizationAccessService _access = Substitute.For<IOrganizationAccessService>();
+    private readonly IPlanningPokerConnectionEvictor _evictor =
+        Substitute.For<IPlanningPokerConnectionEvictor>();
     private readonly ProjectService _service;
 
     public ProjectAccessServiceTests()
@@ -26,7 +28,8 @@ public sealed class ProjectAccessServiceTests : IAsyncDisposable
         _service = new ProjectService(
             new ProjectAccessRepository(_context),
             _access,
-            new TestTimeProvider(new DateTimeOffset(2026, 10, 3, 4, 0, 0, TimeSpan.Zero)));
+            new TestTimeProvider(new DateTimeOffset(2026, 10, 3, 4, 0, 0, TimeSpan.Zero)),
+            _evictor);
     }
 
     [Fact]
@@ -143,6 +146,19 @@ public sealed class ProjectAccessServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task DeleteAsync_EvictsAllProjectConnections()
+    {
+        await SeedAsync();
+        ConfigureOwnerMutation();
+
+        await _service.DeleteAsync("owner", 10);
+
+        await _evictor.Received(1).EvictProjectAsync(
+            10,
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task SetAccessAsync_RejectsForeignTargetAndOrganizationOwner()
     {
         await SeedAsync();
@@ -172,7 +188,8 @@ public sealed class ProjectAccessServiceTests : IAsyncDisposable
         var service = new ProjectService(
             repository,
             _access,
-            new TestTimeProvider(new DateTimeOffset(2026, 10, 3, 4, 0, 0, TimeSpan.Zero)));
+            new TestTimeProvider(new DateTimeOffset(2026, 10, 3, 4, 0, 0, TimeSpan.Zero)),
+            _evictor);
         ConfigureOwnerMutation();
 
         await Assert.ThrowsAsync<ProjectConflictException>(
@@ -189,6 +206,10 @@ public sealed class ProjectAccessServiceTests : IAsyncDisposable
         await _context.SaveChangesAsync();
 
         await _service.SetAccessAsync("owner", 10, "member", new(false));
+        await _evictor.Received(1).EvictUserFromProjectAsync(
+            "member",
+            10,
+            Arg.Any<CancellationToken>());
         await _service.SetAccessAsync("owner", 10, "member", new(true));
 
         Assert.True(await _context.ProjectMemberships.AnyAsync(x =>

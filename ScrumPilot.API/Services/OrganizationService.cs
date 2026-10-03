@@ -8,13 +8,21 @@ public sealed class OrganizationService(
     IOrganizationRepository repository,
     ICurrentUser currentUser,
     IOrganizationAccessService accessService,
-    TimeProvider timeProvider) : IOrganizationService
+    TimeProvider timeProvider,
+    IPlanningPokerConnectionEvictor connectionEvictor) : IOrganizationService
 {
     private const int MaxNameLength = 200;
 
     public Task<IReadOnlyList<OrganizationSummaryDto>> ListAsync(
         CancellationToken cancellationToken = default) =>
         repository.ListForUserAsync(currentUser.UserId, cancellationToken);
+
+    public Task<IReadOnlyList<OrganizationSummaryDto>> ListDeletedAsync(
+        CancellationToken cancellationToken = default) =>
+        repository.ListDeletedForUserAsync(
+            currentUser.UserId,
+            currentUser.IsInRole("Admin"),
+            cancellationToken);
 
     public async Task<OrganizationSummaryDto> GetAsync(
         int organizationId,
@@ -89,6 +97,7 @@ public sealed class OrganizationService(
             organizationId,
             UtcNow,
             cancellationToken));
+        await connectionEvictor.EvictOrganizationAsync(organizationId, cancellationToken);
     }
 
     public async Task<OrganizationSummaryDto> RestoreAsync(
@@ -141,6 +150,7 @@ public sealed class OrganizationService(
         }
 
         HandleMutation(await repository.PurgeAsync(organizationId, cancellationToken));
+        await connectionEvictor.EvictOrganizationAsync(organizationId, cancellationToken);
     }
 
     public async Task<IReadOnlyList<OrganizationMemberDto>> ListMembersAsync(
@@ -167,6 +177,10 @@ public sealed class OrganizationService(
             userId,
             request.Role,
             cancellationToken));
+        await connectionEvictor.EvictUserFromOrganizationAsync(
+            userId,
+            organizationId,
+            cancellationToken);
     }
 
     public async Task RemoveMemberAsync(
@@ -179,6 +193,10 @@ public sealed class OrganizationService(
             organizationId,
             userId,
             cancellationToken));
+        await connectionEvictor.EvictUserFromOrganizationAsync(
+            userId,
+            organizationId,
+            cancellationToken);
     }
 
     public async Task LeaveAsync(
@@ -190,6 +208,10 @@ public sealed class OrganizationService(
             organizationId,
             currentUser.UserId,
             cancellationToken));
+        await connectionEvictor.EvictUserFromOrganizationAsync(
+            currentUser.UserId,
+            organizationId,
+            cancellationToken);
     }
 
     private DateTime UtcNow => timeProvider.GetUtcNow().UtcDateTime;

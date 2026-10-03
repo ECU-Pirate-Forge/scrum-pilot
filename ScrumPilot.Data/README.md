@@ -28,7 +28,7 @@ Organization owners have implicit access to every project in their organization.
 7. Creates explicit project memberships for migrated non-owner members.
 8. Creates invitation storage and token indexes.
 
-Startup runs `PirateForgeBootstrapper` in a serializable transaction (plus a PostgreSQL advisory lock), seeds missing development users/data idempotently, repairs Pirate Forge memberships/access, retries classified transient conflicts, and validates the global-Admin owner invariant. If no existing global Admin can own Pirate Forge, startup fails with instructions to assign one.
+Startup creates missing development seed users, then runs `PirateForgeBootstrapper` in a serializable transaction (plus a PostgreSQL advisory lock). Only seed users newly created in that invocation receive initial Pirate Forge membership and project access, so manual membership or grant revocations remain durable across restarts. Existing member Admins are promoted to Owner when needed; an Admin without membership is not re-added. The bootstrap retries classified transient conflicts and validates the global-Admin owner invariant.
 
 ## Lifecycle behavior
 

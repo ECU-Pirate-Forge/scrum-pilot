@@ -10,7 +10,8 @@ namespace ScrumPilot.API.Services;
 public sealed class ProjectService(
     IProjectAccessRepository repository,
     IOrganizationAccessService accessService,
-    TimeProvider timeProvider) : IProjectService
+    TimeProvider timeProvider,
+    IPlanningPokerConnectionEvictor connectionEvictor) : IProjectService
 {
     private const int MaxNameLength = 200;
 
@@ -96,6 +97,7 @@ public sealed class ProjectService(
         {
             throw new ProjectNotFoundException();
         }
+        await connectionEvictor.EvictProjectAsync(projectId, cancellationToken);
     }
 
     public async Task<IReadOnlyList<ProjectMemberAccessDto>> GetMembersAsync(
@@ -143,6 +145,13 @@ public sealed class ProjectService(
         switch (result)
         {
             case ProjectAccessMutationResult.Success:
+                if (!request.HasAccess)
+                {
+                    await connectionEvictor.EvictUserFromProjectAsync(
+                        userId,
+                        projectId,
+                        cancellationToken);
+                }
                 return;
             case ProjectAccessMutationResult.ProjectNotFound:
                 throw new ProjectNotFoundException();

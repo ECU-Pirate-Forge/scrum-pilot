@@ -190,6 +190,13 @@ public sealed class OrganizationInvitationRepository(ScrumPilotContext context)
                     await transaction.CommitAsync(cancellationToken);
                     return InvitationAcceptanceResult.Expired;
                 }
+                if (!await context.Organizations.AnyAsync(
+                        x => x.OrganizationId == invitation.OrganizationId
+                             && x.DeletedAt == null,
+                        cancellationToken))
+                {
+                    return InvitationAcceptanceResult.Invalid;
+                }
                 if (await context.OrganizationMemberships.AnyAsync(
                         x => x.OrganizationId == invitation.OrganizationId && x.UserId == userId,
                         cancellationToken))

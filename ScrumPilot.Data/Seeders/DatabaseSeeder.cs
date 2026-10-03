@@ -542,10 +542,11 @@ namespace ScrumPilot.Data.Seeders
             Console.WriteLine($"[SEEDER] Created {history.Count} PbiStatusHistory entries for burndown accuracy.");
         }
 
-        public static async Task SeedUsersAsync(
+        public static async Task<IReadOnlySet<string>> SeedUsersAsync(
             UserManager<ApplicationUser> userManager,
             RoleManager<IdentityRole> roleManager)
         {
+            var createdUserIds = new HashSet<string>(StringComparer.Ordinal);
             // Seed roles
             string[] roles = ["Admin", "Developer"];
             foreach (var role in roles)
@@ -603,13 +604,17 @@ namespace ScrumPilot.Data.Seeders
                 EnsureSucceeded(
                     await userManager.AddToRoleAsync(user, seed.Role),
                     $"assign {seed.Role} to seeded user {seed.Email}");
+                createdUserIds.Add(user.Id);
                 Console.WriteLine($"[SEEDER] Created user: {seed.Email} [{seed.Role}]");
             }
+
+            return createdUserIds;
         }
 
         public static async Task SeedPirateForgeMembershipsAsync(
             ScrumPilotContext context,
             TimeProvider timeProvider,
+            IReadOnlyCollection<string> newlyCreatedUserIds,
             CancellationToken cancellationToken = default)
         {
             if (context.Database.CurrentTransaction is not null)
@@ -617,6 +622,7 @@ namespace ScrumPilot.Data.Seeders
                 await SeedPirateForgeMembershipsCoreAsync(
                     context,
                     timeProvider,
+                    newlyCreatedUserIds,
                     cancellationToken);
                 return;
             }
@@ -627,6 +633,7 @@ namespace ScrumPilot.Data.Seeders
             await SeedPirateForgeMembershipsCoreAsync(
                 context,
                 timeProvider,
+                newlyCreatedUserIds,
                 cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
@@ -634,6 +641,7 @@ namespace ScrumPilot.Data.Seeders
         private static async Task SeedPirateForgeMembershipsCoreAsync(
             ScrumPilotContext context,
             TimeProvider timeProvider,
+            IReadOnlyCollection<string> newlyCreatedUserIds,
             CancellationToken cancellationToken)
         {
             var organization = await EnsurePirateForgeOrganizationAsync(
@@ -646,7 +654,11 @@ namespace ScrumPilot.Data.Seeders
             }
 
             var now = timeProvider.GetUtcNow().UtcDateTime;
+            var candidateIds = newlyCreatedUserIds
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
             var userIds = await context.Users
+                .Where(x => candidateIds.Contains(x.Id))
                 .OrderBy(x => x.Id)
                 .Select(x => x.Id)
                 .ToListAsync(cancellationToken);
@@ -664,21 +676,24 @@ namespace ScrumPilot.Data.Seeders
             var memberships = await context.OrganizationMemberships
                 .Where(x => x.OrganizationId == organization.OrganizationId)
                 .ToDictionaryAsync(x => x.UserId, StringComparer.Ordinal, cancellationToken);
-            if (!memberships.Values.Any(x => x.Role == OrganizationRole.Owner)
-                && adminIdSet.Count == 0)
-            {
-                throw new InvalidOperationException(OrganizationBootstrapValidator.MissingOwnerMessage);
-            }
-
             var newlyCreatedMemberIds = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var membership in memberships.Values)
+            {
+                if (adminIds.Contains(membership.UserId, StringComparer.Ordinal)
+                    && membership.Role != OrganizationRole.Owner)
+                {
+                    membership.Role = OrganizationRole.Owner;
+                }
+            }
 
             foreach (var userId in userIds)
             {
                 if (memberships.TryGetValue(userId, out var membership))
                 {
-                    if (adminIdSet.Contains(userId) && membership.Role != OrganizationRole.Owner)
+                    if (membership.Role == OrganizationRole.Member)
                     {
-                        membership.Role = OrganizationRole.Owner;
+                        newlyCreatedMemberIds.Add(userId);
                     }
                     continue;
                 }
@@ -745,7 +760,6 @@ namespace ScrumPilot.Data.Seeders
                     }
                 }
             }
-            await context.SaveChangesAsync(cancellationToken);
             await context.SaveChangesAsync(cancellationToken);
         }
 

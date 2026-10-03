@@ -24,6 +24,10 @@ public interface IOrganizationRepository
     Task<IReadOnlyList<OrganizationSummaryDto>> ListForUserAsync(
         string userId,
         CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<OrganizationSummaryDto>> ListDeletedForUserAsync(
+        string userId,
+        bool includeAll,
+        CancellationToken cancellationToken = default);
     Task<OrganizationSummaryDto?> GetForUserAsync(
         int organizationId,
         string userId,

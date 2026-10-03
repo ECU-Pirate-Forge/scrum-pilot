@@ -152,6 +152,57 @@ public sealed class OrganizationManagementTests : FrontendTestBase
     }
 
     [Fact]
+    public void Deleted_organizations_are_reachable_without_loading_their_projects()
+    {
+        var deleted = new OrganizationSummaryDto(9, "Deleted Forge", OrganizationRole.Owner, true);
+        HttpResponseFactory = request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path.EndsWith("/organizations/deleted", StringComparison.Ordinal))
+                return Json(new[] { deleted });
+            if (path.EndsWith("/organizations", StringComparison.Ordinal))
+                return Json(Array.Empty<OrganizationSummaryDto>());
+            return Json(Array.Empty<Project>());
+        };
+
+        var cut = Render<OrganizationManagement>();
+        cut.WaitForState(() => cut.Markup.Contains("Deleted Forge"));
+
+        Assert.Contains("Deleted organizations", cut.Markup);
+        Assert.Contains("data-action=\"restore\"", cut.Markup);
+        Assert.DoesNotContain("api/organizations/9/projects", HttpRequests);
+    }
+
+    [Fact]
+    public void Reload_replaces_stale_selection_and_clears_project_state()
+    {
+        var organizationState = Services.GetRequiredService<OrganizationStateService>();
+        var projectState = Services.GetRequiredService<ProjectStateService>();
+        organizationState.SetOrganization(
+            new OrganizationSummaryDto(1, "A", OrganizationRole.Owner, false));
+        projectState.SetProject(new Project
+        {
+            ProjectId = 11,
+            OrganizationId = 1,
+            ProjectName = "A project"
+        });
+        var fallback = new OrganizationSummaryDto(2, "B", OrganizationRole.Owner, false);
+        HttpResponseFactory = request =>
+            request.RequestUri!.AbsolutePath.EndsWith("/organizations/deleted")
+                ? Json(Array.Empty<OrganizationSummaryDto>())
+                : request.RequestUri.AbsolutePath.EndsWith("/organizations")
+                    ? Json(new[] { fallback })
+                    : Json(Array.Empty<Project>());
+
+        var cut = Render<OrganizationManagement>();
+        cut.WaitForState(() => cut.Markup.Contains("B"));
+
+        Assert.Equal(2, organizationState.SelectedOrganizationId);
+        Assert.Null(projectState.SelectedProjectId);
+        Assert.DoesNotContain("A project", cut.Markup);
+    }
+
+    [Fact]
     public void Project_management_uses_selected_organization_and_hides_owner_controls_from_member()
     {
         Services.GetRequiredService<OrganizationStateService>().SetOrganization(

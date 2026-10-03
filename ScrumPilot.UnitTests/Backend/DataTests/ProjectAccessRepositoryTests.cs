@@ -60,6 +60,9 @@ public sealed class ProjectAccessRepositoryTests : IAsyncDisposable
         services.AddScoped<IOrganizationAccessService, OrganizationAccessService>();
         services.AddScoped<IProjectService, ProjectService>();
         services.AddSingleton(TimeProvider.System);
+        services.AddSignalR();
+        services.AddSingleton<PlanningPokerSessionService>();
+        services.AddSingleton<IPlanningPokerConnectionEvictor, PlanningPokerConnectionEvictor>();
 
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();

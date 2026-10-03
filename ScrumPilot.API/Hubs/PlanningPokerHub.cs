@@ -15,7 +15,7 @@ public class PlanningPokerHub(
     private const string ProjectNotFoundMessage = "Project not found.";
     private const string PbiNotFoundMessage = "Product backlog item not found.";
 
-    private static string GroupName(PlanningPokerSessionKey key) =>
+    internal static string GroupName(PlanningPokerSessionKey key) =>
         $"planning-poker-{key.OrganizationId}-{key.ProjectId}";
 
     private string? GetAuthenticatedUserId()
@@ -138,11 +138,11 @@ public class PlanningPokerHub(
         await RemoveFromSessionAsync();
 
         var sessionKey = new PlanningPokerSessionKey(organizationId.Value, projectId);
-        var trustedDisplayName = principal.Identity.Name;
+        var trustedDisplayName = principal?.Identity?.Name;
         if (string.IsNullOrWhiteSpace(trustedDisplayName))
             trustedDisplayName = userId;
 
-        session.AddParticipant(Context.ConnectionId, trustedDisplayName, sessionKey);
+        session.AddParticipant(Context.ConnectionId, userId, trustedDisplayName, sessionKey);
         var group = GroupName(sessionKey);
         try
         {

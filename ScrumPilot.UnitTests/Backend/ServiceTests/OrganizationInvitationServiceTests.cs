@@ -277,6 +277,26 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task AcceptAsync_DeletedOrganizationIsGenericNotFoundAndAddsNoMembership()
+    {
+        await SeedAsync();
+        await _service.InviteAsync(
+            _organizationId,
+            new("member@example.com", OrganizationRole.Member));
+        var token = _sender.Token!;
+        var organization = await _context.Organizations.FindAsync(_organizationId);
+        organization!.DeletedAt = _clock.GetUtcNow().UtcDateTime;
+        await _context.SaveChangesAsync();
+        _currentUser.UserId.Returns("member");
+
+        await Assert.ThrowsAsync<OrganizationNotFoundException>(
+            () => _service.AcceptAsync(new(token)));
+
+        Assert.False(await _context.OrganizationMemberships.AnyAsync(x =>
+            x.OrganizationId == _organizationId && x.UserId == "member"));
+    }
+
+    [Fact]
     public async Task AcceptAsync_UsesConfirmedDatabaseEmailInsteadOfStaleJwtEmail()
     {
         await SeedAsync();

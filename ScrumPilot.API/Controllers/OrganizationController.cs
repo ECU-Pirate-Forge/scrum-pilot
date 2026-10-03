@@ -17,6 +17,13 @@ public sealed class OrganizationController(IOrganizationService service) : Contr
             () => service.ListAsync(cancellationToken),
             value => Ok(value));
 
+    [HttpGet("deleted")]
+    public Task<ActionResult<IReadOnlyList<OrganizationSummaryDto>>> ListDeleted(
+        CancellationToken cancellationToken = default) =>
+        ExecuteAsync(
+            () => service.ListDeletedAsync(cancellationToken),
+            value => Ok(value));
+
     [HttpPost]
     public Task<ActionResult<OrganizationCreatedDto>> Create(
         [FromBody] CreateOrganizationRequest request,

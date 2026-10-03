@@ -16,6 +16,8 @@ public sealed class OrganizationServiceTests : IAsyncDisposable
     private readonly ScrumPilotContext _context;
     private readonly ICurrentUser _currentUser = Substitute.For<ICurrentUser>();
     private readonly IOrganizationAccessService _access = Substitute.For<IOrganizationAccessService>();
+    private readonly IPlanningPokerConnectionEvictor _evictor =
+        Substitute.For<IPlanningPokerConnectionEvictor>();
     private readonly TestTimeProvider _clock = new(new DateTimeOffset(2026, 10, 3, 3, 0, 0, TimeSpan.Zero));
     private readonly OrganizationService _service;
 
@@ -30,7 +32,8 @@ public sealed class OrganizationServiceTests : IAsyncDisposable
             new OrganizationRepository(_context),
             _currentUser,
             _access,
-            _clock);
+            _clock,
+            _evictor);
     }
 
     [Fact]
@@ -50,6 +53,39 @@ public sealed class OrganizationServiceTests : IAsyncDisposable
         Assert.Equal(active.OrganizationId, organization.OrganizationId);
         Assert.Equal(OrganizationRole.Member, organization.Role);
         Assert.False(organization.IsDeleted);
+    }
+
+    [Fact]
+    public async Task ListDeletedAsync_ReturnsHistoricalOwnersAndAllForGlobalAdmin()
+    {
+        await SeedUserAsync("creator");
+        await SeedUserAsync("other");
+        var owned = await SeedOrganizationAsync(
+            "Owned deleted",
+            ("creator", OrganizationRole.Owner));
+        var notOwned = await SeedOrganizationAsync(
+            "Other deleted",
+            ("other", OrganizationRole.Owner));
+        var memberOnly = await SeedOrganizationAsync(
+            "Member deleted",
+            ("creator", OrganizationRole.Member));
+        owned.DeletedAt = notOwned.DeletedAt = memberOnly.DeletedAt =
+            _clock.GetUtcNow().UtcDateTime;
+        await _context.SaveChangesAsync();
+
+        var ownerResult = await _service.ListDeletedAsync();
+
+        Assert.Equal([owned.OrganizationId], ownerResult.Select(x => x.OrganizationId));
+        Assert.All(ownerResult, x => Assert.True(x.IsDeleted));
+
+        _currentUser.IsInRole("Admin").Returns(true);
+        var adminResult = await _service.ListDeletedAsync();
+
+        Assert.Equal(3, adminResult.Count);
+        Assert.All(adminResult, x => Assert.True(x.IsDeleted));
+        Assert.Equal(
+            OrganizationRole.Member,
+            adminResult.Single(x => x.OrganizationId == notOwned.OrganizationId).Role);
     }
 
     [Fact]
@@ -196,6 +232,10 @@ public sealed class OrganizationServiceTests : IAsyncDisposable
             "creator",
             new(OrganizationRole.Member));
 
+        await _evictor.Received(1).EvictUserFromOrganizationAsync(
+            "creator",
+            organization.OrganizationId,
+            Arg.Any<CancellationToken>());
         await _context.Entry(creator).ReloadAsync();
         Assert.Equal(organization.OrganizationId, creator.DefaultOrganizationId);
         Assert.Null(creator.DefaultProjectId);
@@ -229,6 +269,10 @@ public sealed class OrganizationServiceTests : IAsyncDisposable
 
         await _service.RemoveMemberAsync(organization.OrganizationId, "member");
 
+        await _evictor.Received(1).EvictUserFromOrganizationAsync(
+            "member",
+            organization.OrganizationId,
+            Arg.Any<CancellationToken>());
         Assert.False(await _context.OrganizationMemberships.AnyAsync(x => x.UserId == "member"));
         Assert.False(await _context.ProjectMemberships.AnyAsync(x => x.UserId == "member"));
         await _context.Entry(member).ReloadAsync();
@@ -246,6 +290,49 @@ public sealed class OrganizationServiceTests : IAsyncDisposable
 
         await Assert.ThrowsAsync<OrganizationConflictException>(
             () => _service.LeaveAsync(organization.OrganizationId));
+    }
+
+    [Fact]
+    public async Task LeaveAsync_MemberIsEvictedAfterRemoval()
+    {
+        await SeedUserAsync("creator");
+        await SeedUserAsync("owner");
+        var organization = await SeedOrganizationAsync(
+            "Leave",
+            ("owner", OrganizationRole.Owner),
+            ("creator", OrganizationRole.Member));
+        _access.IsOrganizationMemberAsync(
+                "creator",
+                organization.OrganizationId,
+                Arg.Any<CancellationToken>())
+            .Returns(true);
+
+        await _service.LeaveAsync(organization.OrganizationId);
+
+        await _evictor.Received(1).EvictUserFromOrganizationAsync(
+            "creator",
+            organization.OrganizationId,
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DeleteAsync_EvictsAllOrganizationConnections()
+    {
+        await SeedUserAsync("creator");
+        var organization = await SeedOrganizationAsync(
+            "Delete",
+            ("creator", OrganizationRole.Owner));
+        _access.IsOrganizationOwnerAsync(
+                "creator",
+                organization.OrganizationId,
+                Arg.Any<CancellationToken>())
+            .Returns(true);
+
+        await _service.DeleteAsync(organization.OrganizationId);
+
+        await _evictor.Received(1).EvictOrganizationAsync(
+            organization.OrganizationId,
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -297,6 +384,9 @@ public sealed class OrganizationServiceTests : IAsyncDisposable
 
         _currentUser.IsInRole("Admin").Returns(true);
         await _service.PurgeAsync(organization.OrganizationId);
+        await _evictor.Received(1).EvictOrganizationAsync(
+            organization.OrganizationId,
+            Arg.Any<CancellationToken>());
         Assert.Null(await _context.Organizations.FindAsync(organization.OrganizationId));
         Assert.False(await _context.Projects.AnyAsync(x => x.ProjectId == project.ProjectId));
         await _context.Entry(creator).ReloadAsync();

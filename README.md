@@ -25,7 +25,7 @@ ScrumPilot is a .NET 10 application for backlog management, Scrum boards, sprint
 
 ### Pirate Forge migration and bootstrap
 
-The `AddOrganizationTenancy` migration creates `Pirate Forge`, assigns every existing project to it, makes existing global Admin users owners, makes other existing users members, and gives those members explicit access to all migrated projects. Startup bootstrap is idempotent and validates that Pirate Forge has at least one owner backed by an existing global Admin. Startup fails with an actionable error if that invariant cannot be satisfied.
+The `AddOrganizationTenancy` migration creates `Pirate Forge`, assigns every existing project to it, makes existing global Admin users owners, makes other existing users members, and gives those members explicit access to all migrated projects. Startup grants initial Pirate Forge membership and project access only to development seed users created during that startup; deliberately removed users are not recreated as members. Existing member Admins may be promoted to Owner, and startup validation fails with an actionable error if Pirate Forge has no owner backed by a global Admin.
 
 ### Invitations
 
@@ -86,7 +86,7 @@ Committed `appsettings.json` contains empty SendGrid placeholders only. Docker C
 
 ## Organization UI
 
-The application shell includes a persistent organization switcher and an accessible-project switcher. Selection falls back to the user's default organization/project from `/user-settings`, and inaccessible selections are cleared. `/organization-management` provides Admin-only organization creation and owner controls for rename, invitations, membership roles, project access, leave, delete, and restore. `/user-settings` manages default organization and project preferences.
+The application shell includes a persistent organization switcher and an accessible-project switcher. Selection falls back to the user's default organization/project from `/user-settings`, and inaccessible selections are cleared. `/organization-management` provides Admin-only organization creation and owner controls for rename, invitations, membership roles, project access, leave, and delete. It also lists deleted organizations for historical owners (and all deleted organizations for global Admins), with restore and retention-gated purge actions according to permissions. `/user-settings` manages default organization and project preferences.
 
 ## Verification commands
 

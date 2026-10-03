@@ -43,8 +43,8 @@ public class PlanningPokerSessionServiceTests
     {
         var service = new PlanningPokerSessionService();
         var otherOrganizationKey = new PlanningPokerSessionKey(4, SessionKey.ProjectId);
-        service.AddParticipant("connection-1", "Alice", SessionKey);
-        service.AddParticipant("connection-2", "Bob", otherOrganizationKey);
+        service.AddParticipant("connection-1", "user-1", "Alice", SessionKey);
+        service.AddParticipant("connection-2", "user-2", "Bob", otherOrganizationKey);
 
         service.SetCurrentPbi("connection-1", 42);
         service.SetVote("connection-1", 8);
@@ -63,7 +63,7 @@ public class PlanningPokerSessionServiceTests
     {
         var service = new PlanningPokerSessionService();
         var currentKey = new PlanningPokerSessionKey(4, 9);
-        service.AddParticipant("connection-1", "Alice", currentKey);
+        service.AddParticipant("connection-1", "user-1", "Alice", currentKey);
 
         var removed = service.RemoveParticipant("connection-1", SessionKey);
 
@@ -72,10 +72,29 @@ public class PlanningPokerSessionServiceTests
         Assert.Single(service.GetStateForSession(currentKey).Participants);
     }
 
+    [Fact]
+    public void RemoveUserFromProject_RemovesAllMatchingConnectionsAndLeavesOthers()
+    {
+        var service = new PlanningPokerSessionService();
+        service.AddParticipant("connection-1", "revoked", "Alice", SessionKey);
+        service.AddParticipant("connection-2", "revoked", "Alice mobile", SessionKey);
+        service.AddParticipant("connection-3", "other", "Bob", SessionKey);
+
+        var removed = service.RemoveUserFromProject("revoked", SessionKey.ProjectId);
+
+        Assert.Equal(["connection-1", "connection-2"], removed.Select(x => x.ConnectionId).Order());
+        Assert.All(removed, x => Assert.Equal(SessionKey, x.SessionKey));
+        var remaining = service.GetStateForSession(SessionKey).Participants;
+        Assert.Single(remaining);
+        Assert.Equal("connection-3", remaining[0].ConnectionId);
+        Assert.Null(service.GetSessionKey("connection-1"));
+        Assert.Null(service.GetSessionKey("connection-2"));
+    }
+
     private static PlanningPokerSessionService CreateSession(int currentPbiId)
     {
         var service = new PlanningPokerSessionService();
-        service.AddParticipant("connection-1", "Alice", SessionKey);
+        service.AddParticipant("connection-1", "user-1", "Alice", SessionKey);
         service.SetCurrentPbi("connection-1", currentPbiId);
         service.SetVote("connection-1", points: 8);
         service.Reveal("connection-1");

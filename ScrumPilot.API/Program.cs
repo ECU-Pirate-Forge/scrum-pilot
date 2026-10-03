@@ -63,6 +63,7 @@ builder.Services.AddAuthorizationBuilder()
 // Add services to the container.
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<PlanningPokerSessionService>();
+builder.Services.AddSingleton<IPlanningPokerConnectionEvictor, PlanningPokerConnectionEvictor>();
 builder.Services.AddScoped<IProjectService, ProjectService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<ISprintService, SprintService>();
@@ -123,7 +124,12 @@ using (var scope = app.Services.CreateScope())
     // Seed database with initial data (seeders are idempotent)
     await DatabaseSeeder.SeedDatabaseAsync(context);
 
-    await scope.ServiceProvider.GetRequiredService<PirateForgeBootstrapper>().RunAsync();
+    var newlyCreatedUserIds = await DatabaseSeeder.SeedUsersAsync(
+        scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>(),
+        scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>());
+    await scope.ServiceProvider
+        .GetRequiredService<PirateForgeBootstrapper>()
+        .RunAsync(newlyCreatedUserIds);
 }
 
 // Configure the HTTP request pipeline.

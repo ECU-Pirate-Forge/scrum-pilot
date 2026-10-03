@@ -3,6 +3,10 @@ using ScrumPilot.Shared.Models.PlanningPoker;
 namespace ScrumPilot.API.Services;
 
 public readonly record struct PlanningPokerSessionKey(int OrganizationId, int ProjectId);
+public readonly record struct PlanningPokerConnection(
+    string ConnectionId,
+    string UserId,
+    PlanningPokerSessionKey SessionKey);
 
 public class PlanningPokerSessionService
 {
@@ -14,7 +18,7 @@ public class PlanningPokerSessionService
     }
 
     private readonly Dictionary<PlanningPokerSessionKey, ProjectSession> _sessions = [];
-    private readonly Dictionary<string, PlanningPokerSessionKey> _connectionToSession = [];
+    private readonly Dictionary<string, PlanningPokerConnection> _connections = [];
     private readonly object _lock = new();
 
     private ProjectSession GetOrCreateSession(PlanningPokerSessionKey sessionKey)
@@ -29,12 +33,13 @@ public class PlanningPokerSessionService
 
     public void AddParticipant(
         string connectionId,
+        string userId,
         string displayName,
         PlanningPokerSessionKey sessionKey)
     {
         lock (_lock)
         {
-            _connectionToSession[connectionId] = sessionKey;
+            _connections[connectionId] = new(connectionId, userId, sessionKey);
             GetOrCreateSession(sessionKey).Participants[connectionId] = (displayName, null, false);
         }
     }
@@ -45,28 +50,67 @@ public class PlanningPokerSessionService
     {
         lock (_lock)
         {
-            if (!_connectionToSession.TryGetValue(connectionId, out var sessionKey))
+            if (!_connections.TryGetValue(connectionId, out var connection))
                 return null;
+            var sessionKey = connection.SessionKey;
             if (expectedSessionKey.HasValue && sessionKey != expectedSessionKey.Value)
                 return null;
-            _connectionToSession.Remove(connectionId);
+            _connections.Remove(connectionId);
             if (_sessions.TryGetValue(sessionKey, out var session))
                 session.Participants.Remove(connectionId);
             return sessionKey;
         }
     }
 
+    public IReadOnlyList<PlanningPokerConnection> RemoveUserFromProject(
+        string userId,
+        int projectId) =>
+        RemoveConnections(x => x.UserId == userId && x.SessionKey.ProjectId == projectId);
+
+    public IReadOnlyList<PlanningPokerConnection> RemoveUserFromOrganization(
+        string userId,
+        int organizationId) =>
+        RemoveConnections(x =>
+            x.UserId == userId && x.SessionKey.OrganizationId == organizationId);
+
+    public IReadOnlyList<PlanningPokerConnection> RemoveProject(int projectId) =>
+        RemoveConnections(x => x.SessionKey.ProjectId == projectId);
+
+    public IReadOnlyList<PlanningPokerConnection> RemoveOrganization(int organizationId) =>
+        RemoveConnections(x => x.SessionKey.OrganizationId == organizationId);
+
+    private IReadOnlyList<PlanningPokerConnection> RemoveConnections(
+        Func<PlanningPokerConnection, bool> predicate)
+    {
+        lock (_lock)
+        {
+            var matches = _connections.Values.Where(predicate).ToArray();
+            foreach (var connection in matches)
+            {
+                _connections.Remove(connection.ConnectionId);
+                if (_sessions.TryGetValue(connection.SessionKey, out var session))
+                {
+                    session.Participants.Remove(connection.ConnectionId);
+                }
+            }
+            return matches;
+        }
+    }
+
     public PlanningPokerSessionKey? GetSessionKey(string connectionId)
     {
         lock (_lock)
-            return _connectionToSession.TryGetValue(connectionId, out var key) ? key : null;
+            return _connections.TryGetValue(connectionId, out var connection)
+                ? connection.SessionKey
+                : null;
     }
 
     public void SetVote(string connectionId, int? points)
     {
         lock (_lock)
         {
-            if (!_connectionToSession.TryGetValue(connectionId, out var sessionKey)) return;
+            if (!_connections.TryGetValue(connectionId, out var connection)) return;
+            var sessionKey = connection.SessionKey;
             var session = GetOrCreateSession(sessionKey);
             if (session.Participants.ContainsKey(connectionId))
             {
@@ -80,7 +124,8 @@ public class PlanningPokerSessionService
     {
         lock (_lock)
         {
-            if (!_connectionToSession.TryGetValue(connectionId, out var sessionKey)) return;
+            if (!_connections.TryGetValue(connectionId, out var connection)) return;
+            var sessionKey = connection.SessionKey;
             var session = GetOrCreateSession(sessionKey);
             session.CurrentPbiId = pbiId;
             session.Revealed = false;
@@ -93,7 +138,8 @@ public class PlanningPokerSessionService
     {
         lock (_lock)
         {
-            if (!_connectionToSession.TryGetValue(connectionId, out var sessionKey)) return null;
+            if (!_connections.TryGetValue(connectionId, out var connection)) return null;
+            var sessionKey = connection.SessionKey;
             var session = GetOrCreateSession(sessionKey);
             if (session.CurrentPbiId != expectedPbiId) return null;
 
@@ -110,7 +156,8 @@ public class PlanningPokerSessionService
     {
         lock (_lock)
         {
-            if (!_connectionToSession.TryGetValue(connectionId, out var sessionKey)) return;
+            if (!_connections.TryGetValue(connectionId, out var connection)) return;
+            var sessionKey = connection.SessionKey;
             GetOrCreateSession(sessionKey).Revealed = true;
         }
     }
@@ -119,7 +166,8 @@ public class PlanningPokerSessionService
     {
         lock (_lock)
         {
-            if (!_connectionToSession.TryGetValue(connectionId, out var sessionKey)) return;
+            if (!_connections.TryGetValue(connectionId, out var connection)) return;
+            var sessionKey = connection.SessionKey;
             var session = GetOrCreateSession(sessionKey);
             session.Revealed = false;
             foreach (var key in session.Participants.Keys.ToList())
@@ -131,7 +179,8 @@ public class PlanningPokerSessionService
     {
         lock (_lock)
         {
-            if (!_connectionToSession.TryGetValue(connectionId, out var sessionKey)) return null;
+            if (!_connections.TryGetValue(connectionId, out var connection)) return null;
+            var sessionKey = connection.SessionKey;
             return CreateState(GetOrCreateSession(sessionKey), includeVotes);
         }
     }

@@ -192,7 +192,7 @@ public class PlanningPokerHubTests
     {
         var setup = CreateJoinedHub(currentPbiId: 42);
         setup.Service.SetVote(ConnectionId, 5);
-        setup.Service.AddParticipant("peer-2", "Bob", SessionKey);
+        setup.Service.AddParticipant("peer-2", "user-2", "Bob", SessionKey);
         setup.Service.SetVote("peer-2", 3);
         var before = setup.Service.GetStateForSession(SessionKey, includeVotes: true);
         setup.Access.CanAccessProjectAsync("user-1", 7, setup.CancellationToken).Returns(false);
@@ -331,7 +331,7 @@ public class PlanningPokerHubTests
     private static HubSetup CreateJoinedHub(int? currentPbiId = null)
     {
         var setup = CreateHub();
-        setup.Service.AddParticipant(ConnectionId, "Alice", SessionKey);
+        setup.Service.AddParticipant(ConnectionId, "user-1", "Alice", SessionKey);
         if (currentPbiId.HasValue)
             setup.Service.SetCurrentPbi(ConnectionId, currentPbiId);
         return setup;

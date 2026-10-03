@@ -5,6 +5,8 @@ namespace ScrumPilot.API.Services;
 public interface IOrganizationService
 {
     Task<IReadOnlyList<OrganizationSummaryDto>> ListAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<OrganizationSummaryDto>> ListDeletedAsync(
+        CancellationToken cancellationToken = default);
     Task<OrganizationSummaryDto> GetAsync(int organizationId, CancellationToken cancellationToken = default);
     Task<OrganizationCreatedDto> CreateAsync(
         CreateOrganizationRequest request,

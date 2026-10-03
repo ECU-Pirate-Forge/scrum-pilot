@@ -36,25 +36,27 @@ public sealed class DatabaseSeederBootstrapTests
     {
         await using var database = await IdentityTestDatabase.CreateAsync();
 
-        await DatabaseSeeder.SeedUsersAsync(database.UserManager, database.RoleManager);
+        var created = await DatabaseSeeder.SeedUsersAsync(database.UserManager, database.RoleManager);
         var tyler = Assert.IsType<ApplicationUser>(
             await database.UserManager.FindByEmailAsync("Tyler@scrumpilot.xyz"));
 
         Assert.True(tyler.EmailConfirmed);
         Assert.True(await database.UserManager.IsInRoleAsync(tyler, "Admin"));
+        Assert.Contains(tyler.Id, created);
 
         await database.UserManager.AddToRoleAsync(tyler, "Developer");
         await database.UserManager.RemoveFromRoleAsync(tyler, "Admin");
         tyler.EmailConfirmed = false;
         await database.UserManager.UpdateAsync(tyler);
 
-        await DatabaseSeeder.SeedUsersAsync(database.UserManager, database.RoleManager);
+        created = await DatabaseSeeder.SeedUsersAsync(database.UserManager, database.RoleManager);
         tyler = Assert.IsType<ApplicationUser>(
             await database.UserManager.FindByEmailAsync("Tyler@scrumpilot.xyz"));
 
         Assert.True(tyler.EmailConfirmed);
         Assert.True(await database.UserManager.IsInRoleAsync(tyler, "Admin"));
         Assert.True(await database.UserManager.IsInRoleAsync(tyler, "Developer"));
+        Assert.Empty(created);
     }
 
     [Fact]
@@ -164,7 +166,10 @@ public sealed class DatabaseSeederBootstrapTests
         await context.SaveChangesAsync();
 
         var timeProvider = new FixedTimeProvider(BootstrapTime);
-        await DatabaseSeeder.SeedPirateForgeMembershipsAsync(context, timeProvider);
+        await DatabaseSeeder.SeedPirateForgeMembershipsAsync(
+            context,
+            timeProvider,
+            ["new-member"]);
 
         Assert.Equal(OrganizationRole.Owner, await MembershipRoleAsync(context, organization.OrganizationId, "admin-b"));
         Assert.Equal(OrganizationRole.Owner, await MembershipRoleAsync(context, organization.OrganizationId, "owner-a"));
@@ -187,7 +192,7 @@ public sealed class DatabaseSeederBootstrapTests
             .Select(x => new { x.UserId, x.ProjectId, x.GrantedAt, x.GrantedByUserId })
             .ToListAsync();
 
-        await DatabaseSeeder.SeedPirateForgeMembershipsAsync(context, timeProvider);
+        await DatabaseSeeder.SeedPirateForgeMembershipsAsync(context, timeProvider, []);
 
         Assert.Equal(membershipsBefore, await context.OrganizationMemberships.AsNoTracking()
             .OrderBy(x => x.UserId)
@@ -202,13 +207,65 @@ public sealed class DatabaseSeederBootstrapTests
         context.ProjectMemberships.Remove(Assert.IsType<ProjectMembership>(revoked));
         await context.SaveChangesAsync();
 
-        await DatabaseSeeder.SeedPirateForgeMembershipsAsync(context, timeProvider);
+        await DatabaseSeeder.SeedPirateForgeMembershipsAsync(context, timeProvider, []);
 
         Assert.Equal([firstProject.ProjectId], await ProjectIdsAsync(context, "new-member"));
     }
 
     [Fact]
-    public async Task SeedPirateForgeMembershipsAsync_NoOwnerRollsBackNewDataAndRetryCompletes()
+    public async Task SeedPirateForgeMembershipsAsync_RemovedMemberIsNotRecreated()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var context = database.Context;
+        var organization = await AddOrganizationAsync(context);
+        var project = await AddProjectAsync(context, organization.OrganizationId, "First");
+        await AddUsersAsync(context, "owner", "removed");
+        context.OrganizationMemberships.AddRange(
+            Membership(organization.OrganizationId, "owner", OrganizationRole.Owner),
+            Membership(organization.OrganizationId, "removed", OrganizationRole.Member));
+        context.ProjectMemberships.Add(Grant(project.ProjectId, "removed", "owner"));
+        await context.SaveChangesAsync();
+
+        context.ProjectMemberships.Remove(
+            Assert.IsType<ProjectMembership>(
+                await context.ProjectMemberships.FindAsync(project.ProjectId, "removed")));
+        context.OrganizationMemberships.Remove(
+            Assert.IsType<OrganizationMembership>(
+                await context.OrganizationMemberships.FindAsync(organization.OrganizationId, "removed")));
+        await context.SaveChangesAsync();
+
+        await DatabaseSeeder.SeedPirateForgeMembershipsAsync(
+            context,
+            new FixedTimeProvider(BootstrapTime),
+            []);
+
+        Assert.False(await context.OrganizationMemberships.AnyAsync(x => x.UserId == "removed"));
+        Assert.False(await context.ProjectMemberships.AnyAsync(x => x.UserId == "removed"));
+    }
+
+    [Fact]
+    public async Task SeedPirateForgeMembershipsAsync_ExistingAdminWithoutMembershipIsNotAdded()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var context = database.Context;
+        var organization = await AddOrganizationAsync(context);
+        await AddRoleAsync(context, "admin-role", "Admin", "ADMIN");
+        await AddUsersAsync(context, "owner", "admin");
+        context.UserRoles.Add(new IdentityUserRole<string> { UserId = "admin", RoleId = "admin-role" });
+        context.OrganizationMemberships.Add(
+            Membership(organization.OrganizationId, "owner", OrganizationRole.Owner));
+        await context.SaveChangesAsync();
+
+        await DatabaseSeeder.SeedPirateForgeMembershipsAsync(
+            context,
+            new FixedTimeProvider(BootstrapTime),
+            []);
+
+        Assert.False(await context.OrganizationMemberships.AnyAsync(x => x.UserId == "admin"));
+    }
+
+    [Fact]
+    public async Task SeedPirateForgeMembershipsAsync_ValidatorRejectsNoOwnerAndRetryCompletes()
     {
         await using var database = await TestDatabase.CreateAsync();
         var context = database.Context;
@@ -220,14 +277,16 @@ public sealed class DatabaseSeederBootstrapTests
             Membership(organization.OrganizationId, "legacy-member", OrganizationRole.Member));
         await context.SaveChangesAsync();
 
+        await DatabaseSeeder.SeedPirateForgeMembershipsAsync(
+            context,
+            new FixedTimeProvider(BootstrapTime),
+            ["new-admin", "new-member"]);
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => DatabaseSeeder.SeedPirateForgeMembershipsAsync(
-                context,
-                new FixedTimeProvider(BootstrapTime)));
+            () => new OrganizationBootstrapValidator(context).ValidateAsync());
 
         Assert.Equal(OrganizationBootstrapValidator.MissingOwnerMessage, exception.Message);
         Assert.Equal(
-            ["legacy-member"],
+            ["legacy-member", "new-admin", "new-member"],
             await context.OrganizationMemberships.AsNoTracking()
                 .OrderBy(x => x.UserId)
                 .Select(x => x.UserId)
@@ -240,7 +299,8 @@ public sealed class DatabaseSeederBootstrapTests
 
         await DatabaseSeeder.SeedPirateForgeMembershipsAsync(
             context,
-            new FixedTimeProvider(BootstrapTime));
+            new FixedTimeProvider(BootstrapTime),
+            ["new-admin", "new-member"]);
 
         Assert.Equal(
             OrganizationRole.Owner,
@@ -271,7 +331,8 @@ public sealed class DatabaseSeederBootstrapTests
         await DatabaseSeeder.SeedProjectDataAsync(context);
         await DatabaseSeeder.SeedPirateForgeMembershipsAsync(
             context,
-            new FixedTimeProvider(BootstrapTime.AddDays(1)));
+            new FixedTimeProvider(BootstrapTime.AddDays(1)),
+            ["unassigned-user"]);
         await new OrganizationBootstrapValidator(context).ValidateAsync();
 
         Assert.Equal(BootstrapTime, returnedOrganization.DeletedAt);
@@ -335,8 +396,14 @@ public sealed class DatabaseSeederBootstrapTests
     {
         await using var database = await BootstrapTestDatabase.CreateAsync();
         var bootstrapper = database.Provider.GetRequiredService<PirateForgeBootstrapper>();
+        await using var seedScope = database.Provider.CreateAsyncScope();
+        var createdUserIds = await DatabaseSeeder.SeedUsersAsync(
+            seedScope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>(),
+            seedScope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>());
 
-        await Task.WhenAll(bootstrapper.RunAsync(), bootstrapper.RunAsync());
+        await Task.WhenAll(
+            bootstrapper.RunAsync(createdUserIds),
+            bootstrapper.RunAsync(createdUserIds));
 
         await using var scope = database.Provider.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<ScrumPilotContext>();

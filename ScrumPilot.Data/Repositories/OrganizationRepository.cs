@@ -23,6 +23,43 @@ public sealed class OrganizationRepository(ScrumPilotContext context) : IOrganiz
                 false))
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<OrganizationSummaryDto>> ListDeletedForUserAsync(
+        string userId,
+        bool includeAll,
+        CancellationToken cancellationToken = default)
+    {
+        if (!includeAll)
+        {
+            return await context.OrganizationMemberships
+                .AsNoTracking()
+                .Where(x =>
+                    x.UserId == userId
+                    && x.Role == OrganizationRole.Owner
+                    && x.Organization!.DeletedAt != null)
+                .OrderBy(x => x.Organization!.Name)
+                .Select(x => new OrganizationSummaryDto(
+                    x.OrganizationId,
+                    x.Organization!.Name,
+                    x.Role,
+                    true))
+                .ToListAsync(cancellationToken);
+        }
+
+        return await context.Organizations
+            .AsNoTracking()
+            .Where(x => x.DeletedAt != null)
+            .OrderBy(x => x.Name)
+            .Select(x => new OrganizationSummaryDto(
+                x.OrganizationId,
+                x.Name,
+                x.OrganizationMemberships
+                    .Where(membership => membership.UserId == userId)
+                    .Select(membership => (OrganizationRole?)membership.Role)
+                    .FirstOrDefault() ?? OrganizationRole.Member,
+                true))
+            .ToListAsync(cancellationToken);
+    }
+
     public Task<OrganizationSummaryDto?> GetForUserAsync(
         int organizationId,
         string userId,

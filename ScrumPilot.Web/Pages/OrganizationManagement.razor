@@ -4,6 +4,7 @@
 @inject HttpClient Http
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject ScrumPilot.Web.Services.OrganizationStateService OrganizationState
+@inject ScrumPilot.Web.Services.ProjectStateService ProjectState
 
 <PageTitle>Organization Management</PageTitle>
 <MudText Typo="Typo.h4" Class="mb-4">Organization Management</MudText>
@@ -57,9 +58,25 @@ else
     <OrganizationDangerZone Organization="_selected" Changed="ReloadAsync" />
 }
 
+@if (_deletedOrganizations.Count > 0)
+{
+    <MudText Typo="Typo.h5" Class="mt-6 mb-3">Deleted organizations</MudText>
+    @foreach (var organization in _deletedOrganizations)
+    {
+        <MudPaper Class="pa-4 mb-3">
+            <MudText Typo="Typo.h6">@organization.Name</MudText>
+            <OrganizationDangerZone
+                Organization="organization"
+                CanPurge="_isAdmin"
+                Changed="ReloadAsync" />
+        </MudPaper>
+    }
+}
+
 @code {
     private OrganizationSummaryDto? _selected;
     private List<Project> _projects = [];
+    private List<OrganizationSummaryDto> _deletedOrganizations = [];
     private bool _isAdmin;
     private bool _useCurrentUser = true;
     private string _currentUserId = "";
@@ -125,15 +142,25 @@ else
             var selectedId = OrganizationState.SelectedOrganizationId;
             _selected = organizations.FirstOrDefault(x => x.OrganizationId == selectedId)
                 ?? organizations.FirstOrDefault();
-            if (OrganizationState.SelectedOrganizationId is null && _selected is not null)
+            var resolvedId = _selected?.OrganizationId;
+            if (OrganizationState.SelectedOrganizationId != resolvedId)
             {
                 OrganizationState.OnChange -= OnOrganizationChanged;
-                OrganizationState.SetOrganization(_selected);
+                if (_selected is null)
+                    OrganizationState.Clear();
+                else
+                    OrganizationState.SetOrganization(_selected);
                 OrganizationState.OnChange += OnOrganizationChanged;
+                ProjectState.Clear();
             }
             _projects = _selected is null ? [] :
                 await Http.GetFromJsonAsync<List<Project>>(
                     $"api/organizations/{_selected.OrganizationId}/projects", token) ?? [];
+            if (_disposed || cancellation != _cancellation) return;
+            _deletedOrganizations =
+                await Http.GetFromJsonAsync<List<OrganizationSummaryDto>>(
+                    "api/organizations/deleted",
+                    token) ?? [];
             if (_disposed || cancellation != _cancellation) return;
             _error = null;
         }

@@ -14,13 +14,15 @@ public sealed class PirateForgeBootstrapper(
     private const long AdvisoryLockKey = 0x534352554D50464;
     private const int MaxAttempts = 3;
 
-    public async Task RunAsync(CancellationToken cancellationToken = default)
+    public async Task RunAsync(
+        IReadOnlyCollection<string> newlyCreatedUserIds,
+        CancellationToken cancellationToken = default)
     {
         for (var attempt = 1; ; attempt++)
         {
             try
             {
-                await RunAttemptAsync(cancellationToken);
+                await RunAttemptAsync(newlyCreatedUserIds, cancellationToken);
                 return;
             }
             catch (Exception exception)
@@ -32,7 +34,9 @@ public sealed class PirateForgeBootstrapper(
         }
     }
 
-    private async Task RunAttemptAsync(CancellationToken cancellationToken)
+    private async Task RunAttemptAsync(
+        IReadOnlyCollection<string> newlyCreatedUserIds,
+        CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var services = scope.ServiceProvider;
@@ -48,9 +52,6 @@ public sealed class PirateForgeBootstrapper(
                 cancellationToken);
         }
 
-        await DatabaseSeeder.SeedUsersAsync(
-            services.GetRequiredService<UserManager<ApplicationUser>>(),
-            services.GetRequiredService<RoleManager<IdentityRole>>());
         var organization = await DatabaseSeeder.SeedPirateForgeOrganizationAsync(
             context,
             services.GetRequiredService<TimeProvider>(),
@@ -61,6 +62,7 @@ public sealed class PirateForgeBootstrapper(
             await DatabaseSeeder.SeedPirateForgeMembershipsAsync(
                 context,
                 services.GetRequiredService<TimeProvider>(),
+                newlyCreatedUserIds,
                 cancellationToken);
         }
 

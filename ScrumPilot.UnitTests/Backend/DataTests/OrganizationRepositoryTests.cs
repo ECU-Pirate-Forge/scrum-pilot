@@ -144,6 +144,50 @@ public sealed class OrganizationRepositoryTests
                 OrganizationRole.Owner));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LifecycleMutation_WithStaleRowVersionReturnsConcurrencyConflict(bool delete)
+    {
+        var connectionString =
+            $"Data Source=org-concurrency-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
+        await using var keeper = new SqliteConnection(connectionString);
+        await keeper.OpenAsync();
+        var options = new DbContextOptionsBuilder<ScrumPilotContext>()
+            .UseSqlite(connectionString)
+            .Options;
+        await using var first = new ScrumPilotContext(options);
+        await first.Database.EnsureCreatedAsync();
+        first.Organizations.Add(new Organization
+        {
+            Name = "Original",
+            NormalizedName = "ORIGINAL",
+            CreatedAt = DateTime.UtcNow
+        });
+        await first.SaveChangesAsync();
+        var organizationId = await first.Organizations.Select(x => x.OrganizationId).SingleAsync();
+
+        await using var second = new ScrumPilotContext(options);
+        await first.Organizations.SingleAsync(x => x.OrganizationId == organizationId);
+        await second.Organizations.SingleAsync(x => x.OrganizationId == organizationId);
+        var firstRepository = new OrganizationRepository(first);
+        var secondRepository = new OrganizationRepository(second);
+
+        Assert.Equal(
+            OrganizationMutationResult.Success,
+            await firstRepository.RenameAsync(organizationId, "First", "FIRST"));
+        var staleResult = delete
+            ? await secondRepository.SoftDeleteAsync(
+                organizationId,
+                DateTime.UtcNow)
+            : await secondRepository.RenameAsync(
+                organizationId,
+                "Second",
+                "SECOND");
+
+        Assert.Equal(OrganizationMutationResult.ConcurrencyConflict, staleResult);
+    }
+
     private static ApplicationUser User(string id) => new()
     {
         Id = id,
