@@ -36,7 +36,8 @@ namespace ScrumPilot.UnitTests.Frontend
 
             // Register ProjectStateService so pages that inject it
             // (ScrumBoard, SwimLanes, Backlog, PbiGeneration, etc.) can be rendered.
-            Services.AddSingleton<ProjectStateService>();
+            Services.AddScoped<ProjectStateService>();
+            Services.AddScoped<OrganizationStateService>();
 
             // Register MetricsDashboardService so Backlog (and other pages that inject it) can be rendered.
             Services.AddSingleton(new MetricsDashboardService(MockHttpClient));

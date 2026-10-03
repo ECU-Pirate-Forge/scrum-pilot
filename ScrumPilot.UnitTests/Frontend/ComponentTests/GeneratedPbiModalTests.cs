@@ -24,7 +24,7 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
                 BaseAddress = new Uri("http://localhost/")
             });
             this.AddAuthorization();
-            Services.AddSingleton<ProjectStateService>();
+            Services.AddScoped<ProjectStateService>();
             JSInterop.Mode = JSRuntimeMode.Loose;
             Render<MudPopoverProvider>();
         }

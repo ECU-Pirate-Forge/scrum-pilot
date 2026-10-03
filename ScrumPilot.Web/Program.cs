@@ -33,7 +33,7 @@ builder.Services.AddScoped(sp =>
     sp.GetRequiredService<IHttpClientFactory>().CreateClient("API"));
 builder.Services.AddApexCharts();
 builder.Services.AddScoped<ScrumPilot.Web.Services.MetricsDashboardService>();
-builder.Services.AddSingleton<ScrumPilot.Web.Services.ProjectStateService>();
+builder.Services.AddScoped<ProjectStateService>();
+builder.Services.AddScoped<OrganizationStateService>();
 
 await builder.Build().RunAsync();
-
