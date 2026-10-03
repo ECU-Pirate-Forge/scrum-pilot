@@ -106,21 +106,27 @@ public sealed class OrganizationInvitationRepository(ScrumPilotContext context)
     {
         try
         {
-            var invitation = await context.OrganizationInvitations.SingleOrDefaultAsync(
-                x => x.OrganizationId == organizationId
-                     && x.OrganizationInvitationId == invitationId,
-                cancellationToken);
-            if (invitation is null)
+            var affected = await context.OrganizationInvitations
+                .Where(x => x.OrganizationId == organizationId
+                            && x.OrganizationInvitationId == invitationId
+                            && x.Status == OrganizationInvitationStatus.Pending)
+                .ExecuteUpdateAsync(
+                    setters => setters
+                        .SetProperty(
+                            x => x.Status,
+                            OrganizationInvitationStatus.Revoked)
+                        .SetProperty(x => x.AcceptedAt, (DateTime?)null),
+                    cancellationToken);
+            foreach (var entry in context.ChangeTracker
+                         .Entries<OrganizationInvitation>()
+                         .Where(x =>
+                             x.Entity.OrganizationId == organizationId
+                             && x.Entity.OrganizationInvitationId == invitationId)
+                         .ToList())
             {
-                return false;
+                entry.State = EntityState.Detached;
             }
-            if (invitation.Status != OrganizationInvitationStatus.Pending)
-            {
-                return false;
-            }
-            invitation.Status = OrganizationInvitationStatus.Revoked;
-            await context.SaveChangesAsync(cancellationToken);
-            return true;
+            return affected == 1;
         }
         catch (Exception exception) when (
             OrganizationInvitationRepositoryExceptionClassifier

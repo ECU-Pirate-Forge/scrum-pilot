@@ -210,6 +210,59 @@ public sealed class OrganizationInvitationConcurrencyTests
                 .IsMembershipUniqueViolation(exception));
     }
 
+    [Fact]
+    public async Task RevokeAsync_AfterAcceptanceCommits_ReportsConflictWithoutOverwritingAccepted()
+    {
+        await using var database = await InvitationRaceDatabase.CreateAsync();
+        await using var revokeContext = database.CreateContext();
+        await using var acceptContext = database.CreateContext();
+        await revokeContext.OrganizationInvitations.SingleAsync();
+
+        var acceptance = await new OrganizationInvitationRepository(acceptContext).AcceptAsync(
+            database.TokenHash,
+            "member",
+            "MEMBER@EXAMPLE.COM",
+            database.UtcNow);
+        var revoked = await new OrganizationInvitationRepository(revokeContext).RevokeAsync(
+            database.OrganizationId,
+            database.InvitationId);
+
+        await using var assertionContext = database.CreateContext();
+        var invitation = await assertionContext.OrganizationInvitations.SingleAsync();
+        Assert.Equal(InvitationAcceptanceStatus.Success, acceptance.Status);
+        Assert.False(revoked);
+        Assert.Equal(OrganizationInvitationStatus.Accepted, invitation.Status);
+        Assert.Equal(database.UtcNow, invitation.AcceptedAt);
+        Assert.True(await assertionContext.OrganizationMemberships.AnyAsync(x =>
+            x.OrganizationId == database.OrganizationId && x.UserId == "member"));
+    }
+
+    [Fact]
+    public async Task AcceptAsync_AfterRevokeCommits_FailsWithoutCreatingMembership()
+    {
+        await using var database = await InvitationRaceDatabase.CreateAsync();
+        await using var revokeContext = database.CreateContext();
+        await using var acceptContext = database.CreateContext();
+
+        var revoked = await new OrganizationInvitationRepository(revokeContext).RevokeAsync(
+            database.OrganizationId,
+            database.InvitationId);
+        var acceptance = await new OrganizationInvitationRepository(acceptContext).AcceptAsync(
+            database.TokenHash,
+            "member",
+            "MEMBER@EXAMPLE.COM",
+            database.UtcNow);
+
+        await using var assertionContext = database.CreateContext();
+        Assert.True(revoked);
+        Assert.Equal(InvitationAcceptanceStatus.Invalid, acceptance.Status);
+        Assert.Equal(
+            OrganizationInvitationStatus.Revoked,
+            (await assertionContext.OrganizationInvitations.SingleAsync()).Status);
+        Assert.False(await assertionContext.OrganizationMemberships.AnyAsync(x =>
+            x.OrganizationId == database.OrganizationId && x.UserId == "member"));
+    }
+
     private static async Task<int> CreateDatabaseAsync(string connectionString)
     {
         await using var context = new ScrumPilotContext(
@@ -235,5 +288,98 @@ public sealed class OrganizationInvitationConcurrencyTests
         context.Organizations.Add(organization);
         await context.SaveChangesAsync();
         return organization.OrganizationId;
+    }
+
+    private sealed class InvitationRaceDatabase : IAsyncDisposable
+    {
+        private readonly SqliteConnection _keeper;
+        private readonly DbContextOptions<ScrumPilotContext> _options;
+
+        private InvitationRaceDatabase(
+            SqliteConnection keeper,
+            DbContextOptions<ScrumPilotContext> options,
+            int organizationId,
+            int invitationId,
+            DateTime utcNow,
+            string tokenHash)
+        {
+            _keeper = keeper;
+            _options = options;
+            OrganizationId = organizationId;
+            InvitationId = invitationId;
+            UtcNow = utcNow;
+            TokenHash = tokenHash;
+        }
+
+        public int OrganizationId { get; }
+        public int InvitationId { get; }
+        public DateTime UtcNow { get; }
+        public string TokenHash { get; }
+
+        public static async Task<InvitationRaceDatabase> CreateAsync()
+        {
+            var connectionString = new SqliteConnectionStringBuilder
+            {
+                DataSource = $"invitation-race-{Guid.NewGuid():N}",
+                Mode = SqliteOpenMode.Memory,
+                Cache = SqliteCacheMode.Shared
+            }.ToString();
+            var keeper = new SqliteConnection(connectionString);
+            await keeper.OpenAsync();
+            var options = new DbContextOptionsBuilder<ScrumPilotContext>()
+                .UseSqlite(connectionString)
+                .Options;
+            await using var context = new ScrumPilotContext(options);
+            await context.Database.EnsureCreatedAsync();
+            var utcNow = new DateTime(2026, 10, 3, 9, 0, 0, DateTimeKind.Utc);
+            const string tokenHash =
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+            context.Users.AddRange(
+                new ApplicationUser
+                {
+                    Id = "owner",
+                    UserName = "owner",
+                    NormalizedUserName = "OWNER"
+                },
+                new ApplicationUser
+                {
+                    Id = "member",
+                    UserName = "member",
+                    NormalizedUserName = "MEMBER"
+                });
+            var organization = new Organization
+            {
+                Name = "Pirate Forge",
+                NormalizedName = "PIRATE FORGE",
+                CreatedAt = utcNow
+            };
+            context.Organizations.Add(organization);
+            await context.SaveChangesAsync();
+            var invitation = new OrganizationInvitation
+            {
+                OrganizationId = organization.OrganizationId,
+                Email = "member@example.com",
+                NormalizedEmail = "MEMBER@EXAMPLE.COM",
+                TokenHash = tokenHash,
+                InvitedByUserId = "owner",
+                Role = OrganizationRole.Member,
+                Status = OrganizationInvitationStatus.Pending,
+                CreatedAt = utcNow.AddHours(-1),
+                ExpiresAt = utcNow.AddHours(1)
+            };
+            context.OrganizationInvitations.Add(invitation);
+            await context.SaveChangesAsync();
+            return new(
+                keeper,
+                options,
+                organization.OrganizationId,
+                invitation.OrganizationInvitationId,
+                utcNow,
+                tokenHash);
+        }
+
+        public ScrumPilotContext CreateContext() => new(_options);
+
+        public ValueTask DisposeAsync() => _keeper.DisposeAsync();
     }
 }
