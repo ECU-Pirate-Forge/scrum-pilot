@@ -455,7 +455,7 @@
         try
         {
             if (capturedHub?.State == HubConnectionState.Connected)
-                await capturedHub.SendAsync("SelectPbi", (int?)null);
+                await capturedHub.SendAsync("ClearPbiIfSelected", capturedPbiId!.Value);
         }
         catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException or HubException)
         {
@@ -466,11 +466,14 @@
 
     private async Task HandlePbiDelete(int pbiId)
     {
-        _selectedPbi = null;
-        _currentPbiId = null;
+        if (_currentPbiId == pbiId)
+        {
+            _selectedPbi = null;
+            _currentPbiId = null;
+        }
         await LoadUnassignedPbisAsync();
         if (_isConnected)
-            await _hub!.SendAsync("SelectPbi", (int?)null);
+            await _hub!.SendAsync("ClearPbiIfSelected", pbiId);
     }
 
     private void ComputeSuggestedPoints()

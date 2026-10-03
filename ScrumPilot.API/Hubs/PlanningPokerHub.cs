@@ -69,6 +69,17 @@ public class PlanningPokerHub : Hub
         await Clients.Group(GroupName(projectId.Value)).SendAsync("PbiSelected", state);
     }
 
+    public async Task ClearPbiIfSelected(int expectedPbiId)
+    {
+        var projectId = _session.GetProjectId(Context.ConnectionId);
+        if (!projectId.HasValue) return;
+
+        var state = _session.ClearCurrentPbiIfSelected(Context.ConnectionId, expectedPbiId);
+        if (state is null) return;
+
+        await Clients.Group(GroupName(projectId.Value)).SendAsync("PbiSelected", state);
+    }
+
     public async Task ResetVoting()
     {
         var projectId = _session.GetProjectId(Context.ConnectionId);

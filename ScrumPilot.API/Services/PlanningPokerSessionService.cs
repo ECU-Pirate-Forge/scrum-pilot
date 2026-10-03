@@ -77,6 +77,23 @@ public class PlanningPokerSessionService
         }
     }
 
+    public PokerSessionState? ClearCurrentPbiIfSelected(string connectionId, int expectedPbiId)
+    {
+        lock (_lock)
+        {
+            if (!_connectionToProject.TryGetValue(connectionId, out var projectId)) return null;
+            var s = GetOrCreateSession(projectId);
+            if (s.CurrentPbiId != expectedPbiId) return null;
+
+            s.CurrentPbiId = null;
+            s.Revealed = false;
+            foreach (var key in s.Participants.Keys.ToList())
+                s.Participants[key] = (s.Participants[key].DisplayName, null, false);
+
+            return CreateState(s, includeVotes: false);
+        }
+    }
+
     public void Reveal(string connectionId)
     {
         lock (_lock)
@@ -112,19 +129,24 @@ public class PlanningPokerSessionService
         lock (_lock)
         {
             var s = GetOrCreateSession(projectId);
-            var showVotes = includeVotes || s.Revealed;
-            return new PokerSessionState
-            {
-                CurrentPbiId = s.CurrentPbiId,
-                Revealed = s.Revealed,
-                Participants = s.Participants.Select(kvp => new ParticipantState
-                {
-                    ConnectionId = kvp.Key,
-                    DisplayName = kvp.Value.DisplayName,
-                    HasVoted = kvp.Value.HasVoted,
-                    Points = showVotes ? kvp.Value.Points : null
-                }).ToList()
-            };
+            return CreateState(s, includeVotes);
         }
+    }
+
+    private static PokerSessionState CreateState(ProjectSession session, bool includeVotes)
+    {
+        var showVotes = includeVotes || session.Revealed;
+        return new PokerSessionState
+        {
+            CurrentPbiId = session.CurrentPbiId,
+            Revealed = session.Revealed,
+            Participants = session.Participants.Select(kvp => new ParticipantState
+            {
+                ConnectionId = kvp.Key,
+                DisplayName = kvp.Value.DisplayName,
+                HasVoted = kvp.Value.HasVoted,
+                Points = showVotes ? kvp.Value.Points : null
+            }).ToList()
+        };
     }
 }
