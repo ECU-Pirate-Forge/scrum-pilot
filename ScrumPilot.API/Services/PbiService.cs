@@ -162,7 +162,7 @@ You are an expert at breaking a problem statement down into independent, paralle
 Do not copy these instructions into the output. Do not use placeholder text. Return only the JSON array with no markdown, no explanation, and no extra keys.
 
 Problem statement: {problemStatement}";
-                    
+
         }
 
         private string BuildImprovementPrompt(ProductBacklogItem pbi)

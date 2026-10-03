@@ -25,7 +25,9 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             _pbis.GetByIdAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
                 .Returns(call => new ProductBacklogItem
                 {
-                    PbiId = call.ArgAt<int>(0), ProjectId = 1, Title = "PBI"
+                    PbiId = call.ArgAt<int>(0),
+                    ProjectId = 1,
+                    Title = "PBI"
                 });
             _mockRepo.GetByIdAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
                 .Returns(call => MakeComment(call.ArgAt<int>(0), 10));

@@ -156,10 +156,10 @@ public sealed class OrganizationRepositoryTests
         int organizationId,
         string userId,
         OrganizationRole role) => new()
-    {
-        OrganizationId = organizationId,
-        UserId = userId,
-        Role = role,
-        JoinedAt = DateTime.UtcNow
-    };
+        {
+            OrganizationId = organizationId,
+            UserId = userId,
+            Role = role,
+            JoinedAt = DateTime.UtcNow
+        };
 }

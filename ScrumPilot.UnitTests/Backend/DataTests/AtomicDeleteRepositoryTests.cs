@@ -28,7 +28,10 @@ public class AtomicDeleteRepositoryTests
 
         var organization = new Organization
         {
-            Name = "Test", NormalizedName = "TEST", CreatedAt = DateTime.UtcNow, RowVersion = [1]
+            Name = "Test",
+            NormalizedName = "TEST",
+            CreatedAt = DateTime.UtcNow,
+            RowVersion = [1]
         };
         var project = new Project { ProjectName = "Project", Organization = organization };
         var sprint = new Sprint { ProjectId = project.ProjectId, SprintTitle = "Sprint" };

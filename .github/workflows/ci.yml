@@ -27,6 +27,14 @@ jobs:
       - name: Build
         run: dotnet build ./ScrumPilot.slnx --no-restore --configuration Release
 
+      - name: Install EF Core tool
+        run: dotnet tool install --global dotnet-ef --version 10.0.5
+
+      - name: Verify EF model matches migrations
+        env:
+          DATABASE_URL: postgresql://unused:unused@localhost:5432/scrumpilot_design
+        run: dotnet ef migrations has-pending-model-changes --project ./ScrumPilot.Data/ScrumPilot.Data.csproj --startup-project ./ScrumPilot.API/ScrumPilot.API.csproj --no-build --configuration Release
+
       - name: Format / Lint check
         run: dotnet format ./ScrumPilot.slnx --verify-no-changes
 
@@ -37,7 +45,7 @@ jobs:
         run: dotnet publish ./ScrumPilot.API/ScrumPilot.API.csproj --no-build --configuration Release --output ./publish/api
 
       - name: Publish Web
-        run: dotnet publish ./ScrumPilot.Web/ScrumPilot.Web.csproj --no-build --configuration Release --output ./publish/web
+        run: dotnet publish ./ScrumPilot.Web/ScrumPilot.Web.csproj --configuration Release --output ./publish/web
 
       - name: Upload test results
         if: always()
@@ -57,4 +65,3 @@ jobs:
 
       - name: Docker build check (Web)
         run: docker build -t scrumpilot-web:ci-check -f ScrumPilot.Web/Dockerfile .
-

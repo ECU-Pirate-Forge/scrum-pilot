@@ -78,7 +78,9 @@ public class TenantIsolationControllerTests
         var repository = Substitute.For<IPbiRepository>();
         repository.GetByIdAsync(5, default).Returns(new ProductBacklogItem
         {
-            PbiId = 5, ProjectId = 11, Title = "old"
+            PbiId = 5,
+            ProjectId = 11,
+            Title = "old"
         });
         _access.CanAccessProjectAsync("user-a", 11).Returns(true);
         service.UpdatePbiAsync(Arg.Any<ProductBacklogItem>(), default)
@@ -87,7 +89,9 @@ public class TenantIsolationControllerTests
 
         var result = await controller.UpdatePbi(new ProductBacklogItem
         {
-            PbiId = 5, ProjectId = 22, Title = "new"
+            PbiId = 5,
+            ProjectId = 22,
+            Title = "new"
         }, default);
 
         Assert.Equal(11, Assert.IsType<ProductBacklogItem>(
@@ -117,7 +121,9 @@ public class TenantIsolationControllerTests
         var pbis = Substitute.For<IPbiRepository>();
         pbis.GetByIdAsync(7, default).Returns(new ProductBacklogItem
         {
-            PbiId = 7, ProjectId = 11, Title = "pbi"
+            PbiId = 7,
+            ProjectId = 11,
+            Title = "pbi"
         });
         _access.CanAccessProjectAsync("user-a", 11).Returns(true);
         comments.AddAsync(Arg.Any<Comment>(), default).Returns(call => call.Arg<Comment>());
@@ -125,7 +131,9 @@ public class TenantIsolationControllerTests
 
         await controller.AddComment(new Comment
         {
-            PbiId = 7, UserId = "user-b", Body = "hello"
+            PbiId = 7,
+            UserId = "user-b",
+            Body = "hello"
         }, default);
 
         await comments.Received().AddAsync(
@@ -139,18 +147,26 @@ public class TenantIsolationControllerTests
         var pbis = Substitute.For<IPbiRepository>();
         comments.GetByIdAsync(3, default).Returns(new Comment
         {
-            CommentId = 3, PbiId = 7, UserId = "user-b", Body = "old"
+            CommentId = 3,
+            PbiId = 7,
+            UserId = "user-b",
+            Body = "old"
         });
         pbis.GetByIdAsync(7, default).Returns(new ProductBacklogItem
         {
-            PbiId = 7, ProjectId = 11, Title = "pbi"
+            PbiId = 7,
+            ProjectId = 11,
+            Title = "pbi"
         });
         _access.CanAccessProjectAsync("user-a", 11).Returns(true);
         var controller = new CommentController(comments, pbis, _currentUser, _access);
 
         var result = await controller.EditComment(3, new Comment
         {
-            CommentId = 3, PbiId = 99, UserId = "user-a", Body = "new"
+            CommentId = 3,
+            PbiId = 99,
+            UserId = "user-a",
+            Body = "new"
         }, default);
 
         Assert.IsType<NotFoundResult>(result.Result);
@@ -182,7 +198,9 @@ public class TenantIsolationControllerTests
 
         var result = await controller.CreatePbi(11, new ProductBacklogItem
         {
-            ProjectId = 11, EpicId = 22, Title = "foreign epic"
+            ProjectId = 11,
+            EpicId = 22,
+            Title = "foreign epic"
         });
 
         Assert.IsType<NotFoundResult>(result.Result);
@@ -225,7 +243,9 @@ public class TenantIsolationControllerTests
         var repository = Substitute.For<ISprintRepository>();
         repository.GetByIdAsync(5, default).Returns(new Sprint
         {
-            SprintId = 5, ProjectId = 11, SprintTitle = "old"
+            SprintId = 5,
+            ProjectId = 11,
+            SprintTitle = "old"
         });
         _access.CanAccessProjectAsync("user-a", 11).Returns(true);
         service.UpdateAsync(Arg.Any<Sprint>(), default).Returns(call => call.Arg<Sprint>());
@@ -233,7 +253,9 @@ public class TenantIsolationControllerTests
 
         var result = await controller.Update(5, new Sprint
         {
-            SprintId = 5, ProjectId = 22, SprintTitle = "new"
+            SprintId = 5,
+            ProjectId = 22,
+            SprintTitle = "new"
         });
 
         Assert.Equal(11, Assert.IsType<Sprint>(
@@ -247,7 +269,8 @@ public class TenantIsolationControllerTests
         var sprints = Substitute.For<ISprintRepository>();
         sprints.GetByIdAsync(22, default).Returns(new Sprint
         {
-            SprintId = 22, ProjectId = 22
+            SprintId = 22,
+            ProjectId = 22
         });
         _access.CanAccessProjectAsync("user-a", 22).Returns(false);
         var controller = new MetricsDashboardController(service, sprints, _currentUser, _access);

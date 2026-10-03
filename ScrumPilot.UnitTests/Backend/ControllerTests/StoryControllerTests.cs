@@ -32,7 +32,9 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             _repository.GetByIdAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
                 .Returns(call => new ProductBacklogItem
                 {
-                    PbiId = call.ArgAt<int>(0), ProjectId = 1, Title = "Existing"
+                    PbiId = call.ArgAt<int>(0),
+                    ProjectId = 1,
+                    Title = "Existing"
                 });
             _mockPbiService.CreatePbiAsync(Arg.Any<ProductBacklogItem>(), Arg.Any<CancellationToken>())
                 .Returns(call => call.ArgAt<ProductBacklogItem>(0));
@@ -415,7 +417,10 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             _repository.GetByIdAsync(8, Arg.Any<CancellationToken>()).Returns(
                 new ProductBacklogItem
                 {
-                    PbiId = 8, ProjectId = 1, Title = "Old", AssignedToUserId = "stale-user"
+                    PbiId = 8,
+                    ProjectId = 1,
+                    Title = "Old",
+                    AssignedToUserId = "stale-user"
                 });
             _access.UserCanBeAssignedToProjectAsync(
                 "stale-user", 1, Arg.Any<CancellationToken>()).Returns(false);
@@ -443,14 +448,19 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             _repository.GetByIdAsync(8, Arg.Any<CancellationToken>()).Returns(
                 new ProductBacklogItem
                 {
-                    PbiId = 8, ProjectId = 1, Title = "Old", AssignedToUserId = "old-user"
+                    PbiId = 8,
+                    ProjectId = 1,
+                    Title = "Old",
+                    AssignedToUserId = "old-user"
                 });
             _access.UserCanBeAssignedToProjectAsync(
                 "foreign-user", 1, Arg.Any<CancellationToken>()).Returns(false);
 
             var result = await _controller.UpdatePbi(new ProductBacklogItem
             {
-                PbiId = 8, Title = "New", AssignedToUserId = "foreign-user"
+                PbiId = 8,
+                Title = "New",
+                AssignedToUserId = "foreign-user"
             });
 
             Assert.IsType<NotFoundResult>(result.Result);

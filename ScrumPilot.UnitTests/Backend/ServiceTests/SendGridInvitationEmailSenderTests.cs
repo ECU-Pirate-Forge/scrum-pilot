@@ -155,12 +155,12 @@ public sealed class SendGridInvitationEmailSenderTests
 
     private static SendGridOptions ValidOptions(
         string invitationBaseUrl = "https://app.example.com/accept") => new()
-    {
-        ApiKey = "secret",
-        FromEmail = "invites@example.com",
-        FromName = "ScrumPilot",
-        InvitationBaseUrl = invitationBaseUrl
-    };
+        {
+            ApiKey = "secret",
+            FromEmail = "invites@example.com",
+            FromName = "ScrumPilot",
+            InvitationBaseUrl = invitationBaseUrl
+        };
 
     private sealed class FakeTransport(HttpStatusCode statusCode) : ISendGridTransport
     {
