@@ -380,6 +380,162 @@ public class MainLayoutTests : BunitContext
     }
 
     [Fact]
+    public async Task Logout_CancelsBlockedPreferenceWriteAndExitsWithoutSnackbar()
+    {
+        _handler.Respond("api/organizations", new[] { Organization(1, "Organization") });
+        _handler.Respond("api/user/settings", new UserSettingsDto
+        {
+            DefaultOrganizationId = 1,
+            DefaultProjectId = 11
+        });
+        _handler.Respond("api/organizations/1/projects", new[]
+        {
+            Project(11, 1, "First"),
+            Project(12, 1, "Second")
+        });
+        var putStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var putCanceled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completedPuts = 0;
+        _handler.RespondAsync("api/user/settings", HttpMethod.Put, async token =>
+        {
+            putStarted.TrySetResult();
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                Interlocked.Increment(ref completedPuts);
+                return new HttpResponseMessage(HttpStatusCode.NoContent);
+            }
+            catch (OperationCanceledException)
+            {
+                putCanceled.TrySetResult();
+                throw;
+            }
+        });
+        var cut = Render<MainLayout>();
+        cut.FindAll("button").Single(button => button.TextContent.Contains("First")).Click();
+        var second = cut.FindComponents<MudMenuItem>()
+            .Single(item => item.Markup.Contains("Second"));
+
+        var selectionTask = cut.InvokeAsync(
+            () => second.Instance.OnClick.InvokeAsync(new MouseEventArgs()));
+        await putStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        cut.Find("[title='Sign out']").Click();
+        cut.FindAll("button").Single(button => button.TextContent.Trim() == "Sign Out").Click();
+
+        await putCanceled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await selectionTask.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(0, completedPuts);
+        Assert.DoesNotContain(
+            "Unable to save your organization and project selection.", cut.Markup);
+    }
+
+    [Fact]
+    public async Task Dispose_CancelsBlockedPreferenceWriteAndWriterExits()
+    {
+        _handler.Respond("api/organizations", new[] { Organization(1, "Organization") });
+        _handler.Respond("api/user/settings", new UserSettingsDto
+        {
+            DefaultOrganizationId = 1,
+            DefaultProjectId = 11
+        });
+        _handler.Respond("api/organizations/1/projects", new[]
+        {
+            Project(11, 1, "First"),
+            Project(12, 1, "Second")
+        });
+        var putStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var putCanceled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _handler.RespondAsync("api/user/settings", HttpMethod.Put, async token =>
+        {
+            putStarted.TrySetResult();
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                return new HttpResponseMessage(HttpStatusCode.NoContent);
+            }
+            catch (OperationCanceledException)
+            {
+                putCanceled.TrySetResult();
+                throw;
+            }
+        });
+        var cut = Render<MainLayout>();
+        cut.FindAll("button").Single(button => button.TextContent.Contains("First")).Click();
+        var second = cut.FindComponents<MudMenuItem>()
+            .Single(item => item.Markup.Contains("Second"));
+
+        var selectionTask = cut.InvokeAsync(
+            () => second.Instance.OnClick.InvokeAsync(new MouseEventArgs()));
+        await putStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        cut.Instance.Dispose();
+
+        await putCanceled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await selectionTask.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task NewSessionWriter_IsNotBlockedOrOverwrittenByStaleWriter()
+    {
+        _handler.Respond("api/organizations", new[] { Organization(1, "Organization") });
+        _handler.Respond("api/user/settings", new UserSettingsDto
+        {
+            DefaultOrganizationId = 1,
+            DefaultProjectId = 11
+        });
+        _handler.Respond("api/organizations/1/projects", new[]
+        {
+            Project(11, 1, "First"),
+            Project(12, 1, "Second"),
+            Project(13, 1, "Third")
+        });
+        var stalePutStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseStalePut = new TaskCompletionSource<HttpResponseMessage>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var putCount = 0;
+        _handler.RespondAsync("api/user/settings", HttpMethod.Put, _ =>
+        {
+            var request = Interlocked.Increment(ref putCount);
+            if (request == 1)
+            {
+                stalePutStarted.TrySetResult();
+                return releaseStalePut.Task;
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
+        });
+        var cut = Render<MainLayout>();
+        cut.FindAll("button").Single(button => button.TextContent.Contains("First")).Click();
+        var second = cut.FindComponents<MudMenuItem>()
+            .Single(item => item.Markup.Contains("Second"));
+        var staleSelection = cut.InvokeAsync(
+            () => second.Instance.OnClick.InvokeAsync(new MouseEventArgs()));
+        await stalePutStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        _authentication.SetAuthenticated(false);
+        cut.WaitForAssertion(() =>
+            Assert.Null(Services.GetRequiredService<ProjectStateService>().SelectedProject));
+        _authentication.SetAuthenticated(true);
+        cut.WaitForAssertion(() =>
+            Assert.Equal(11, Services.GetRequiredService<ProjectStateService>().SelectedProjectId));
+        cut.FindAll("button").Single(button => button.TextContent.Contains("First")).Click();
+        var third = cut.FindComponents<MudMenuItem>()
+            .Single(item => item.Markup.Contains("Third"));
+
+        await cut.InvokeAsync(
+            () => third.Instance.OnClick.InvokeAsync(new MouseEventArgs()))
+            .WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(2, putCount);
+
+        releaseStalePut.SetResult(new HttpResponseMessage(HttpStatusCode.NoContent));
+        await staleSelection.WaitAsync(TimeSpan.FromSeconds(5));
+        await cut.InvokeAsync(
+            () => third.Instance.OnClick.InvokeAsync(new MouseEventArgs()));
+
+        Assert.Equal(2, putCount);
+    }
+
+    [Fact]
     public void ProjectListRefresh_PreservesCurrentSelectionBeforeStoredDefault()
     {
         _handler.Respond("api/organizations", new[] { Organization(1, "Organization") });

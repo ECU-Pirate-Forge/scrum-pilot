@@ -120,6 +120,8 @@
     private Selection? _persistedSelection;
     private Task _selectionWriterTask = Task.CompletedTask;
     private bool _selectionWriterRunning;
+    private CancellationTokenSource? _selectionWriterOwner;
+    private CancellationTokenSource? _sessionCancellation;
     private int _persistenceGeneration;
     private bool _disposed;
 
@@ -223,11 +225,20 @@
     {
         var generation = ++_loadGeneration;
         ClearSession(incrementGeneration: false);
+        CancellationTokenSource sessionCancellation;
+        lock (_selectionPersistenceLock)
+        {
+            if (_disposed)
+                return;
+
+            sessionCancellation = new CancellationTokenSource();
+            _sessionCancellation = sessionCancellation;
+        }
 
         try
         {
             var organizations = await Http.GetFromJsonAsync<List<OrganizationSummaryDto>>(
-                "api/organizations") ?? [];
+                "api/organizations", sessionCancellation.Token) ?? [];
             if (!IsCurrent(generation))
                 return;
 
@@ -236,7 +247,8 @@
                     && !(rejectedOrganizationIds?.Contains(o.OrganizationId) ?? false))
                 .ToList();
 
-            _settings = await Http.GetFromJsonAsync<UserSettingsDto>("api/user/settings");
+            _settings = await Http.GetFromJsonAsync<UserSettingsDto>(
+                "api/user/settings", sessionCancellation.Token);
             if (!IsCurrent(generation))
                 return;
 
@@ -286,6 +298,9 @@
             if (IsCurrent(generation))
                 ClearSession();
         }
+        catch (OperationCanceledException) when (sessionCancellation.IsCancellationRequested)
+        {
+        }
         catch (Exception)
         {
             if (IsCurrent(generation))
@@ -327,10 +342,17 @@
         int? existingGeneration = null)
     {
         var generation = existingGeneration ?? ++_loadGeneration;
+        CancellationTokenSource? sessionCancellation;
+        lock (_selectionPersistenceLock)
+            sessionCancellation = _sessionCancellation;
+        if (sessionCancellation is null || sessionCancellation.IsCancellationRequested)
+            return ProjectLoadResult.Failed;
+
         try
         {
             var projects = await Http.GetFromJsonAsync<List<Project>>(
-                $"api/organizations/{organization.OrganizationId}/projects") ?? [];
+                $"api/organizations/{organization.OrganizationId}/projects",
+                sessionCancellation.Token) ?? [];
             if (!IsCurrent(generation)
                 || OrganizationState.SelectedOrganizationId != organization.OrganizationId)
                 return ProjectLoadResult.Failed;
@@ -365,6 +387,10 @@
                 ClearSession();
             return ProjectLoadResult.Failed;
         }
+        catch (OperationCanceledException) when (sessionCancellation.IsCancellationRequested)
+        {
+            return ProjectLoadResult.Failed;
+        }
         catch (Exception)
         {
             if (IsCurrent(generation))
@@ -397,87 +423,122 @@
     {
         lock (_selectionPersistenceLock)
         {
+            var sessionCancellation = _sessionCancellation;
+            if (_disposed || sessionCancellation is null
+                || sessionCancellation.IsCancellationRequested)
+                return Task.CompletedTask;
+
             _desiredSelection = new Selection(organizationId, projectId);
-            if (!_selectionWriterRunning)
+            if (!_selectionWriterRunning
+                || !ReferenceEquals(_selectionWriterOwner, sessionCancellation))
             {
                 _selectionWriterRunning = true;
-                _selectionWriterTask = RunSelectionWriterAsync(_persistenceGeneration);
+                _selectionWriterOwner = sessionCancellation;
+                _selectionWriterTask = RunSelectionWriterAsync(
+                    _persistenceGeneration, sessionCancellation);
             }
 
             return _selectionWriterTask;
         }
     }
 
-    private async Task RunSelectionWriterAsync(int persistenceGeneration)
+    private async Task RunSelectionWriterAsync(
+        int persistenceGeneration,
+        CancellationTokenSource sessionCancellation)
     {
-        while (true)
+        try
         {
-            Selection target;
-            lock (_selectionPersistenceLock)
+            while (true)
             {
-                if (_disposed || _desiredSelection is not Selection desired
-                    || desired == _persistedSelection)
+                Selection target;
+                lock (_selectionPersistenceLock)
                 {
-                    _selectionWriterRunning = false;
-                    return;
+                    if (!IsCurrentWriter(persistenceGeneration, sessionCancellation)
+                        || _desiredSelection is not Selection desired
+                        || desired == _persistedSelection)
+                        return;
+
+                    target = desired;
                 }
 
-                persistenceGeneration = _persistenceGeneration;
-                target = desired;
-            }
-
-            try
-            {
-                var latest = await Http.GetFromJsonAsync<UserSettingsDto>("api/user/settings")
+                try
+                {
+                    var latest = await Http.GetFromJsonAsync<UserSettingsDto>(
+                        "api/user/settings", sessionCancellation.Token)
                     ?? _settings
                     ?? new UserSettingsDto();
-                lock (_selectionPersistenceLock)
-                {
-                    if (persistenceGeneration != _persistenceGeneration)
-                        continue;
-                    if (_desiredSelection is Selection latestDesired)
-                        target = latestDesired;
+                    lock (_selectionPersistenceLock)
+                    {
+                        if (!IsCurrentWriter(persistenceGeneration, sessionCancellation))
+                            return;
+                        if (_desiredSelection is Selection latestDesired)
+                            target = latestDesired;
+                    }
+
+                    var merged = new UserSettingsDto
+                    {
+                        Email = latest.Email,
+                        DiscordUsername = latest.DiscordUsername,
+                        UiPreference = latest.UiPreference,
+                        DefaultOrganizationId = target.OrganizationId,
+                        DefaultProjectId = target.ProjectId
+                    };
+
+                    var response = await Http.PutAsJsonAsync(
+                        "api/user/settings", merged, sessionCancellation.Token);
+                    response.EnsureSuccessStatusCode();
+
+                    lock (_selectionPersistenceLock)
+                    {
+                        if (!IsCurrentWriter(persistenceGeneration, sessionCancellation))
+                            return;
+
+                        _persistedSelection = target;
+                        _settings = merged;
+                    }
                 }
-
-                var merged = new UserSettingsDto
+                catch (OperationCanceledException)
+                    when (sessionCancellation.IsCancellationRequested)
                 {
-                    Email = latest.Email,
-                    DiscordUsername = latest.DiscordUsername,
-                    UiPreference = latest.UiPreference,
-                    DefaultOrganizationId = target.OrganizationId,
-                    DefaultProjectId = target.ProjectId
-                };
-
-                var response = await Http.PutAsJsonAsync("api/user/settings", merged);
-                response.EnsureSuccessStatusCode();
-
-                lock (_selectionPersistenceLock)
+                    return;
+                }
+                catch (Exception)
                 {
-                    if (persistenceGeneration != _persistenceGeneration)
-                        continue;
+                    bool retryLatest;
+                    lock (_selectionPersistenceLock)
+                    {
+                        if (!IsCurrentWriter(persistenceGeneration, sessionCancellation))
+                            return;
+                        retryLatest = _desiredSelection is Selection desired && desired != target;
+                    }
 
-                    _persistedSelection = target;
-                    _settings = merged;
+                    Snackbar.Add(
+                        "Unable to save your organization and project selection.", Severity.Error);
+                    if (!retryLatest)
+                        return;
                 }
             }
-            catch (Exception)
+        }
+        finally
+        {
+            lock (_selectionPersistenceLock)
             {
-                var retryLatest = false;
-                lock (_selectionPersistenceLock)
+                if (ReferenceEquals(_selectionWriterOwner, sessionCancellation))
                 {
-                    if (persistenceGeneration != _persistenceGeneration)
-                        continue;
-                    retryLatest = _desiredSelection is Selection desired && desired != target;
-                    if (!retryLatest)
-                        _selectionWriterRunning = false;
+                    _selectionWriterRunning = false;
+                    _selectionWriterOwner = null;
                 }
-
-                Snackbar.Add("Unable to save your organization and project selection.", Severity.Error);
-                if (!retryLatest)
-                    return;
             }
         }
     }
+
+    private bool IsCurrentWriter(
+        int persistenceGeneration,
+        CancellationTokenSource sessionCancellation) =>
+        !_disposed
+        && persistenceGeneration == _persistenceGeneration
+        && ReferenceEquals(_sessionCancellation, sessionCancellation)
+        && !sessionCancellation.IsCancellationRequested;
 
     private bool IsCurrent(int generation) => !_disposed && generation == _loadGeneration;
 
@@ -490,12 +551,17 @@
         _settings = null;
         _isDarkMode = false;
         _userPreferenceLoaded = false;
+        CancellationTokenSource? sessionCancellation;
         lock (_selectionPersistenceLock)
         {
             _persistenceGeneration++;
             _desiredSelection = null;
             _persistedSelection = null;
+            sessionCancellation = _sessionCancellation;
+            _sessionCancellation = null;
         }
+        sessionCancellation?.Cancel();
+        sessionCancellation?.Dispose();
         OrganizationState.Clear();
         ProjectState.Clear();
     }
@@ -531,11 +597,17 @@
     {
         _disposed = true;
         _loadGeneration++;
+        CancellationTokenSource? sessionCancellation;
         lock (_selectionPersistenceLock)
         {
             _persistenceGeneration++;
             _desiredSelection = null;
+            _persistedSelection = null;
+            sessionCancellation = _sessionCancellation;
+            _sessionCancellation = null;
         }
+        sessionCancellation?.Cancel();
+        sessionCancellation?.Dispose();
         AuthStateProvider.AuthenticationStateChanged -= OnAuthStateChanged;
         ProjectState.OnProjectListChanged -= OnProjectListChanged;
     }
