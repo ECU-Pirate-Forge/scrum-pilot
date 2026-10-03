@@ -9,11 +9,16 @@ namespace ScrumPilot.Data.Migrations
     /// <inheritdoc />
     public partial class AddOrganizationTenancy : Migration
     {
-        private const string MigrationTimestamp = "2026-10-03 02:43:14+00";
+        private const string PostgreSqlMigrationTimestamp = "2026-10-03 02:43:14+00";
+        private const string SqliteMigrationTimestamp = "2026-10-03 02:43:14.0000000";
 
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            var migrationTimestampSql = ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL"
+                ? $"TIMESTAMPTZ '{PostgreSqlMigrationTimestamp}'"
+                : $"'{SqliteMigrationTimestamp}'";
+
             migrationBuilder.AddColumn<int>(
                 name: "OrganizationId",
                 table: "Project",
@@ -53,14 +58,14 @@ namespace ScrumPilot.Data.Migrations
             {
                 migrationBuilder.Sql($$"""
                     INSERT INTO "Organizations" ("Name", "NormalizedName", "CreatedAt", "RowVersion")
-                    VALUES ('Pirate Forge', 'PIRATE FORGE', TIMESTAMPTZ '{{MigrationTimestamp}}', decode('00000000000000000000000000000001', 'hex'));
+                    VALUES ('Pirate Forge', 'PIRATE FORGE', {{migrationTimestampSql}}, decode('00000000000000000000000000000001', 'hex'));
                     """);
             }
             else
             {
                 migrationBuilder.Sql($$"""
                     INSERT INTO "Organizations" ("Name", "NormalizedName", "CreatedAt", "RowVersion")
-                    VALUES ('Pirate Forge', 'PIRATE FORGE', '{{MigrationTimestamp}}', X'00000000000000000000000000000001');
+                    VALUES ('Pirate Forge', 'PIRATE FORGE', {{migrationTimestampSql}}, X'00000000000000000000000000000001');
                     """);
             }
 
@@ -117,7 +122,7 @@ namespace ScrumPilot.Data.Migrations
                            WHERE user_roles."UserId" = users."Id"
                              AND roles."NormalizedName" = 'ADMIN'
                        ) THEN 'Owner' ELSE 'Member' END,
-                       '{{MigrationTimestamp}}'
+                       {{migrationTimestampSql}}
                 FROM "AspNetUsers" users
                 CROSS JOIN "Organizations" organization
                 WHERE organization."NormalizedName" = 'PIRATE FORGE';
@@ -167,6 +172,29 @@ namespace ScrumPilot.Data.Migrations
                 name: "IX_OrganizationMemberships_UserId",
                 table: "OrganizationMemberships",
                 column: "UserId");
+
+            migrationBuilder.Sql("""
+                UPDATE "AspNetUsers"
+                SET "DefaultProjectId" = NULL
+                WHERE "DefaultProjectId" IS NOT NULL
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM "Project" project
+                      WHERE project."ProjectId" = "AspNetUsers"."DefaultProjectId"
+                  );
+
+                DELETE FROM "UserDashboardPreferences"
+                WHERE NOT EXISTS (
+                          SELECT 1
+                          FROM "Project" project
+                          WHERE project."ProjectId" = "UserDashboardPreferences"."ProjectId"
+                      )
+                   OR NOT EXISTS (
+                          SELECT 1
+                          FROM "AspNetUsers" users
+                          WHERE users."Id" = "UserDashboardPreferences"."UserId"
+                      );
+                """);
 
             migrationBuilder.AddForeignKey(
                 name: "FK_Project_Organizations_OrganizationId",
@@ -247,7 +275,17 @@ namespace ScrumPilot.Data.Migrations
 
             migrationBuilder.Sql($$"""
                 INSERT INTO "ProjectMemberships" ("ProjectId", "UserId", "GrantedAt", "GrantedByUserId")
-                SELECT project."ProjectId", membership."UserId", '{{MigrationTimestamp}}', membership."UserId"
+                SELECT project."ProjectId",
+                       membership."UserId",
+                       {{migrationTimestampSql}},
+                       COALESCE((
+                           SELECT owner."UserId"
+                           FROM "OrganizationMemberships" owner
+                           WHERE owner."OrganizationId" = membership."OrganizationId"
+                             AND owner."Role" = 'Owner'
+                           ORDER BY owner."UserId"
+                           LIMIT 1
+                       ), membership."UserId")
                 FROM "OrganizationMemberships" membership
                 INNER JOIN "Project" project
                     ON project."OrganizationId" = membership."OrganizationId"
@@ -379,6 +417,11 @@ namespace ScrumPilot.Data.Migrations
                 table: "AspNetUsers");
 
             migrationBuilder.Sql("""DROP TABLE "Organizations";""");
+
+            if (ActiveProvider == "Microsoft.EntityFrameworkCore.Sqlite")
+            {
+                migrationBuilder.Sql("PRAGMA foreign_keys = 1;", suppressTransaction: true);
+            }
         }
     }
 }
