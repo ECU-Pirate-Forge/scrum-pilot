@@ -4,6 +4,8 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests;
 
 public class PlanningPokerSessionServiceTests
 {
+    private static readonly PlanningPokerSessionKey SessionKey = new(3, 7);
+
     [Fact]
     public void ClearCurrentPbiIfSelected_ClearsMatchingSelectionAndResetsVoting()
     {
@@ -36,10 +38,30 @@ public class PlanningPokerSessionServiceTests
         Assert.Equal(8, participant.Points);
     }
 
+    [Fact]
+    public void SessionsWithSameProjectIdInDifferentOrganizations_AreIsolated()
+    {
+        var service = new PlanningPokerSessionService();
+        var otherOrganizationKey = new PlanningPokerSessionKey(4, SessionKey.ProjectId);
+        service.AddParticipant("connection-1", "Alice", SessionKey);
+        service.AddParticipant("connection-2", "Bob", otherOrganizationKey);
+
+        service.SetCurrentPbi("connection-1", 42);
+        service.SetVote("connection-1", 8);
+
+        var first = service.GetStateForSession(SessionKey, includeVotes: true);
+        var second = service.GetStateForSession(otherOrganizationKey, includeVotes: true);
+        Assert.Equal(42, first.CurrentPbiId);
+        Assert.Single(first.Participants);
+        Assert.Null(second.CurrentPbiId);
+        Assert.Single(second.Participants);
+        Assert.Equal("Bob", second.Participants[0].DisplayName);
+    }
+
     private static PlanningPokerSessionService CreateSession(int currentPbiId)
     {
         var service = new PlanningPokerSessionService();
-        service.AddParticipant("connection-1", "Alice", projectId: 7);
+        service.AddParticipant("connection-1", "Alice", SessionKey);
         service.SetCurrentPbi("connection-1", currentPbiId);
         service.SetVote("connection-1", points: 8);
         service.Reveal("connection-1");
