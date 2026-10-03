@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using ScrumPilot.API.Controllers;
+using ScrumPilot.API.Authorization;
 using ScrumPilot.Data.Repositories;
 using ScrumPilot.Shared.Models;
 using Xunit;
@@ -10,12 +11,27 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
     public class CommentControllerTests
     {
         private readonly ICommentRepository _mockRepo;
+        private readonly IPbiRepository _pbis;
         private readonly CommentController _controller;
 
         public CommentControllerTests()
         {
             _mockRepo = Substitute.For<ICommentRepository>();
-            _controller = new CommentController(_mockRepo);
+            _pbis = Substitute.For<IPbiRepository>();
+            var currentUser = Substitute.For<ICurrentUser>();
+            var access = Substitute.For<IOrganizationAccessService>();
+            currentUser.UserId.Returns("user1");
+            access.CanAccessProjectAsync("user1", 1, Arg.Any<CancellationToken>()).Returns(true);
+            _pbis.GetByIdAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+                .Returns(call => new ProductBacklogItem
+                {
+                    PbiId = call.ArgAt<int>(0),
+                    ProjectId = 1,
+                    Title = "PBI"
+                });
+            _mockRepo.GetByIdAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+                .Returns(call => MakeComment(call.ArgAt<int>(0), 10));
+            _controller = new CommentController(_mockRepo, _pbis, currentUser, access);
         }
 
         private static Comment MakeComment(int id = 1, int pbiId = 10, string body = "Test comment") =>
@@ -132,7 +148,8 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         public async Task EditComment_ReturnsNotFound_WhenCommentDoesNotExist()
         {
             var comment = MakeComment(1, 10);
-            _mockRepo.GetByPbiIdAsync(10).Returns(new List<Comment>()); // no match
+            _mockRepo.GetByIdAsync(1, Arg.Any<CancellationToken>())
+                .Returns((Comment?)null);
 
             var result = await _controller.EditComment(1, comment);
 

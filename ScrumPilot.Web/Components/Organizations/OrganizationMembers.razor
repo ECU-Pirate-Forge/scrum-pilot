@@ -1,0 +1,217 @@
+@implements IDisposable
+@inject HttpClient Http
+
+<MudPaper Class="pa-4 mb-4">
+    <MudText Typo="Typo.h6">Members</MudText>
+    @if (CanManage)
+    {
+        <div class="d-flex gap-2 align-center mb-3">
+            <MudTextField @bind-Value="_email" InputType="InputType.Email" Label="Invite email" />
+            <MudSelect @bind-Value="_inviteRole" Label="Role">
+                <MudSelectItem Value="OrganizationRole.Member">Member</MudSelectItem>
+                <MudSelectItem Value="OrganizationRole.Owner">Owner</MudSelectItem>
+            </MudSelect>
+            <MudButton data-action="invite" OnClick="InviteAsync">Invite</MudButton>
+        </div>
+    }
+    @foreach (var member in _members)
+    {
+        <div class="d-flex gap-2 align-center my-2">
+            <MudText Style="flex:1">@member.UserId — @member.Role</MudText>
+            @if (CanManage)
+            {
+                <MudCheckBox @bind-Value="_confirmedMembers[member.UserId]" Label="Confirm" />
+                @if (member.Role == OrganizationRole.Member)
+                {
+                    <MudButton data-action="promote" Disabled="@(!_confirmedMembers[member.UserId])"
+                               OnClick="@(() => ChangeRoleAsync(member, OrganizationRole.Owner))">Promote</MudButton>
+                }
+                else
+                {
+                    <MudButton data-action="demote" Disabled="@(!_confirmedMembers[member.UserId])"
+                               OnClick="@(() => ChangeRoleAsync(member, OrganizationRole.Member))">Demote</MudButton>
+                }
+                <MudButton data-action="remove" Color="Color.Error" Disabled="@(!_confirmedMembers[member.UserId])"
+                           OnClick="@(() => RemoveAsync(member))">Remove</MudButton>
+            }
+        </div>
+    }
+    @if (CanManage)
+    {
+        <MudText Typo="Typo.h6" Class="mt-4">Pending invitations</MudText>
+        @foreach (var invitation in _invitations.Where(x => x.Status == OrganizationInvitationStatus.Pending))
+        {
+            <div class="d-flex gap-2 align-center my-2">
+                <MudText Style="flex:1">@invitation.Email — @invitation.Role</MudText>
+                @if (!string.IsNullOrWhiteSpace(invitation.DeliveryError))
+                {
+                    <MudText Color="Color.Error">@invitation.DeliveryError</MudText>
+                }
+                <MudButton OnClick="@(() => ResendAsync(invitation))">Resend</MudButton>
+                <MudButton Color="Color.Error" OnClick="@(() => RevokeAsync(invitation))">Revoke</MudButton>
+            </div>
+        }
+    }
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-2">@_error</MudAlert>
+    }
+</MudPaper>
+
+@code {
+    [Parameter] public int OrganizationId { get; set; }
+    [Parameter] public bool CanManage { get; set; }
+
+    private readonly Dictionary<string, bool> _confirmedMembers = [];
+    private List<OrganizationMemberDto> _members = [];
+    private List<OrganizationInvitationDto> _invitations = [];
+    private CancellationTokenSource? _loadCancellation;
+    private (int OrganizationId, bool CanManage)? _lastParameterKey;
+    private long _generation;
+    private bool _disposed;
+    private string _email = "";
+    private OrganizationRole _inviteRole = OrganizationRole.Member;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var key = (OrganizationId, CanManage);
+        if (_lastParameterKey == key) return;
+        _lastParameterKey = key;
+        await ReloadAsync(key);
+    }
+
+    private async Task ReloadAsync((int OrganizationId, bool CanManage) key)
+    {
+        if (_disposed || _lastParameterKey != key) return;
+
+        var generation = ++_generation;
+        _loadCancellation?.Cancel();
+        _loadCancellation?.Dispose();
+        _loadCancellation = new();
+        _members = [];
+        _invitations = [];
+        _confirmedMembers.Clear();
+        _error = null;
+        await LoadAsync(key, generation, _loadCancellation.Token);
+    }
+
+    private async Task LoadAsync(
+        (int OrganizationId, bool CanManage) key,
+        long generation,
+        CancellationToken token)
+    {
+        try
+        {
+            var members = await Http.GetFromJsonAsync<List<OrganizationMemberDto>>(
+                $"api/organizations/{key.OrganizationId}/members", token) ?? [];
+            if (!IsCurrent(key, generation)) return;
+
+            _members = members;
+            _confirmedMembers.Clear();
+            foreach (var member in _members) _confirmedMembers[member.UserId] = false;
+
+            var invitations = key.CanManage
+                ? await Http.GetFromJsonAsync<List<OrganizationInvitationDto>>(
+                    $"api/organizations/{key.OrganizationId}/invitations", token) ?? []
+                : [];
+            if (!IsCurrent(key, generation)) return;
+
+            _invitations = invitations;
+            _error = null;
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (HttpRequestException) when (IsCurrent(key, generation))
+        {
+            _error = "Unable to load organization members.";
+        }
+    }
+
+    private async Task InviteAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_email)) { _error = "Email is required."; return; }
+        var email = _email.Trim();
+        var role = _inviteRole;
+        await MutateAsync(
+            organizationId => Http.PostAsJsonAsync($"api/organizations/{organizationId}/invitations",
+                new InviteOrganizationMemberRequest(email, role)),
+            "Unable to send invitation.",
+            () => _email = "");
+    }
+
+    private Task ChangeRoleAsync(OrganizationMemberDto member, OrganizationRole role) =>
+        MutateAsync(
+            organizationId => Http.PutAsJsonAsync(
+                $"api/organizations/{organizationId}/members/{Uri.EscapeDataString(member.UserId)}/role",
+                new UpdateOrganizationMemberRoleRequest(role)),
+            "Unable to change the member role.");
+
+    private Task RemoveAsync(OrganizationMemberDto member) =>
+        MutateAsync(
+            organizationId => Http.DeleteAsync(
+                $"api/organizations/{organizationId}/members/{Uri.EscapeDataString(member.UserId)}"),
+            "Unable to remove the member.");
+
+    private Task ResendAsync(OrganizationInvitationDto invitation) =>
+        MutateAsync(
+            organizationId => Http.PostAsync(
+                $"api/organizations/{organizationId}/invitations/{invitation.OrganizationInvitationId}/resend", null),
+            "Unable to resend the invitation.");
+
+    private Task RevokeAsync(OrganizationInvitationDto invitation) =>
+        MutateAsync(
+            organizationId => Http.DeleteAsync(
+                $"api/organizations/{organizationId}/invitations/{invitation.OrganizationInvitationId}"),
+            "Unable to revoke the invitation.");
+
+    private async Task MutateAsync(
+        Func<int, Task<HttpResponseMessage>> action,
+        string fallback,
+        Action? onSuccess = null)
+    {
+        var key = (OrganizationId, CanManage);
+        var generation = _generation;
+        if (!key.CanManage || !IsCurrent(key, generation)) return;
+
+        _error = null;
+        try
+        {
+            var response = await action(key.OrganizationId);
+            if (!IsCurrent(key, generation)) return;
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await ErrorAsync(response, fallback);
+                if (IsCurrent(key, generation)) _error = error;
+                return;
+            }
+
+            onSuccess?.Invoke();
+            await ReloadAsync(key);
+        }
+        catch (HttpRequestException)
+        {
+            if (IsCurrent(key, generation)) _error = fallback;
+        }
+    }
+
+    private bool IsCurrent((int OrganizationId, bool CanManage) key, long generation) =>
+        !_disposed
+        && generation == _generation
+        && _lastParameterKey == key
+        && (OrganizationId, CanManage) == key;
+
+    private static async Task<string> ErrorAsync(HttpResponseMessage response, string fallback)
+    {
+        try { return (await response.Content.ReadFromJsonAsync<ProblemDetails>())?.Detail ?? fallback; }
+        catch { return fallback; }
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        _generation++;
+        _loadCancellation?.Cancel();
+        _loadCancellation?.Dispose();
+    }
+    private sealed class ProblemDetails { public string? Detail { get; set; } }
+}

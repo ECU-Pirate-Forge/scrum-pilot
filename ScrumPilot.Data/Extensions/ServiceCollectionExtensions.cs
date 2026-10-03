@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using ScrumPilot.Data.Context;
 using ScrumPilot.Data.Models;
 using ScrumPilot.Data.Repositories;
+using ScrumPilot.Data.Services;
 
 namespace ScrumPilot.Data.Extensions
 {
@@ -51,12 +52,17 @@ namespace ScrumPilot.Data.Extensions
 
             // Add repositories
             services.AddScoped<IProjectRepository, ProjectRepository>();
+            services.AddScoped<IProjectAccessRepository, ProjectAccessRepository>();
             services.AddScoped<IPbiRepository, PbiRepository>();
             services.AddScoped<ICommentRepository, CommentRepository>();
             services.AddScoped<ISprintRepository, SprintRepository>();
             services.AddScoped<IEpicRepository, EpicRepository>();
             services.AddScoped<IPbiHistoryRepository, PbiHistoryRepository>();
             services.AddScoped<IDashboardPreferenceRepository, DashboardPreferenceRepository>();
+            services.AddScoped<IOrganizationRepository, OrganizationRepository>();
+            services.AddScoped<IOrganizationInvitationRepository, OrganizationInvitationRepository>();
+            services.AddScoped<OrganizationBootstrapValidator>();
+            services.AddSingleton<PirateForgeBootstrapper>();
 
             return services;
         }

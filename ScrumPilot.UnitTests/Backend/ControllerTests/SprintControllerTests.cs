@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using ScrumPilot.API.Controllers;
 using ScrumPilot.API.Services;
+using ScrumPilot.API.Authorization;
+using ScrumPilot.Data.Repositories;
 using ScrumPilot.Shared.Models;
 using Xunit;
 
@@ -10,12 +12,19 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
     public class SprintControllerTests
     {
         private readonly ISprintService _mockSprintService;
+        private readonly ISprintRepository _repository;
+        private readonly IOrganizationAccessService _access;
         private readonly SprintController _controller;
 
         public SprintControllerTests()
         {
             _mockSprintService = Substitute.For<ISprintService>();
-            _controller = new SprintController(_mockSprintService);
+            _repository = Substitute.For<ISprintRepository>();
+            var currentUser = Substitute.For<ICurrentUser>();
+            _access = Substitute.For<IOrganizationAccessService>();
+            currentUser.UserId.Returns("test-user");
+            _access.CanAccessProjectAsync("test-user", 1, Arg.Any<CancellationToken>()).Returns(true);
+            _controller = new SprintController(_mockSprintService, _repository, currentUser, _access);
         }
 
         [Fact]
@@ -42,17 +51,17 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
                 }
             };
 
-            _mockSprintService.GetAllSprintsAsync().Returns(expectedSprints);
+            _mockSprintService.GetSprintsByProjectAsync(1).Returns(expectedSprints);
 
             // Act
-            var result = await _controller.GetAllSprints();
+            var result = await _controller.GetAllSprints(1);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
             var actualSprints = Assert.IsType<List<Sprint>>(okResult.Value);
             Assert.Equal(expectedSprints.Count, actualSprints.Count);
             Assert.Equal(expectedSprints, actualSprints);
-            await _mockSprintService.Received(1).GetAllSprintsAsync();
+            await _mockSprintService.Received(1).GetSprintsByProjectAsync(1);
         }
 
         [Fact]
@@ -60,16 +69,16 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         {
             // Arrange
             var expectedSprints = new List<Sprint>();
-            _mockSprintService.GetAllSprintsAsync().Returns(expectedSprints);
+            _mockSprintService.GetSprintsByProjectAsync(1).Returns(expectedSprints);
 
             // Act
-            var result = await _controller.GetAllSprints();
+            var result = await _controller.GetAllSprints(1);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
             var actualSprints = Assert.IsType<List<Sprint>>(okResult.Value);
             Assert.Empty(actualSprints);
-            await _mockSprintService.Received(1).GetAllSprintsAsync();
+            await _mockSprintService.Received(1).GetSprintsByProjectAsync(1);
         }
     }
 }

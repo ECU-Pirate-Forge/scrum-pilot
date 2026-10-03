@@ -8,41 +8,34 @@ namespace ScrumPilot.API.Services
     /// </summary>
     public interface IPbiService
     {
-        /// <summary>Returns all PBIs regardless of draft status.</summary>
-        Task<IEnumerable<ProductBacklogItem>> GetAllPbisAsync();
-
-        /// <summary>Returns all non-draft PBIs.</summary>
-        Task<IEnumerable<ProductBacklogItem>> GetNonDraftPbisAsync();
-
-        /// <summary>Returns all draft PBIs awaiting review and commit.</summary>
-        Task<IEnumerable<ProductBacklogItem>> GetDraftPbisAsync();
-
         /// <summary>
         /// Returns non-draft PBIs filtered by any combination of sprint, epic, and project.
         /// Pass <c>sprintId = -1</c> to retrieve unassigned PBIs.
         /// </summary>
-        Task<IEnumerable<ProductBacklogItem>> GetFilteredPbisAsync(int? sprintId, int? epicId, int? projectId = null);
+        Task<IEnumerable<ProductBacklogItem>> GetFilteredPbisAsync(int? sprintId, int? epicId, int? projectId = null, CancellationToken cancellationToken = default);
 
         /// <summary>Creates and persists a non-draft PBI, returning the saved entity.</summary>
-        Task<ProductBacklogItem> CreatePbiAsync(ProductBacklogItem story);
+        Task<ProductBacklogItem> CreatePbiAsync(ProductBacklogItem story, CancellationToken cancellationToken = default);
 
         /// <summary>Creates and persists a PBI in draft state, returning the saved entity.</summary>
-        Task<ProductBacklogItem> CreateDraftPbiAsync(ProductBacklogItem story);
+        Task<ProductBacklogItem> CreateDraftPbiAsync(ProductBacklogItem story, CancellationToken cancellationToken = default);
+
+        Task<List<ProductBacklogItem>> CreatePbisAsync(IEnumerable<ProductBacklogItem> stories, bool draft, CancellationToken cancellationToken = default);
 
         /// <summary>Promotes a draft PBI to the backlog by fetching it by ID and clearing its draft flag.</summary>
-        Task<ProductBacklogItem> CommitDraftPbiAsync(ProductBacklogItem draftPbi);
+        Task<ProductBacklogItem> CommitDraftPbiAsync(ProductBacklogItem draftPbi, CancellationToken cancellationToken = default);
 
         /// <summary>Clears the draft flag on the supplied PBI and saves the change.</summary>
-        Task<ProductBacklogItem> CommitPbiAsync(ProductBacklogItem pbi);
+        Task<ProductBacklogItem> CommitPbiAsync(ProductBacklogItem pbi, CancellationToken cancellationToken = default);
 
         /// <summary>Updates an existing PBI and returns the saved entity.</summary>
-        Task<ProductBacklogItem> UpdatePbiAsync(ProductBacklogItem pbi);
+        Task<ProductBacklogItem> UpdatePbiAsync(ProductBacklogItem pbi, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Permanently deletes the PBI with the given <paramref name="id"/>.
         /// Returns <c>true</c> if deleted; <c>false</c> if not found.
         /// </summary>
-        Task<bool> DeletePbiAsync(int id);
+        Task<bool> DeletePbiAsync(int id, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Calls the configured AI provider (Groq or local Ollama) for each problem statement,

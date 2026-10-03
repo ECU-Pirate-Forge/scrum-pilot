@@ -1,57 +1,72 @@
 using Microsoft.AspNetCore.Mvc;
+using ScrumPilot.API.Authorization;
 using ScrumPilot.API.Services;
+using ScrumPilot.Data.Repositories;
 using ScrumPilot.Shared.Models;
 
-namespace ScrumPilot.API.Controllers
+namespace ScrumPilot.API.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class SprintController(
+    ISprintService sprintService,
+    ISprintRepository sprintRepository,
+    ICurrentUser currentUser,
+    IOrganizationAccessService accessService) : ControllerBase
 {
-    /// <summary>
-    /// Manages Sprint resources.
-    /// </summary>
-    [ApiController]
-    [Route("api/[controller]")]
-    public class SprintController : ControllerBase
+    [HttpGet]
+    public async Task<ActionResult<IEnumerable<Sprint>>> GetAllSprints(
+        [FromQuery] int projectId,
+        CancellationToken cancellationToken = default)
     {
-        private readonly ISprintService _sprintService;
+        if (!await CanAccess(projectId, cancellationToken)) return NotFound();
+        return Ok(await sprintService.GetSprintsByProjectAsync(projectId, cancellationToken));
+    }
 
-        /// <summary>Initialises a new instance of <see cref="SprintController"/>.</summary>
-        public SprintController(ISprintService sprintService)
-        {
-            _sprintService = sprintService;
-        }
+    [HttpPost]
+    public async Task<ActionResult<Sprint>> Create(
+        [FromQuery] int projectId,
+        [FromBody] Sprint request,
+        CancellationToken cancellationToken = default)
+    {
+        if (!await CanAccess(projectId, cancellationToken)) return NotFound();
+        var sprint = new Sprint { ProjectId = projectId };
+        ApplyMutableFields(sprint, request);
+        return Ok(await sprintService.CreateAsync(sprint, cancellationToken));
+    }
 
-        /// <summary>Returns all sprints, optionally filtered by project.</summary>
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<Sprint>>> GetAllSprints([FromQuery] int? projectId = null)
-        {
-            var sprints = projectId.HasValue
-                ? await _sprintService.GetSprintsByProjectAsync(projectId.Value)
-                : await _sprintService.GetAllSprintsAsync();
-            return Ok(sprints);
-        }
+    [HttpPut("{id:int}")]
+    public async Task<ActionResult<Sprint>> Update(
+        int id,
+        [FromBody] Sprint request,
+        CancellationToken cancellationToken = default)
+    {
+        if (id != request.SprintId) return BadRequest();
+        var existing = await sprintRepository.GetByIdAsync(id, cancellationToken);
+        if (existing is null || !await CanAccess(existing.ProjectId, cancellationToken)) return NotFound();
+        ApplyMutableFields(existing, request);
+        return Ok(await sprintService.UpdateAsync(existing, cancellationToken));
+    }
 
-        /// <summary>Creates a new sprint.</summary>
-        [HttpPost]
-        public async Task<ActionResult<Sprint>> Create([FromBody] Sprint sprint)
-        {
-            var created = await _sprintService.CreateAsync(sprint);
-            return Ok(created);
-        }
+    [HttpDelete("{id:int}")]
+    public async Task<ActionResult> Delete(int id, CancellationToken cancellationToken = default)
+    {
+        var existing = await sprintRepository.GetByIdAsync(id, cancellationToken);
+        if (existing is null || !await CanAccess(existing.ProjectId, cancellationToken)) return NotFound();
+        await sprintService.DeleteAsync(id, cancellationToken);
+        return NoContent();
+    }
 
-        /// <summary>Updates an existing sprint. Returns 400 if the route ID does not match the body.</summary>
-        [HttpPut("{id:int}")]
-        public async Task<ActionResult<Sprint>> Update(int id, [FromBody] Sprint sprint)
-        {
-            if (id != sprint.SprintId) return BadRequest();
-            var updated = await _sprintService.UpdateAsync(sprint);
-            return Ok(updated);
-        }
+    private Task<bool> CanAccess(int projectId, CancellationToken cancellationToken) =>
+        accessService.CanAccessProjectAsync(currentUser.UserId, projectId, cancellationToken);
 
-        /// <summary>Deletes the sprint and unassigns all its PBIs.</summary>
-        [HttpDelete("{id:int}")]
-        public async Task<ActionResult> Delete(int id)
-        {
-            await _sprintService.DeleteAsync(id);
-            return NoContent();
-        }
+    private static void ApplyMutableFields(Sprint target, Sprint source)
+    {
+        target.SprintTitle = source.SprintTitle;
+        target.SprintGoal = source.SprintGoal;
+        target.StartDate = source.StartDate;
+        target.EndDate = source.EndDate;
+        target.IsOpen = source.IsOpen;
+        target.DateClosed = source.DateClosed;
     }
 }

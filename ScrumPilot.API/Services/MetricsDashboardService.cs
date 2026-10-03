@@ -21,8 +21,7 @@ public class MetricsDashboardService : IMetricsDashboardService
 
     public async Task<SprintSummaryDto?> GetSprintSummaryAsync(int sprintId)
     {
-        var allSprints = await _sprints.GetAllSprintsAsync();
-        var sprint = allSprints.FirstOrDefault(s => s.SprintId == sprintId);
+        var sprint = await _sprints.GetByIdAsync(sprintId);
         if (sprint is null) return null;
 
         var now = DateTime.UtcNow.Date;
@@ -49,8 +48,7 @@ public class MetricsDashboardService : IMetricsDashboardService
 
     public async Task<List<BurndownPoint>> GetBurndownDataAsync(int sprintId)
     {
-        var allSprints = await _sprints.GetAllSprintsAsync();
-        var sprint = allSprints.FirstOrDefault(s => s.SprintId == sprintId);
+        var sprint = await _sprints.GetByIdAsync(sprintId);
         if (sprint?.StartDate is null || sprint.EndDate is null) return [];
 
         var items = (await _pbis.GetFilteredPbisAsync(sprintId, null)).ToList();
@@ -145,9 +143,8 @@ public class MetricsDashboardService : IMetricsDashboardService
 
     public async Task<List<VelocityPoint>> GetVelocityDataAsync(int? currentSprintId = null, int? projectId = null)
     {
-        var allSprints = projectId.HasValue
-            ? (await _sprints.GetSprintsByProjectAsync(projectId.Value)).ToList()
-            : (await _sprints.GetAllSprintsAsync()).ToList();
+        if (!projectId.HasValue) return [];
+        var allSprints = (await _sprints.GetSprintsByProjectAsync(projectId.Value)).ToList();
 
         // Upper bound: if a sprint is selected use its start date so we show
         // sprints up to and including it (open sprints are included this way).
@@ -187,8 +184,7 @@ public class MetricsDashboardService : IMetricsDashboardService
 
     public async Task<List<BugTrendPoint>> GetBugTrendAsync(int sprintId)
     {
-        var allSprints = await _sprints.GetAllSprintsAsync();
-        var sprint = allSprints.FirstOrDefault(s => s.SprintId == sprintId);
+        var sprint = await _sprints.GetByIdAsync(sprintId);
         if (sprint?.StartDate is null) return [];
 
         var items = (await _pbis.GetFilteredPbisAsync(sprintId, null)).ToList();

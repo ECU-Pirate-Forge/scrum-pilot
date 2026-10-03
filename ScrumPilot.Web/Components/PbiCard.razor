@@ -2,6 +2,7 @@
 @using System.Security.Claims
 @inject HttpClient Http
 @inject IDialogService DialogService
+@inject ISnackbar Snackbar
 @inject AuthenticationStateProvider AuthState
 
 @if (PbiModel != null)
@@ -43,7 +44,7 @@
                                        OnClick="StartEdit">
                                 Edit
                             </MudButton>
-                            @if (PbiModel?.PbiId > 0)
+                            @if (CanUsePersistentActions)
                             {
                                 <MudButton Variant="Variant.Outlined"
                                            Color="Color.Error"
@@ -53,30 +54,33 @@
                                 </MudButton>
                             }
                         </div>
-                        <div class="pbi-button-right">
-                            <MudButton Variant="Variant.Filled"
-                                       Color="Color.Tertiary"
-                                       StartIcon="@Icons.Material.Filled.AutoAwesome"
-                                       OnClick="ImproveWithAi"
-                                       Disabled="@isImproving">
-                                @if (isImproving)
-                                {
-                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
-                                    <span>Improving...</span>
-                                }
-                                else
-                                {
-                                    <span>Improve with AI</span>
-                                }
-                            </MudButton>
-                            <MudTooltip Text="@(PbiModel?.IsFlagged == true ? "Remove flag" : "Flag this PBI")">
-                                <MudIconButton Icon="@Icons.Material.Filled.Flag"
-                                               Color="@(PbiModel?.IsFlagged == true ? Color.Error : Color.Default)"
-                                               Variant="Variant.Outlined"
-                                               Size="Size.Medium"
-                                               OnClick="HandleFlagClick" />
-                            </MudTooltip>
-                        </div>
+                        @if (CanUsePersistentActions)
+                        {
+                            <div class="pbi-button-right">
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Tertiary"
+                                           StartIcon="@Icons.Material.Filled.AutoAwesome"
+                                           OnClick="ImproveWithAi"
+                                           Disabled="@isImproving">
+                                    @if (isImproving)
+                                    {
+                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
+                                        <span>Improving...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Improve with AI</span>
+                                    }
+                                </MudButton>
+                                <MudTooltip Text="@(PbiModel?.IsFlagged == true ? "Remove flag" : "Flag this PBI")">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Flag"
+                                                   Color="@(PbiModel?.IsFlagged == true ? Color.Error : Color.Default)"
+                                                   Variant="Variant.Outlined"
+                                                   Size="Size.Medium"
+                                                   OnClick="HandleFlagClick" />
+                                </MudTooltip>
+                            </div>
+                        }
                     }
                 </div>
                 }
@@ -574,6 +578,7 @@ else
     [Parameter] public int? ProjectId { get; set; }
     [Parameter] public EventCallback<int> OnNavigateToPbi { get; set; }
     [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public bool PersistOnSave { get; set; } = true;
 
     // Edit mode state
     private bool isEditMode = false;
@@ -640,9 +645,10 @@ else
 
     private async Task LoadEpics()
     {
+        if (!ProjectId.HasValue) { epics = []; return; }
         try
         {
-            var url = ProjectId.HasValue ? $"api/Epic?projectId={ProjectId.Value}" : "api/Epic";
+            var url = $"api/Epic?projectId={ProjectId.Value}";
             epics = await Http.GetFromJsonAsync<List<Epic>>(url);
         }
         catch { epics = new(); }
@@ -650,9 +656,10 @@ else
 
     private async Task LoadSprints()
     {
+        if (!ProjectId.HasValue) { sprints = []; return; }
         try
         {
-            var url = ProjectId.HasValue ? $"api/Sprint?projectId={ProjectId.Value}" : "api/Sprint";
+            var url = $"api/Sprint?projectId={ProjectId.Value}";
             sprints = await Http.GetFromJsonAsync<List<Sprint>>(url);
         }
         catch { sprints = new(); }
@@ -660,17 +667,21 @@ else
 
     private async Task LoadUsers()
     {
-        try { users = await Http.GetFromJsonAsync<List<UserSummaryDto>>("api/user/all") ?? new(); }
+        try
+        {
+            users = ProjectId.HasValue
+                ? await Http.GetFromJsonAsync<List<UserSummaryDto>>($"api/user/all?projectId={ProjectId.Value}") ?? new()
+                : [];
+        }
         catch { users = new(); }
     }
 
     private async Task LoadProjectPbis()
     {
+        if (!ProjectId.HasValue) { projectPbis = []; return; }
         try
         {
-            var url = ProjectId.HasValue
-                ? $"api/Pbi/getNonDraftPbis?projectId={ProjectId.Value}"
-                : "api/Pbi/getNonDraftPbis";
+            var url = $"api/Pbi/getNonDraftPbis?projectId={ProjectId.Value}";
             projectPbis = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(url) ?? new();
         }
         catch { projectPbis = new(); }
@@ -720,6 +731,7 @@ else
     // Delete methods
     private void ConfirmDelete()
     {
+        if (!CanUsePersistentActions) return;
         showDeleteConfirm = true;
         errorMessage = "";
     }
@@ -731,7 +743,7 @@ else
 
     private void HandleFlagClick()
     {
-        if (PbiModel == null) return;
+        if (!CanUsePersistentActions) return;
         flagReason = "";
         flagReasonError = false;
         _isUnflagging = PbiModel.IsFlagged;
@@ -740,6 +752,7 @@ else
 
     private async Task ConfirmFlag()
     {
+        if (!CanUsePersistentActions) return;
         if (string.IsNullOrWhiteSpace(flagReason))
         {
             flagReasonError = true;
@@ -778,7 +791,7 @@ else
 
     private async Task DeleteStory()
     {
-        if (PbiModel == null) return;
+        if (!CanUsePersistentActions) return;
 
         try
         {
@@ -833,28 +846,104 @@ else
             return;
         }
 
-        PbiModel!.Title            = editTitle;
-        PbiModel.Description       = editDescription;
-        PbiModel.Type              = editType;
-        PbiModel.Status            = editStatus;
-        PbiModel.Priority          = editPriority;
-        PbiModel.StoryPoints       = editStoryPoints;
-        PbiModel.EpicId            = editEpicId;
-        PbiModel.SprintId          = editSprintId;
-        PbiModel.AssignedToUserId  = editAssignedToUserId;
-        PbiModel.IssueLink         = string.IsNullOrWhiteSpace(editIssueLink) ? null : editIssueLink.Trim();
-        PbiModel.DependsOnPbiId    = editDependsOnPbi?.PbiId;
-        PbiModel.LastUpdated       = DateTime.Now;
-
         titleError = false;
         errorMessage = "";
-        isEditMode = false;
-        isAiSuggestion = false;
-
-        if (OnSave.HasDelegate)
+        var request = BuildEditedPbi();
+        if (!PersistOnSave)
         {
-            await OnSave.InvokeAsync(PbiModel);
+            CopyPbi(request, PbiModel!);
+            isEditMode = false;
+            isAiSuggestion = false;
+            if (OnSave.HasDelegate)
+                await OnSave.InvokeAsync(PbiModel);
+            return;
         }
+
+        try
+        {
+            HttpResponseMessage response;
+            if (request.PbiId == 0)
+            {
+                if (!ProjectId.HasValue)
+                {
+                    errorMessage = "Save failed: Select a project first.";
+                    Snackbar.Add(errorMessage, Severity.Error);
+                    return;
+                }
+
+                response = await Http.PostAsJsonAsync(
+                    $"api/Pbi/createStory?projectId={ProjectId.Value}", request);
+            }
+            else
+            {
+                response = await Http.PutAsJsonAsync("api/Pbi", request);
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                errorMessage = "Save failed. Your changes were not applied.";
+                Snackbar.Add(errorMessage, Severity.Error);
+                return;
+            }
+
+            var saved = await response.Content.ReadFromJsonAsync<ProductBacklogItem>() ?? request;
+            CopyPbi(saved, PbiModel!);
+            isEditMode = false;
+            isAiSuggestion = false;
+            Snackbar.Add("PBI saved.", Severity.Success);
+            if (OnSave.HasDelegate)
+                await OnSave.InvokeAsync(saved);
+        }
+        catch
+        {
+            errorMessage = "Save failed. Unable to connect to the server.";
+            Snackbar.Add(errorMessage, Severity.Error);
+        }
+    }
+
+    private ProductBacklogItem BuildEditedPbi() => new()
+    {
+        PbiId = PbiModel!.PbiId,
+        ProjectId = PbiModel.ProjectId,
+        Type = editType,
+        EpicId = editEpicId,
+        SprintId = editSprintId,
+        Title = editTitle,
+        Description = editDescription,
+        Status = editStatus,
+        Priority = editPriority,
+        StoryPoints = editStoryPoints,
+        Origin = PbiModel.Origin,
+        IsDraft = PbiModel.IsDraft,
+        IsFlagged = PbiModel.IsFlagged,
+        AssignedToUserId = editAssignedToUserId,
+        IssueLink = string.IsNullOrWhiteSpace(editIssueLink) ? null : editIssueLink.Trim(),
+        DependsOnPbiId = editDependsOnPbi?.PbiId ?? editDependsOnPbiId,
+        DateCreated = PbiModel.DateCreated,
+        LastUpdated = DateTime.UtcNow
+    };
+
+    private static void CopyPbi(ProductBacklogItem source, ProductBacklogItem target)
+    {
+        target.PbiId = source.PbiId;
+        target.ProjectId = source.ProjectId;
+        target.Type = source.Type;
+        target.EpicId = source.EpicId;
+        target.SprintId = source.SprintId;
+        target.Title = source.Title;
+        target.Description = source.Description;
+        target.Status = source.Status;
+        target.Priority = source.Priority;
+        target.StoryPoints = source.StoryPoints;
+        target.Origin = source.Origin;
+        target.IsDraft = source.IsDraft;
+        target.IsFlagged = source.IsFlagged;
+        target.AssignedToUserId = source.AssignedToUserId;
+        target.IssueLink = source.IssueLink;
+        target.DependsOnPbiId = source.DependsOnPbiId;
+        target.DateCreated = source.DateCreated;
+        target.LastUpdated = source.LastUpdated;
+        target.Comments = source.Comments;
     }
 
     private async Task CancelEdit()
@@ -871,7 +960,7 @@ else
 
     private async Task ImproveWithAi()
     {
-        if (PbiModel == null) return;
+        if (!CanUsePersistentActions) return;
 
         isImproving = true;
         errorMessage = "";
@@ -951,4 +1040,7 @@ else
         ScrumPilot.Shared.Models.PbiPriority.High => Color.Error,
         _ => Color.Default
     };
+
+    private bool CanUsePersistentActions =>
+        PersistOnSave && PbiModel is { PbiId: > 0 };
 }

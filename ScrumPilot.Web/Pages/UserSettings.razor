@@ -1,4 +1,5 @@
 @page "/user-settings"
+@implements IDisposable
 @inject HttpClient Http
 @inject ScrumPilot.Web.Services.ProjectStateService ProjectState
 @inject NavigationManager Navigation
@@ -81,12 +82,14 @@
                     Profile &amp; Preferences
                 </MudText>
                 <MudStack Spacing="3">
-                    <MudTextField @bind-Value="_settings.Email"
+                    <MudTextField Value="_settings.Email"
                                   Label="Email Address"
                                   InputType="InputType.Email"
                                   Variant="Variant.Outlined"
+                                  ReadOnly="true"
                                   Adornment="Adornment.Start"
-                                  AdornmentIcon="@Icons.Material.Filled.Email" />
+                                  AdornmentIcon="@Icons.Material.Filled.Email"
+                                  HelperText="Email changes require a confirmed-email workflow, which is not currently available." />
 
                     <MudTextField @bind-Value="_settings.DiscordUsername"
                                   Label="Discord Username"
@@ -113,6 +116,23 @@
                                 <span>Dark</span>
                             </MudStack>
                         </MudSelectItem>
+                    </MudSelect>
+
+                    <MudSelect T="int?"
+                               Label="Default Organization"
+                               Value="_settings.DefaultOrganizationId"
+                               ValueChanged="OnDefaultOrganizationChangedAsync"
+                               Variant="Variant.Outlined"
+                               Adornment="Adornment.Start"
+                               AdornmentIcon="@Icons.Material.Filled.Business"
+                               Clearable="true"
+                               HelperText="Projects are loaded from the selected organization.">
+                        @foreach (var organization in _organizations)
+                        {
+                            <MudSelectItem T="int?" Value="@((int?)organization.OrganizationId)">
+                                @organization.Name
+                            </MudSelectItem>
+                        }
                     </MudSelect>
 
                     <MudSelect T="int?"
@@ -161,6 +181,7 @@
 
 @code {
     private UserSettingsDto _settings = new();
+    private List<OrganizationSummaryDto> _organizations = [];
     private List<Project> _projects = [];
     private bool _loading = true;
 
@@ -174,25 +195,117 @@
     private bool _savingSettings;
     private string? _settingsError;
     private bool _settingsSuccess;
+    private CancellationTokenSource? _projectLoadCts;
+    private long _projectLoadGeneration;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
             var settingsTask = Http.GetFromJsonAsync<UserSettingsDto>("api/user/settings");
-            var projectsTask = Http.GetFromJsonAsync<List<Project>>("api/Project");
-            await Task.WhenAll(settingsTask, projectsTask);
+            var organizationsTask =
+                Http.GetFromJsonAsync<List<OrganizationSummaryDto>>("api/organizations");
+            await Task.WhenAll(settingsTask, organizationsTask);
 
             _settings = await settingsTask ?? new();
-            _projects = await projectsTask ?? [];
+            _organizations = await organizationsTask ?? [];
+            if (_settings.DefaultOrganizationId.HasValue
+                && _organizations.Any(organization =>
+                    organization.OrganizationId == _settings.DefaultOrganizationId.Value))
+            {
+                var projects = await LoadProjectsAsync(
+                    _settings.DefaultOrganizationId.Value,
+                    CancellationToken.None);
+                _projects = projects ?? [];
+                if (_settings.DefaultProjectId.HasValue
+                    && _projects.All(project =>
+                        project.ProjectId != _settings.DefaultProjectId.Value))
+                {
+                    _settings.DefaultProjectId = null;
+                }
+            }
+            else
+            {
+                _settings.DefaultOrganizationId = null;
+                _settings.DefaultProjectId = null;
+            }
         }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
             Navigation.NavigateTo("/login", forceLoad: false);
             return;
         }
-        _loading = false;
+        catch (HttpRequestException)
+        {
+            _settingsError = "Failed to load settings. Please try again.";
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
+
+    private async Task OnDefaultOrganizationChangedAsync(int? organizationId)
+    {
+        _projectLoadCts?.Cancel();
+        _projectLoadCts?.Dispose();
+        _projectLoadCts = null;
+        var generation = ++_projectLoadGeneration;
+        _settings.DefaultOrganizationId = organizationId;
+        _settings.DefaultProjectId = null;
+        _projects = [];
+        _settingsError = null;
+        _settingsSuccess = false;
+        if (organizationId.HasValue)
+        {
+            var cts = new CancellationTokenSource();
+            _projectLoadCts = cts;
+            try
+            {
+                var projects = await LoadProjectsAsync(
+                    organizationId.Value,
+                    cts.Token);
+                if (IsCurrentProjectLoad(organizationId.Value, generation, cts))
+                {
+                    _projects = projects ?? [];
+                }
+            }
+            catch (OperationCanceledException) when (cts.IsCancellationRequested)
+            {
+            }
+            catch (HttpRequestException)
+            {
+                if (IsCurrentProjectLoad(organizationId.Value, generation, cts))
+                {
+                    _settingsError =
+                        "Failed to load projects for the selected organization.";
+                }
+            }
+            finally
+            {
+                if (ReferenceEquals(_projectLoadCts, cts))
+                {
+                    _projectLoadCts = null;
+                }
+                cts.Dispose();
+            }
+        }
+    }
+
+    private Task<List<Project>?> LoadProjectsAsync(
+        int organizationId,
+        CancellationToken cancellationToken) =>
+        Http.GetFromJsonAsync<List<Project>>(
+            $"api/organizations/{organizationId}/projects",
+            cancellationToken);
+
+    private bool IsCurrentProjectLoad(
+        int organizationId,
+        long generation,
+        CancellationTokenSource cts) =>
+        generation == _projectLoadGeneration
+        && ReferenceEquals(_projectLoadCts, cts)
+        && _settings.DefaultOrganizationId == organizationId;
 
     private async Task SavePasswordAsync()
     {
@@ -263,7 +376,8 @@
             }
             else
             {
-                _settingsError = "Failed to save settings.";
+                var body = await response.Content.ReadFromJsonAsync<SettingsErrorResponse>();
+                _settingsError = body?.Errors?.FirstOrDefault() ?? "Failed to save settings.";
             }
         }
         catch
@@ -277,4 +391,13 @@
     }
 
     private record PasswordErrorResponse(IEnumerable<string>? Errors);
+    private record SettingsErrorResponse(IEnumerable<string>? Errors);
+
+    public void Dispose()
+    {
+        ++_projectLoadGeneration;
+        _projectLoadCts?.Cancel();
+        _projectLoadCts?.Dispose();
+        _projectLoadCts = null;
+    }
 }

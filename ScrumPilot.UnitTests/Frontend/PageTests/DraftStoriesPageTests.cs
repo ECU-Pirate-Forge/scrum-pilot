@@ -4,7 +4,7 @@ using MudBlazor.Services;
 using NSubstitute;
 using ScrumPilot.Shared.Models;
 using ScrumPilot.Web.Pages;
-using System.Net.Http.Json;
+using ScrumPilot.Web.Services;
 using Xunit;
 
 namespace ScrumPilot.UnitTests.Frontend.PageTests
@@ -60,6 +60,33 @@ namespace ScrumPilot.UnitTests.Frontend.PageTests
             Assert.Contains("pa-4", component.Markup); // Padding class
             Assert.Contains("pa-6", component.Markup); // Paper padding
             Assert.Contains("mb-6", component.Markup); // Margin bottom
+        }
+
+        [Fact]
+        public void DraftPbiPage_RequestsSelectedProject_AndReloadsWhenSelectionChanges()
+        {
+            var projectState = Services.GetRequiredService<ProjectStateService>();
+            projectState.SetProject(new Project { ProjectId = 7, ProjectName = "Seven" });
+
+            var component = Render<DraftPbiPage>();
+
+            component.WaitForAssertion(() =>
+                Assert.Contains("api/Pbi/getDraftPbis?projectId=7", HttpRequests));
+
+            projectState.SetProject(new Project { ProjectId = 9, ProjectName = "Nine" });
+
+            component.WaitForAssertion(() =>
+                Assert.Contains("api/Pbi/getDraftPbis?projectId=9", HttpRequests));
+            Assert.Equal(2, HttpRequests.Count);
+        }
+
+        [Fact]
+        public void DraftPbiPage_ShowsSelectProjectStateWithoutRequest()
+        {
+            var component = Render<DraftPbiPage>();
+
+            Assert.Contains("Select a project to view its draft PBIs.", component.Markup);
+            Assert.Empty(HttpRequests);
         }
     }
 }

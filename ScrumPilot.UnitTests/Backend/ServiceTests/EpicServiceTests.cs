@@ -26,30 +26,30 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
                 new Epic { EpicId = 1, Name = "Scrum Board Filtering", DateCreated = DateTime.UtcNow },
                 new Epic { EpicId = 2, Name = "User Management", DateCreated = DateTime.UtcNow }
             };
-            _mockRepository.GetAllEpicsAsync().Returns(expectedEpics);
+            _mockRepository.GetEpicsByProjectAsync(1).Returns(expectedEpics);
 
             // Act
-            var result = await _epicService.GetAllEpicsAsync();
+            var result = await _epicService.GetEpicsByProjectAsync(1);
 
             // Assert
             var actualEpics = result.ToList();
             Assert.Equal(expectedEpics.Count, actualEpics.Count);
             Assert.Equal(expectedEpics, actualEpics);
-            await _mockRepository.Received(1).GetAllEpicsAsync();
+            await _mockRepository.Received(1).GetEpicsByProjectAsync(1);
         }
 
         [Fact]
         public async Task GetAllEpicsAsync_ReturnsEmptyList_WhenNoEpics()
         {
             // Arrange
-            _mockRepository.GetAllEpicsAsync().Returns(new List<Epic>());
+            _mockRepository.GetEpicsByProjectAsync(1).Returns(new List<Epic>());
 
             // Act
-            var result = await _epicService.GetAllEpicsAsync();
+            var result = await _epicService.GetEpicsByProjectAsync(1);
 
             // Assert
             Assert.Empty(result);
-            await _mockRepository.Received(1).GetAllEpicsAsync();
+            await _mockRepository.Received(1).GetEpicsByProjectAsync(1);
         }
     }
 }

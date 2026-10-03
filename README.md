@@ -1,260 +1,115 @@
-
 # ScrumPilot
 
-> AI-powered Scrum project management built for student and professional teams.
+> AI-powered Scrum project management for multi-organization teams.
 
-ScrumPilot is a full-stack web application that combines a classic Scrum workflow with AI story generation, real-time planning poker, and sprint metrics dashboards. Teams can manage their product backlog, run sprints, collaborate through comments, and generate high-quality user stories from plain-English problem statements.
+ScrumPilot is a .NET 10 application for backlog management, Scrum boards, sprint metrics, AI-assisted story generation, and real-time planning poker. It is developed through ECU Pirate Forge and includes a Blazor WebAssembly client, ASP.NET Core API, EF Core data layer, and the ScrumLord Discord bot.
 
-Built by students in **SENG 4235** (Undergraduate) and **SENG 6235** (Graduate) at East Carolina University under the **ECU Pirate Forge** initiative.
+## Features
 
----
+- Organization tenancy with global administrators and organization-scoped owners/members
+- Explicit project access for ordinary organization members
+- Scrum board, backlog, sprints, epics, comments, dependencies, and dashboards
+- AI story generation through Groq or local Ollama
+- SignalR planning poker with project authorization
+- Organization invitations delivered through SendGrid
+- 30-day organization soft-delete and restore lifecycle
 
-## Table of Contents
+## Organization tenancy
 
-- [Project Background](#-project-background)
-- [Features](#-features)
-- [Roadmap](#-roadmap)
-- [Architecture](#️-architecture)
-- [Project Directory Structure](#-project-directory-structure)
-- [Getting Started](#-getting-started)
-- [Running Tests](#-running-tests)
-- [ScrumLord Discord Bot](#-scrumlord-discord-bot)
-- [Deployment](#-deployment)
-- [Project READMEs](#️-project-readmes)
+- The ASP.NET Core Identity `Admin` role is global. Only a global Admin can create an organization or permanently purge one after its retention period.
+- `Owner` and `Member` are organization membership roles. Owners can rename and soft-delete their organization, manage invitations and members, promote or demote members, manage projects, and grant or revoke project access.
+- Owners implicitly access every project in their organization. They do not need `ProjectMembership` rows.
+- Members see only projects for which they have explicit project access. Organization membership alone is not project access.
+- The final owner cannot leave, be removed, or be demoted. Promote another member to Owner before the current final owner leaves or transfers responsibility.
+- Deleting an organization is reversible for 30 days. A historical owner can restore it during that window. After 30 days, only a global Admin can permanently purge it.
 
----
+### Pirate Forge migration and bootstrap
 
-## 📖 Project Background
+The `AddOrganizationTenancy` migration creates `Pirate Forge`, assigns every existing project to it, makes existing global Admin users owners, makes other existing users members, and gives those members explicit access to all migrated projects. Startup grants initial Pirate Forge membership and project access only to development seed users created during that startup; deliberately removed users are not recreated as members. Existing member Admins may be promoted to Owner, and startup validation fails with an actionable error if Pirate Forge has no owner backed by a global Admin.
 
-ScrumPilot was created because there needed to be something better than what was out there. The goal of ScrumPilot is to eliminate the pains of the existing Agile Software Project Management solutions. The application supports the full Scrum lifecycle — from product backlog grooming and sprint planning through sprint execution and retrospective metrics — augmented with AI to reduce the overhead of story writing and estimation.
+### Invitations
 
-Key goals of the project:
+An owner invites an email address as Owner or Member. Invitation tokens are random, stored only as hashes, expire after 72 hours, and are single-use and revocable. Acceptance requires an authenticated account with a confirmed Identity email matching the invitation. The acceptance API returns the joined organization ID so the Web client can select it.
 
-- Give teams a self-hosted Scrum board with no third-party licensing costs
-- Integrate AI story generation so teams can go from a problem statement to a well-formed user story in seconds
-- Provide real-time collaborative planning poker to remove estimation bottlenecks
-- Surface actionable sprint metrics (burndown, velocity, WIP, cycle time) in a single dashboard
-- Complement the web app with **ScrumLord**, a Discord bot that passively monitors team communication and automatically generates AI-powered chat and sprint summaries
+The Web route is `/accept-invitation?token=...`. Anonymous recipients are sent through login and returned to the acceptance page; after success the token is removed from the browser URL.
 
----
+## Architecture
 
-## ✨ Features
+```text
+ScrumPilot.Web -> HTTPS/JSON + SignalR -> ScrumPilot.API -> ScrumPilot.Data -> SQLite/PostgreSQL
+```
 
-The following features are fully implemented in the current release:
-
-| Feature | Description |
+| Project | Responsibility |
 |---|---|
-| **Scrum Board** | Drag-and-drop Kanban board with ToDo / In Progress / In Review / Done lanes |
-| **Product Backlog** | Full backlog management with sprint & epic assignment, priority, and story points |
-| **AI Story Generation** | Generate user stories from problem statements via Groq (production) or local Ollama (dev) |
-| **Draft Workflow** | AI-generated stories land in a draft state for human review before committing to the backlog |
-| **Planning Poker** | Real-time Fibonacci voting via SignalR with AI-suggested point values, reveal, and reset controls |
-| **Metrics Dashboard** | Burndown, velocity, WIP, cycle time, bug trend, and time-in-stage widgets per sprint |
-| **Dependency Chart** | Visual graph of PBI dependencies within a sprint |
-| **Per-PBI Comments** | Threaded comments on backlog items with edit and delete support |
-| **User Settings** | Per-user dark/light theme, default project, Discord username, and password management |
-| **JWT Authentication** | Stateless bearer-token auth with automatic token expiry detection |
-| **ScrumLord Discord Bot** | Passive Discord monitor that records voice meetings and generates AI chat & sprint summaries |
+| `ScrumPilot.API` | REST endpoints, authorization, services, SignalR, AI and email integrations |
+| `ScrumPilot.Web` | Blazor WebAssembly UI, organization/project selection, settings |
+| `ScrumPilot.Shared` | Shared entities, enums, request and response contracts |
+| `ScrumPilot.Data` | EF Core context, repositories, migrations, Identity, bootstrap |
+| `ScrumPilot.UnitTests` | xUnit, NSubstitute, bUnit, and relational tests |
+| `ScrumPilot.AppHost` | Aspire local orchestration |
+| `discord-bot` | ScrumLord Discord integration |
 
----
-
-## 🗺️ Roadmap
-
-Planned features for future sprints:
-
-- **Enhanced AI Refinement** — iterative story refinement through follow-up prompts and acceptance-criteria generation
-- **Multi-Project Support** — workspace-level project switching with per-project permissions and member roles
-- **Retrospective Board** — structured "went well / to improve / action items" boards tied to completed sprints
-- **Notifications** — in-app,email, and bot notifications for assignment changes, mentions, and sprint events
-- **GitHub Integration** — link PBIs to pull requests and auto-close stories when PRs are merged
-- **ScrumLord Web Dashboard** — surface ScrumLord's Discord summaries and meeting transcripts inside the ScrumPilot web UI
-- **OAuth / SSO** — Discord OAuth and SSO login options
-- **Mobile Functionality** — Native companion app for on-the-go sprint updates
-- **Web-App & Bot Integration** — deeper integration between the web app and Discord bot (e.g., trigger story generation from a Discord command, post sprint summaries to a Discord channel)
-
----
-
-## 🏗️ Architecture
-
-ScrumPilot follows a clean, layered architecture split across five .NET projects:
-
-```
-scrum-pilot/
-├── ScrumPilot.API/        → ASP.NET Core Web API (controllers, services, AI integration, SignalR hub)
-├── ScrumPilot.Web/        → Blazor WebAssembly frontend (pages, components, auth)
-├── ScrumPilot.Shared/     → Shared models, enums, and DTOs (referenced by API and Web)
-├── ScrumPilot.Data/       → EF Core data layer (DbContext, repositories, migrations, seeders)
-└── ScrumPilot.UnitTests/  → xUnit test suite (backend services, controllers, Blazor components)
-```
-
-### Communication Flow
-
-```
-Browser (Blazor WASM)
-    ↕ HTTPS + SignalR
-ASP.NET Core API
-    ↕ EF Core
-SQLite (dev) / PostgreSQL (production on Render)
-```
-
----
-
-## 📁 Project Directory Structure
-
-```
-scrum-pilot/
-├── ScrumPilot.API/              # ASP.NET Core Web API
-│   ├── Controllers/             # REST endpoints
-│   ├── Services/                # Business logic & AI integration
-│   ├── Hubs/                    # SignalR hubs (planning poker)
-│   └── appsettings.json         # API configuration
-│
-├── ScrumPilot.Web/              # Blazor WebAssembly frontend
-│   ├── Pages/                   # Blazor page components
-│   ├── Components/              # Reusable UI components
-│   ├── Services/                # Client-side service layer
-│   └── wwwroot/appsettings.json # Frontend configuration (API base URL)
-│
-├── ScrumPilot.Shared/           # Shared models, enums, and DTOs
-│
-├── ScrumPilot.Data/             # EF Core data layer
-│   ├── Repositories/            # Data access abstractions
-│   ├── Migrations/              # EF Core migration history
-│   └── Seeders/                 # Development seed data
-│
-├── ScrumPilot.UnitTests/        # xUnit + NSubstitute test suite
-│
-├── discord-bot/                 # ScrumLord Discord bot (Node.js)
-│   ├── index.js                 # Bot entry point & command routing
-│   ├── chat-summarizer.js       # AI chat & sprint summary logic
-│   ├── recorder.js              # Voice channel recording
-│   ├── tests/                   # Jest test suite
-│   └── README.md                # Bot-specific documentation
-│
-├── docs/                        # Project documentation
-│   ├── architecture.md
-│   ├── api.md
-│   └── troubleshooting.md
-│
-├── docker-compose.yml           # Local multi-service dev environment
-├── ScrumPilot.slnx              # .NET solution file
-└── README.md                    # This file
-```
-
----
-
-## 🚀 Getting Started
+## Getting started
 
 ### Prerequisites
 
-- [.NET 10 SDK](https://dotnet.microsoft.com/download)
-- [Node.js](https://nodejs.org/) v16 or higher (for the Discord bot)
-- A running instance of [Ollama](https://ollama.ai) *(optional — for local AI generation)*
-- A [Groq API key](https://console.groq.com/) *(optional — for production AI generation)*
+- .NET SDK 10.0.401 or a compatible 10.0 SDK
+- Node.js for the optional Discord bot
+- Optional: Ollama for local AI generation
 
-### Clone the Repository
-
-```bash
-git clone https://github.com/ECU-Pirate-Forge/scrum-pilot.git
-cd scrum-pilot
+```powershell
+dotnet restore .\ScrumPilot.slnx
+dotnet run --project .\ScrumPilot.API\ScrumPilot.API.csproj
+dotnet run --project .\ScrumPilot.Web\ScrumPilot.Web.csproj
 ```
 
-### Run the Web Application Locally
+The standard development endpoints are API `http://localhost:5219`, Swagger `http://localhost:5219/swagger`, and Web `http://localhost:5199`.
 
-**Terminal 1 — Start the API**
-```bash
-cd ScrumPilot.API
-dotnet run
-```
-API available at `http://localhost:5219` · Swagger UI at `http://localhost:5219/swagger`
+## Configuration
 
-**Terminal 2 — Start the Blazor frontend**
-```bash
-cd ScrumPilot.Web
-dotnet run
-```
-App available at `http://localhost:5199`
+Do not commit production credentials. ASP.NET Core maps double underscores in environment variables to configuration section separators.
 
-### Configuration
-
-| Setting | Location | Purpose |
-|---|---|---|
-| `ConnectionStrings:DefaultConnection` | `ScrumPilot.API/appsettings.json` | SQLite path for local dev |
-| `Jwt:Key` / `Jwt:Issuer` / `Jwt:Audience` | `ScrumPilot.API/appsettings.json` | JWT signing parameters |
-| `GroqApiKey` | Environment variable | Groq API key for production AI |
-| `OllamaBaseUrl` | `ScrumPilot.API/appsettings.json` | Local Ollama URL for development AI |
-| `ApiBaseUrl` | `ScrumPilot.Web/wwwroot/appsettings.json` | API base URL consumed by Blazor |
-| `DATABASE_URL` | Environment variable | PostgreSQL connection string (Render deployment) |
-
-### Default Credentials (seeded)
-
-| Username | Password |
+| Variable | Purpose |
 |---|---|
-| `admin` | `Admin@1234!` |
-| `devuser` | `Dev@1234!` |
+| `DATABASE_URL` | PostgreSQL connection URI; absence selects configured SQLite |
+| `GroqApiKey` | Optional Groq key; absence uses Ollama |
+| `SendGrid__ApiKey` | SendGrid API key |
+| `SendGrid__FromEmail` | Verified sender email |
+| `SendGrid__FromName` | Invitation sender display name |
+| `SendGrid__InvitationBaseUrl` | Absolute Web URL ending at `/accept-invitation` |
 
----
+For local development, `SendGrid__InvitationBaseUrl` may use HTTP only with a loopback host, for example `http://localhost:5199/accept-invitation`. Production and every non-loopback URL must use HTTPS, for example `https://your-web-host/accept-invitation`.
 
-## 🧪 Running Tests
+SendGrid options are validated lazily on the first invitation delivery, not during API startup. Invalid configuration produces an invitation delivery error. After correcting environment variables or configuration, restart the API so configuration is reloaded, especially if options were already cached.
 
-```bash
-# Run all .NET tests
-dotnet test ScrumPilot.UnitTests
+Committed `appsettings.json` contains empty SendGrid placeholders only. Docker Compose passes the four variables from the host without defining values. Render operators must configure the same variables as secrets/environment variables on the API service; the deployment workflow builds images and triggers Render but does not copy secret values into images.
 
-# Run with code coverage
-dotnet test ScrumPilot.UnitTests --collect:"XPlat Code Coverage"
+## Organization UI
 
-# Run Discord bot tests
-cd discord-bot
-npm test
+The application shell includes a persistent organization switcher and an accessible-project switcher. Selection falls back to the user's default organization/project from `/user-settings`, and inaccessible selections are cleared. `/organization-management` provides Admin-only organization creation and owner controls for rename, invitations, membership roles, project access, leave, and delete. It also lists deleted organizations for historical owners (and all deleted organizations for global Admins), with restore and retention-gated purge actions according to permissions. `/user-settings` manages default organization and project preferences.
+
+## Verification commands
+
+```powershell
+dotnet format .\ScrumPilot.slnx --verify-no-changes
+dotnet test .\ScrumPilot.UnitTests\ScrumPilot.UnitTests.csproj --configuration Release
+dotnet build .\ScrumPilot.slnx --configuration Release
+$env:DATABASE_URL = 'postgresql://unused:unused@localhost:5432/scrumpilot_design'
+dotnet ef migrations has-pending-model-changes --project .\ScrumPilot.Data\ScrumPilot.Data.csproj --startup-project .\ScrumPilot.API\ScrumPilot.API.csproj
+npm test --prefix .\discord-bot
 ```
 
----
+The design-time URI is parsed to select Npgsql but the pending-model check does not connect to that database. Replace it with the deployment connection only for commands that actually access a database.
 
-## 🤖 ScrumLord Discord Bot
+## Deployment
 
-**ScrumLord** is the Discord bot companion to ScrumPilot. It passively monitors your team's Discord server, records voice meetings, and uses AI to generate daily chat summaries and end-of-sprint recap reports — keeping your team's communication history searchable and actionable without any manual effort.
+Render hosts the API and Web images. The API applies EF migrations and then runs the idempotent Pirate Forge bootstrap at startup. Configure `DATABASE_URL`, JWT settings, AI provider settings, and all four SendGrid variables in the API service. `SendGrid__InvitationBaseUrl` must point to the deployed Web `/accept-invitation` route over HTTPS.
 
-See the [discord-bot/README.md](discord-bot/README.md) for full setup, configuration, and command documentation.
+## Project documentation
 
-**Highlights:**
-
-- Automatic voice channel recording when quorum is reached
-- AI-powered daily chat summaries (Claude → GPT-4o-mini fallback)
-- Automated end-of-sprint summary reports keyed to your sprint schedule
-- `!summarize`, `!export`, `!sprintsummary`, and `!ping` commands
-- All summaries posted to Discord and saved locally as Markdown files
-
----
-
-## 🌐 Deployment
-
-ScrumPilot is deployed on **Render**:
-
-- **API**: `https://scrumpilot-api.onrender.com`
-- **Web**: `https://scrumpilot-web.onrender.com`
-
-The API auto-migrates the PostgreSQL database on startup via EF Core migrations.
-
----
-
-## 🗂️ Project READMEs
-
-Each sub-project contains its own detailed README:
-
-- [`ScrumPilot.API/README.md`](ScrumPilot.API/README.md)
-- [`ScrumPilot.Web/README.md`](ScrumPilot.Web/README.md)
-- [`ScrumPilot.Shared/README.md`](ScrumPilot.Shared/README.md)
-- [`ScrumPilot.Data/README.md`](ScrumPilot.Data/README.md)
-- [`ScrumPilot.UnitTests/README.md`](ScrumPilot.UnitTests/README.md)
-- [`discord-bot/README.md`](discord-bot/README.md)
-
----
-
-## 👥 Team
-
-Built by the **ECU Pirate Forge** team for at East Carolina University.
-
----
-
-**Built with ❤️ by the ECU Pirate Forge Team**
+- [API](ScrumPilot.API/README.md)
+- [Data](ScrumPilot.Data/README.md)
+- [Web](ScrumPilot.Web/README.md)
+- [Shared](ScrumPilot.Shared/README.md)
+- [Tests](ScrumPilot.UnitTests/README.md)
+- [Discord bot](discord-bot/README.md)

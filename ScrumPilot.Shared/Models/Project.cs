@@ -8,6 +8,9 @@ namespace ScrumPilot.Shared.Models
         /// <summary>Unique identifier for this project.</summary>
         public int ProjectId { get; set; }
 
+        /// <summary>Identifier of the organization that owns this project.</summary>
+        public int OrganizationId { get; set; }
+
         /// <summary>Display name of the project.</summary>
         public required string ProjectName { get; set; }
 
@@ -22,5 +25,8 @@ namespace ScrumPilot.Shared.Models
 
         /// <summary>All PBIs that belong to this project.</summary>
         public ICollection<ProductBacklogItem>? ProductBacklogItems { get; set; }
+
+        /// <summary>Organization that owns this project.</summary>
+        public Organization? Organization { get; set; }
     }
 }

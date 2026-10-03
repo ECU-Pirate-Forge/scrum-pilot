@@ -21,6 +21,10 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - OllamaBaseUrl=http://ollama:11434/
+      - SendGrid__ApiKey=${SendGrid__ApiKey:-}
+      - SendGrid__FromEmail=${SendGrid__FromEmail:-}
+      - SendGrid__FromName=${SendGrid__FromName:-}
+      - SendGrid__InvitationBaseUrl=${SendGrid__InvitationBaseUrl:-}
     volumes:
       - ./ScrumPilot.Data:/ScrumPilot.Data
 

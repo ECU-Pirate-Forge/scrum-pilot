@@ -14,7 +14,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
     {
         private static readonly string ValidTestToken = CreateTestJwt(new Dictionary<string, string>
         {
-            [ClaimTypes.Name] = "Tyler",
+            [ClaimTypes.Name] = "Brian",
             [ClaimTypes.NameIdentifier] = "user-1"
         });
 
@@ -44,11 +44,11 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
         public async Task LoginAsync_WhenApiReturnsSuccess_ReturnsTrue()
         {
             // Arrange
-            var loginResponse = new LoginResponse { Token = ValidTestToken, UserName = "Tyler" };
+            var loginResponse = new LoginResponse { Token = ValidTestToken, UserName = "Brian" };
             var (service, _) = CreateAuthService(HttpStatusCode.OK, loginResponse);
 
             // Act
-            var result = await service.LoginAsync(new LoginRequest { UserName = "Tyler", Password = "Password1234!" });
+            var result = await service.LoginAsync(new LoginRequest { UserName = "Brian", Password = "Password1234!" });
 
             // Assert
             Assert.True(result);
@@ -61,7 +61,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             var (service, _) = CreateAuthService(HttpStatusCode.Unauthorized);
 
             // Act
-            var result = await service.LoginAsync(new LoginRequest { UserName = "Tyler", Password = "WrongPass!" });
+            var result = await service.LoginAsync(new LoginRequest { UserName = "Brian", Password = "WrongPass!" });
 
             // Assert
             Assert.False(result);
@@ -71,11 +71,11 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
         public async Task LoginAsync_WhenApiReturnsSuccess_SavesTokenToLocalStorage()
         {
             // Arrange
-            var loginResponse = new LoginResponse { Token = ValidTestToken, UserName = "Tyler" };
+            var loginResponse = new LoginResponse { Token = ValidTestToken, UserName = "Brian" };
             var (service, mockJs) = CreateAuthService(HttpStatusCode.OK, loginResponse);
 
             // Act
-            await service.LoginAsync(new LoginRequest { UserName = "Tyler", Password = "Password1234!" });
+            await service.LoginAsync(new LoginRequest { UserName = "Brian", Password = "Password1234!" });
 
             // Assert — localStorage.setItem("authToken", token) was called
             await mockJs.Received(1).InvokeAsync<IJSVoidResult>(
@@ -92,7 +92,7 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
             var (service, mockJs) = CreateAuthService(HttpStatusCode.Unauthorized);
 
             // Act
-            await service.LoginAsync(new LoginRequest { UserName = "Tyler", Password = "WrongPass!" });
+            await service.LoginAsync(new LoginRequest { UserName = "Brian", Password = "WrongPass!" });
 
             // Assert — localStorage.setItem should never have been called
             await mockJs.DidNotReceive().InvokeAsync<IJSVoidResult>(
@@ -119,10 +119,10 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests
         public async Task LogoutAsync_AfterLogin_AuthStateIsAnonymous()
         {
             // Arrange
-            var loginResponse = new LoginResponse { Token = ValidTestToken, UserName = "Tyler" };
+            var loginResponse = new LoginResponse { Token = ValidTestToken, UserName = "Brian" };
             var (service, mockJs) = CreateAuthService(HttpStatusCode.OK, loginResponse);
 
-            await service.LoginAsync(new LoginRequest { UserName = "Tyler", Password = "Password1234!" });
+            await service.LoginAsync(new LoginRequest { UserName = "Brian", Password = "Password1234!" });
 
             // Act
             await service.LogoutAsync();

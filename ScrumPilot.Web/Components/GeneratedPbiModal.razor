@@ -21,6 +21,7 @@
 
                 <PbiCard PbiModel="@currentItem.Pbi"
                          ProjectId="@ProjectId"
+                         PersistOnSave="false"
                          ReadOnly="@(currentItem.State != GeneratedPbiSaveState.Pending)" />
 
                 <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.Center" Class="generated-pbi-navigation">
@@ -149,6 +150,12 @@
         _isCommitting = true;
         try
         {
+            if (!ProjectId.HasValue)
+            {
+                Snackbar.Add("Select a project before saving PBIs.", Severity.Error);
+                return;
+            }
+
             foreach (var item in items)
             {
                 if (ProjectId.HasValue)
@@ -157,7 +164,8 @@
                 }
             }
 
-            var endpoint = asDraft ? "api/Pbi/createDraftPbis" : "api/Pbi/createStories";
+            var endpoint = (asDraft ? "api/Pbi/createDraftPbis" : "api/Pbi/createStories")
+                + $"?projectId={ProjectId.Value}";
             var response = await Http.PostAsJsonAsync(endpoint, items.Select(item => item.Pbi).ToList());
 
             if (!response.IsSuccessStatusCode)

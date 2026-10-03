@@ -5,8 +5,10 @@
 @inject NavigationManager Navigation
 @inject IDialogService DialogService
 @inject HttpClient Http
+@inject OrganizationStateService OrganizationState
 @inject ProjectStateService ProjectState
 @inject AuthenticationStateProvider AuthStateProvider
+@inject ISnackbar Snackbar
 @inherits LayoutComponentBase
 @implements IDisposable
 @using MudBlazor
@@ -27,6 +29,28 @@
             <img src="/images/logo.png" alt="ScrumPilot" class="main-logo" />
         </a>
         <MudSpacer />
+        @if (_organizations.Any())
+        {
+            <MudMenu Dense="true" ActivationEvent="MouseEvent.LeftClick" AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter">
+                <ActivatorContent>
+                    <MudButton Color="Color.Inherit"
+                               EndIcon="@Icons.Material.Filled.KeyboardArrowDown"
+                               StartIcon="@Icons.Material.Filled.Business"
+                               Style="text-transform: none; font-size: 1rem; font-weight: 600;">
+                        @(OrganizationState.SelectedOrganization?.Name ?? "Select Organization")
+                    </MudButton>
+                </ActivatorContent>
+                <ChildContent>
+                    @foreach (var organization in _organizations)
+                    {
+                        var item = organization;
+                        <MudMenuItem OnClick="@(() => SelectOrganizationAsync(item))">
+                            @item.Name
+                        </MudMenuItem>
+                    }
+                </ChildContent>
+            </MudMenu>
+        }
         @if (_appBarProjects.Any())
         {
             <MudMenu Dense="true" ActivationEvent="MouseEvent.LeftClick" AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter">
@@ -87,7 +111,19 @@
     private bool _isDarkMode = false;
     private bool _userPreferenceLoaded = false;
     private MudThemeProvider? _mudThemeProvider;
+    private List<OrganizationSummaryDto> _organizations = [];
     private List<Project> _appBarProjects = new();
+    private UserSettingsDto? _settings;
+    private int _loadGeneration;
+    private readonly object _selectionPersistenceLock = new();
+    private Selection? _desiredSelection;
+    private Selection? _persistedSelection;
+    private Task _selectionWriterTask = Task.CompletedTask;
+    private bool _selectionWriterRunning;
+    private CancellationTokenSource? _selectionWriterOwner;
+    private CancellationTokenSource? _sessionCancellation;
+    private int _persistenceGeneration;
+    private bool _disposed;
 
     MudTheme currentTheme = new()
     {
@@ -135,7 +171,11 @@
     {
         AuthStateProvider.AuthenticationStateChanged += OnAuthStateChanged;
         ProjectState.OnProjectListChanged += OnProjectListChanged;
-        await TryLoadProjectsAsync();
+        var authenticationState = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (authenticationState.User.Identity?.IsAuthenticated == true)
+            await LoadSessionAsync();
+        else
+            ClearSession();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -147,67 +187,383 @@
         }
     }
 
-    private async void OnAuthStateChanged(Task<AuthenticationState> task)
+    private void OnAuthStateChanged(Task<AuthenticationState> task)
     {
-        var state = await task;
-        if (state.User.Identity?.IsAuthenticated == true)
-            await TryLoadProjectsAsync();
-        else
+        _ = InvokeAsync(async () =>
         {
-            _appBarProjects.Clear();
-            ProjectState.SetProject(null);
-            await InvokeAsync(StateHasChanged);
-        }
-    }
-
-    private async void OnProjectListChanged()
-    {
-        await TryLoadProjectsAsync();
-    }
-
-    private async Task TryLoadProjectsAsync()
-    {
-        try
-        {
-            _appBarProjects = await Http.GetFromJsonAsync<List<Project>>("api/project") ?? new();
-        }
-        catch
-        {
-            _appBarProjects = new();
-        }
-
-        UserSettingsDto? settings = null;
-        try
-        {
-            settings = await Http.GetFromJsonAsync<UserSettingsDto>("api/user/settings");
-            if (settings is not null)
+            var state = await task;
+            if (state.User.Identity?.IsAuthenticated == true)
+                await LoadSessionAsync();
+            else
             {
-                _isDarkMode = settings.UiPreference == UiPreference.Dark;
+                ClearSession();
+                StateHasChanged();
+            }
+        });
+    }
+
+    private void OnProjectListChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            var organization = OrganizationState.SelectedOrganization;
+            if (organization is not null)
+            {
+                var currentProjectId = ProjectState.SelectedProjectId;
+                var result = await LoadProjectsAsync(
+                    organization,
+                    currentProjectId,
+                    _settings?.DefaultProjectId,
+                    persist: false);
+                if (result == ProjectLoadResult.NotFound)
+                    await LoadSessionAsync(new HashSet<int> { organization.OrganizationId });
+            }
+        });
+    }
+
+    private async Task LoadSessionAsync(IReadOnlySet<int>? rejectedOrganizationIds = null)
+    {
+        var generation = ++_loadGeneration;
+        ClearSession(incrementGeneration: false);
+        CancellationTokenSource sessionCancellation;
+        lock (_selectionPersistenceLock)
+        {
+            if (_disposed)
+                return;
+
+            sessionCancellation = new CancellationTokenSource();
+            _sessionCancellation = sessionCancellation;
+        }
+
+        try
+        {
+            var organizations = await Http.GetFromJsonAsync<List<OrganizationSummaryDto>>(
+                "api/organizations", sessionCancellation.Token) ?? [];
+            if (!IsCurrent(generation))
+                return;
+
+            _organizations = organizations
+                .Where(o => !o.IsDeleted
+                    && !(rejectedOrganizationIds?.Contains(o.OrganizationId) ?? false))
+                .ToList();
+
+            _settings = await Http.GetFromJsonAsync<UserSettingsDto>(
+                "api/user/settings", sessionCancellation.Token);
+            if (!IsCurrent(generation))
+                return;
+
+            if (_settings is not null)
+            {
+                _isDarkMode = _settings.UiPreference == UiPreference.Dark;
                 _userPreferenceLoaded = true;
             }
-        }
-        catch { }
 
-        if (ProjectState.SelectedProject == null && _appBarProjects.Count > 0)
-        {
-            var defaultProject = settings?.DefaultProjectId.HasValue == true
-                ? _appBarProjects.FirstOrDefault(p => p.ProjectId == settings.DefaultProjectId.Value)
-                : null;
-            ProjectState.SetProject(defaultProject ?? _appBarProjects[0]);
-        }
-        else if (ProjectState.SelectedProject != null)
-        {
-            var refreshed = _appBarProjects.FirstOrDefault(p => p.ProjectId == ProjectState.SelectedProjectId);
-            if (refreshed != null)
-                ProjectState.SetProject(refreshed);
-        }
+            lock (_selectionPersistenceLock)
+            {
+                _persistedSelection = _settings?.DefaultOrganizationId is int organizationId
+                    ? new Selection(organizationId, _settings.DefaultProjectId)
+                    : null;
+            }
 
-        await InvokeAsync(StateHasChanged);
+            var candidates = _organizations
+                .OrderByDescending(o => o.OrganizationId == _settings?.DefaultOrganizationId)
+                .ToList();
+            var attemptedOrganizationIds = new HashSet<int>();
+            foreach (var organization in candidates)
+            {
+                if (!attemptedOrganizationIds.Add(organization.OrganizationId)
+                    || !IsCurrent(generation))
+                    continue;
+
+                OrganizationState.SetOrganization(organization);
+                var result = await LoadProjectsAsync(
+                    organization,
+                    _settings?.DefaultProjectId,
+                    fallbackProjectId: null,
+                    persist: false,
+                    generation);
+                if (result == ProjectLoadResult.Success || result == ProjectLoadResult.Failed)
+                    return;
+            }
+
+            if ((attemptedOrganizationIds.Count > 0 || rejectedOrganizationIds?.Count > 0)
+                && IsCurrent(generation))
+            {
+                ClearSession(incrementGeneration: false);
+                Snackbar.Add("Unable to load organizations and projects.", Severity.Error);
+            }
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            if (IsCurrent(generation))
+                ClearSession();
+        }
+        catch (OperationCanceledException) when (sessionCancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception)
+        {
+            if (IsCurrent(generation))
+            {
+                ClearSession();
+                Snackbar.Add("Unable to load organizations and projects.", Severity.Error);
+            }
+        }
+        finally
+        {
+            if (IsCurrent(generation))
+                StateHasChanged();
+        }
     }
 
-    private void SetGlobalProject(Project project)
+    private async Task SelectOrganizationAsync(OrganizationSummaryDto organization)
     {
+        if (!_organizations.Any(o => o.OrganizationId == organization.OrganizationId))
+            return;
+
+        OrganizationState.SetOrganization(organization);
+        _appBarProjects = [];
+        ProjectState.Clear();
+        StateHasChanged();
+        var result = await LoadProjectsAsync(
+            organization,
+            _settings?.DefaultProjectId,
+            fallbackProjectId: null,
+            persist: true);
+        if (result == ProjectLoadResult.NotFound)
+            await LoadSessionAsync(new HashSet<int> { organization.OrganizationId });
+    }
+
+    private async Task<ProjectLoadResult> LoadProjectsAsync(
+        OrganizationSummaryDto organization,
+        int? preferredProjectId,
+        int? fallbackProjectId,
+        bool persist,
+        int? existingGeneration = null)
+    {
+        var generation = existingGeneration ?? ++_loadGeneration;
+        CancellationTokenSource? sessionCancellation;
+        lock (_selectionPersistenceLock)
+            sessionCancellation = _sessionCancellation;
+        if (sessionCancellation is null || sessionCancellation.IsCancellationRequested)
+            return ProjectLoadResult.Failed;
+
+        try
+        {
+            var projects = await Http.GetFromJsonAsync<List<Project>>(
+                $"api/organizations/{organization.OrganizationId}/projects",
+                sessionCancellation.Token) ?? [];
+            if (!IsCurrent(generation)
+                || OrganizationState.SelectedOrganizationId != organization.OrganizationId)
+                return ProjectLoadResult.Failed;
+
+            _appBarProjects = projects;
+            var selected = preferredProjectId is int projectId
+                ? projects.FirstOrDefault(p => p.ProjectId == projectId)
+                : null;
+            selected ??= fallbackProjectId is int fallbackId
+                ? projects.FirstOrDefault(p => p.ProjectId == fallbackId)
+                : null;
+            selected ??= projects.FirstOrDefault();
+            ProjectState.SetProject(selected);
+
+            if (persist)
+                await PersistLatestSelectionAsync(organization.OrganizationId, selected?.ProjectId);
+            return ProjectLoadResult.Success;
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            if (IsCurrent(generation))
+            {
+                OrganizationState.Clear();
+                _appBarProjects = [];
+                ProjectState.Clear();
+            }
+            return ProjectLoadResult.NotFound;
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            if (IsCurrent(generation))
+                ClearSession();
+            return ProjectLoadResult.Failed;
+        }
+        catch (OperationCanceledException) when (sessionCancellation.IsCancellationRequested)
+        {
+            return ProjectLoadResult.Failed;
+        }
+        catch (Exception)
+        {
+            if (IsCurrent(generation))
+            {
+                _appBarProjects = [];
+                ProjectState.Clear();
+                Snackbar.Add("Unable to load projects.", Severity.Error);
+            }
+            return ProjectLoadResult.Failed;
+        }
+        finally
+        {
+            if (IsCurrent(generation))
+                StateHasChanged();
+        }
+    }
+
+    private async Task SetGlobalProject(Project project)
+    {
+        if (!_appBarProjects.Any(p => p.ProjectId == project.ProjectId))
+            return;
+
+        _loadGeneration++;
         ProjectState.SetProject(project);
+        if (OrganizationState.SelectedOrganizationId is int organizationId)
+            await PersistLatestSelectionAsync(organizationId, project.ProjectId);
+    }
+
+    private Task PersistLatestSelectionAsync(int organizationId, int? projectId)
+    {
+        lock (_selectionPersistenceLock)
+        {
+            var sessionCancellation = _sessionCancellation;
+            if (_disposed || sessionCancellation is null
+                || sessionCancellation.IsCancellationRequested)
+                return Task.CompletedTask;
+
+            _desiredSelection = new Selection(organizationId, projectId);
+            if (!_selectionWriterRunning
+                || !ReferenceEquals(_selectionWriterOwner, sessionCancellation))
+            {
+                _selectionWriterRunning = true;
+                _selectionWriterOwner = sessionCancellation;
+                _selectionWriterTask = RunSelectionWriterAsync(
+                    _persistenceGeneration, sessionCancellation);
+            }
+
+            return _selectionWriterTask;
+        }
+    }
+
+    private async Task RunSelectionWriterAsync(
+        int persistenceGeneration,
+        CancellationTokenSource sessionCancellation)
+    {
+        try
+        {
+            while (true)
+            {
+                Selection target;
+                lock (_selectionPersistenceLock)
+                {
+                    if (!IsCurrentWriter(persistenceGeneration, sessionCancellation)
+                        || _desiredSelection is not Selection desired
+                        || desired == _persistedSelection)
+                        return;
+
+                    target = desired;
+                }
+
+                try
+                {
+                    var latest = await Http.GetFromJsonAsync<UserSettingsDto>(
+                        "api/user/settings", sessionCancellation.Token)
+                    ?? _settings
+                    ?? new UserSettingsDto();
+                    lock (_selectionPersistenceLock)
+                    {
+                        if (!IsCurrentWriter(persistenceGeneration, sessionCancellation))
+                            return;
+                        if (_desiredSelection is Selection latestDesired)
+                            target = latestDesired;
+                    }
+
+                    var merged = new UserSettingsDto
+                    {
+                        Email = latest.Email,
+                        DiscordUsername = latest.DiscordUsername,
+                        UiPreference = latest.UiPreference,
+                        DefaultOrganizationId = target.OrganizationId,
+                        DefaultProjectId = target.ProjectId
+                    };
+
+                    var response = await Http.PutAsJsonAsync(
+                        "api/user/settings", merged, sessionCancellation.Token);
+                    response.EnsureSuccessStatusCode();
+
+                    lock (_selectionPersistenceLock)
+                    {
+                        if (!IsCurrentWriter(persistenceGeneration, sessionCancellation))
+                            return;
+
+                        _persistedSelection = target;
+                        _settings = merged;
+                    }
+                }
+                catch (OperationCanceledException)
+                    when (sessionCancellation.IsCancellationRequested)
+                {
+                    return;
+                }
+                catch (Exception)
+                {
+                    bool retryLatest;
+                    lock (_selectionPersistenceLock)
+                    {
+                        if (!IsCurrentWriter(persistenceGeneration, sessionCancellation))
+                            return;
+                        retryLatest = _desiredSelection is Selection desired && desired != target;
+                    }
+
+                    Snackbar.Add(
+                        "Unable to save your organization and project selection.", Severity.Error);
+                    if (!retryLatest)
+                        return;
+                }
+            }
+        }
+        finally
+        {
+            lock (_selectionPersistenceLock)
+            {
+                if (ReferenceEquals(_selectionWriterOwner, sessionCancellation))
+                {
+                    _selectionWriterRunning = false;
+                    _selectionWriterOwner = null;
+                }
+            }
+        }
+    }
+
+    private bool IsCurrentWriter(
+        int persistenceGeneration,
+        CancellationTokenSource sessionCancellation) =>
+        !_disposed
+        && persistenceGeneration == _persistenceGeneration
+        && ReferenceEquals(_sessionCancellation, sessionCancellation)
+        && !sessionCancellation.IsCancellationRequested;
+
+    private bool IsCurrent(int generation) => !_disposed && generation == _loadGeneration;
+
+    private void ClearSession(bool incrementGeneration = true)
+    {
+        if (incrementGeneration)
+            _loadGeneration++;
+        _organizations = [];
+        _appBarProjects = [];
+        _settings = null;
+        _isDarkMode = false;
+        _userPreferenceLoaded = false;
+        CancellationTokenSource? sessionCancellation;
+        lock (_selectionPersistenceLock)
+        {
+            _persistenceGeneration++;
+            _desiredSelection = null;
+            _persistedSelection = null;
+            sessionCancellation = _sessionCancellation;
+            _sessionCancellation = null;
+        }
+        sessionCancellation?.Cancel();
+        sessionCancellation?.Dispose();
+        OrganizationState.Clear();
+        ProjectState.Clear();
     }
 
     private void ToggleNavMenu()
@@ -231,8 +587,7 @@
 
         if (confirmed == true)
         {
-            ProjectState.SetProject(null);
-            _appBarProjects.Clear();
+            ClearSession();
             await AuthService.LogoutAsync();
             Navigation.NavigateTo("/login");
         }
@@ -240,7 +595,29 @@
 
     public void Dispose()
     {
+        _disposed = true;
+        _loadGeneration++;
+        CancellationTokenSource? sessionCancellation;
+        lock (_selectionPersistenceLock)
+        {
+            _persistenceGeneration++;
+            _desiredSelection = null;
+            _persistedSelection = null;
+            sessionCancellation = _sessionCancellation;
+            _sessionCancellation = null;
+        }
+        sessionCancellation?.Cancel();
+        sessionCancellation?.Dispose();
         AuthStateProvider.AuthenticationStateChanged -= OnAuthStateChanged;
         ProjectState.OnProjectListChanged -= OnProjectListChanged;
+    }
+
+    private readonly record struct Selection(int OrganizationId, int? ProjectId);
+
+    private enum ProjectLoadResult
+    {
+        Success,
+        NotFound,
+        Failed
     }
 }

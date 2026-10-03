@@ -13,46 +13,51 @@ namespace ScrumPilot.Data.Repositories
             _context = context;
         }
 
-        public async Task<IEnumerable<Epic>> GetAllEpicsAsync()
-        {
-            return await _context.Epics
-                .OrderBy(e => e.Name)
-                .ToListAsync();
-        }
-
-        public async Task<IEnumerable<Epic>> GetEpicsByProjectAsync(int projectId)
+        public async Task<IEnumerable<Epic>> GetEpicsByProjectAsync(int projectId, CancellationToken cancellationToken = default)
         {
             return await _context.Epics
                 .Where(e => e.ProjectId == projectId)
                 .OrderBy(e => e.Name)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
         }
 
-        public async Task<Epic> CreateAsync(Epic epic)
+        public Task<Epic?> GetByIdAsync(int id, CancellationToken cancellationToken = default) =>
+            _context.Epics.FirstOrDefaultAsync(e => e.EpicId == id, cancellationToken);
+
+        public async Task<Epic> CreateAsync(Epic epic, CancellationToken cancellationToken = default)
         {
             _context.Epics.Add(epic);
-            await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync(cancellationToken);
             return epic;
         }
 
-        public async Task<Epic> UpdateAsync(Epic epic)
+        public async Task<Epic> UpdateAsync(Epic epic, CancellationToken cancellationToken = default)
         {
-            _context.Epics.Update(epic);
-            await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync(cancellationToken);
             return epic;
         }
 
-        public async Task DeleteAsync(int id)
+        public async Task DeleteAsync(int id, CancellationToken cancellationToken = default)
         {
-            await _context.Stories
-                .Where(p => p.EpicId == id)
-                .ExecuteUpdateAsync(s => s.SetProperty(p => p.EpicId, (int?)null));
-
-            var epic = await _context.Epics.FindAsync(id);
-            if (epic != null)
+            await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            try
             {
-                _context.Epics.Remove(epic);
-                await _context.SaveChangesAsync();
+                await _context.Stories
+                    .Where(p => p.EpicId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(p => p.EpicId, (int?)null), cancellationToken);
+
+                var epic = await _context.Epics.FindAsync([id], cancellationToken);
+                if (epic != null)
+                {
+                    _context.Epics.Remove(epic);
+                    await _context.SaveChangesAsync(cancellationToken);
+                }
+                await transaction.CommitAsync(cancellationToken);
+            }
+            catch
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+                throw;
             }
         }
     }

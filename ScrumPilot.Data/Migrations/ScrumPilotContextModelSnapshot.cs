@@ -166,6 +166,9 @@ namespace ScrumPilot.Data.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("text");
 
+                    b.Property<int?>("DefaultOrganizationId")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("DefaultProjectId")
                         .HasColumnType("integer");
 
@@ -219,6 +222,10 @@ namespace ScrumPilot.Data.Migrations
                         .HasColumnType("character varying(256)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DefaultOrganizationId");
+
+                    b.HasIndex("DefaultProjectId");
 
                     b.HasIndex("NormalizedEmail")
                         .HasDatabaseName("EmailIndex");
@@ -323,6 +330,132 @@ namespace ScrumPilot.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("MessageTranscripts");
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.Organization", b =>
+                {
+                    b.Property<int>("OrganizationId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("OrganizationId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.HasKey("OrganizationId");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique();
+
+                    b.ToTable("Organizations", (string)null);
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.OrganizationInvitation", b =>
+                {
+                    b.Property<int>("OrganizationInvitationId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("OrganizationInvitationId"));
+
+                    b.Property<DateTime?>("AcceptedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeliveryError")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("InvitedByUserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("LastSentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("NormalizedEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("OrganizationInvitationId");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("InvitedByUserId");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("OrganizationId", "NormalizedEmail", "Status");
+
+                    b.ToTable("OrganizationInvitations", (string)null);
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.OrganizationMembership", b =>
+                {
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("JoinedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("OrganizationId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("OrganizationMemberships", (string)null);
                 });
 
             modelBuilder.Entity("ScrumPilot.Shared.Models.PbiStatusHistory", b =>
@@ -445,13 +578,42 @@ namespace ScrumPilot.Data.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("text");
 
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("ProjectName")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.HasKey("ProjectId");
 
+                    b.HasIndex("OrganizationId");
+
                     b.ToTable("Project", (string)null);
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.ProjectMembership", b =>
+                {
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("GrantedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("GrantedByUserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("ProjectId", "UserId");
+
+                    b.HasIndex("GrantedByUserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("ProjectMemberships", (string)null);
                 });
 
             modelBuilder.Entity("ScrumPilot.Shared.Models.Sprint", b =>
@@ -502,6 +664,8 @@ namespace ScrumPilot.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("UserId", "ProjectId");
+
+                    b.HasIndex("ProjectId");
 
                     b.ToTable("UserDashboardPreferences", (string)null);
                 });
@@ -557,6 +721,19 @@ namespace ScrumPilot.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ScrumPilot.Data.Models.ApplicationUser", b =>
+                {
+                    b.HasOne("ScrumPilot.Shared.Models.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("DefaultOrganizationId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ScrumPilot.Shared.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("DefaultProjectId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
             modelBuilder.Entity("ScrumPilot.Shared.Models.Comment", b =>
                 {
                     b.HasOne("ScrumPilot.Shared.Models.ProductBacklogItem", null)
@@ -573,6 +750,38 @@ namespace ScrumPilot.Data.Migrations
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.OrganizationInvitation", b =>
+                {
+                    b.HasOne("ScrumPilot.Data.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("InvitedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ScrumPilot.Shared.Models.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.OrganizationMembership", b =>
+                {
+                    b.HasOne("ScrumPilot.Shared.Models.Organization", "Organization")
+                        .WithMany("OrganizationMemberships")
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ScrumPilot.Data.Models.ApplicationUser", null)
+                        .WithMany("OrganizationMemberships")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Organization");
                 });
 
             modelBuilder.Entity("ScrumPilot.Shared.Models.PbiStatusHistory", b =>
@@ -606,6 +815,38 @@ namespace ScrumPilot.Data.Migrations
                         .HasForeignKey("SprintId");
                 });
 
+            modelBuilder.Entity("ScrumPilot.Shared.Models.Project", b =>
+                {
+                    b.HasOne("ScrumPilot.Shared.Models.Organization", "Organization")
+                        .WithMany("Projects")
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Organization");
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.ProjectMembership", b =>
+                {
+                    b.HasOne("ScrumPilot.Data.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("GrantedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ScrumPilot.Shared.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ScrumPilot.Data.Models.ApplicationUser", null)
+                        .WithMany("ProjectMemberships")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ScrumPilot.Shared.Models.Sprint", b =>
                 {
                     b.HasOne("ScrumPilot.Shared.Models.Project", null)
@@ -615,9 +856,38 @@ namespace ScrumPilot.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ScrumPilot.Shared.Models.UserDashboardPreference", b =>
+                {
+                    b.HasOne("ScrumPilot.Shared.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ScrumPilot.Data.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ScrumPilot.Data.Models.ApplicationUser", b =>
+                {
+                    b.Navigation("OrganizationMemberships");
+
+                    b.Navigation("ProjectMemberships");
+                });
+
             modelBuilder.Entity("ScrumPilot.Shared.Models.Epic", b =>
                 {
                     b.Navigation("ProductBacklogItems");
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.Organization", b =>
+                {
+                    b.Navigation("OrganizationMemberships");
+
+                    b.Navigation("Projects");
                 });
 
             modelBuilder.Entity("ScrumPilot.Shared.Models.ProductBacklogItem", b =>

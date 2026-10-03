@@ -9,9 +9,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using ScrumPilot.Data.Repositories;
 using System.Text;
+using ScrumPilot.API.Authorization;
+using ScrumPilot.API.Configuration;
+using ScrumPilot.Data.Services;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -61,12 +65,25 @@ builder.Services.AddAuthorizationBuilder()
 // Add services to the container.
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<PlanningPokerSessionService>();
+builder.Services.AddSingleton<IPlanningPokerConnectionEvictor, PlanningPokerConnectionEvictor>();
 builder.Services.AddScoped<IProjectService, ProjectService>();
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<ISprintService, SprintService>();
 builder.Services.AddScoped<IEpicService, EpicService>();
 builder.Services.AddScoped<IMetricsDashboardService, MetricsDashboardService>();
 builder.Services.AddScoped<IDashboardPreferenceService, DashboardPreferenceService>();
 builder.Services.AddScoped<IUserSettingsService, UserSettingsService>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUser, CurrentUser>();
+builder.Services.AddScoped<IOrganizationAccessService, OrganizationAccessService>();
+builder.Services.AddScoped<IOrganizationService, OrganizationService>();
+builder.Services.AddScoped<IInvitationAcceptanceUserLookup, InvitationAcceptanceUserLookup>();
+builder.Services.Configure<SendGridOptions>(
+    builder.Configuration.GetSection(SendGridOptions.SectionName));
+builder.Services.AddSingleton<IValidateOptions<SendGridOptions>, SendGridOptionsValidator>();
+builder.Services.AddHttpClient<ISendGridTransport, SendGridTransport>();
+builder.Services.AddScoped<IInvitationEmailSender, SendGridInvitationEmailSender>();
+builder.Services.AddScoped<IOrganizationInvitationService, OrganizationInvitationService>();
 builder.Services.AddHttpClient<IPbiService, PbiService>(client =>
 {
     client.Timeout = TimeSpan.FromMinutes(5);
@@ -91,7 +108,7 @@ builder.Services.AddCors(options =>
             // )
             .AllowAnyHeader()
             .AllowAnyMethod()
-            // .AllowCredentials()
+    // .AllowCredentials()
     );
 });
 
@@ -106,16 +123,17 @@ using (var scope = app.Services.CreateScope())
     var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 
     // Apply migrations for both Postgres (Render) and SQLite (local dev)
-    context.Database.Migrate();
+    await context.Database.MigrateAsync();
 
     // Seed database with initial data (seeders are idempotent)
-    DatabaseSeeder.SeedDatabase(context);
+    await DatabaseSeeder.SeedDatabaseAsync(context);
 
-    // Seed Identity users and roles
-    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-    await DatabaseSeeder.SeedUsersAsync(userManager, roleManager);
-    await DatabaseSeeder.SeedProjectDataAsync(context);
+    var newlyCreatedUserIds = await DatabaseSeeder.SeedUsersAsync(
+        scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>(),
+        scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>());
+    await scope.ServiceProvider
+        .GetRequiredService<PirateForgeBootstrapper>()
+        .RunAsync(newlyCreatedUserIds);
 }
 
 // Configure the HTTP request pipeline.
