@@ -13,6 +13,7 @@ using Microsoft.IdentityModel.Tokens;
 using ScrumPilot.Data.Repositories;
 using System.Text;
 using ScrumPilot.API.Authorization;
+using ScrumPilot.API.Configuration;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -70,6 +71,11 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddScoped<IOrganizationAccessService, OrganizationAccessService>();
 builder.Services.AddScoped<IOrganizationService, OrganizationService>();
+builder.Services.Configure<SendGridOptions>(
+    builder.Configuration.GetSection(SendGridOptions.SectionName));
+builder.Services.AddSingleton<ISendGridTransport, SendGridTransport>();
+builder.Services.AddScoped<IInvitationEmailSender, SendGridInvitationEmailSender>();
+builder.Services.AddScoped<IOrganizationInvitationService, OrganizationInvitationService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddHttpClient<IPbiService, PbiService>(client =>
 {

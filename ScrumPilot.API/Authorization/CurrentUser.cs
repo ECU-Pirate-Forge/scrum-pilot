@@ -22,6 +22,20 @@ public sealed class CurrentUser(IHttpContextAccessor httpContextAccessor) : ICur
         }
     }
 
+    public string Email
+    {
+        get
+        {
+            var principal = httpContextAccessor.HttpContext?.User;
+            var email = principal?.FindFirstValue(ClaimTypes.Email);
+            if (principal?.Identity?.IsAuthenticated != true || string.IsNullOrWhiteSpace(email))
+            {
+                throw new InvalidOperationException("An authenticated user email is required.");
+            }
+            return email;
+        }
+    }
+
     public bool IsInRole(string role) =>
         httpContextAccessor.HttpContext?.User?.IsInRole(role) ?? false;
 }
