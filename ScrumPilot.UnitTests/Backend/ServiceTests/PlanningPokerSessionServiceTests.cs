@@ -58,6 +58,20 @@ public class PlanningPokerSessionServiceTests
         Assert.Equal("Bob", second.Participants[0].DisplayName);
     }
 
+    [Fact]
+    public void RemoveParticipant_WithStaleExpectedSession_DoesNotRemoveCurrentMapping()
+    {
+        var service = new PlanningPokerSessionService();
+        var currentKey = new PlanningPokerSessionKey(4, 9);
+        service.AddParticipant("connection-1", "Alice", currentKey);
+
+        var removed = service.RemoveParticipant("connection-1", SessionKey);
+
+        Assert.Null(removed);
+        Assert.Equal(currentKey, service.GetSessionKey("connection-1"));
+        Assert.Single(service.GetStateForSession(currentKey).Participants);
+    }
+
     private static PlanningPokerSessionService CreateSession(int currentPbiId)
     {
         var service = new PlanningPokerSessionService();

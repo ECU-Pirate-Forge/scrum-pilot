@@ -29,7 +29,7 @@
                            Color="Color.Warning"
                            StartIcon="@Icons.Material.Filled.Visibility"
                            OnClick="RevealAsync"
-                           Disabled="@(_revealed || !_isConnected)"
+                           Disabled="@(_revealed || !_isSessionJoined)"
                            Class="me-2">
                     Reveal
                 </MudButton>
@@ -37,7 +37,7 @@
                            Color="Color.Default"
                            StartIcon="@Icons.Material.Filled.Refresh"
                            OnClick="ResetAsync"
-                           Disabled="@(!_isConnected)">
+                           Disabled="@(!_isSessionJoined)">
                     Re-vote
                 </MudButton>
             }
@@ -171,7 +171,7 @@
                     </div>
                 }
             }
-            else if (_isConnected)
+            else if (_isSessionJoined)
             {
                 <MudText Typo="Typo.body2" Style="color:var(--mud-palette-text-disabled);">
                     Waiting for team members to join...
@@ -187,7 +187,7 @@
 
         <!-- Right: point selection (only shown when a PBI is active and not yet revealed) -->
         <div class="pp-bottom-right">
-            @if (_isConnected && _currentPbiId.HasValue && !_revealed)
+            @if (_isSessionJoined && _currentPbiId.HasValue && !_revealed)
             {
                 <div class="pp-point-selection">
                     <MudText Typo="Typo.caption" Style="font-weight:600; margin-bottom:8px; display:block;">
@@ -223,6 +223,7 @@
     private string _myConnectionId = "";
     private string _myDisplayName = "Anonymous";
     private string _connectionStatus = "Connecting...";
+    private bool _isSessionJoined;
 
     private int _suggestedPointIndex = -1;
     private bool _pointsCommitting = false;
@@ -232,7 +233,8 @@
 
     private Color ConnectionColor => _hub?.State switch
     {
-        HubConnectionState.Connected => Color.Success,
+        HubConnectionState.Connected when _isSessionJoined => Color.Success,
+        HubConnectionState.Connected => Color.Error,
         HubConnectionState.Connecting or HubConnectionState.Reconnecting => Color.Warning,
         _ => Color.Error
     };
@@ -255,6 +257,7 @@
             _myVote = null;
             _suggestedPointIndex = -1;
             _participants = [];
+            _isSessionJoined = false;
 
             // Dispose old hub so the server removes us from the old project's group
             if (_hub is not null)
@@ -357,15 +360,18 @@
             InvokeAsync(StateHasChanged);
         });
 
-        _hub.Reconnected += _ =>
+        _hub.Reconnected += async _ =>
         {
-            _connectionStatus = "Connected";
-            return _hub.SendAsync("JoinSession", _myDisplayName, ProjectState.SelectedProjectId ?? 0);
+            _connectionStatus = "Joining...";
+            _isSessionJoined = false;
+            await JoinCurrentSessionAsync();
+            await InvokeAsync(StateHasChanged);
         };
 
         _hub.Closed += _ =>
         {
             _connectionStatus = "Disconnected";
+            _isSessionJoined = false;
             return InvokeAsync(StateHasChanged);
         };
 
@@ -373,12 +379,33 @@
         {
             await _hub.StartAsync();
             _myConnectionId = _hub.ConnectionId ?? "";
-            _connectionStatus = "Connected";
-            await _hub.SendAsync("JoinSession", _myDisplayName, ProjectState.SelectedProjectId ?? 0);
+            _connectionStatus = "Joining...";
+            await JoinCurrentSessionAsync();
         }
         catch
         {
             _connectionStatus = "Failed";
+            _isSessionJoined = false;
+        }
+    }
+
+    private async Task JoinCurrentSessionAsync()
+    {
+        try
+        {
+            await _hub!.InvokeAsync(
+                "JoinSession",
+                _myDisplayName,
+                ProjectState.SelectedProjectId ?? 0);
+            _isSessionJoined = true;
+            _connectionStatus = "Connected";
+        }
+        catch (HubException ex)
+        {
+            _isSessionJoined = false;
+            _connectionStatus = "Session unavailable";
+            Logger.LogWarning(ex, "Planning poker session access was denied.");
+            Snackbar.Add("Planning poker session is unavailable.", Severity.Error);
         }
     }
 
@@ -398,19 +425,19 @@
 
     private async Task SelectPbiAsync(ProductBacklogItem pbi)
     {
+        if (!_isSessionJoined) return;
         _selectedPbi = pbi;
         _currentPbiId = pbi.PbiId;
         _revealed = false;
         _myVote = null;
         _suggestedPointIndex = -1;
         foreach (var p in _participants) { p.HasVoted = false; p.Points = null; }
-        if (_isConnected)
-            await _hub!.SendAsync("SelectPbi", pbi.PbiId);
+        await _hub!.SendAsync("SelectPbi", pbi.PbiId);
     }
 
     private async Task CastVoteAsync(int points)
     {
-        if (!_isConnected || !_currentPbiId.HasValue) return;
+        if (!_isSessionJoined || !_currentPbiId.HasValue) return;
         _myVote = points;
         var me = _participants.FirstOrDefault(p => p.ConnectionId == _myConnectionId);
         if (me != null) me.HasVoted = true;
@@ -419,13 +446,13 @@
 
     private async Task RevealAsync()
     {
-        if (!_isConnected) return;
+        if (!_isSessionJoined) return;
         await _hub!.SendAsync("RevealCards");
     }
 
     private async Task ResetAsync()
     {
-        if (!_isConnected) return;
+        if (!_isSessionJoined) return;
         _myVote = null;
         await _hub!.SendAsync("ResetVoting");
     }
@@ -472,7 +499,7 @@
             _currentPbiId = null;
         }
         await LoadUnassignedPbisAsync();
-        if (_isConnected)
+        if (_isSessionJoined)
             await _hub!.SendAsync("ClearPbiIfSelected", pbiId);
     }
 

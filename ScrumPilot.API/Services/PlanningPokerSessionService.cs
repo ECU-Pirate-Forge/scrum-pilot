@@ -39,11 +39,15 @@ public class PlanningPokerSessionService
         }
     }
 
-    public PlanningPokerSessionKey? RemoveParticipant(string connectionId)
+    public PlanningPokerSessionKey? RemoveParticipant(
+        string connectionId,
+        PlanningPokerSessionKey? expectedSessionKey = null)
     {
         lock (_lock)
         {
             if (!_connectionToSession.TryGetValue(connectionId, out var sessionKey))
+                return null;
+            if (expectedSessionKey.HasValue && sessionKey != expectedSessionKey.Value)
                 return null;
             _connectionToSession.Remove(connectionId);
             if (_sessions.TryGetValue(sessionKey, out var session))

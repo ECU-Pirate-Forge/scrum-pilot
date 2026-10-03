@@ -73,9 +73,150 @@ public class PlanningPokerHubTests
         await setup.Hub.JoinSession("ignored", projectId: 9);
 
         await setup.Groups.Received(1).RemoveFromGroupAsync(
-            ConnectionId, Group, setup.CancellationToken);
+            ConnectionId, Group, CancellationToken.None);
         Assert.Empty(setup.Service.GetStateForSession(SessionKey).Participants);
         Assert.Equal(new PlanningPokerSessionKey(4, 9), setup.Service.GetSessionKey(ConnectionId));
+    }
+
+    [Fact]
+    public async Task JoinSession_DeniedRejoin_EvictsAuthorizedPreviousSession()
+    {
+        var setup = CreateHub();
+        await setup.Hub.JoinSession("ignored", projectId: 7);
+        setup.Access.CanAccessProjectAsync("user-1", 9, setup.CancellationToken).Returns(false);
+
+        var exception = await Assert.ThrowsAsync<HubException>(
+            () => setup.Hub.JoinSession("ignored", projectId: 9));
+
+        Assert.Equal("Project not found.", exception.Message);
+        Assert.Null(setup.Service.GetSessionKey(ConnectionId));
+        await setup.Groups.Received(1).RemoveFromGroupAsync(
+            ConnectionId, Group, CancellationToken.None);
+        await setup.GroupClient.Received(1).SendCoreAsync(
+            "UserLeft",
+            Arg.Is<object?[]>(arguments =>
+                arguments.Length == 1 && (string)arguments[0]! == ConnectionId),
+            CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task JoinSession_FirstGroupAddFailure_DoesNotLeaveParticipant()
+    {
+        var setup = CreateHub();
+        setup.Groups.AddToGroupAsync(ConnectionId, Group, setup.CancellationToken)
+            .Returns(Task.FromException(new InvalidOperationException("group add failed")));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => setup.Hub.JoinSession("ignored", projectId: 7));
+
+        Assert.Null(setup.Service.GetSessionKey(ConnectionId));
+        await setup.Groups.Received(1).RemoveFromGroupAsync(
+            ConnectionId, Group, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task JoinSession_RejoinGroupAddFailure_CleansBothSessionsAndNotifiesPeers()
+    {
+        var setup = CreateHub();
+        await setup.Hub.JoinSession("ignored", projectId: 7);
+        setup.Access.CanAccessProjectAsync("user-1", 9, setup.CancellationToken).Returns(true);
+        setup.Access.GetOrganizationIdForProjectAsync(9, setup.CancellationToken).Returns(4);
+        var newGroup = "planning-poker-4-9";
+        setup.Groups.AddToGroupAsync(ConnectionId, newGroup, setup.CancellationToken)
+            .Returns(Task.FromException(new InvalidOperationException("group add failed")));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => setup.Hub.JoinSession("ignored", projectId: 9));
+
+        Assert.Null(setup.Service.GetSessionKey(ConnectionId));
+        await setup.Groups.Received(1).RemoveFromGroupAsync(
+            ConnectionId, Group, CancellationToken.None);
+        await setup.Groups.Received(1).RemoveFromGroupAsync(
+            ConnectionId, newGroup, CancellationToken.None);
+        await setup.GroupClient.Received(2).SendCoreAsync(
+            "UserLeft",
+            Arg.Is<object?[]>(arguments =>
+                arguments.Length == 1 && (string)arguments[0]! == ConnectionId),
+            CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task JoinSession_RejoinRemoveGroupFailure_NotifiesOldPeersAndJoinsNewSession()
+    {
+        var setup = CreateHub();
+        await setup.Hub.JoinSession("ignored", projectId: 7);
+        setup.Access.CanAccessProjectAsync("user-1", 9, setup.CancellationToken).Returns(true);
+        setup.Access.GetOrganizationIdForProjectAsync(9, setup.CancellationToken).Returns(4);
+        setup.Groups.RemoveFromGroupAsync(ConnectionId, Group, CancellationToken.None)
+            .Returns(Task.FromException(new InvalidOperationException("group remove failed")));
+
+        await setup.Hub.JoinSession("ignored", projectId: 9);
+
+        Assert.Equal(new PlanningPokerSessionKey(4, 9), setup.Service.GetSessionKey(ConnectionId));
+        await setup.GroupClient.Received(1).SendCoreAsync(
+            "UserLeft",
+            Arg.Is<object?[]>(arguments =>
+                arguments.Length == 1 && (string)arguments[0]! == ConnectionId),
+            CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task JoinSession_CanceledGroupAdd_DoesNotLeaveParticipant()
+    {
+        var setup = CreateHub();
+        setup.Groups.AddToGroupAsync(ConnectionId, Group, setup.CancellationToken)
+            .Returns(Task.FromException(new OperationCanceledException()));
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => setup.Hub.JoinSession("ignored", projectId: 7));
+
+        Assert.Null(setup.Service.GetSessionKey(ConnectionId));
+        await setup.Groups.Received(1).RemoveFromGroupAsync(
+            ConnectionId, Group, CancellationToken.None);
+    }
+
+    [Theory]
+    [InlineData("SelectCard")]
+    [InlineData("RevealCards")]
+    [InlineData("SelectPbi")]
+    [InlineData("ClearPbiIfSelected")]
+    [InlineData("ResetVoting")]
+    public async Task SessionOperation_RevokedAccess_EvictsWithoutMutationOrOperationBroadcast(
+        string operation)
+    {
+        var setup = CreateJoinedHub(currentPbiId: 42);
+        setup.Service.SetVote(ConnectionId, 5);
+        setup.Service.AddParticipant("peer-2", "Bob", SessionKey);
+        setup.Service.SetVote("peer-2", 3);
+        var before = setup.Service.GetStateForSession(SessionKey, includeVotes: true);
+        setup.Access.CanAccessProjectAsync("user-1", 7, setup.CancellationToken).Returns(false);
+
+        var exception = await Assert.ThrowsAsync<HubException>(() => operation switch
+        {
+            "SelectCard" => setup.Hub.SelectCard(8),
+            "RevealCards" => setup.Hub.RevealCards(),
+            "SelectPbi" => setup.Hub.SelectPbi(99),
+            "ClearPbiIfSelected" => setup.Hub.ClearPbiIfSelected(42),
+            "ResetVoting" => setup.Hub.ResetVoting(),
+            _ => throw new ArgumentOutOfRangeException(nameof(operation))
+        });
+
+        Assert.Equal("Project not found.", exception.Message);
+        Assert.Null(setup.Service.GetSessionKey(ConnectionId));
+        var after = setup.Service.GetStateForSession(SessionKey, includeVotes: true);
+        Assert.Equal(before.CurrentPbiId, after.CurrentPbiId);
+        Assert.Equal(before.Revealed, after.Revealed);
+        var peer = Assert.Single(after.Participants);
+        Assert.Equal("peer-2", peer.ConnectionId);
+        Assert.True(peer.HasVoted);
+        Assert.Equal(3, peer.Points);
+        await setup.GroupClient.Received(1).SendCoreAsync(
+            "UserLeft",
+            Arg.Is<object?[]>(arguments =>
+                arguments.Length == 1 && (string)arguments[0]! == ConnectionId),
+            CancellationToken.None);
+        await setup.Access.DidNotReceiveWithAnyArgs()
+            .PbiBelongsToProjectAsync(default, default, default);
     }
 
     [Fact]
@@ -106,7 +247,7 @@ public class PlanningPokerHubTests
             Arg.Is<object?[]>(arguments =>
                 arguments.Length == 1 &&
                 ((PokerSessionState)arguments[0]!).CurrentPbiId == 99),
-            setup.CancellationToken);
+            CancellationToken.None);
     }
 
     [Fact]
@@ -122,7 +263,7 @@ public class PlanningPokerHubTests
                 arguments.Length == 1 &&
                 ((PokerSessionState)arguments[0]!).CurrentPbiId == null &&
                 !((PokerSessionState)arguments[0]!).Revealed),
-            setup.CancellationToken);
+            CancellationToken.None);
         Assert.Null(setup.Service.GetState(ConnectionId)!.CurrentPbiId);
     }
 
