@@ -432,7 +432,11 @@
         await LoadUnassignedPbisAsync();
         _selectedPbi = _unassignedPbis?.FirstOrDefault(item => item.PbiId == pbi.PbiId);
         if (_selectedPbi is null)
+        {
             _currentPbiId = null;
+            if (_isConnected)
+                await _hub!.SendAsync("SelectPbi", (int?)null);
+        }
     }
 
     private async Task HandlePbiDelete(int pbiId)
