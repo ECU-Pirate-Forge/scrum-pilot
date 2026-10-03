@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 using System.Net;
 using Microsoft.Extensions.Options;
 using ScrumPilot.API.Configuration;
@@ -23,14 +22,16 @@ public interface ISendGridTransport
         CancellationToken cancellationToken = default);
 }
 
-public sealed class SendGridTransport : ISendGridTransport
+public sealed class SendGridTransport(HttpClient httpClient) : ISendGridTransport
 {
     public async Task<HttpStatusCode> SendAsync(
         string apiKey,
         InvitationEmailMessage message,
         CancellationToken cancellationToken = default)
     {
-        var client = new SendGridClient(apiKey);
+        var client = new SendGridClient(
+            httpClient,
+            new SendGridClientOptions { ApiKey = apiKey });
         var response = await client.SendEmailAsync(
             MailHelper.CreateSingleEmail(
                 new EmailAddress(message.FromEmail, message.FromName),
@@ -53,8 +54,18 @@ public sealed class SendGridInvitationEmailSender(
         string token,
         CancellationToken cancellationToken = default)
     {
-        var configuration = options.Value;
-        Validate(configuration);
+        SendGridOptions configuration;
+        try
+        {
+            configuration = options.Value;
+        }
+        catch (OptionsValidationException exception)
+        {
+            logger.LogError("SendGrid invitation configuration is invalid.");
+            throw new InvitationDeliveryException(
+                "SendGrid configuration is invalid.",
+                exception);
+        }
         var url = BuildInvitationUrl(configuration.InvitationBaseUrl, token);
         var message = new InvitationEmailMessage(
             configuration.FromEmail,
@@ -87,28 +98,6 @@ public sealed class SendGridInvitationEmailSender(
                 (int)statusCode);
             throw new InvitationDeliveryException(
                 $"SendGrid invitation delivery returned HTTP status {(int)statusCode}.");
-        }
-    }
-
-    private static void Validate(SendGridOptions configuration)
-    {
-        var validationResults = new List<ValidationResult>();
-        if (!Validator.TryValidateObject(
-                configuration,
-                new ValidationContext(configuration),
-                validationResults,
-                validateAllProperties: true)
-            || !Uri.TryCreate(
-                configuration.InvitationBaseUrl,
-                UriKind.Absolute,
-                out var baseUri)
-            || baseUri.Scheme is not ("http" or "https"))
-        {
-            var details = string.Join(
-                " ",
-                validationResults.Select(x => x.ErrorMessage));
-            throw new InvitationDeliveryException(
-                $"SendGrid configuration is invalid. {details}".Trim());
         }
     }
 

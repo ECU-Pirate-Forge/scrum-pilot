@@ -9,6 +9,7 @@ namespace ScrumPilot.API.Services;
 public sealed class OrganizationInvitationService(
     IOrganizationInvitationRepository repository,
     ICurrentUser currentUser,
+    IInvitationAcceptanceUserLookup userLookup,
     IOrganizationAccessService accessService,
     IInvitationEmailSender emailSender,
     TimeProvider timeProvider) : IOrganizationInvitationService
@@ -28,7 +29,8 @@ public sealed class OrganizationInvitationService(
             email,
             normalizedEmail,
             request.Role);
-        await repository.ReplacePendingAsync(invitation, cancellationToken);
+        await ExecuteMutationAsync(
+            () => repository.ReplacePendingAsync(invitation, cancellationToken));
         await DeliverAsync(invitation, token, cancellationToken);
         return ToDto(invitation);
     }
@@ -58,11 +60,11 @@ public sealed class OrganizationInvitationService(
             existing.Email,
             existing.NormalizedEmail,
             existing.Role);
-        replacement = await repository.ReplaceAsync(
+        replacement = await ExecuteMutationAsync(() => repository.ReplaceAsync(
                           organizationId,
                           invitationId,
                           replacement,
-                          cancellationToken)
+                          cancellationToken))
                       ?? throw new OrganizationConflictException(
                           "The invitation is no longer pending.");
         await DeliverAsync(replacement, token, cancellationToken);
@@ -89,26 +91,37 @@ public sealed class OrganizationInvitationService(
         {
             throw new OrganizationValidationException("An invitation token is required.");
         }
-        string normalizedEmail;
-        try
-        {
-            normalizedEmail = NormalizeEmail(currentUser.Email);
-        }
-        catch (InvalidOperationException)
+        // TODO: A future change-email workflow must re-confirm the new Identity email
+        // before it can become authoritative for invitation acceptance.
+        var user = await userLookup.FindByIdAsync(currentUser.UserId, cancellationToken);
+        if (user is null
+            || !user.EmailConfirmed
+            || string.IsNullOrWhiteSpace(user.Email))
         {
             throw new OrganizationForbiddenException(
-                "An authenticated user email is required to accept an invitation.");
+                "The invitation cannot be accepted by this account.");
         }
-        var result = await repository.AcceptAsync(
-            HashToken(request.Token),
+        var normalizedEmail = NormalizeEmail(user.Email);
+        var result = await ExecuteMutationAsync(() => repository.AcceptAsync(
+            HashToken(DecodeToken(request.Token)),
             currentUser.UserId,
             normalizedEmail,
             UtcNow,
-            cancellationToken);
-        if (result != InvitationAcceptanceResult.Success)
+            cancellationToken));
+        switch (result)
         {
-            throw new OrganizationConflictException(
-                "The invitation cannot be accepted.");
+            case InvitationAcceptanceResult.Success:
+                return;
+            case InvitationAcceptanceResult.EmailMismatch:
+                throw new OrganizationForbiddenException(
+                    "The invitation cannot be accepted by this account.");
+            case InvitationAcceptanceResult.Expired:
+            case InvitationAcceptanceResult.ExistingMember:
+                throw new OrganizationConflictException(
+                    "The invitation cannot be accepted.");
+            default:
+                throw new OrganizationNotFoundException(
+                    "The invitation was not found.");
         }
     }
 
@@ -210,17 +223,44 @@ public sealed class OrganizationInvitationService(
 
     private DateTime UtcNow => timeProvider.GetUtcNow().UtcDateTime;
 
-    private static string HashToken(string token)
+    private static async Task<T> ExecuteMutationAsync<T>(Func<Task<T>> action)
     {
         try
         {
-            return Convert.ToHexString(SHA256.HashData(Base64UrlDecode(token)));
+            return await action();
+        }
+        catch (OrganizationInvitationConcurrencyException)
+        {
+            throw new OrganizationConflictException(
+                "The invitation was changed by another request.");
+        }
+    }
+
+    private static byte[] DecodeToken(string token)
+    {
+        if (token.Length != 43
+            || token.Any(character =>
+                !char.IsAsciiLetterOrDigit(character) && character is not '-' and not '_'))
+        {
+            throw new OrganizationValidationException("The invitation token is invalid.");
+        }
+        try
+        {
+            var bytes = Base64UrlDecode(token);
+            if (bytes.Length != 32)
+            {
+                throw new FormatException();
+            }
+            return bytes;
         }
         catch (FormatException)
         {
-            return Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token)));
+            throw new OrganizationValidationException("The invitation token is invalid.");
         }
     }
+
+    private static string HashToken(byte[] token) =>
+        Convert.ToHexString(SHA256.HashData(token));
 
     private static string Base64UrlEncode(byte[] value) =>
         Convert.ToBase64String(value).TrimEnd('=').Replace('+', '-').Replace('/', '_');

@@ -16,6 +16,8 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
     private readonly SqliteConnection _connection = new("Data Source=:memory:");
     private readonly ScrumPilotContext _context;
     private readonly ICurrentUser _currentUser = Substitute.For<ICurrentUser>();
+    private readonly IInvitationAcceptanceUserLookup _userLookup =
+        Substitute.For<IInvitationAcceptanceUserLookup>();
     private readonly IOrganizationAccessService _access = Substitute.For<IOrganizationAccessService>();
     private readonly FakeInvitationEmailSender _sender = new();
     private readonly TestTimeProvider _clock =
@@ -31,9 +33,18 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
         _context.Database.EnsureCreated();
         _currentUser.UserId.Returns("owner");
         _currentUser.Email.Returns("owner@example.com");
+        _userLookup.FindByIdAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                var user = _context.Users.Find(call.ArgAt<string>(0));
+                return user is null
+                    ? null
+                    : new InvitationAcceptanceUser(user.Email, user.EmailConfirmed);
+            });
         _service = new(
             new OrganizationInvitationRepository(_context),
             _currentUser,
+            _userLookup,
             _access,
             _sender,
             _clock);
@@ -117,7 +128,7 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
         Assert.Equal(OrganizationInvitationStatus.Pending, invitations[1].Status);
         _currentUser.UserId.Returns("member");
         _currentUser.Email.Returns("member@example.com");
-        await Assert.ThrowsAsync<OrganizationConflictException>(() =>
+        await Assert.ThrowsAsync<OrganizationNotFoundException>(() =>
             _service.AcceptAsync(new(oldToken!)));
     }
 
@@ -135,7 +146,7 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
 
         _currentUser.UserId.Returns("member");
         _currentUser.Email.Returns("member@example.com");
-        await Assert.ThrowsAsync<OrganizationConflictException>(() =>
+        await Assert.ThrowsAsync<OrganizationNotFoundException>(() =>
             _service.AcceptAsync(new(oldToken!)));
         await _service.AcceptAsync(new(newToken!));
         Assert.True(await _context.OrganizationMemberships.AnyAsync(x =>
@@ -151,10 +162,13 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
             new("member@example.com", OrganizationRole.Member));
         var token = _sender.Token!;
         _currentUser.UserId.Returns("member");
-        _currentUser.Email.Returns("wrong@example.com");
-        await Assert.ThrowsAsync<OrganizationConflictException>(() => _service.AcceptAsync(new(token)));
+        var member = await _context.Users.FindAsync("member");
+        member!.Email = "wrong@example.com";
+        await _context.SaveChangesAsync();
+        await Assert.ThrowsAsync<OrganizationForbiddenException>(() => _service.AcceptAsync(new(token)));
 
-        _currentUser.Email.Returns("member@example.com");
+        member.Email = "member@example.com";
+        await _context.SaveChangesAsync();
         _clock.Advance(TimeSpan.FromHours(73));
         await Assert.ThrowsAsync<OrganizationConflictException>(() => _service.AcceptAsync(new(token)));
         Assert.Equal(
@@ -171,7 +185,7 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
         await _service.RevokeAsync(_organizationId, invitation.OrganizationInvitationId);
         _currentUser.UserId.Returns("member");
         _currentUser.Email.Returns("member@example.com");
-        await Assert.ThrowsAsync<OrganizationConflictException>(() => _service.AcceptAsync(new(token)));
+        await Assert.ThrowsAsync<OrganizationNotFoundException>(() => _service.AcceptAsync(new(token)));
 
         _currentUser.UserId.Returns("owner");
         _currentUser.Email.Returns("owner@example.com");
@@ -182,7 +196,7 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
         _currentUser.UserId.Returns("member");
         _currentUser.Email.Returns("member@example.com");
         await _service.AcceptAsync(new(token));
-        await Assert.ThrowsAsync<OrganizationConflictException>(() => _service.AcceptAsync(new(token)));
+        await Assert.ThrowsAsync<OrganizationNotFoundException>(() => _service.AcceptAsync(new(token)));
     }
 
     [Fact]
@@ -209,6 +223,139 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
         Assert.Equal(
             OrganizationRole.Member,
             (await _context.OrganizationMemberships.SingleAsync(x => x.UserId == "member")).Role);
+    }
+
+    [Fact]
+    public async Task AcceptAsync_UsesConfirmedDatabaseEmailInsteadOfStaleJwtEmail()
+    {
+        await SeedAsync();
+        await _service.InviteAsync(
+            _organizationId,
+            new("member@example.com", OrganizationRole.Member));
+        _currentUser.UserId.Returns("member");
+        _currentUser.Email.Returns("stale@example.com");
+
+        await _service.AcceptAsync(new(_sender.Token!));
+
+        Assert.True(await _context.OrganizationMemberships.AnyAsync(x =>
+            x.OrganizationId == _organizationId && x.UserId == "member"));
+    }
+
+    [Fact]
+    public async Task AcceptAsync_UnconfirmedDatabaseEmailIsForbidden()
+    {
+        await SeedAsync();
+        await _service.InviteAsync(
+            _organizationId,
+            new("member@example.com", OrganizationRole.Member));
+        var member = await _context.Users.FindAsync("member");
+        member!.EmailConfirmed = false;
+        await _context.SaveChangesAsync();
+        _currentUser.UserId.Returns("member");
+
+        await Assert.ThrowsAsync<OrganizationForbiddenException>(() =>
+            _service.AcceptAsync(new(_sender.Token!)));
+    }
+
+    [Fact]
+    public async Task AcceptAsync_ChangedDatabaseEmailIsForbidden()
+    {
+        await SeedAsync();
+        await _service.InviteAsync(
+            _organizationId,
+            new("member@example.com", OrganizationRole.Member));
+        var member = await _context.Users.FindAsync("member");
+        member!.Email = "changed@example.com";
+        member.NormalizedEmail = "CHANGED@EXAMPLE.COM";
+        await _context.SaveChangesAsync();
+        _currentUser.UserId.Returns("member");
+
+        await Assert.ThrowsAsync<OrganizationForbiddenException>(() =>
+            _service.AcceptAsync(new(_sender.Token!)));
+    }
+
+    [Theory]
+    [InlineData("invite")]
+    [InlineData("resend")]
+    [InlineData("accept")]
+    public async Task MutationConcurrencyFailureIsMappedToConflict(string operation)
+    {
+        var repository = Substitute.For<IOrganizationInvitationRepository>();
+        var currentUser = Substitute.For<ICurrentUser>();
+        var lookup = Substitute.For<IInvitationAcceptanceUserLookup>();
+        var access = Substitute.For<IOrganizationAccessService>();
+        currentUser.UserId.Returns("owner");
+        access.IsOrganizationOwnerAsync("owner", 5, Arg.Any<CancellationToken>())
+            .Returns(true);
+        lookup.FindByIdAsync("owner", Arg.Any<CancellationToken>())
+            .Returns(new InvitationAcceptanceUser("owner@example.com", true));
+        var failure = new OrganizationInvitationConcurrencyException(
+            "concurrent",
+            new InvalidOperationException());
+        repository.ReplacePendingAsync(
+                Arg.Any<OrganizationInvitation>(),
+                Arg.Any<CancellationToken>())
+            .Returns<Task<OrganizationInvitation>>(_ => throw failure);
+        repository.GetAsync(5, 9, Arg.Any<CancellationToken>())
+            .Returns(new OrganizationInvitation
+            {
+                OrganizationInvitationId = 9,
+                OrganizationId = 5,
+                Email = "member@example.com",
+                NormalizedEmail = "MEMBER@EXAMPLE.COM",
+                TokenHash = new string('0', 64),
+                InvitedByUserId = "owner",
+                Role = OrganizationRole.Member,
+                Status = OrganizationInvitationStatus.Pending
+            });
+        repository.ReplaceAsync(
+                5,
+                9,
+                Arg.Any<OrganizationInvitation>(),
+                Arg.Any<CancellationToken>())
+            .Returns<Task<OrganizationInvitation?>>(_ => throw failure);
+        repository.AcceptAsync(
+                Arg.Any<string>(),
+                "owner",
+                "OWNER@EXAMPLE.COM",
+                Arg.Any<DateTime>(),
+                Arg.Any<CancellationToken>())
+            .Returns<Task<InvitationAcceptanceResult>>(_ => throw failure);
+        var service = new OrganizationInvitationService(
+            repository,
+            currentUser,
+            lookup,
+            access,
+            _sender,
+            _clock);
+
+        Task Action() => operation switch
+        {
+            "invite" => service.InviteAsync(
+                5,
+                new("member@example.com", OrganizationRole.Member)),
+            "resend" => service.ResendAsync(5, 9),
+            _ => service.AcceptAsync(new(
+                Convert.ToBase64String(new byte[32])
+                    .TrimEnd('=')
+                    .Replace('+', '-')
+                    .Replace('/', '_')))
+        };
+
+        await Assert.ThrowsAsync<OrganizationConflictException>(Action);
+    }
+
+    [Theory]
+    [InlineData("%%%")]
+    [InlineData("abcde")]
+    [InlineData("YWJj=")]
+    public async Task AcceptAsync_MalformedBase64UrlTokenIsValidationFailure(string token)
+    {
+        await SeedAsync();
+        _currentUser.UserId.Returns("member");
+
+        await Assert.ThrowsAsync<OrganizationValidationException>(() =>
+            _service.AcceptAsync(new(token)));
     }
 
     [Fact]
@@ -267,7 +414,8 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
         UserName = id,
         NormalizedUserName = id.ToUpperInvariant(),
         Email = email,
-        NormalizedEmail = email.ToUpperInvariant()
+        NormalizedEmail = email.ToUpperInvariant(),
+        EmailConfirmed = true
     };
 
     private static byte[] Base64UrlDecode(string token)

@@ -13,22 +13,33 @@ public sealed class OrganizationInvitationRepository(ScrumPilotContext context)
         OrganizationInvitation invitation,
         CancellationToken cancellationToken = default)
     {
-        await using var transaction = await context.Database.BeginTransactionAsync(
-            IsolationLevel.Serializable,
-            cancellationToken);
-        var pending = await context.OrganizationInvitations
-            .Where(x => x.OrganizationId == invitation.OrganizationId
-                        && x.NormalizedEmail == invitation.NormalizedEmail
-                        && x.Status == OrganizationInvitationStatus.Pending)
-            .ToListAsync(cancellationToken);
-        foreach (var existing in pending)
+        try
         {
-            existing.Status = OrganizationInvitationStatus.Revoked;
+            await using var transaction = await context.Database.BeginTransactionAsync(
+                IsolationLevel.Serializable,
+                cancellationToken);
+            var pending = await context.OrganizationInvitations
+                .Where(x => x.OrganizationId == invitation.OrganizationId
+                            && x.NormalizedEmail == invitation.NormalizedEmail
+                            && x.Status == OrganizationInvitationStatus.Pending)
+                .ToListAsync(cancellationToken);
+            foreach (var existing in pending)
+            {
+                existing.Status = OrganizationInvitationStatus.Revoked;
+            }
+            context.OrganizationInvitations.Add(invitation);
+            await context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return invitation;
         }
-        context.OrganizationInvitations.Add(invitation);
-        await context.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-        return invitation;
+        catch (Exception exception) when (
+            OrganizationInvitationRepositoryExceptionClassifier
+                .IsTransactionConcurrency(exception))
+        {
+            throw new OrganizationInvitationConcurrencyException(
+                "The invitation was changed by another request.",
+                exception);
+        }
     }
 
     public async Task<IReadOnlyList<OrganizationInvitationDto>> ListAsync(
@@ -58,23 +69,34 @@ public sealed class OrganizationInvitationRepository(ScrumPilotContext context)
         OrganizationInvitation replacement,
         CancellationToken cancellationToken = default)
     {
-        await using var transaction = await context.Database.BeginTransactionAsync(
-            IsolationLevel.Serializable,
-            cancellationToken);
-        var existing = await context.OrganizationInvitations.SingleOrDefaultAsync(
-            x => x.OrganizationId == organizationId
-                 && x.OrganizationInvitationId == invitationId
-                 && x.Status == OrganizationInvitationStatus.Pending,
-            cancellationToken);
-        if (existing is null)
+        try
         {
-            return null;
+            await using var transaction = await context.Database.BeginTransactionAsync(
+                IsolationLevel.Serializable,
+                cancellationToken);
+            var existing = await context.OrganizationInvitations.SingleOrDefaultAsync(
+                x => x.OrganizationId == organizationId
+                     && x.OrganizationInvitationId == invitationId
+                     && x.Status == OrganizationInvitationStatus.Pending,
+                cancellationToken);
+            if (existing is null)
+            {
+                return null;
+            }
+            existing.Status = OrganizationInvitationStatus.Revoked;
+            context.OrganizationInvitations.Add(replacement);
+            await context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return replacement;
         }
-        existing.Status = OrganizationInvitationStatus.Revoked;
-        context.OrganizationInvitations.Add(replacement);
-        await context.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-        return replacement;
+        catch (Exception exception) when (
+            OrganizationInvitationRepositoryExceptionClassifier
+                .IsTransactionConcurrency(exception))
+        {
+            throw new OrganizationInvitationConcurrencyException(
+                "The invitation was changed by another request.",
+                exception);
+        }
     }
 
     public async Task<bool> RevokeAsync(
@@ -120,51 +142,70 @@ public sealed class OrganizationInvitationRepository(ScrumPilotContext context)
         DateTime utcNow,
         CancellationToken cancellationToken = default)
     {
-        await using var transaction = await context.Database.BeginTransactionAsync(
-            IsolationLevel.Serializable,
-            cancellationToken);
-        var invitation = await context.OrganizationInvitations.SingleOrDefaultAsync(
-            x => x.TokenHash == tokenHash,
-            cancellationToken);
-        if (invitation is null
-            || !FixedTimeHashEquals(invitation.TokenHash, tokenHash)
-            || invitation.Status != OrganizationInvitationStatus.Pending)
+        try
         {
-            return InvitationAcceptanceResult.Invalid;
+            await using var transaction = await context.Database.BeginTransactionAsync(
+                IsolationLevel.Serializable,
+                cancellationToken);
+            {
+                var invitation = await context.OrganizationInvitations.SingleOrDefaultAsync(
+                    x => x.TokenHash == tokenHash,
+                    cancellationToken);
+                if (invitation is null
+                    || !FixedTimeHashEquals(invitation.TokenHash, tokenHash)
+                    || invitation.Status != OrganizationInvitationStatus.Pending)
+                {
+                    return InvitationAcceptanceResult.Invalid;
+                }
+                if (invitation.NormalizedEmail != normalizedEmail)
+                {
+                    return InvitationAcceptanceResult.EmailMismatch;
+                }
+                if (invitation.ExpiresAt <= utcNow)
+                {
+                    invitation.Status = OrganizationInvitationStatus.Expired;
+                    await context.SaveChangesAsync(cancellationToken);
+                    await transaction.CommitAsync(cancellationToken);
+                    return InvitationAcceptanceResult.Expired;
+                }
+                if (await context.OrganizationMemberships.AnyAsync(
+                        x => x.OrganizationId == invitation.OrganizationId && x.UserId == userId,
+                        cancellationToken))
+                {
+                    invitation.Status = OrganizationInvitationStatus.Revoked;
+                    await context.SaveChangesAsync(cancellationToken);
+                    await transaction.CommitAsync(cancellationToken);
+                    return InvitationAcceptanceResult.ExistingMember;
+                }
+
+                context.OrganizationMemberships.Add(new OrganizationMembership
+                {
+                    OrganizationId = invitation.OrganizationId,
+                    UserId = userId,
+                    Role = invitation.Role,
+                    JoinedAt = utcNow
+                });
+                invitation.Status = OrganizationInvitationStatus.Accepted;
+                invitation.AcceptedAt = utcNow;
+                await context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return InvitationAcceptanceResult.Success;
+            }
         }
-        if (invitation.NormalizedEmail != normalizedEmail)
+        catch (Exception exception) when (
+            OrganizationInvitationRepositoryExceptionClassifier
+                .IsMembershipUniqueViolation(exception))
         {
-            return InvitationAcceptanceResult.EmailMismatch;
-        }
-        if (invitation.ExpiresAt <= utcNow)
-        {
-            invitation.Status = OrganizationInvitationStatus.Expired;
-            await context.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-            return InvitationAcceptanceResult.Expired;
-        }
-        if (await context.OrganizationMemberships.AnyAsync(
-                x => x.OrganizationId == invitation.OrganizationId && x.UserId == userId,
-                cancellationToken))
-        {
-            invitation.Status = OrganizationInvitationStatus.Revoked;
-            await context.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
             return InvitationAcceptanceResult.ExistingMember;
         }
-
-        context.OrganizationMemberships.Add(new OrganizationMembership
+        catch (Exception exception) when (
+            OrganizationInvitationRepositoryExceptionClassifier
+                .IsTransactionConcurrency(exception))
         {
-            OrganizationId = invitation.OrganizationId,
-            UserId = userId,
-            Role = invitation.Role,
-            JoinedAt = utcNow
-        });
-        invitation.Status = OrganizationInvitationStatus.Accepted;
-        invitation.AcceptedAt = utcNow;
-        await context.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-        return InvitationAcceptanceResult.Success;
+            throw new OrganizationInvitationConcurrencyException(
+                "The invitation was changed by another request.",
+                exception);
+        }
     }
 
     private static bool FixedTimeHashEquals(string left, string right)

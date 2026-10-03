@@ -60,6 +60,67 @@ public sealed class OrganizationInvitationControllerTests
         Assert.IsType<ConflictObjectResult>(result);
     }
 
+    [Theory]
+    [MemberData(nameof(AcceptanceFailures))]
+    public async Task Accept_MapsApplicationFailureToDeliberateStatus(
+        Exception exception,
+        int expectedStatus)
+    {
+        var controller = CreateController();
+        _service.AcceptAsync(
+                Arg.Any<AcceptOrganizationInvitationRequest>(),
+                Arg.Any<CancellationToken>())
+            .Returns<Task>(_ => throw exception);
+
+        var result = await controller.Accept(new("token"));
+
+        var failure = Assert.IsAssignableFrom<ObjectResult>(result);
+        Assert.Equal(expectedStatus, failure.StatusCode);
+    }
+
+    public static TheoryData<Exception, int> AcceptanceFailures => new()
+    {
+        {
+            new OrganizationValidationException("The invitation token is invalid."),
+            StatusCodes.Status400BadRequest
+        },
+        {
+            new OrganizationForbiddenException("The invitation cannot be accepted by this account."),
+            StatusCodes.Status403Forbidden
+        },
+        {
+            new OrganizationNotFoundException("The invitation was not found."),
+            StatusCodes.Status404NotFound
+        },
+        {
+            new OrganizationConflictException("The invitation cannot be accepted."),
+            StatusCodes.Status409Conflict
+        }
+    };
+
+    [Fact]
+    public async Task Resend_SuccessReturnsOk()
+    {
+        var controller = CreateController();
+        var dto = Dto();
+        _service.ResendAsync(5, 9, Arg.Any<CancellationToken>()).Returns(dto);
+
+        var result = await controller.Resend(5, 9);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.Same(dto, ok.Value);
+    }
+
+    [Fact]
+    public async Task Revoke_SuccessReturnsNoContent()
+    {
+        var controller = CreateController();
+
+        var result = await controller.Revoke(5, 9);
+
+        Assert.IsType<NoContentResult>(result);
+    }
+
     [Fact]
     public async Task List_UnauthenticatedReturnsUnauthorized()
     {
