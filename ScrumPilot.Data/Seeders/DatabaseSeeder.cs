@@ -8,13 +8,35 @@ namespace ScrumPilot.Data.Seeders
 {
     public static class DatabaseSeeder
     {
-        public static void SeedDatabase(ScrumPilotContext context)
+        public static async Task SeedDatabaseAsync(
+            ScrumPilotContext context,
+            CancellationToken cancellationToken = default)
         {
-            SeedMessageTranscripts(context);
+            await SeedMessageTranscriptsAsync(context, cancellationToken);
         }
 
-        public static async Task SeedProjectDataAsync(ScrumPilotContext context)
+        public static async Task<Organization> SeedPirateForgeOrganizationAsync(
+            ScrumPilotContext context,
+            TimeProvider timeProvider,
+            CancellationToken cancellationToken = default)
         {
+            await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+            var organization = await EnsurePirateForgeOrganizationAsync(
+                context,
+                timeProvider,
+                cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return organization;
+        }
+
+        public static async Task SeedProjectDataAsync(
+            ScrumPilotContext context,
+            CancellationToken cancellationToken = default)
+        {
+            var organizationId = await context.Organizations
+                .Where(x => x.NormalizedName == "PIRATE FORGE" && x.DeletedAt == null)
+                .Select(x => x.OrganizationId)
+                .SingleAsync(cancellationToken);
             var seedProjects = new[]
             {
                 new { Name = "ScrumPilot",        Description = "Scrum focused project management tool." },
@@ -27,11 +49,16 @@ namespace ScrumPilot.Data.Seeders
             {
                 if (!await context.Projects.AnyAsync(x => x.ProjectName == p.Name))
                 {
-                    context.Projects.Add(new Project { ProjectName = p.Name, Description = p.Description });
+                    context.Projects.Add(new Project
+                    {
+                        OrganizationId = organizationId,
+                        ProjectName = p.Name,
+                        Description = p.Description
+                    });
                     Console.WriteLine($"[SEEDER] Created project: {p.Name}");
                 }
             }
-            await context.SaveChangesAsync();
+            await context.SaveChangesAsync(cancellationToken);
 
             var project = await context.Projects.FirstOrDefaultAsync(p => p.ProjectName == "ScrumPilot");
 
@@ -494,7 +521,9 @@ namespace ScrumPilot.Data.Seeders
             Console.WriteLine($"[SEEDER] Created {history.Count} PbiStatusHistory entries for burndown accuracy.");
         }
 
-        public static async Task SeedUsersAsync(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager)
+        public static async Task SeedUsersAsync(
+            UserManager<ApplicationUser> userManager,
+            RoleManager<IdentityRole> roleManager)
         {
             // Seed roles
             string[] roles = ["Admin", "Developer"];
@@ -510,7 +539,7 @@ namespace ScrumPilot.Data.Seeders
             // Seed users — temporary dev accounts, replace before production
             var seedUsers = new[]
             {
-                new { Email = "Tyler@scrumpilot.xyz",   UserName = "Tyler",   Password = "Password1234!", Role = "Developer", DiscordUsername = (string?)null, UiPreference = UiPreference.Light },
+                new { Email = "Tyler@scrumpilot.xyz",   UserName = "Tyler",   Password = "Password1234!", Role = "Admin",     DiscordUsername = (string?)null, UiPreference = UiPreference.Light },
                 new { Email = "Nate@scrumpilot.xyz",    UserName = "Nate",    Password = "Password1234!", Role = "Developer", DiscordUsername = (string?)null, UiPreference = UiPreference.Dark },
                 new { Email = "Dylan@scrumpilot.xyz",   UserName = "Dylan",   Password = "Password1234!", Role = "Developer", DiscordUsername = (string?)null, UiPreference = UiPreference.Light },
                 new { Email = "James@scrumpilot.xyz",   UserName = "James",   Password = "Password1234!", Role = "Developer", DiscordUsername = (string?)null, UiPreference = UiPreference.Dark },
@@ -522,18 +551,36 @@ namespace ScrumPilot.Data.Seeders
 
             foreach (var seed in seedUsers)
             {
-                if (await userManager.FindByEmailAsync(seed.Email) is not null)
+                var user = await userManager.FindByEmailAsync(seed.Email);
+                if (user is not null)
                 {
+                    if (!user.EmailConfirmed)
+                    {
+                        user.EmailConfirmed = true;
+                        EnsureSucceeded(
+                            await userManager.UpdateAsync(user),
+                            $"confirm seeded user {seed.Email}");
+                    }
+
+                    if (seed.UserName == "Tyler" && !await userManager.IsInRoleAsync(user, "Admin"))
+                    {
+                        EnsureSucceeded(
+                            await userManager.AddToRoleAsync(user, "Admin"),
+                            $"assign Admin to seeded user {seed.Email}");
+                    }
+
                     Console.WriteLine($"[SEEDER] User already exists, skipping: {seed.Email}");
                     continue;
                 }
 
-                var user = new ApplicationUser { UserName = seed.UserName, Email = seed.Email, EmailConfirmed = true, DiscordUsername = seed.DiscordUsername, UiPreference = seed.UiPreference };
+                user = new ApplicationUser { UserName = seed.UserName, Email = seed.Email, EmailConfirmed = true, DiscordUsername = seed.DiscordUsername, UiPreference = seed.UiPreference };
                 var result = await userManager.CreateAsync(user, seed.Password);
 
                 if (result.Succeeded)
                 {
-                    await userManager.AddToRoleAsync(user, seed.Role);
+                    EnsureSucceeded(
+                        await userManager.AddToRoleAsync(user, seed.Role),
+                        $"assign {seed.Role} to seeded user {seed.Email}");
                     Console.WriteLine($"[SEEDER] Created user: {seed.Email} [{seed.Role}]");
                 }
                 else
@@ -543,9 +590,149 @@ namespace ScrumPilot.Data.Seeders
             }
         }
 
-        private static void SeedMessageTranscripts(ScrumPilotContext context)
+        public static async Task SeedPirateForgeMembershipsAsync(
+            ScrumPilotContext context,
+            TimeProvider timeProvider,
+            CancellationToken cancellationToken = default)
         {
-            if (context.MessageTranscripts.Any())
+            await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+            var organization = await EnsurePirateForgeOrganizationAsync(
+                context,
+                timeProvider,
+                cancellationToken);
+            var now = timeProvider.GetUtcNow().UtcDateTime;
+            var userIds = await context.Users
+                .OrderBy(x => x.Id)
+                .Select(x => x.Id)
+                .ToListAsync(cancellationToken);
+            var adminIds = await (
+                    from userRole in context.UserRoles
+                    join role in context.Roles on userRole.RoleId equals role.Id
+                    where role.NormalizedName == "ADMIN"
+                    select userRole.UserId)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+            var adminIdSet = adminIds.ToHashSet(StringComparer.Ordinal);
+            var memberships = await context.OrganizationMemberships
+                .Where(x => x.OrganizationId == organization.OrganizationId)
+                .ToDictionaryAsync(x => x.UserId, StringComparer.Ordinal, cancellationToken);
+            var newlyCreatedMemberIds = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var userId in userIds)
+            {
+                if (memberships.TryGetValue(userId, out var membership))
+                {
+                    if (adminIdSet.Contains(userId) && membership.Role != OrganizationRole.Owner)
+                    {
+                        membership.Role = OrganizationRole.Owner;
+                    }
+                    continue;
+                }
+
+                var role = adminIdSet.Contains(userId)
+                    ? OrganizationRole.Owner
+                    : OrganizationRole.Member;
+                membership = new OrganizationMembership
+                {
+                    OrganizationId = organization.OrganizationId,
+                    UserId = userId,
+                    Role = role,
+                    JoinedAt = now
+                };
+                context.OrganizationMemberships.Add(membership);
+                memberships.Add(userId, membership);
+                if (role == OrganizationRole.Member)
+                {
+                    newlyCreatedMemberIds.Add(userId);
+                }
+            }
+
+            var ownerIds = memberships.Values
+                .Where(x => x.Role == OrganizationRole.Owner)
+                .Select(x => x.UserId)
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+            var projectIds = await context.Projects
+                .Where(x => x.OrganizationId == organization.OrganizationId)
+                .Select(x => x.ProjectId)
+                .ToArrayAsync(cancellationToken);
+
+            if (ownerIds.Length > 0)
+            {
+                var ownerIdSet = ownerIds.ToHashSet(StringComparer.Ordinal);
+                var redundantOwnerGrants = await context.ProjectMemberships
+                    .Where(x => projectIds.Contains(x.ProjectId) && ownerIdSet.Contains(x.UserId))
+                    .ToListAsync(cancellationToken);
+                context.ProjectMemberships.RemoveRange(redundantOwnerGrants);
+
+                var existingGrantKeys = await context.ProjectMemberships
+                    .Where(x => projectIds.Contains(x.ProjectId) && newlyCreatedMemberIds.Contains(x.UserId))
+                    .Select(x => new { x.ProjectId, x.UserId })
+                    .ToListAsync(cancellationToken);
+                var existingGrants = existingGrantKeys
+                    .Select(x => (x.ProjectId, x.UserId))
+                    .ToHashSet();
+                foreach (var memberId in newlyCreatedMemberIds)
+                {
+                    foreach (var projectId in projectIds)
+                    {
+                        if (existingGrants.Contains((projectId, memberId)))
+                        {
+                            continue;
+                        }
+
+                        context.ProjectMemberships.Add(new ProjectMembership
+                        {
+                            ProjectId = projectId,
+                            UserId = memberId,
+                            GrantedAt = now,
+                            GrantedByUserId = ownerIds[0]
+                        });
+                    }
+                }
+            }
+
+            await context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+
+        private static async Task<Organization> EnsurePirateForgeOrganizationAsync(
+            ScrumPilotContext context,
+            TimeProvider timeProvider,
+            CancellationToken cancellationToken)
+        {
+            var organization = await context.Organizations
+                .SingleOrDefaultAsync(x => x.NormalizedName == "PIRATE FORGE", cancellationToken);
+            if (organization is not null)
+            {
+                return organization;
+            }
+
+            organization = new Organization
+            {
+                Name = "Pirate Forge",
+                NormalizedName = "PIRATE FORGE",
+                CreatedAt = timeProvider.GetUtcNow().UtcDateTime
+            };
+            context.Organizations.Add(organization);
+            await context.SaveChangesAsync(cancellationToken);
+            return organization;
+        }
+
+        private static void EnsureSucceeded(IdentityResult result, string operation)
+        {
+            if (!result.Succeeded)
+            {
+                throw new InvalidOperationException(
+                    $"Unable to {operation}: {string.Join(", ", result.Errors.Select(x => x.Description))}");
+            }
+        }
+
+        private static async Task SeedMessageTranscriptsAsync(
+            ScrumPilotContext context,
+            CancellationToken cancellationToken)
+        {
+            if (await context.MessageTranscripts.AnyAsync(cancellationToken))
             {
                 Console.WriteLine("[SEEDER] Database already has message transcripts, skipping seed.");
                 return;
@@ -579,7 +766,7 @@ namespace ScrumPilot.Data.Seeders
             };
 
             context.MessageTranscripts.Add(transcript);
-            var rowsAffected = context.SaveChanges();
+            var rowsAffected = await context.SaveChangesAsync(cancellationToken);
 
             Console.WriteLine($"[SEEDER] Successfully seeded {rowsAffected} message transcript(s).");
         }

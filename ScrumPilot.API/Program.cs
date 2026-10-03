@@ -15,6 +15,7 @@ using ScrumPilot.Data.Repositories;
 using System.Text;
 using ScrumPilot.API.Authorization;
 using ScrumPilot.API.Configuration;
+using ScrumPilot.Data.Services;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -117,16 +118,20 @@ using (var scope = app.Services.CreateScope())
     var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 
     // Apply migrations for both Postgres (Render) and SQLite (local dev)
-    context.Database.Migrate();
+    await context.Database.MigrateAsync();
 
     // Seed database with initial data (seeders are idempotent)
-    DatabaseSeeder.SeedDatabase(context);
+    await DatabaseSeeder.SeedDatabaseAsync(context);
 
     // Seed Identity users and roles
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+    var timeProvider = scope.ServiceProvider.GetRequiredService<TimeProvider>();
     await DatabaseSeeder.SeedUsersAsync(userManager, roleManager);
+    await DatabaseSeeder.SeedPirateForgeOrganizationAsync(context, timeProvider);
     await DatabaseSeeder.SeedProjectDataAsync(context);
+    await DatabaseSeeder.SeedPirateForgeMembershipsAsync(context, timeProvider);
+    await scope.ServiceProvider.GetRequiredService<OrganizationBootstrapValidator>().ValidateAsync();
 }
 
 // Configure the HTTP request pipeline.

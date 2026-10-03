@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using ScrumPilot.Data.Context;
 using ScrumPilot.Data.Models;
 using ScrumPilot.Data.Repositories;
+using ScrumPilot.Data.Services;
 
 namespace ScrumPilot.Data.Extensions
 {
@@ -60,6 +61,7 @@ namespace ScrumPilot.Data.Extensions
             services.AddScoped<IDashboardPreferenceRepository, DashboardPreferenceRepository>();
             services.AddScoped<IOrganizationRepository, OrganizationRepository>();
             services.AddScoped<IOrganizationInvitationRepository, OrganizationInvitationRepository>();
+            services.AddScoped<OrganizationBootstrapValidator>();
 
             return services;
         }
