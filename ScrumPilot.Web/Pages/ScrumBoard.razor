@@ -475,12 +475,10 @@
         await LoadItemsAsync(showLoading: false);
     }
 
-    private Task HandlePbiSave(ProductBacklogItem pbi)
+    private async Task HandlePbiSave(ProductBacklogItem pbi)
     {
-        var index = _items.FindIndex(item => item.PbiId == pbi.PbiId);
-        if (index >= 0) _items[index] = pbi;
         SelectedPbi = null;
-        return Task.CompletedTask;
+        await LoadItemsAsync(showLoading: false);
     }
 
     private async Task HandlePbiDelete(int pbiId)
@@ -511,12 +509,11 @@
         _newPbi = null;
     }
 
-    private Task HandleNewPbiSaved(ProductBacklogItem saved)
+    private async Task HandleNewPbiSaved(ProductBacklogItem saved)
     {
         _showNewPbiForm = false;
         _newPbi = null;
-        _items.Add(saved);
-        return Task.CompletedTask;
+        await LoadItemsAsync(showLoading: false);
     }
 
     private static IReadOnlyList<LaneDefinition> StatusLanes() =>

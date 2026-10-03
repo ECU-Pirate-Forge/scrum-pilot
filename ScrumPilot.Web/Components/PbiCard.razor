@@ -44,7 +44,7 @@
                                        OnClick="StartEdit">
                                 Edit
                             </MudButton>
-                            @if (PbiModel?.PbiId > 0)
+                            @if (CanUsePersistentActions)
                             {
                                 <MudButton Variant="Variant.Outlined"
                                            Color="Color.Error"
@@ -54,30 +54,33 @@
                                 </MudButton>
                             }
                         </div>
-                        <div class="pbi-button-right">
-                            <MudButton Variant="Variant.Filled"
-                                       Color="Color.Tertiary"
-                                       StartIcon="@Icons.Material.Filled.AutoAwesome"
-                                       OnClick="ImproveWithAi"
-                                       Disabled="@isImproving">
-                                @if (isImproving)
-                                {
-                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
-                                    <span>Improving...</span>
-                                }
-                                else
-                                {
-                                    <span>Improve with AI</span>
-                                }
-                            </MudButton>
-                            <MudTooltip Text="@(PbiModel?.IsFlagged == true ? "Remove flag" : "Flag this PBI")">
-                                <MudIconButton Icon="@Icons.Material.Filled.Flag"
-                                               Color="@(PbiModel?.IsFlagged == true ? Color.Error : Color.Default)"
-                                               Variant="Variant.Outlined"
-                                               Size="Size.Medium"
-                                               OnClick="HandleFlagClick" />
-                            </MudTooltip>
-                        </div>
+                        @if (CanUsePersistentActions)
+                        {
+                            <div class="pbi-button-right">
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Tertiary"
+                                           StartIcon="@Icons.Material.Filled.AutoAwesome"
+                                           OnClick="ImproveWithAi"
+                                           Disabled="@isImproving">
+                                    @if (isImproving)
+                                    {
+                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
+                                        <span>Improving...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Improve with AI</span>
+                                    }
+                                </MudButton>
+                                <MudTooltip Text="@(PbiModel?.IsFlagged == true ? "Remove flag" : "Flag this PBI")">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Flag"
+                                                   Color="@(PbiModel?.IsFlagged == true ? Color.Error : Color.Default)"
+                                                   Variant="Variant.Outlined"
+                                                   Size="Size.Medium"
+                                                   OnClick="HandleFlagClick" />
+                                </MudTooltip>
+                            </div>
+                        }
                     }
                 </div>
                 }
@@ -728,6 +731,7 @@ else
     // Delete methods
     private void ConfirmDelete()
     {
+        if (!CanUsePersistentActions) return;
         showDeleteConfirm = true;
         errorMessage = "";
     }
@@ -739,7 +743,7 @@ else
 
     private void HandleFlagClick()
     {
-        if (PbiModel == null) return;
+        if (!CanUsePersistentActions) return;
         flagReason = "";
         flagReasonError = false;
         _isUnflagging = PbiModel.IsFlagged;
@@ -748,6 +752,7 @@ else
 
     private async Task ConfirmFlag()
     {
+        if (!CanUsePersistentActions) return;
         if (string.IsNullOrWhiteSpace(flagReason))
         {
             flagReasonError = true;
@@ -786,7 +791,7 @@ else
 
     private async Task DeleteStory()
     {
-        if (PbiModel == null) return;
+        if (!CanUsePersistentActions) return;
 
         try
         {
@@ -955,7 +960,7 @@ else
 
     private async Task ImproveWithAi()
     {
-        if (PbiModel == null) return;
+        if (!CanUsePersistentActions) return;
 
         isImproving = true;
         errorMessage = "";
@@ -1035,4 +1040,7 @@ else
         ScrumPilot.Shared.Models.PbiPriority.High => Color.Error,
         _ => Color.Default
     };
+
+    private bool CanUsePersistentActions =>
+        PersistOnSave && PbiModel is { PbiId: > 0 };
 }

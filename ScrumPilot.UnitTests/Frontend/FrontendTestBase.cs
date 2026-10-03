@@ -12,13 +12,18 @@ namespace ScrumPilot.UnitTests.Frontend
     {
         protected readonly HttpClient MockHttpClient;
         protected readonly List<string> HttpRequests = [];
+        protected readonly List<(HttpMethod Method, string Url)> HttpRequestLog = [];
         protected HttpStatusCode HttpResponseStatusCode { get; set; } = HttpStatusCode.OK;
+        protected Func<HttpRequestMessage, HttpResponseMessage>? HttpResponseFactory { get; set; }
 
         protected FrontendTestBase()
         {
             Services.AddMudServices();
             MockHttpClient = new HttpClient(new RecordingHandler(
-                HttpRequests, () => HttpResponseStatusCode))
+                HttpRequests,
+                HttpRequestLog,
+                () => HttpResponseStatusCode,
+                request => HttpResponseFactory?.Invoke(request)))
             {
                 BaseAddress = new Uri("https://localhost/")
             };
@@ -46,14 +51,18 @@ namespace ScrumPilot.UnitTests.Frontend
 
         private sealed class RecordingHandler(
             List<string> requests,
-            Func<HttpStatusCode> getStatusCode) : HttpMessageHandler
+            List<(HttpMethod Method, string Url)> requestLog,
+            Func<HttpStatusCode> getStatusCode,
+            Func<HttpRequestMessage, HttpResponseMessage?> createResponse) : HttpMessageHandler
         {
             protected override Task<HttpResponseMessage> SendAsync(
                 HttpRequestMessage request,
                 CancellationToken cancellationToken)
             {
-                requests.Add(request.RequestUri!.PathAndQuery.TrimStart('/'));
-                return Task.FromResult(new HttpResponseMessage(getStatusCode())
+                var url = request.RequestUri!.PathAndQuery.TrimStart('/');
+                requests.Add(url);
+                requestLog.Add((request.Method, url));
+                return Task.FromResult(createResponse(request) ?? new HttpResponseMessage(getStatusCode())
                 {
                     Content = new StringContent("[]", System.Text.Encoding.UTF8, "application/json")
                 });

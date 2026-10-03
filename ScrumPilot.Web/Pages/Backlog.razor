@@ -424,7 +424,7 @@
             var pbiUrl = $"api/Pbi/getNonDraftPbis?projectId={_selectedProjectId.Value}";
 
             _sprints = await Http.GetFromJsonAsync<List<Sprint>>(sprintUrl) ?? new();
-            _allPbis = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(pbiUrl) ?? new();
+            await LoadPbisAsync(pbiUrl);
 
             var velocityPoints = await MetricsSvc.GetVelocityDataAsync(projectId: _selectedProjectId);
             if (velocityPoints.Count > 0)
@@ -432,6 +432,7 @@
                 var recent = velocityPoints.TakeLast(3).ToList();
                 _recommendedPoints = Math.Round(recent.Average(p => p.Completed), 1);
             }
+
             else
             {
                 _recommendedPoints = 0;
@@ -446,6 +447,25 @@
         finally
         {
             _loading = false;
+        }
+    }
+
+    private async Task LoadPbisAsync(string? url = null, bool preserveOnFailure = false)
+    {
+        if (!_selectedProjectId.HasValue)
+        {
+            _allPbis = [];
+            return;
+        }
+
+        url ??= $"api/Pbi/getNonDraftPbis?projectId={_selectedProjectId.Value}";
+        try
+        {
+            _allPbis = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(url) ?? new();
+        }
+        catch
+        {
+            if (!preserveOnFailure) throw;
         }
     }
 
@@ -528,12 +548,10 @@
 
     private void ClosePbiDetails() => SelectedPbi = null;
 
-    private Task HandlePbiSave(ProductBacklogItem pbi)
+    private async Task HandlePbiSave(ProductBacklogItem pbi)
     {
         SelectedPbi = null;
-        var idx = _allPbis.FindIndex(item => item.PbiId == pbi.PbiId);
-        if (idx >= 0) _allPbis[idx] = pbi;
-        return Task.CompletedTask;
+        await LoadPbisAsync(preserveOnFailure: true);
     }
 
     private Task HandlePbiDelete(int pbiId)
@@ -569,7 +587,7 @@
     {
         _showNewPbiForm = false;
         _newPbi = null;
-        _allPbis.Add(saved);
+        await LoadPbisAsync(preserveOnFailure: true);
         StateHasChanged();
     }
 

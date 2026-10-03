@@ -923,22 +923,12 @@
         _dialogPbi = null;
     }
 
-    private Task HandlePbiSaveFromDialog(ProductBacklogItem pbi)
+    private async Task HandlePbiSaveFromDialog(ProductBacklogItem pbi)
     {
-        var index = _pbis.FindIndex(item => item.PbiId == pbi.PbiId);
-        if (index >= 0)
-        {
-            _pbis[index] = pbi;
-            Snackbar.Add("Story updated.", Severity.Success);
-        }
-        else
-        {
-            _pbis.Insert(0, pbi);
-            Snackbar.Add("Story created.", Severity.Success);
-        }
-
+        var wasExisting = _pbis.Any(item => item.PbiId == pbi.PbiId);
+        await LoadStories();
         ClosePbiDialog();
-        return Task.CompletedTask;
+        Snackbar.Add(wasExisting ? "Story updated." : "Story created.", Severity.Success);
     }
 
     private Task HandlePbiDeleteFromDialog(int id)

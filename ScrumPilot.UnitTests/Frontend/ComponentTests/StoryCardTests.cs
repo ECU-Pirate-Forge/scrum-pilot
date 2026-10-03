@@ -200,5 +200,37 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
                 Assert.Contains(HttpRequests, request =>
                     request.Equals("api/Pbi", StringComparison.OrdinalIgnoreCase)));
         }
+
+        [Theory]
+        [InlineData(false, 1)]
+        [InlineData(true, 0)]
+        public void PbiCard_HidesPersistenceActions_WhenCardCannotPersist(
+            bool persistOnSave, int pbiId)
+        {
+            var pbi = CreateTestPbi();
+            pbi.PbiId = pbiId;
+
+            var component = Render<PbiCard>(parameters => parameters
+                .Add(p => p.PbiModel, pbi)
+                .Add(p => p.PersistOnSave, persistOnSave));
+
+            Assert.DoesNotContain("Improve with AI", component.Markup);
+            Assert.DoesNotContain(component.FindAll("button"),
+                button => button.TextContent.Trim() == "Delete");
+            Assert.Empty(component.FindAll(".mud-icon-button"));
+            Assert.Empty(HttpRequests);
+        }
+
+        [Fact]
+        public void PbiCard_ShowsPersistenceActions_WhenCardIsPersisted()
+        {
+            var component = Render<PbiCard>(parameters => parameters
+                .Add(p => p.PbiModel, CreateTestPbi()));
+
+            Assert.Contains("Improve with AI", component.Markup);
+            Assert.Contains(component.FindAll("button"),
+                button => button.TextContent.Trim() == "Delete");
+            Assert.NotEmpty(component.FindAll(".mud-icon-button"));
+        }
     }
 }
