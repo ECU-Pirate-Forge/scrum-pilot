@@ -275,10 +275,15 @@ public class TenantIsolationControllerTests
     }
 
     [Fact]
-    public async Task UserSettings_RejectForeignDefaultProject()
+    public async Task UserSettings_ReturnsBadRequestForInvalidDefaultProject()
     {
         var service = Substitute.For<IUserSettingsService>();
-        _access.CanAccessProjectAsync("user-a", 22).Returns(false);
+        service.UpdateSettingsAsync(
+                "user-a",
+                Arg.Any<UserSettingsDto>(),
+                Arg.Any<CancellationToken>())
+            .Returns(UserSettingsUpdateResult.Validation(
+                "The selected default project is not available."));
         var controller = new UserController(service, _currentUser, _access);
 
         var result = await controller.UpdateSettings(new UserSettingsDto
@@ -286,9 +291,10 @@ public class TenantIsolationControllerTests
             DefaultProjectId = 22
         });
 
-        Assert.IsType<NotFoundResult>(result);
-        await _access.Received(1).CanAccessProjectAsync("user-a", 22, default);
-        await service.DidNotReceive().UpdateSettingsAsync(
-            Arg.Any<string>(), Arg.Any<UserSettingsDto>());
+        Assert.IsType<BadRequestObjectResult>(result);
+        await service.Received(1).UpdateSettingsAsync(
+            "user-a",
+            Arg.Any<UserSettingsDto>(),
+            default);
     }
 }

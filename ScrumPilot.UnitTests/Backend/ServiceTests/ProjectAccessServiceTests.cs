@@ -197,14 +197,34 @@ public sealed class ProjectAccessServiceTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task DeleteAsync_RemovesProject()
+    public async Task SetAccessAsync_RevokePreservesDifferentProjectDefault()
     {
         await SeedAsync();
         ConfigureOwnerMutation();
+        var member = await _context.Users.SingleAsync(x => x.Id == "member");
+        member.DefaultProjectId = 11;
+        await _context.SaveChangesAsync();
+
+        await _service.SetAccessAsync("owner", 10, "member", new(false));
+
+        await _context.Entry(member).ReloadAsync();
+        Assert.Equal(11, member.DefaultProjectId);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_RemovesProjectAndClearsMatchingDefaults()
+    {
+        await SeedAsync();
+        ConfigureOwnerMutation();
+        var member = await _context.Users.SingleAsync(x => x.Id == "member");
+        member.DefaultProjectId = 10;
+        await _context.SaveChangesAsync();
 
         await _service.DeleteAsync("owner", 10);
 
         Assert.False(await _context.Projects.AnyAsync(x => x.ProjectId == 10));
+        await _context.Entry(member).ReloadAsync();
+        Assert.Null(member.DefaultProjectId);
     }
 
     public async ValueTask DisposeAsync()

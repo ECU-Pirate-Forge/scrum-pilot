@@ -255,6 +255,27 @@ public sealed class OrganizationRepository(ScrumPilotContext context) : IOrganiz
             return OrganizationMutationResult.LastOwner;
         }
 
+        if (membership.Role == OrganizationRole.Owner && role != OrganizationRole.Owner)
+        {
+            var user = await context.Users.SingleAsync(
+                candidate => candidate.Id == userId,
+                cancellationToken);
+            if (user.DefaultProjectId.HasValue
+                && await context.Projects.AnyAsync(
+                    project =>
+                        project.ProjectId == user.DefaultProjectId.Value
+                        && project.OrganizationId == organizationId,
+                    cancellationToken)
+                && !await context.ProjectMemberships.AnyAsync(
+                    projectMembership =>
+                        projectMembership.ProjectId == user.DefaultProjectId.Value
+                        && projectMembership.UserId == userId,
+                    cancellationToken))
+            {
+                user.DefaultProjectId = null;
+            }
+        }
+
         membership.Role = role;
         organization.RowVersion = Guid.NewGuid().ToByteArray();
         var result = await SaveMutationAsync(cancellationToken);

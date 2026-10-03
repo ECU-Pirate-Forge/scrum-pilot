@@ -166,6 +166,42 @@ public sealed class OrganizationServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task UpdateMemberRoleAsync_DemotingOwnerClearsInaccessibleProjectDefault()
+    {
+        await SeedUserAsync("creator");
+        await SeedUserAsync("second-owner");
+        var organization = await SeedOrganizationAsync(
+            "Owners",
+            ("creator", OrganizationRole.Owner),
+            ("second-owner", OrganizationRole.Owner));
+        var project = new Project
+        {
+            ProjectName = "Implicit access",
+            OrganizationId = organization.OrganizationId
+        };
+        _context.Projects.Add(project);
+        await _context.SaveChangesAsync();
+        var creator = await _context.Users.SingleAsync(user => user.Id == "creator");
+        creator.DefaultOrganizationId = organization.OrganizationId;
+        creator.DefaultProjectId = project.ProjectId;
+        await _context.SaveChangesAsync();
+        _access.IsOrganizationOwnerAsync(
+                "creator",
+                organization.OrganizationId,
+                Arg.Any<CancellationToken>())
+            .Returns(true);
+
+        await _service.UpdateMemberRoleAsync(
+            organization.OrganizationId,
+            "creator",
+            new(OrganizationRole.Member));
+
+        await _context.Entry(creator).ReloadAsync();
+        Assert.Equal(organization.OrganizationId, creator.DefaultOrganizationId);
+        Assert.Null(creator.DefaultProjectId);
+    }
+
+    [Fact]
     public async Task RemoveMemberAsync_CleansProjectMembershipAndDefaults()
     {
         await SeedUserAsync("creator");

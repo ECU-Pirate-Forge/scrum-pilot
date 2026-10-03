@@ -30,12 +30,12 @@ public class UserController(
         [FromBody] UserSettingsDto dto,
         CancellationToken cancellationToken = default)
     {
-        if (dto.DefaultProjectId.HasValue
-            && !await accessService.CanAccessProjectAsync(
-                currentUser.UserId, dto.DefaultProjectId.Value, cancellationToken))
-            return NotFound();
-        var success = await service.UpdateSettingsAsync(currentUser.UserId, dto);
-        return success ? NoContent() : BadRequest("Failed to update settings.");
+        var result = await service.UpdateSettingsAsync(
+            currentUser.UserId,
+            dto,
+            cancellationToken);
+        if (!result.UserFound) return Unauthorized();
+        return result.Succeeded ? NoContent() : BadRequest(new { errors = result.Errors });
     }
 
     /// <summary>Returns a lightweight summary of every registered user for assignment dropdowns.</summary>
