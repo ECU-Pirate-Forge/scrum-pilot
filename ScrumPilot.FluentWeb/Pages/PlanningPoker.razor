@@ -1,8 +1,586 @@
 @page "/planning-poker"
+@using Microsoft.AspNetCore.SignalR
+@using Microsoft.AspNetCore.SignalR.Client
+@using ScrumPilot.FluentWeb.Components.PlanningPoker
+@using ScrumPilot.FluentWeb.Services.PlanningPoker
+@using ScrumPilot.Shared.Models.PlanningPoker
+@inject HttpClient Http
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ProjectStateService ProjectState
+@inject ILogger<PlanningPoker> Logger
+@inject IAppNotificationService Notifications
+@inject IServiceProvider ServiceProvider
+@implements IAsyncDisposable
 
 <PageTitle>Planning Poker</PageTitle>
 
-<div class="page-shell">
-    <h1>Planning Poker</h1>
-    <p>Estimate stories with the team using a shared relative-sizing workflow.</p>
+<div class="pp-page">
+    <AppPageHeader Title="Planning Poker" Subtitle="Estimate stories with the team using a shared relative-sizing workflow.">
+        <Actions>
+            <div class="pp-header-actions">
+                @if (_currentPbiId.HasValue)
+                {
+                    <FluentButton Appearance="ButtonAppearance.Primary"
+                                  Disabled="@(_revealed || !_isSessionJoined)"
+                                  OnClick="RevealAsync">
+                        Reveal
+                    </FluentButton>
+                    <FluentButton Appearance="ButtonAppearance.Outline"
+                                  Disabled="@(!_isSessionJoined)"
+                                  OnClick="ResetAsync">
+                        Re-vote
+                    </FluentButton>
+                }
+            </div>
+        </Actions>
+    </AppPageHeader>
+
+    <FluentMessageBar Intent="@ConnectionIntent" Class="pp-connection-bar">
+        <span>@_connectionStatus</span>
+    </FluentMessageBar>
+
+    @if (!string.IsNullOrWhiteSpace(_loadError))
+    {
+        <FluentMessageBar Intent="MessageBarIntent.Warning" Class="pp-connection-bar">
+            @_loadError
+        </FluentMessageBar>
+    }
+
+    <PlanningPokerStoryPanel SelectedPbi="_selectedPbi"
+                             BacklogItems="_unassignedPbis"
+                             CurrentPbiId="_currentPbiId"
+                             CanSelectStories="_isSessionJoined"
+                             Revealed="_revealed"
+                             SuggestedDisplay="@SuggestedDisplay"
+                             CanIncreaseSuggested="@(_revealed && _suggestedPointIndex >= 0 && _suggestedPointIndex < ValidPoints.Length - 1)"
+                             CanDecreaseSuggested="@(_revealed && _suggestedPointIndex > 0)"
+                             CanCommitSuggested="@(_revealed && _suggestedPointIndex >= 0 && !_pointsCommitting)"
+                             PointsCommitting="_pointsCommitting"
+                             SelectPbi="SelectPbiAsync"
+                             IncreaseSuggested="IncreaseSuggested"
+                             DecreaseSuggested="DecreaseSuggested"
+                             CommitSuggestedPoints="CommitSuggestedPoints" />
+
+    <section class="pp-voting-region" aria-labelledby="planning-poker-voting-heading">
+        <div class="pp-bottom-left">
+            <PlanningPokerParticipantsList Participants="_participants"
+                                           Revealed="_revealed"
+                                           MyConnectionId="_myConnectionId"
+                                           IsSessionJoined="_isSessionJoined" />
+        </div>
+        <div class="pp-bottom-right">
+            <FluentText Tag="TextTag.H2" Size="TextSize.Size400" Weight="TextWeight.Semibold" Id="planning-poker-voting-heading">Your estimate</FluentText>
+            @if (_isSessionJoined && _currentPbiId.HasValue && !_revealed)
+            {
+                <PlanningPokerVoteCards IsEnabled="true" SelectedVote="_myVote" OnVote="CastVoteAsync" />
+            }
+            else if (_revealed)
+            {
+                <p class="sp-muted">Cards are revealed. Reset voting to estimate again.</p>
+            }
+            else
+            {
+                <p class="sp-muted">Select a story after connecting to start voting.</p>
+            }
+        </div>
+    </section>
+
+    <div class="pp-live-region" role="status" aria-live="polite">@LiveRegionText</div>
 </div>
+
+@code {
+    private static readonly int[] ValidPoints = [0, 1, 2, 3, 5, 8, 13, 21];
+
+    private HubConnection? _hub;
+    private IReadOnlyList<ProductBacklogItem>? _unassignedPbis;
+    private ProductBacklogItem? _selectedPbi;
+    private int? _currentPbiId;
+    private bool _revealed;
+    private List<ParticipantState> _participants = [];
+    private int? _myVote;
+    private string _myConnectionId = string.Empty;
+    private string _myDisplayName = "Anonymous";
+    private string _connectionStatus = "Connecting to planning poker...";
+    private string? _loadError;
+    private bool _isSessionJoined;
+    private int _suggestedPointIndex = -1;
+    private bool _pointsCommitting;
+    private IPlanningPokerHubConnectionFactory? _hubFactory;
+
+    private string SuggestedDisplay => _suggestedPointIndex < 0 ? "-" : ValidPoints[_suggestedPointIndex].ToString();
+
+    private string LiveRegionText => _revealed
+        ? $"Cards revealed. Suggested points {SuggestedDisplay}."
+        : _myVote.HasValue
+            ? $"Your vote {DisplayPoints(_myVote)} was submitted."
+            : _connectionStatus;
+
+    private MessageBarIntent ConnectionIntent => _hub?.State switch
+    {
+        HubConnectionState.Connected when _isSessionJoined => MessageBarIntent.Success,
+        HubConnectionState.Connected => MessageBarIntent.Warning,
+        HubConnectionState.Connecting or HubConnectionState.Reconnecting => MessageBarIntent.Warning,
+        _ => MessageBarIntent.Error
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _hubFactory = ServiceProvider.GetService<IPlanningPokerHubConnectionFactory>()
+            ?? new PlanningPokerHubConnectionFactory();
+        ProjectState.OnChange += HandleProjectStateChanged;
+        await LoadUnassignedPbisAsync();
+        await InitHubAsync();
+    }
+
+    private void HandleProjectStateChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            ClearLocalSession();
+
+            if (_hub is not null)
+            {
+                await _hub.DisposeAsync();
+                _hub = null;
+            }
+
+            await LoadUnassignedPbisAsync();
+            await InitHubAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadUnassignedPbisAsync()
+    {
+        try
+        {
+            _loadError = null;
+            var url = "api/Pbi/getNonDraftPbis";
+            if (ProjectState.SelectedProjectId.HasValue)
+            {
+                url += $"?projectId={ProjectState.SelectedProjectId.Value}";
+            }
+
+            var all = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(url);
+            _unassignedPbis = all?.Where(p => p.SprintId is null).ToList() ?? [];
+            if (_currentPbiId.HasValue)
+            {
+                _selectedPbi = _unassignedPbis.FirstOrDefault(p => p.PbiId == _currentPbiId.Value) ?? _selectedPbi;
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or NotSupportedException or System.Text.Json.JsonException)
+        {
+            Logger.LogWarning(ex, "Unable to load planning poker backlog items.");
+            _loadError = "Backlog stories could not be loaded.";
+            _unassignedPbis = [];
+        }
+    }
+
+    private async Task InitHubAsync()
+    {
+        var configuration = ServiceProvider.GetService<IConfiguration>();
+        if (configuration is null || configuration.GetValue<bool>("PlanningPoker:DisableHubConnection"))
+        {
+            _connectionStatus = "Disconnected from planning poker";
+            _isSessionJoined = false;
+            return;
+        }
+
+        try
+        {
+            var token = await JS.InvokeAsync<string?>("localStorage.getItem", "authToken");
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            _myDisplayName = authState.User.Identity?.Name
+                ?? authState.User.FindFirst("email")?.Value
+                ?? "Anonymous";
+
+            var apiBase = configuration["ApiBaseUrl"] ?? "http://localhost:5219/";
+            var hubUrl = new Uri(new Uri(apiBase), "hubs/planning-poker").ToString();
+
+            _hub = _hubFactory!.Create(hubUrl, () => Task.FromResult(token));
+            RegisterHubHandlers(_hub);
+
+            await _hub.StartAsync();
+            _myConnectionId = _hub.ConnectionId ?? string.Empty;
+            _connectionStatus = "Joining planning poker...";
+            await JoinCurrentSessionAsync();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException
+                                   or HttpRequestException
+                                   or OperationCanceledException
+                                   or TimeoutException
+                                   or System.Net.WebSockets.WebSocketException)
+        {
+            Logger.LogWarning(ex, "Unable to connect to the planning poker hub.");
+            _connectionStatus = "Disconnected from planning poker";
+            _isSessionJoined = false;
+        }
+    }
+
+    private void RegisterHubHandlers(HubConnection hub)
+    {
+        hub.On<PokerSessionState>("ReceiveSessionState", state =>
+        {
+            ApplySessionState(state);
+            return InvokeAsync(StateHasChanged);
+        });
+
+        hub.On<ParticipantState>("UserJoined", participant =>
+        {
+            if (_participants.All(p => p.ConnectionId != participant.ConnectionId))
+            {
+                _participants.Add(participant);
+            }
+
+            return InvokeAsync(StateHasChanged);
+        });
+
+        hub.On<string>("UserLeft", connectionId =>
+        {
+            _participants.RemoveAll(p => p.ConnectionId == connectionId);
+            return InvokeAsync(StateHasChanged);
+        });
+
+        hub.On<string>("CardSelected", connectionId =>
+        {
+            var participant = _participants.FirstOrDefault(p => p.ConnectionId == connectionId);
+            if (participant is not null)
+            {
+                participant.HasVoted = true;
+            }
+
+            return InvokeAsync(StateHasChanged);
+        });
+
+        hub.On<PokerSessionState>("CardsRevealed", state =>
+        {
+            ApplySessionState(state);
+            ComputeSuggestedPoints();
+            return InvokeAsync(StateHasChanged);
+        });
+
+        hub.On<PokerSessionState>("PbiSelected", state =>
+        {
+            ApplySessionState(state);
+            _suggestedPointIndex = -1;
+            if (state.CurrentPbiId.HasValue)
+            {
+                _selectedPbi = _unassignedPbis?.FirstOrDefault(p => p.PbiId == state.CurrentPbiId.Value);
+            }
+
+            return InvokeAsync(StateHasChanged);
+        });
+
+        hub.On<PokerSessionState>("VotingReset", state =>
+        {
+            ApplySessionState(state);
+            _myVote = null;
+            _suggestedPointIndex = -1;
+            return InvokeAsync(StateHasChanged);
+        });
+
+        hub.Reconnecting += exception =>
+        {
+            Logger.LogInformation(exception, "Planning poker hub reconnecting.");
+            _connectionStatus = "Reconnecting to planning poker...";
+            _isSessionJoined = false;
+            return InvokeAsync(StateHasChanged);
+        };
+
+        hub.Reconnected += async _ =>
+        {
+            _connectionStatus = "Joining planning poker...";
+            _isSessionJoined = false;
+            await JoinCurrentSessionAsync();
+            await InvokeAsync(StateHasChanged);
+        };
+
+        hub.Closed += exception =>
+        {
+            if (exception is not null)
+            {
+                Logger.LogWarning(exception, "Planning poker hub closed.");
+            }
+
+            _connectionStatus = "Disconnected from planning poker";
+            _isSessionJoined = false;
+            return InvokeAsync(StateHasChanged);
+        };
+    }
+
+    private async Task JoinCurrentSessionAsync()
+    {
+        if (_hub is null)
+        {
+            return;
+        }
+
+        if (await InvokeHubOperationAsync(() => _hub.InvokeAsync("JoinSession", _myDisplayName, ProjectState.SelectedProjectId ?? 0)))
+        {
+            _isSessionJoined = true;
+            _connectionStatus = "Connected to planning poker";
+        }
+    }
+
+    private void ApplySessionState(PokerSessionState state)
+    {
+        _currentPbiId = state.CurrentPbiId;
+        _revealed = state.Revealed;
+        _participants = state.Participants;
+
+        if (string.IsNullOrEmpty(_myConnectionId) && _hub?.ConnectionId is not null)
+        {
+            _myConnectionId = _hub.ConnectionId;
+        }
+
+        if (_currentPbiId.HasValue)
+        {
+            _selectedPbi = _unassignedPbis?.FirstOrDefault(p => p.PbiId == _currentPbiId.Value) ?? _selectedPbi;
+        }
+
+        var me = _participants.FirstOrDefault(p => p.ConnectionId == _myConnectionId);
+        if (me is not null && me.HasVoted && state.Revealed)
+        {
+            _myVote = me.Points;
+        }
+    }
+
+    private async Task SelectPbiAsync(ProductBacklogItem pbi)
+    {
+        if (!_isSessionJoined || _hub is null)
+        {
+            return;
+        }
+
+        if (!await InvokeHubOperationAsync(() => _hub.InvokeAsync("SelectPbi", pbi.PbiId)))
+        {
+            return;
+        }
+
+        _selectedPbi = pbi;
+        _currentPbiId = pbi.PbiId;
+        _revealed = false;
+        _myVote = null;
+        _suggestedPointIndex = -1;
+        foreach (var participant in _participants)
+        {
+            participant.HasVoted = false;
+            participant.Points = null;
+        }
+    }
+
+    private async Task CastVoteAsync(int points)
+    {
+        if (!_isSessionJoined || !_currentPbiId.HasValue || _hub is null)
+        {
+            return;
+        }
+
+        if (!await InvokeHubOperationAsync(() => _hub.InvokeAsync("SelectCard", points == -1 ? null : points)))
+        {
+            return;
+        }
+
+        _myVote = points;
+        var me = _participants.FirstOrDefault(p => p.ConnectionId == _myConnectionId);
+        if (me is not null)
+        {
+            me.HasVoted = true;
+        }
+    }
+
+    private Task RevealAsync()
+    {
+        return _isSessionJoined && _hub is not null
+            ? InvokeHubOperationAsync(() => _hub.InvokeAsync("RevealCards"))
+            : Task.CompletedTask;
+    }
+
+    private async Task ResetAsync()
+    {
+        if (!_isSessionJoined || _hub is null)
+        {
+            return;
+        }
+
+        if (await InvokeHubOperationAsync(() => _hub.InvokeAsync("ResetVoting")))
+        {
+            _myVote = null;
+        }
+    }
+
+    private async Task HandlePbiSaveAsync(ProductBacklogItem pbi)
+    {
+        var capturedPbiId = _currentPbiId;
+        var capturedProjectId = ProjectState.SelectedProjectId;
+        var capturedHub = _hub;
+
+        await LoadUnassignedPbisAsync();
+
+        if (!PlanningPokerSaveGuard.ShouldClearSelection(
+                pbi.PbiId,
+                capturedPbiId,
+                capturedProjectId,
+                capturedHub,
+                _currentPbiId,
+                ProjectState.SelectedProjectId,
+                _hub,
+                _unassignedPbis?.Select(item => item.PbiId).ToArray() ?? []))
+        {
+            return;
+        }
+
+        _selectedPbi = null;
+        _currentPbiId = null;
+
+        if (capturedHub?.State == HubConnectionState.Connected && capturedPbiId.HasValue)
+        {
+            await InvokeHubOperationAsync(() => capturedHub.InvokeAsync("ClearPbiIfSelected", capturedPbiId.Value));
+        }
+    }
+
+    private async Task<bool> InvokeHubOperationAsync(Func<Task> operation)
+    {
+        try
+        {
+            await operation();
+            return true;
+        }
+        catch (HubException ex)
+        {
+            HandleHubOperationFailure(ex);
+            return false;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException
+                                   or ObjectDisposedException
+                                   or OperationCanceledException
+                                   or HttpRequestException
+                                   or IOException
+                                   or System.Net.WebSockets.WebSocketException
+                                   or TimeoutException)
+        {
+            HandleHubOperationFailure(ex);
+            return false;
+        }
+    }
+
+    private void HandleHubOperationFailure(Exception exception)
+    {
+        var failure = PlanningPokerInvocationError.Classify(exception);
+        Logger.LogWarning(exception, "Planning poker hub operation failed with {Failure}.", failure);
+
+        if (failure == PlanningPokerInvocationFailure.Rejected)
+        {
+            Notifications.ShowError("The planning poker operation was rejected.");
+            return;
+        }
+
+        ClearLocalSession();
+        if (failure == PlanningPokerInvocationFailure.AccessDenied)
+        {
+            _connectionStatus = "Access denied to planning poker";
+            Notifications.ShowError("Planning poker access was denied.");
+            return;
+        }
+
+        _connectionStatus = "Disconnected from planning poker";
+        Notifications.ShowWarning("The planning poker session disconnected.");
+    }
+
+    private void ClearLocalSession()
+    {
+        _isSessionJoined = false;
+        _selectedPbi = null;
+        _currentPbiId = null;
+        _revealed = false;
+        _myVote = null;
+        _suggestedPointIndex = -1;
+        _participants = [];
+        _myConnectionId = string.Empty;
+    }
+
+    private void ComputeSuggestedPoints()
+    {
+        var validVotes = _participants
+            .Where(p => p.HasVoted && p.Points.HasValue && p.Points.Value > 0)
+            .Select(p => p.Points!.Value)
+            .ToList();
+
+        var target = validVotes.Count > 0
+            ? (int)Math.Round(validVotes.Average())
+            : 0;
+
+        var nearest = ValidPoints.MinBy(v => Math.Abs(v - target));
+        _suggestedPointIndex = Array.IndexOf(ValidPoints, nearest);
+        if (_suggestedPointIndex < 0)
+        {
+            _suggestedPointIndex = 0;
+        }
+    }
+
+    private void IncreaseSuggested()
+    {
+        if (_suggestedPointIndex < ValidPoints.Length - 1)
+        {
+            _suggestedPointIndex++;
+        }
+    }
+
+    private void DecreaseSuggested()
+    {
+        if (_suggestedPointIndex > 0)
+        {
+            _suggestedPointIndex--;
+        }
+    }
+
+    private async Task CommitSuggestedPoints()
+    {
+        if (_selectedPbi is null || _suggestedPointIndex < 0)
+        {
+            return;
+        }
+
+        _pointsCommitting = true;
+        try
+        {
+            _selectedPbi.StoryPoints = (PbiPoints)ValidPoints[_suggestedPointIndex];
+            var response = await Http.PutAsJsonAsync("api/Pbi", _selectedPbi);
+            if (response.IsSuccessStatusCode)
+            {
+                Notifications.ShowSuccess("Story points saved.");
+                await HandlePbiSaveAsync(_selectedPbi);
+                return;
+            }
+
+            Logger.LogWarning("Planning poker story point commit failed with status {StatusCode}.", response.StatusCode);
+            Notifications.ShowError("Story points could not be saved.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or NotSupportedException or System.Text.Json.JsonException)
+        {
+            Logger.LogWarning(ex, "Unable to commit planning poker suggested points.");
+            Notifications.ShowError("Story points could not be saved.");
+        }
+        finally
+        {
+            _pointsCommitting = false;
+        }
+    }
+
+    private static string DisplayPoints(int? points) => points switch
+    {
+        null => "?",
+        -1 => "?",
+        _ => points.Value.ToString()
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        ProjectState.OnChange -= HandleProjectStateChanged;
+        if (_hub is not null)
+        {
+            await _hub.DisposeAsync();
+        }
+    }
+}

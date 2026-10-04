@@ -1,0 +1,70 @@
+<WidgetCard Title="Remaining Story Points">
+    @if (_loading)
+    {
+        <div class="widget-center"><FluentSpinner Label="Loading remaining points" /></div>
+    }
+    else if (!SprintId.HasValue)
+    {
+        <div class="widget-empty">No sprint selected</div>
+    }
+    else
+    {
+        <div class="stat-card-content" style="text-align: center;">
+            <div class="stat-number" style="color: #ff9800;">@_remaining.ToString("0")</div>
+            <div class="stat-label">Remaining</div>
+            @if (_total > 0)
+            {
+                <div class="metric-progress-track" aria-label="Completed story point percentage">
+                    <div class="metric-progress-fill" style="width: @CompletedWidth; background: #ff9800;"></div>
+                </div>
+                <FluentText Size="TextSize.Size200" Class="stat-caption">
+                    @((_total - _remaining).ToString("0")) of @_total.ToString("0") points done
+                </FluentText>
+            }
+        </div>
+    }
+</WidgetCard>
+
+@code {
+    [Parameter] public int? SprintId { get; set; }
+    [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
+    [Inject] private ILogger<RemainingPointsWidget> Logger { get; set; } = default!;
+
+    private double _remaining;
+    private double _total;
+    private double _completedPercent;
+    private bool _loading = true;
+    private int? _lastSprintId = -1;
+    private string CompletedWidth => $"{_completedPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}%";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_lastSprintId == SprintId) return;
+        _lastSprintId = SprintId;
+        _loading = true;
+        try
+        {
+            if (SprintId.HasValue)
+            {
+                var progress = await MetricsSvc.GetSprintProgressAsync(SprintId.Value);
+                _total = progress.CommittedPoints;
+                _remaining = Math.Max(0, progress.CommittedPoints - progress.CompletedPoints);
+                _completedPercent = _total > 0 ? Math.Clamp(progress.CompletedPoints / _total * 100, 0, 100) : 0;
+            }
+            else
+            {
+                _remaining = 0;
+                _total = 0;
+                _completedPercent = 0;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load remaining points for sprint {SprintId}", SprintId);
+            _remaining = 0;
+            _total = 0;
+            _completedPercent = 0;
+        }
+        _loading = false;
+    }
+}

@@ -1,0 +1,118 @@
+@using ScrumPilot.Shared.Models
+
+<section class="pp-story-panel" aria-labelledby="planning-poker-story-heading">
+    <div class="pp-story-main">
+        @if (SelectedPbi is not null)
+        {
+            <FluentCard Class="pp-story-card">
+                <div class="sp-row-between pp-story-title-row">
+                    <div>
+                        <FluentText Tag="TextTag.H2" Size="TextSize.Size600" Weight="TextWeight.Semibold" Id="planning-poker-story-heading">@SelectedPbi.Title</FluentText>
+                        <p class="sp-muted pp-story-meta">@SelectedPbi.Type • @SelectedPbi.Status • @((int)SelectedPbi.StoryPoints) points</p>
+                    </div>
+                    <FluentBadge Color="@PriorityColor(SelectedPbi.Priority)" Appearance="BadgeAppearance.Tint">@SelectedPbi.Priority</FluentBadge>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(SelectedPbi.Description))
+                {
+                    <p class="pp-story-description">@SelectedPbi.Description</p>
+                }
+                else
+                {
+                    <p class="sp-muted">No description has been added for this story.</p>
+                }
+            </FluentCard>
+
+            <FluentCard Class="pp-suggest-wrap" aria-live="polite">
+                <FluentText Tag="TextTag.H3" Size="TextSize.Size300" Weight="TextWeight.Semibold">Suggested points</FluentText>
+                <div class="pp-suggest-counter">
+                    <FluentButton Appearance="ButtonAppearance.Outline"
+                                  Disabled="@(!CanDecreaseSuggested)"
+                                  Title="Decrease suggested points"
+                                  OnClick="DecreaseSuggested">
+                        −
+                    </FluentButton>
+                    <span class="pp-suggest-value" aria-label="@($"Suggested points {SuggestedDisplay}")">@SuggestedDisplay</span>
+                    <FluentButton Appearance="ButtonAppearance.Outline"
+                                  Disabled="@(!CanIncreaseSuggested)"
+                                  Title="Increase suggested points"
+                                  OnClick="IncreaseSuggested">
+                        +
+                    </FluentButton>
+                    <FluentButton Appearance="ButtonAppearance.Primary"
+                                  Disabled="@(!CanCommitSuggested)"
+                                  Loading="@PointsCommitting"
+                                  OnClick="CommitSuggestedPoints">
+                        @(PointsCommitting ? "Saving..." : "Commit")
+                    </FluentButton>
+                </div>
+                @if (!Revealed)
+                {
+                    <span class="sp-muted pp-small">Reveal cards before committing the team estimate.</span>
+                }
+            </FluentCard>
+        }
+        else
+        {
+            <AppEmptyState Title="Select a story"
+                           Message="Choose a backlog item to share it with the team and begin voting."
+                           Icon="@(new Icons.Regular.Size24.HandRight())" />
+        }
+    </div>
+
+    <aside class="pp-backlog-panel" aria-labelledby="planning-poker-backlog-heading">
+        <FluentText Tag="TextTag.H2" Size="TextSize.Size400" Weight="TextWeight.Semibold" Id="planning-poker-backlog-heading">Backlog</FluentText>
+        @if (BacklogItems is null)
+        {
+            <AppLoadingState Message="Loading backlog stories..." />
+        }
+        else if (BacklogItems.Count == 0)
+        {
+            <p class="sp-muted">No unassigned stories.</p>
+        }
+        else
+        {
+            <div class="pp-backlog-list" role="list">
+                @foreach (var pbi in BacklogItems)
+                {
+                    var active = CurrentPbiId == pbi.PbiId;
+                    <button type="button"
+                            class="@($"pp-pbi-item {(active ? "pp-pbi-active" : string.Empty)}")"
+                            aria-pressed="@(active.ToString().ToLowerInvariant())"
+                            disabled="@(!CanSelectStories)"
+                            @onclick="() => SelectPbi.InvokeAsync(pbi)">
+                        <span class="pp-pbi-title">@pbi.Title</span>
+                        <span class="pp-pbi-badges">
+                            <FluentBadge Color="@PriorityColor(pbi.Priority)" Appearance="BadgeAppearance.Tint">@pbi.Priority</FluentBadge>
+                            <FluentBadge Appearance="BadgeAppearance.Outline">@((int)pbi.StoryPoints) pts</FluentBadge>
+                        </span>
+                    </button>
+                }
+            </div>
+        }
+    </aside>
+</section>
+
+@code {
+    [Parameter] public ProductBacklogItem? SelectedPbi { get; set; }
+    [Parameter] public IReadOnlyList<ProductBacklogItem>? BacklogItems { get; set; }
+    [Parameter] public int? CurrentPbiId { get; set; }
+    [Parameter] public bool CanSelectStories { get; set; }
+    [Parameter] public bool Revealed { get; set; }
+    [Parameter] public string SuggestedDisplay { get; set; } = "-";
+    [Parameter] public bool CanIncreaseSuggested { get; set; }
+    [Parameter] public bool CanDecreaseSuggested { get; set; }
+    [Parameter] public bool CanCommitSuggested { get; set; }
+    [Parameter] public bool PointsCommitting { get; set; }
+    [Parameter] public EventCallback<ProductBacklogItem> SelectPbi { get; set; }
+    [Parameter] public EventCallback IncreaseSuggested { get; set; }
+    [Parameter] public EventCallback DecreaseSuggested { get; set; }
+    [Parameter] public EventCallback CommitSuggestedPoints { get; set; }
+
+    private static BadgeColor PriorityColor(PbiPriority priority) => priority switch
+    {
+        PbiPriority.High => BadgeColor.Danger,
+        PbiPriority.Medium => BadgeColor.Warning,
+        PbiPriority.Low => BadgeColor.Success,
+        _ => BadgeColor.Subtle
+    };
+}

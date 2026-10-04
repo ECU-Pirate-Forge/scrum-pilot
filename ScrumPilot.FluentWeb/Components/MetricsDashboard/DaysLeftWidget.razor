@@ -1,0 +1,49 @@
+<WidgetCard Title="Days Left in Sprint">
+    @if (Sprint is not null && Sprint.StartDate.HasValue && Sprint.EndDate.HasValue)
+    {
+        <div class="stat-card-content" style="text-align: center;">
+            <div class="stat-number" style="color: #1e88e5;">@_daysLeft</div>
+            <div class="stat-label">Days left</div>
+            @if (_totalDays > 0)
+            {
+                <div class="metric-progress-track" aria-label="Sprint elapsed percentage">
+                    <div class="metric-progress-fill" style="width: @ProgressWidth; background: #1e88e5;"></div>
+                </div>
+                <FluentText Size="TextSize.Size200" Class="stat-caption">
+                    @(_totalDays - _daysLeft) of @_totalDays days elapsed
+                </FluentText>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="widget-empty">No sprint dates set</div>
+    }
+</WidgetCard>
+
+@code {
+    [Parameter] public Sprint? Sprint { get; set; }
+
+    private int _daysLeft;
+    private int _totalDays;
+    private double _progressPct;
+    private string ProgressWidth => $"{_progressPct.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}%";
+
+    protected override void OnParametersSet()
+    {
+        if (Sprint?.StartDate is null || Sprint.EndDate is null)
+        {
+            _daysLeft = 0;
+            _totalDays = 0;
+            _progressPct = 0;
+            return;
+        }
+
+        var today = DateTime.Today;
+        var start = Sprint.StartDate.Value.Date;
+        var end = Sprint.EndDate.Value.Date;
+        _daysLeft = Math.Max(0, (end - today).Days);
+        _totalDays = Math.Max(1, (end - start).Days);
+        _progressPct = Math.Clamp((double)(_totalDays - _daysLeft) / _totalDays * 100, 0, 100);
+    }
+}
