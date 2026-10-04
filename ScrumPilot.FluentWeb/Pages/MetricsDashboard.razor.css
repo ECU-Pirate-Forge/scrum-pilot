@@ -1,0 +1,38 @@
+.metrics-root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacingVerticalL);
+}
+
+.sprint-goal-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacingVerticalXS);
+    background: var(--colorNeutralBackground1);
+    border: 1px solid var(--colorNeutralStroke2);
+}
+
+.metrics-grid {
+    min-height: 48rem;
+}
+
+.metrics-grid .grid-stack-item-content {
+    inset: 6px;
+    overflow: hidden;
+}
+
+.metrics-grid .grid-stack-item.ui-draggable-dragging,
+.metrics-grid .grid-stack-item.ui-resizable-resizing {
+    opacity: 0.92;
+}
+
+::deep .grid-stack-placeholder > .placeholder-content {
+    border-color: var(--colorBrandStroke1, var(--colorBrandBackground));
+    background: color-mix(in srgb, var(--colorBrandBackground) 12%, transparent);
+}
+
+@media (max-width: 768px) {
+    .metrics-grid {
+        min-height: 70rem;
+    }
+}

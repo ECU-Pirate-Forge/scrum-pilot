@@ -1,0 +1,85 @@
+@if (_isLoading)
+{
+    <FluentCard Class="widget-card" Style="height: 100%;">
+        <div class="widget-header">
+            <FluentText Size="TextSize.Size300" Weight="TextWeight.Semibold" Class="widget-title">@Title</FluentText>
+        </div>
+        <div class="widget-body widget-loading">
+            <FluentSpinner Label="Loading widget" />
+        </div>
+    </FluentCard>
+}
+else if (_error is not null)
+{
+    <FluentCard Class="widget-card" Style="height: 100%;">
+        <div class="widget-header">
+            <FluentText Size="TextSize.Size300" Weight="TextWeight.Semibold" Class="widget-title">@Title</FluentText>
+        </div>
+        <div class="widget-body widget-error" role="alert">
+            <AppIcon Value="@(new Icons.Regular.Size20.ErrorCircle())" Label="Error" Color="Color.Error" />
+            <FluentText Size="TextSize.Size200">@_error</FluentText>
+        </div>
+    </FluentCard>
+}
+else
+{
+    <FluentCard Class="widget-card" Style="height: 100%;">
+        @if (!string.IsNullOrWhiteSpace(Title) || Actions is not null)
+        {
+            <div class="widget-header">
+                @if (!string.IsNullOrWhiteSpace(Title))
+                {
+                    <FluentText Size="TextSize.Size300" Weight="TextWeight.Semibold" Class="widget-title">@Title</FluentText>
+                }
+                <FluentSpacer />
+                @if (Actions is not null)
+                {
+                    <FluentMenu>
+                        <FluentMenuButton Appearance="ButtonAppearance.Transparent"
+                                          IconOnly="true"
+                                          IconStart="@(new Icons.Regular.Size20.MoreHorizontal().WithColor("currentColor"))"
+                                          Title="Widget actions" />
+                        <FluentMenuList>
+                            @Actions
+                        </FluentMenuList>
+                    </FluentMenu>
+                }
+            </div>
+        }
+        <div class="widget-body">
+            @ChildContent
+        </div>
+    </FluentCard>
+}
+
+@code {
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Actions { get; set; }
+    [Parameter] public Func<Task>? LoadData { get; set; }
+    [Inject] private ILogger<WidgetCard> Logger { get; set; } = default!;
+
+    private bool _isLoading = true;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (LoadData is not null)
+        {
+            try
+            {
+                await LoadData();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Failed to load metric widget {Title}", Title);
+                _error = ex.Message.Length > 80 ? ex.Message[..80] + "…" : ex.Message;
+            }
+        }
+
+        _isLoading = false;
+    }
+}
+
+
+
