@@ -1,0 +1,40 @@
+@using Microsoft.AspNetCore.Components.Web
+
+<div class="pp-vote-picker" role="radiogroup" aria-label="Story point estimate">
+    @foreach (var points in PointValues)
+    {
+        var selected = SelectedVote == points;
+        <button type="button"
+                class="@($"pp-point-card {(selected ? "pp-point-selected" : string.Empty)}")"
+                role="radio"
+                aria-checked="@(selected.ToString().ToLowerInvariant())"
+                aria-label="Vote @DisplayPoints(points)"
+                disabled="@(!IsEnabled)"
+                @onclick="() => VoteAsync(points)"
+                @onkeydown="args => HandleKeyDownAsync(args, points)">
+            @DisplayPoints(points)
+        </button>
+    }
+</div>
+
+@code {
+    private static readonly int[] PointValues = [1, 2, 3, 5, 8, 13, 21, -1];
+
+    [Parameter] public bool IsEnabled { get; set; }
+    [Parameter] public int? SelectedVote { get; set; }
+    [Parameter] public EventCallback<int> OnVote { get; set; }
+
+    private Task VoteAsync(int points) => IsEnabled ? OnVote.InvokeAsync(points) : Task.CompletedTask;
+
+    private Task HandleKeyDownAsync(KeyboardEventArgs args, int points)
+    {
+        return args.Key is "Enter" or " " ? VoteAsync(points) : Task.CompletedTask;
+    }
+
+    private static string DisplayPoints(int? points) => points switch
+    {
+        null => "?",
+        -1 => "?",
+        _ => points.Value.ToString()
+    };
+}

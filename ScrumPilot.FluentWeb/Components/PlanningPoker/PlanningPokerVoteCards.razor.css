@@ -1,0 +1,40 @@
+.pp-vote-picker {
+    display: flex;
+    gap: var(--spacingHorizontalS);
+    flex-wrap: wrap;
+}
+
+.pp-point-card {
+    width: 3.5rem;
+    height: 4.75rem;
+    border-radius: var(--borderRadiusMedium);
+    border: 2px solid var(--colorBrandStroke1, var(--colorBrandForeground1));
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--fontSizeBase500);
+    font-weight: var(--fontWeightSemibold);
+    cursor: pointer;
+    background: var(--colorNeutralBackground1);
+    color: var(--colorBrandForeground1);
+    transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+}
+
+.pp-point-card:hover:not(:disabled),
+.pp-point-card:focus-visible {
+    background: var(--colorBrandBackground2, var(--colorNeutralBackground2));
+    transform: translateY(-0.15rem);
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 2px;
+}
+
+.pp-point-card:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.pp-point-selected {
+    background: var(--colorBrandBackground);
+    color: var(--colorNeutralForegroundOnBrand);
+    box-shadow: var(--shadow4);
+}
