@@ -94,24 +94,7 @@ builder.Services.AddOpenApi();
 builder.Services.AddSwaggerGen();
 
 // Add CORS policy for Blazor WebAssembly
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowBlazor", policy =>
-        policy
-            .WithOrigins(
-                "http://localhost:5199",
-                "http://127.0.0.1:5199",
-                "https://localhost:7280",
-                "https://127.0.0.1:7280",
-                "http://localhost:5299",
-                "http://127.0.0.1:5299",
-                "https://localhost:7380",
-                "https://127.0.0.1:7380"
-            )
-            .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowCredentials());
-});
+builder.Services.AddCors(BlazorCorsPolicy.Configure);
 
 var app = builder.Build();
 
@@ -146,7 +129,7 @@ if (app.Environment.IsDevelopment())
 }
 
 // Use CORS policy
-app.UseCors("AllowBlazor");
+app.UseCors(BlazorCorsPolicy.Name);
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
