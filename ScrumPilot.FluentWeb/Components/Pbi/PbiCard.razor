@@ -1,0 +1,142 @@
+@using ScrumPilot.Shared.Models
+@namespace ScrumPilot.FluentWeb.Components.Pbi
+
+@if (PbiModel is null)
+{
+    <AppEmptyState Title="No PBI selected" Message="Choose a backlog item to view its details." Icon="@(new Icons.Regular.Size24.DocumentText())" />
+}
+else
+{
+    <FluentCard Class="pbi-card" data-testid="pbi-card">
+        <div class="pbi-card__header">
+            <div class="pbi-card__title-wrap">
+                <div class="pbi-card__badges">
+                    <FluentBadge Appearance="BadgeAppearance.Tint" Color="@TypeColor">@PbiModel.Type</FluentBadge>
+                    <AppStatusBadge Status="PbiModel.Status" />
+                    <FluentBadge Appearance="BadgeAppearance.Tint" Color="@PriorityColor">@PbiModel.Priority</FluentBadge>
+                    @if (PbiModel.IsFlagged)
+                    {
+                        <FluentBadge Appearance="BadgeAppearance.Filled" Color="BadgeColor.Danger">Flagged</FluentBadge>
+                    }
+                    @if (PbiModel.IsDraft)
+                    {
+                        <FluentBadge Appearance="BadgeAppearance.Tint" Color="BadgeColor.Warning">Draft</FluentBadge>
+                    }
+                </div>
+                <h3>@PbiModel.Title</h3>
+            </div>
+            @if (!ReadOnly)
+            {
+                <FluentButton Appearance="ButtonAppearance.Outline" OnClick="OpenDetails" IconStart="@(new Icons.Regular.Size20.Edit())">Edit</FluentButton>
+            }
+            else
+            {
+                <FluentButton Appearance="ButtonAppearance.Outline" OnClick="OpenDetails">View details</FluentButton>
+            }
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(PbiModel.Description))
+        {
+            <p class="pbi-card__description">@PbiModel.Description</p>
+        }
+
+        <dl class="pbi-card__facts">
+            <div><dt>Points</dt><dd>@((int)PbiModel.StoryPoints)</dd></div>
+            <div><dt>Sprint</dt><dd>@(PbiModel.SprintId?.ToString() ?? "Unassigned")</dd></div>
+            <div><dt>Epic</dt><dd>@(PbiModel.EpicId?.ToString() ?? "Unassigned")</dd></div>
+            <div><dt>Assignee</dt><dd>@(string.IsNullOrWhiteSpace(PbiModel.AssignedToUserId) ? "Unassigned" : PbiModel.AssignedToUserId)</dd></div>
+            <div><dt>Depends on</dt><dd>@(PbiModel.DependsOnPbiId?.ToString() ?? "None")</dd></div>
+        </dl>
+    </FluentCard>
+
+    <PbiDetailsDialog Pbi="PbiModel"
+                      Open="_detailsOpen"
+                      ReadOnly="ReadOnly"
+                      PersistOnSave="PersistOnSave"
+                      ProjectId="ProjectId"
+                      OnSaved="HandleSavedAsync"
+                      OnCancelled="CloseDetailsAsync"
+                      OnDeleted="HandleDeletedAsync"
+                      OnNavigateToPbi="OnNavigateToPbi" />
+}
+
+@code {
+    [Parameter] public ProductBacklogItem? PbiModel { get; set; }
+    [Parameter] public int? ProjectId { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public bool PersistOnSave { get; set; } = true;
+    [Parameter] public bool StartInEditMode { get; set; }
+    [Parameter] public EventCallback<ProductBacklogItem> OnChanged { get; set; }
+    [Parameter] public EventCallback<int> OnDeleted { get; set; }
+    [Parameter] public EventCallback<ProductBacklogItem> OnSave { get; set; }
+    [Parameter] public EventCallback<int> OnDelete { get; set; }
+    [Parameter] public EventCallback OnCancelNew { get; set; }
+    [Parameter] public EventCallback<int> OnNavigateToPbi { get; set; }
+
+    private bool _detailsOpen;
+
+    protected override void OnParametersSet()
+    {
+        if (StartInEditMode && PbiModel is not null)
+        {
+            _detailsOpen = true;
+        }
+    }
+
+    public void OpenDetails()
+    {
+        _detailsOpen = true;
+        StateHasChanged();
+    }
+
+    private async Task CloseDetailsAsync()
+    {
+        _detailsOpen = false;
+        if (PbiModel?.PbiId == 0 && OnCancelNew.HasDelegate)
+        {
+            await OnCancelNew.InvokeAsync();
+        }
+    }
+
+    private async Task HandleSavedAsync(ProductBacklogItem pbi)
+    {
+        _detailsOpen = false;
+        if (OnChanged.HasDelegate)
+        {
+            await OnChanged.InvokeAsync(pbi);
+        }
+        if (OnSave.HasDelegate)
+        {
+            await OnSave.InvokeAsync(pbi);
+        }
+    }
+
+    private async Task HandleDeletedAsync(int pbiId)
+    {
+        _detailsOpen = false;
+        if (OnDeleted.HasDelegate)
+        {
+            await OnDeleted.InvokeAsync(pbiId);
+        }
+        if (OnDelete.HasDelegate)
+        {
+            await OnDelete.InvokeAsync(pbiId);
+        }
+    }
+
+    private BadgeColor TypeColor => PbiModel?.Type switch
+    {
+        PbiType.Bug => BadgeColor.Danger,
+        PbiType.Task => BadgeColor.Informative,
+        _ => BadgeColor.Brand
+    };
+
+    private BadgeColor PriorityColor => PbiModel?.Priority switch
+    {
+        PbiPriority.High => BadgeColor.Danger,
+        PbiPriority.Medium => BadgeColor.Warning,
+        PbiPriority.Low => BadgeColor.Success,
+        _ => BadgeColor.Subtle
+    };
+}
+
