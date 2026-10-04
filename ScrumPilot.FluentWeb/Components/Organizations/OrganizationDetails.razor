@@ -1,0 +1,104 @@
+@inject HttpClient Http
+@inject ILogger<OrganizationDetails> Logger
+
+<FluentCard Class="organization-card">
+    <div>
+        <FluentText Tag="TextTag.H2" Size="TextSize.Size500" Weight="TextWeight.Semibold">@Organization.Name</FluentText>
+        <p class="sp-muted">Your role: @Organization.Role</p>
+    </div>
+    @if (Organization.Role == OrganizationRole.Owner && !Organization.IsDeleted)
+    {
+        <div class="inline-editor">
+            <label>Organization name <FluentTextInput Value="_name" ValueChanged="OnNameChanged" /></label>
+            <FluentButton data-action="rename" Appearance="ButtonAppearance.Primary" OnClick="RenameAsync" Disabled="@_busy">Rename</FluentButton>
+        </div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <FluentMessageBar Intent="MessageBarIntent.Error">@_error</FluentMessageBar>
+    }
+</FluentCard>
+
+@code {
+    [Parameter, EditorRequired] public OrganizationSummaryDto Organization { get; set; } = default!;
+    [Parameter] public EventCallback<OrganizationSummaryDto> OrganizationChanged { get; set; }
+
+    private string _name = string.Empty;
+    private string? _error;
+    private bool _busy;
+    private bool _dirty;
+    private int? _sourceOrganizationId;
+    private string? _sourceName;
+    private long _generation;
+
+    protected override void OnParametersSet()
+    {
+        var organizationChanged = _sourceOrganizationId != Organization.OrganizationId;
+        var sourceNameChanged = !string.Equals(_sourceName, Organization.Name, StringComparison.Ordinal);
+        if (organizationChanged || (sourceNameChanged && !_dirty))
+        {
+            _name = Organization.Name;
+            _dirty = false;
+        }
+        if (organizationChanged)
+        {
+            _generation++;
+            _error = null;
+            _busy = false;
+        }
+        _sourceOrganizationId = Organization.OrganizationId;
+        _sourceName = Organization.Name;
+    }
+
+    private void OnNameChanged(string? value)
+    {
+        _name = value ?? string.Empty;
+        _dirty = !string.Equals(_name, _sourceName, StringComparison.Ordinal);
+    }
+
+    private async Task RenameAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_name)) { _error = "Organization name is required."; return; }
+        var organizationId = Organization.OrganizationId;
+        var generation = _generation;
+        var name = _name.Trim();
+        _busy = true;
+        _error = null;
+        try
+        {
+            var response = await Http.PutAsJsonAsync($"api/organizations/{organizationId}", new RenameOrganizationRequest(name));
+            if (!IsCurrent(generation, organizationId)) return;
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await ErrorAsync(response, "Unable to rename the organization.");
+                return;
+            }
+            var updated = await response.Content.ReadFromJsonAsync<OrganizationSummaryDto>();
+            if (IsCurrent(generation, organizationId) && updated is not null)
+            {
+                _name = updated.Name;
+                _sourceName = updated.Name;
+                _dirty = false;
+                _error = null;
+                await OrganizationChanged.InvokeAsync(updated);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Unable to rename organization {OrganizationId}", organizationId);
+            if (IsCurrent(generation, organizationId)) _error = "Unable to rename the organization.";
+        }
+        finally
+        {
+            if (IsCurrent(generation, organizationId)) _busy = false;
+        }
+    }
+
+    private bool IsCurrent(long generation, int organizationId) => generation == _generation && _sourceOrganizationId == organizationId && Organization.OrganizationId == organizationId;
+    private static async Task<string> ErrorAsync(HttpResponseMessage response, string fallback)
+    {
+        try { return (await response.Content.ReadFromJsonAsync<ProblemDetails>())?.Detail ?? fallback; }
+        catch { return fallback; }
+    }
+    private sealed class ProblemDetails { public string? Detail { get; set; } }
+}

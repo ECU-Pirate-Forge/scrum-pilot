@@ -1,0 +1,196 @@
+@implements IDisposable
+@inject HttpClient Http
+@inject IAppDialogService Dialogs
+@inject ILogger<OrganizationMembers> Logger
+
+<FluentCard Class="organization-members">
+    <div class="section-header">
+        <FluentText Tag="TextTag.H2" Size="TextSize.Size500" Weight="TextWeight.Semibold">Members</FluentText>
+        @if (_loading) { <FluentSpinner Label="Loading members" /> }
+    </div>
+
+    @if (CanManage)
+    {
+        <div class="invite-row">
+            <label>Invite email <FluentTextInput @bind-Value="_email" Placeholder="person@example.com" /></label>
+            <label>Role
+                <select @bind="_inviteRole">
+                    @foreach (var role in Enum.GetValues<OrganizationRole>()) { <option value="@role">@role</option> }
+                </select>
+            </label>
+            <FluentButton data-action="invite" Appearance="ButtonAppearance.Primary" OnClick="InviteAsync">Invite</FluentButton>
+        </div>
+    }
+
+    @if (_members.Count == 0 && !_loading)
+    {
+        <AppEmptyState Title="No members" Message="Organization members will appear here." Icon="@(new Icons.Regular.Size24.PeopleTeam())" />
+    }
+    else
+    {
+        <FluentDataGrid TGridItem="OrganizationMemberDto" Items="@_members.AsQueryable()" GridTemplateColumns="1fr .5fr .7fr auto" Class="management-grid">
+            <PropertyColumn Property="@(member => member.UserId)" Title="User" Sortable="true" />
+            <PropertyColumn Property="@(member => member.Role)" Title="Role" Sortable="true" />
+            <TemplateColumn Title="Joined" Context="member">@member.JoinedAt.ToString("MMM dd, yyyy")</TemplateColumn>
+            <TemplateColumn Title="Actions" Context="member">
+                @if (CanManage)
+                {
+                    @if (member.Role == OrganizationRole.Member)
+                    {
+                        <FluentButton data-action="promote" Appearance="ButtonAppearance.Subtle" OnClick="@(() => ChangeRoleAsync(member, OrganizationRole.Owner))">Promote</FluentButton>
+                    }
+                    else
+                    {
+                        <FluentButton data-action="demote" Appearance="ButtonAppearance.Subtle" OnClick="@(() => ChangeRoleAsync(member, OrganizationRole.Member))">Demote</FluentButton>
+                    }
+                    <FluentButton data-action="remove" Appearance="ButtonAppearance.Subtle" OnClick="@(() => RemoveAsync(member))">Remove</FluentButton>
+                }
+            </TemplateColumn>
+        </FluentDataGrid>
+    }
+
+    @if (CanManage)
+    {
+        <FluentDivider />
+        <FluentText Tag="TextTag.H3" Size="TextSize.Size400" Weight="TextWeight.Semibold">Pending invitations</FluentText>
+        @foreach (var invitation in _invitations.Where(x => x.Status == OrganizationInvitationStatus.Pending))
+        {
+            <div class="invitation-row">
+                <span>@invitation.Email — @invitation.Role</span>
+                @if (!string.IsNullOrWhiteSpace(invitation.DeliveryError)) { <span class="error-text">@invitation.DeliveryError</span> }
+                <FluentButton Appearance="ButtonAppearance.Subtle" OnClick="@(() => ResendAsync(invitation))">Resend</FluentButton>
+                <FluentButton Appearance="ButtonAppearance.Subtle" OnClick="@(() => RevokeAsync(invitation))">Revoke</FluentButton>
+            </div>
+        }
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <FluentMessageBar Intent="MessageBarIntent.Error">@_error</FluentMessageBar>
+    }
+</FluentCard>
+
+@code {
+    [Parameter] public int OrganizationId { get; set; }
+    [Parameter] public bool CanManage { get; set; }
+
+    private List<OrganizationMemberDto> _members = [];
+    private List<OrganizationInvitationDto> _invitations = [];
+    private CancellationTokenSource? _loadCancellation;
+    private (int OrganizationId, bool CanManage)? _lastParameterKey;
+    private long _generation;
+    private bool _disposed;
+    private bool _loading;
+    private string _email = string.Empty;
+    private OrganizationRole _inviteRole = OrganizationRole.Member;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var key = (OrganizationId, CanManage);
+        if (_lastParameterKey == key) return;
+        _lastParameterKey = key;
+        await ReloadAsync(key);
+    }
+
+    private async Task ReloadAsync((int OrganizationId, bool CanManage) key)
+    {
+        if (_disposed || _lastParameterKey != key) return;
+        var generation = ++_generation;
+        _loadCancellation?.Cancel();
+        _loadCancellation?.Dispose();
+        _loadCancellation = new();
+        _members = [];
+        _invitations = [];
+        _error = null;
+        _loading = true;
+        await LoadAsync(key, generation, _loadCancellation.Token);
+        if (IsCurrent(key, generation)) _loading = false;
+    }
+
+    private async Task LoadAsync((int OrganizationId, bool CanManage) key, long generation, CancellationToken token)
+    {
+        try
+        {
+            var members = await Http.GetFromJsonAsync<List<OrganizationMemberDto>>($"api/organizations/{key.OrganizationId}/members", token) ?? [];
+            if (!IsCurrent(key, generation)) return;
+            _members = members;
+            _invitations = key.CanManage
+                ? await Http.GetFromJsonAsync<List<OrganizationInvitationDto>>($"api/organizations/{key.OrganizationId}/invitations", token) ?? []
+                : [];
+            _error = null;
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (Exception ex) when (IsCurrent(key, generation))
+        {
+            Logger.LogError(ex, "Unable to load organization members for {OrganizationId}", key.OrganizationId);
+            _error = "Unable to load organization members.";
+        }
+    }
+
+    private async Task InviteAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_email)) { _error = "Email is required."; return; }
+        var email = _email.Trim();
+        var role = _inviteRole;
+        await MutateAsync(id => Http.PostAsJsonAsync($"api/organizations/{id}/invitations", new InviteOrganizationMemberRequest(email, role)), "Unable to send invitation.", () => _email = string.Empty);
+    }
+
+    private Task ChangeRoleAsync(OrganizationMemberDto member, OrganizationRole role) =>
+        MutateAsync(id => Http.PutAsJsonAsync($"api/organizations/{id}/members/{Uri.EscapeDataString(member.UserId)}/role", new UpdateOrganizationMemberRoleRequest(role)), "Unable to change the member role.");
+
+    private async Task RemoveAsync(OrganizationMemberDto member)
+    {
+        if (await Dialogs.ConfirmAsync("Remove member", $"Remove {member.UserId} from this organization?", "Remove", "Cancel", destructive: true))
+            await MutateAsync(id => Http.DeleteAsync($"api/organizations/{id}/members/{Uri.EscapeDataString(member.UserId)}"), "Unable to remove the member.");
+    }
+
+    private Task ResendAsync(OrganizationInvitationDto invitation) =>
+        MutateAsync(id => Http.PostAsync($"api/organizations/{id}/invitations/{invitation.OrganizationInvitationId}/resend", null), "Unable to resend the invitation.");
+
+    private async Task RevokeAsync(OrganizationInvitationDto invitation)
+    {
+        if (await Dialogs.ConfirmAsync("Revoke invitation", $"Revoke the invitation for {invitation.Email}?", "Revoke", "Cancel", destructive: true))
+            await MutateAsync(id => Http.DeleteAsync($"api/organizations/{id}/invitations/{invitation.OrganizationInvitationId}"), "Unable to revoke the invitation.");
+    }
+
+    private async Task MutateAsync(Func<int, Task<HttpResponseMessage>> action, string fallback, Action? onSuccess = null)
+    {
+        var key = (OrganizationId, CanManage);
+        var generation = _generation;
+        if (!key.CanManage || !IsCurrent(key, generation)) return;
+        _error = null;
+        try
+        {
+            var response = await action(key.OrganizationId);
+            if (!IsCurrent(key, generation)) return;
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await ErrorAsync(response, fallback);
+                return;
+            }
+            onSuccess?.Invoke();
+            await ReloadAsync(key);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Organization member mutation failed for {OrganizationId}", key.OrganizationId);
+            if (IsCurrent(key, generation)) _error = fallback;
+        }
+    }
+
+    private bool IsCurrent((int OrganizationId, bool CanManage) key, long generation) => !_disposed && generation == _generation && _lastParameterKey == key && (OrganizationId, CanManage) == key;
+    private static async Task<string> ErrorAsync(HttpResponseMessage response, string fallback)
+    {
+        try { return (await response.Content.ReadFromJsonAsync<ProblemDetails>())?.Detail ?? fallback; }
+        catch { return fallback; }
+    }
+    public void Dispose()
+    {
+        _disposed = true;
+        _generation++;
+        _loadCancellation?.Cancel();
+        _loadCancellation?.Dispose();
+    }
+    private sealed class ProblemDetails { public string? Detail { get; set; } }
+}

@@ -1,8 +1,464 @@
 @page "/project-management"
+@implements IDisposable
+@using ScrumPilot.FluentWeb.Components.ProjectManagement
+@inject HttpClient Http
+@inject ProjectStateService ProjectState
+@inject OrganizationStateService OrganizationState
+@inject IAppNotificationService Notifications
+@inject IAppDialogService Dialogs
+@inject ILogger<ProjectManagement> Logger
 
 <PageTitle>Project Management</PageTitle>
 
-<div class="page-shell">
-    <h1>Project Management</h1>
-    <p>Track milestones, milestones and delivery health for the active project.</p>
+<div class="project-management-page">
+    <AppPageHeader Title="Project Management" Subtitle="Manage projects, sprints, epics and backlog items for the selected organization.">
+        <Actions>
+            <FluentButton Appearance="ButtonAppearance.Outline" IconStart="@(new Icons.Regular.Size20.ArrowSync())" OnClick="ReloadForOrganizationAsync" Disabled="@_loadingProjects">Refresh</FluentButton>
+        </Actions>
+    </AppPageHeader>
+
+    @if (!OrganizationState.SelectedOrganizationId.HasValue)
+    {
+        <AppEmptyState Title="Select an organization" Message="Choose an organization from the header before managing projects." Icon="@(new Icons.Regular.Size24.Organization())" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_loadError))
+    {
+        <AppErrorState Title="Unable to load projects" Message="@_loadError" OnRetry="ReloadForOrganizationAsync" />
+    }
+    else
+    {
+        <div class="project-management-layout">
+            <ProjectListPanel Projects="_projects"
+                              SelectedProjectId="_selectedProject?.ProjectId"
+                              IsOwner="IsOwner"
+                              IsLoading="_loadingProjects"
+                              IsSaving="_saving"
+                              OnSelect="SelectProjectAsync"
+                              OnCreate="CreateProjectAsync"
+                              OnUpdate="UpdateProjectAsync"
+                              OnDelete="DeleteProjectAsync" />
+
+            <ProjectDetailsPanel Project="_selectedProject"
+                                 IsOwner="IsOwner"
+                                 IsSaving="_saving"
+                                 Sprints="_sprints"
+                                 Epics="_epics"
+                                 Pbis="_pbis"
+                                 LoadingStories="_loadingStories"
+                                 OnCreateSprint="CreateSprintAsync"
+                                 OnUpdateSprint="UpdateSprintAsync"
+                                 OnDeleteSprint="DeleteSprintAsync"
+                                 OnCreateEpic="CreateEpicAsync"
+                                 OnUpdateEpic="UpdateEpicAsync"
+                                 OnDeleteEpic="DeleteEpicAsync"
+                                 OnLoadStories="LoadStoriesAsync"
+                                 OnSavePbi="SavePbiAsync"
+                                 OnDeletePbi="DeletePbiAsync" />
+        </div>
+    }
 </div>
+
+@code {
+    private readonly List<Project> _projects = [];
+    private readonly List<Sprint> _sprints = [];
+    private readonly List<Epic> _epics = [];
+    private readonly List<ProductBacklogItem> _pbis = [];
+    private Project? _selectedProject;
+    private bool _loadingProjects;
+    private bool _loadingStories;
+    private bool _saving;
+    private string? _loadError;
+    private CancellationTokenSource? _loadCancellation;
+    private long _generation;
+    private bool _disposed;
+
+    private bool IsOwner => OrganizationState.SelectedOrganization?.Role == OrganizationRole.Owner;
+
+    protected override async Task OnInitializedAsync()
+    {
+        OrganizationState.OnChange += OnOrganizationChanged;
+        await ReloadForOrganizationAsync();
+    }
+
+    private void OnOrganizationChanged()
+    {
+        if (_disposed) return;
+        _ = InvokeAsync(async () =>
+        {
+            if (_disposed) return;
+            await ReloadForOrganizationAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task ReloadForOrganizationAsync()
+    {
+        if (_disposed) return;
+
+        var selectedProjectId = ProjectState.SelectedProjectId;
+        var organizationId = OrganizationState.SelectedOrganizationId;
+        var generation = ++_generation;
+        _loadCancellation?.Cancel();
+        _loadCancellation?.Dispose();
+        _loadCancellation = new CancellationTokenSource();
+        ResetProjectData(clearProjectState: !organizationId.HasValue);
+        _loadError = null;
+
+        if (!organizationId.HasValue)
+            return;
+
+        _loadingProjects = true;
+        try
+        {
+            var projects = await Http.GetFromJsonAsync<List<Project>>($"api/organizations/{organizationId.Value}/projects", _loadCancellation.Token) ?? [];
+            if (!IsCurrent(generation, organizationId.Value)) return;
+
+            _projects.Clear();
+            _projects.AddRange(projects);
+            var selected = selectedProjectId.HasValue
+                ? _projects.FirstOrDefault(project => project.ProjectId == selectedProjectId.Value)
+                : _projects.FirstOrDefault();
+            if (selected is not null)
+                await SelectProjectAsync(selected);
+        }
+        catch (OperationCanceledException) when (_loadCancellation?.IsCancellationRequested == true) { }
+        catch (Exception ex) when (!_disposed)
+        {
+            Logger.LogError(ex, "Failed to load projects for organization {OrganizationId}", organizationId);
+            _loadError = "Unable to load projects for the selected organization.";
+            Notifications.ShowError(_loadError);
+        }
+        finally
+        {
+            if (organizationId.HasValue && IsCurrent(generation, organizationId.Value))
+                _loadingProjects = false;
+        }
+    }
+
+    private void ResetProjectData(bool clearProjectState)
+    {
+        _projects.Clear();
+        _selectedProject = null;
+        _sprints.Clear();
+        _epics.Clear();
+        _pbis.Clear();
+        _loadingStories = false;
+        if (clearProjectState) ProjectState.Clear();
+    }
+
+    private bool IsCurrent(long generation, int organizationId) =>
+        !_disposed && generation == _generation && OrganizationState.SelectedOrganizationId == organizationId;
+
+    private async Task SelectProjectAsync(Project project)
+    {
+        _selectedProject = project;
+        ProjectState.SetProject(project);
+        _sprints.Clear();
+        _epics.Clear();
+        _pbis.Clear();
+        await LoadSprintsAsync();
+        await LoadEpicsAsync();
+        await LoadStoriesAsync(new ProjectPbiFilter());
+    }
+
+    private async Task LoadSprintsAsync()
+    {
+        if (_selectedProject is null) return;
+        var projectId = _selectedProject.ProjectId;
+        try
+        {
+            var sprints = await Http.GetFromJsonAsync<List<Sprint>>($"api/sprint?projectId={projectId}") ?? [];
+            if (_selectedProject?.ProjectId != projectId) return;
+            _sprints.Clear();
+            _sprints.AddRange(sprints);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load sprints for project {ProjectId}", projectId);
+            Notifications.ShowError("Failed to load sprints.");
+        }
+    }
+
+    private async Task LoadEpicsAsync()
+    {
+        if (_selectedProject is null) return;
+        var projectId = _selectedProject.ProjectId;
+        try
+        {
+            var epics = await Http.GetFromJsonAsync<List<Epic>>($"api/epic?projectId={projectId}") ?? [];
+            if (_selectedProject?.ProjectId != projectId) return;
+            _epics.Clear();
+            _epics.AddRange(epics);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load epics for project {ProjectId}", projectId);
+            Notifications.ShowError("Failed to load epics.");
+        }
+    }
+
+    private async Task LoadStoriesAsync(ProjectPbiFilter filter)
+    {
+        if (_selectedProject is null) return;
+        var projectId = _selectedProject.ProjectId;
+        _loadingStories = true;
+        try
+        {
+            var url = $"api/pbi/getNonDraftPbis?projectId={projectId}";
+            if (filter.SprintId.HasValue) url += $"&sprintId={filter.SprintId.Value}";
+            if (filter.EpicId.HasValue) url += $"&epicId={filter.EpicId.Value}";
+            var pbis = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(url) ?? [];
+            if (_selectedProject?.ProjectId != projectId) return;
+            _pbis.Clear();
+            _pbis.AddRange(pbis);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load PBIs for project {ProjectId}", projectId);
+            Notifications.ShowError("Failed to load stories.");
+        }
+        finally
+        {
+            if (_selectedProject?.ProjectId == projectId) _loadingStories = false;
+        }
+    }
+
+    private async Task CreateProjectAsync(ProjectEditorModel model)
+    {
+        var organizationId = OrganizationState.SelectedOrganizationId;
+        if (!organizationId.HasValue || string.IsNullOrWhiteSpace(model.ProjectName)) return;
+        _saving = true;
+        try
+        {
+            var response = await Http.PostAsJsonAsync($"api/organizations/{organizationId.Value}/projects", new CreateProjectRequest(model.ProjectName.Trim(), NullIfWhiteSpace(model.Description)));
+            if (!response.IsSuccessStatusCode)
+            {
+                Notifications.ShowError("Failed to create project.");
+                return;
+            }
+            var project = await response.Content.ReadFromJsonAsync<Project>();
+            if (project is not null)
+            {
+                _projects.Add(project);
+                ProjectState.NotifyProjectListChanged();
+                Notifications.ShowSuccess("Project created.");
+                await SelectProjectAsync(project);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to create project");
+            Notifications.ShowError("Failed to create project.");
+        }
+        finally { _saving = false; }
+    }
+
+    private async Task UpdateProjectAsync(ProjectEditorModel model)
+    {
+        var project = _projects.FirstOrDefault(p => p.ProjectId == model.ProjectId);
+        if (project is null || string.IsNullOrWhiteSpace(model.ProjectName)) return;
+        _saving = true;
+        try
+        {
+            var description = NullIfWhiteSpace(model.Description);
+            var response = await Http.PutAsJsonAsync($"api/projects/{project.ProjectId}", new UpdateProjectRequest(model.ProjectName.Trim(), description));
+            if (!response.IsSuccessStatusCode)
+            {
+                Notifications.ShowError("Failed to rename project.");
+                return;
+            }
+            project.ProjectName = model.ProjectName.Trim();
+            project.Description = description;
+            if (_selectedProject?.ProjectId == project.ProjectId) _selectedProject = project;
+            ProjectState.NotifyProjectListChanged();
+            Notifications.ShowSuccess("Project renamed.");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to update project {ProjectId}", project.ProjectId);
+            Notifications.ShowError("Failed to rename project.");
+        }
+        finally { _saving = false; }
+    }
+
+    private async Task DeleteProjectAsync(Project project)
+    {
+        if (!await Dialogs.ConfirmAsync("Delete project", $"Delete \"{project.ProjectName}\"? This cannot be undone.", "Delete", "Cancel", destructive: true))
+            return;
+        try
+        {
+            var response = await Http.DeleteAsync($"api/projects/{project.ProjectId}");
+            if (!response.IsSuccessStatusCode)
+            {
+                Notifications.ShowError("Failed to delete project.");
+                return;
+            }
+            _projects.Remove(project);
+            if (_selectedProject?.ProjectId == project.ProjectId)
+            {
+                _selectedProject = null;
+                _sprints.Clear();
+                _epics.Clear();
+                _pbis.Clear();
+                if (ProjectState.SelectedProjectId == project.ProjectId) ProjectState.Clear();
+            }
+            ProjectState.NotifyProjectListChanged();
+            Notifications.ShowInfo("Project deleted.");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to delete project {ProjectId}", project.ProjectId);
+            Notifications.ShowError("Failed to delete project.");
+        }
+    }
+
+    private async Task CreateSprintAsync(Sprint sprint)
+    {
+        if (_selectedProject is null || string.IsNullOrWhiteSpace(sprint.SprintTitle)) return;
+        _saving = true;
+        try
+        {
+            sprint.ProjectId = _selectedProject.ProjectId;
+            var response = await Http.PostAsJsonAsync($"api/sprint?projectId={_selectedProject.ProjectId}", sprint);
+            if (!response.IsSuccessStatusCode) { Notifications.ShowError("Failed to create sprint."); return; }
+            var created = await response.Content.ReadFromJsonAsync<Sprint>();
+            if (created is not null) _sprints.Insert(0, created);
+            Notifications.ShowSuccess("Sprint created.");
+        }
+        catch (Exception ex) { Logger.LogError(ex, "Failed to create sprint"); Notifications.ShowError("Failed to create sprint."); }
+        finally { _saving = false; }
+    }
+
+    private async Task UpdateSprintAsync(Sprint sprint)
+    {
+        _saving = true;
+        try
+        {
+            var response = await Http.PutAsJsonAsync($"api/sprint/{sprint.SprintId}", sprint);
+            if (!response.IsSuccessStatusCode) { Notifications.ShowError("Failed to update sprint."); return; }
+            var updated = await response.Content.ReadFromJsonAsync<Sprint>();
+            var index = _sprints.FindIndex(s => s.SprintId == sprint.SprintId);
+            if (index >= 0) _sprints[index] = updated ?? sprint;
+            Notifications.ShowSuccess("Sprint updated.");
+        }
+        catch (Exception ex) { Logger.LogError(ex, "Failed to update sprint {SprintId}", sprint.SprintId); Notifications.ShowError("Failed to update sprint."); }
+        finally { _saving = false; }
+    }
+
+    private async Task DeleteSprintAsync(Sprint sprint)
+    {
+        if (!await Dialogs.ConfirmAsync("Delete sprint", $"Delete \"{sprint.SprintTitle}\"? Stories assigned to it will be unassigned.", "Delete", "Cancel", destructive: true)) return;
+        try
+        {
+            var response = await Http.DeleteAsync($"api/sprint/{sprint.SprintId}");
+            if (!response.IsSuccessStatusCode) { Notifications.ShowError("Failed to delete sprint."); return; }
+            _sprints.Remove(sprint);
+            Notifications.ShowInfo("Sprint deleted. Stories were unassigned.");
+            await LoadStoriesAsync(new ProjectPbiFilter());
+        }
+        catch (Exception ex) { Logger.LogError(ex, "Failed to delete sprint {SprintId}", sprint.SprintId); Notifications.ShowError("Failed to delete sprint."); }
+    }
+
+    private async Task CreateEpicAsync(Epic epic)
+    {
+        if (_selectedProject is null || string.IsNullOrWhiteSpace(epic.Name)) return;
+        _saving = true;
+        try
+        {
+            epic.ProjectId = _selectedProject.ProjectId;
+            epic.DateCreated = DateTime.UtcNow;
+            var response = await Http.PostAsJsonAsync($"api/epic?projectId={_selectedProject.ProjectId}", epic);
+            if (!response.IsSuccessStatusCode) { Notifications.ShowError("Failed to create epic."); return; }
+            var created = await response.Content.ReadFromJsonAsync<Epic>();
+            if (created is not null) _epics.Add(created);
+            Notifications.ShowSuccess("Epic created.");
+        }
+        catch (Exception ex) { Logger.LogError(ex, "Failed to create epic"); Notifications.ShowError("Failed to create epic."); }
+        finally { _saving = false; }
+    }
+
+    private async Task UpdateEpicAsync(Epic epic)
+    {
+        _saving = true;
+        try
+        {
+            var response = await Http.PutAsJsonAsync($"api/epic/{epic.EpicId}", epic);
+            if (!response.IsSuccessStatusCode) { Notifications.ShowError("Failed to update epic."); return; }
+            var existing = _epics.FirstOrDefault(e => e.EpicId == epic.EpicId);
+            if (existing is not null) existing.Name = epic.Name;
+            Notifications.ShowSuccess("Epic updated.");
+        }
+        catch (Exception ex) { Logger.LogError(ex, "Failed to update epic {EpicId}", epic.EpicId); Notifications.ShowError("Failed to update epic."); }
+        finally { _saving = false; }
+    }
+
+    private async Task DeleteEpicAsync(Epic epic)
+    {
+        if (!await Dialogs.ConfirmAsync("Delete epic", $"Delete \"{epic.Name}\"? Stories assigned to it will be unassigned.", "Delete", "Cancel", destructive: true)) return;
+        try
+        {
+            var response = await Http.DeleteAsync($"api/epic/{epic.EpicId}");
+            if (!response.IsSuccessStatusCode) { Notifications.ShowError("Failed to delete epic."); return; }
+            _epics.Remove(epic);
+            Notifications.ShowInfo("Epic deleted. Stories were unassigned.");
+            await LoadStoriesAsync(new ProjectPbiFilter());
+        }
+        catch (Exception ex) { Logger.LogError(ex, "Failed to delete epic {EpicId}", epic.EpicId); Notifications.ShowError("Failed to delete epic."); }
+    }
+
+    private async Task SavePbiAsync(ProductBacklogItem pbi)
+    {
+        if (_selectedProject is null || string.IsNullOrWhiteSpace(pbi.Title)) return;
+        _saving = true;
+        try
+        {
+            HttpResponseMessage response;
+            if (pbi.PbiId == 0)
+            {
+                pbi.ProjectId = _selectedProject.ProjectId;
+                pbi.Origin = PbiOrigin.WebUserCreated;
+                pbi.DateCreated = DateTime.UtcNow;
+                pbi.LastUpdated = DateTime.UtcNow;
+                response = await Http.PostAsJsonAsync($"api/pbi/createStory?projectId={_selectedProject.ProjectId}", pbi);
+            }
+            else
+            {
+                pbi.LastUpdated = DateTime.UtcNow;
+                response = await Http.PutAsJsonAsync("api/pbi", pbi);
+            }
+            if (!response.IsSuccessStatusCode) { Notifications.ShowError(pbi.PbiId == 0 ? "Failed to create story." : "Failed to update story."); return; }
+            var saved = await response.Content.ReadFromJsonAsync<ProductBacklogItem>();
+            if (saved is not null)
+            {
+                var index = _pbis.FindIndex(item => item.PbiId == saved.PbiId);
+                if (index >= 0) _pbis[index] = saved; else _pbis.Add(saved);
+            }
+            Notifications.ShowSuccess(pbi.PbiId == 0 ? "Story created." : "Story updated.");
+        }
+        catch (Exception ex) { Logger.LogError(ex, "Failed to save PBI {PbiId}", pbi.PbiId); Notifications.ShowError("Failed to save story."); }
+        finally { _saving = false; }
+    }
+
+    private async Task DeletePbiAsync(ProductBacklogItem pbi)
+    {
+        if (!await Dialogs.ConfirmAsync("Delete story", $"Delete \"{pbi.Title}\"? This cannot be undone.", "Delete", "Cancel", destructive: true)) return;
+        try
+        {
+            var response = await Http.DeleteAsync($"api/pbi/{pbi.PbiId}");
+            if (!response.IsSuccessStatusCode) { Notifications.ShowError("Failed to delete story."); return; }
+            _pbis.Remove(pbi);
+            Notifications.ShowInfo("Story deleted.");
+        }
+        catch (Exception ex) { Logger.LogError(ex, "Failed to delete PBI {PbiId}", pbi.PbiId); Notifications.ShowError("Failed to delete story."); }
+    }
+
+    private static string? NullIfWhiteSpace(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    public void Dispose()
+    {
+        _disposed = true;
+        OrganizationState.OnChange -= OnOrganizationChanged;
+        _loadCancellation?.Cancel();
+        _loadCancellation?.Dispose();
+    }
+}

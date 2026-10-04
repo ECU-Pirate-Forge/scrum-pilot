@@ -1,0 +1,109 @@
+<div class="management-section">
+    <div class="section-header">
+        <FluentText Tag="TextTag.H3" Size="TextSize.Size500" Weight="TextWeight.Semibold">Sprints</FluentText>
+        @if (IsOwner)
+        {
+            <FluentButton Appearance="ButtonAppearance.Primary" IconStart="@(new Icons.Regular.Size20.Add())" OnClick="ShowCreate" Disabled="@_showCreate">Add sprint</FluentButton>
+        }
+    </div>
+
+    @if (_showCreate)
+    {
+        <div class="editor-card">
+            <label>Sprint title <FluentTextInput @bind-Value="_draft.SprintTitle" Required="true" /></label>
+            <label>Sprint goal <FluentTextArea @bind-Value="_draft.SprintGoal" /></label>
+            <div class="date-row">
+                <label>Start date <input type="date" value="@FormatDate(_draft.StartDate)" @onchange="e => _draft.StartDate = ParseDate(e.Value)" /></label>
+                <label>End date <input type="date" value="@FormatDate(_draft.EndDate)" @onchange="e => _draft.EndDate = ParseDate(e.Value)" /></label>
+            </div>
+            <FluentCheckbox @bind-Value="_draft.IsOpen" Label="Open sprint" />
+            <div class="sp-row">
+                <FluentButton Appearance="ButtonAppearance.Primary" OnClick="CreateAsync" Disabled="@IsSaving">Save sprint</FluentButton>
+                <FluentButton Appearance="ButtonAppearance.Outline" OnClick="CancelCreate" Disabled="@IsSaving">Cancel</FluentButton>
+            </div>
+        </div>
+    }
+
+    @if (Sprints.Count == 0)
+    {
+        <AppEmptyState Title="No sprints" Message="Add a sprint to start planning work." Icon="@(new Icons.Regular.Size24.CalendarLtr())" />
+    }
+    else
+    {
+        <FluentDataGrid TGridItem="Sprint" Items="@Sprints.AsQueryable()" GridTemplateColumns="1.2fr 1fr 1fr auto" Class="management-grid">
+            <PropertyColumn Property="@(sprint => sprint.SprintTitle)" Title="Sprint" Sortable="true" />
+            <TemplateColumn Title="Goal" Context="sprint">@sprint.SprintGoal</TemplateColumn>
+            <TemplateColumn Title="Dates" Context="sprint">@FormatDateRange(sprint.StartDate, sprint.EndDate)</TemplateColumn>
+            <TemplateColumn Title="Actions" Context="sprint">
+                @if (IsOwner)
+                {
+                    <FluentButton Appearance="ButtonAppearance.Subtle" OnClick="@(() => StartEdit(sprint))">Edit</FluentButton>
+                    <FluentButton Appearance="ButtonAppearance.Subtle" OnClick="@(() => OnDelete.InvokeAsync(sprint))">Delete</FluentButton>
+                }
+            </TemplateColumn>
+        </FluentDataGrid>
+    }
+
+    @if (_editing is not null)
+    {
+        <div class="editor-card" role="dialog" aria-label="Edit sprint">
+            <FluentText Tag="TextTag.H4" Size="TextSize.Size400" Weight="TextWeight.Semibold">Edit sprint</FluentText>
+            <label>Sprint title <FluentTextInput @bind-Value="_editing.SprintTitle" Required="true" /></label>
+            <label>Sprint goal <FluentTextArea @bind-Value="_editing.SprintGoal" /></label>
+            <div class="date-row">
+                <label>Start date <input type="date" value="@FormatDate(_editing.StartDate)" @onchange="e => _editing.StartDate = ParseDate(e.Value)" /></label>
+                <label>End date <input type="date" value="@FormatDate(_editing.EndDate)" @onchange="e => _editing.EndDate = ParseDate(e.Value)" /></label>
+            </div>
+            <FluentCheckbox @bind-Value="_editing.IsOpen" Label="Open sprint" />
+            <div class="sp-row">
+                <FluentButton Appearance="ButtonAppearance.Primary" OnClick="SaveEditAsync" Disabled="@IsSaving">Save changes</FluentButton>
+                <FluentButton Appearance="ButtonAppearance.Outline" OnClick="CancelEdit" Disabled="@IsSaving">Cancel</FluentButton>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<Sprint> Sprints { get; set; } = [];
+    [Parameter] public bool IsOwner { get; set; }
+    [Parameter] public bool IsSaving { get; set; }
+    [Parameter] public EventCallback<Sprint> OnCreate { get; set; }
+    [Parameter] public EventCallback<Sprint> OnUpdate { get; set; }
+    [Parameter] public EventCallback<Sprint> OnDelete { get; set; }
+
+    private bool _showCreate;
+    private Sprint _draft = new();
+    private Sprint? _editing;
+
+    private void ShowCreate() { _draft = new Sprint { IsOpen = true }; _showCreate = true; }
+    private void CancelCreate() { _draft = new(); _showCreate = false; }
+    private async Task CreateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_draft.SprintTitle)) return;
+        await OnCreate.InvokeAsync(_draft);
+        CancelCreate();
+    }
+    private void StartEdit(Sprint sprint) => _editing = Copy(sprint);
+    private void CancelEdit() => _editing = null;
+    private async Task SaveEditAsync()
+    {
+        if (_editing is null || string.IsNullOrWhiteSpace(_editing.SprintTitle)) return;
+        await OnUpdate.InvokeAsync(_editing);
+        _editing = null;
+    }
+    private static Sprint Copy(Sprint sprint) => new()
+    {
+        SprintId = sprint.SprintId, ProjectId = sprint.ProjectId, SprintTitle = sprint.SprintTitle,
+        SprintGoal = sprint.SprintGoal, StartDate = sprint.StartDate, EndDate = sprint.EndDate,
+        IsOpen = sprint.IsOpen, DateClosed = sprint.DateClosed
+    };
+    private static DateTime? ParseDate(object? value) => DateTime.TryParse(value?.ToString(), out var date) ? date : null;
+    private static string FormatDate(DateTime? value) => value?.ToString("yyyy-MM-dd") ?? string.Empty;
+    private static string FormatDateRange(DateTime? start, DateTime? end) => (start, end) switch
+    {
+        (null, null) => "No dates set",
+        (null, not null) => $"Until {end:MMM dd, yyyy}",
+        (not null, null) => $"From {start:MMM dd, yyyy}",
+        _ => $"{start:MMM dd} – {end:MMM dd, yyyy}"
+    };
+}

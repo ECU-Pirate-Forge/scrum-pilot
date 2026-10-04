@@ -1,0 +1,16 @@
+.organization-management-page {
+    display: grid;
+    gap: var(--spacingVerticalL);
+}
+.org-create-card, .project-access-card, .deleted-organizations {
+    display: grid;
+    gap: var(--spacingVerticalM);
+}
+.owner-search {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--spacingHorizontalM);
+    align-items: end;
+}
+select { min-height: 2rem; }
+@media (max-width: 700px) { .owner-search { grid-template-columns: 1fr; } }
