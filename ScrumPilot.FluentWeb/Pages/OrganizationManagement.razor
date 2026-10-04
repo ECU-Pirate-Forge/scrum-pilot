@@ -1,0 +1,223 @@
+@page "/organization-management"
+@implements IDisposable
+@using System.Security.Claims
+@using ScrumPilot.FluentWeb.Components.Organizations
+@inject HttpClient Http
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject OrganizationStateService OrganizationState
+@inject ProjectStateService ProjectState
+@inject IAppNotificationService Notifications
+@inject ILogger<OrganizationManagement> Logger
+
+<PageTitle>Organization Management</PageTitle>
+
+<div class="organization-management-page">
+    <AppPageHeader Title="Organization Management" Subtitle="Manage organization details, members, project access and lifecycle." />
+
+    @if (_isAdmin)
+    {
+        <FluentCard Class="org-create-card">
+            <FluentText Tag="TextTag.H2" Size="TextSize.Size500" Weight="TextWeight.Semibold">Create organization</FluentText>
+            <label>Organization name <FluentTextInput @bind-Value="_newName" Required="true" /></label>
+            <FluentCheckbox @bind-Value="_useCurrentUser" Label="Make me the initial owner" />
+            @if (!_useCurrentUser)
+            {
+                <div class="owner-search">
+                    <label>Search initial owner by username or email <FluentTextInput @bind-Value="_ownerQuery" /></label>
+                    <FluentButton Appearance="ButtonAppearance.Outline" OnClick="SearchOwnersAsync">Search users</FluentButton>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(_searchFeedback))
+                {
+                    <FluentMessageBar Intent="MessageBarIntent.Info">@_searchFeedback</FluentMessageBar>
+                }
+                <label>Initial owner user ID
+                    <select @bind="_initialOwnerId">
+                        <option value="">Select a user</option>
+                        @foreach (var user in _ownerResults)
+                        {
+                            <option value="@user.Id">@user.UserName (@user.Email)</option>
+                        }
+                    </select>
+                </label>
+            }
+            else
+            {
+                <p class="sp-muted">Initial owner user ID: your authenticated account</p>
+            }
+            <FluentButton Appearance="ButtonAppearance.Primary" OnClick="CreateAsync">Create organization</FluentButton>
+        </FluentCard>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <AppErrorState Title="Unable to load organization management" Message="@_error" OnRetry="ReloadAsync" />
+    }
+    else if (_selected is null)
+    {
+        <AppEmptyState Title="Select an organization" Message="Choose an organization from the header to manage it." Icon="@(new Icons.Regular.Size24.Organization())" />
+    }
+    else
+    {
+        <OrganizationDetails Organization="_selected" OrganizationChanged="UpdateSelected" />
+        <OrganizationMembers OrganizationId="_selected.OrganizationId" CanManage="@(_selected.Role == OrganizationRole.Owner)" />
+        @foreach (var project in _projects)
+        {
+            <FluentCard Class="project-access-card">
+                <FluentText Tag="TextTag.H2" Size="TextSize.Size500" Weight="TextWeight.Semibold">@project.ProjectName access</FluentText>
+                <ProjectAccessEditor ProjectId="project.ProjectId" CanManage="@(_selected.Role == OrganizationRole.Owner)" />
+            </FluentCard>
+        }
+        <OrganizationDangerZone Organization="_selected" Changed="ReloadAsync" />
+    }
+
+    @if (_deletedOrganizations.Count > 0)
+    {
+        <section class="deleted-organizations" aria-labelledby="deleted-organizations-heading">
+            <FluentText Id="deleted-organizations-heading" Tag="TextTag.H2" Size="TextSize.Size500" Weight="TextWeight.Semibold">Deleted organizations</FluentText>
+            @foreach (var organization in _deletedOrganizations)
+            {
+                <FluentCard>
+                    <FluentText Tag="TextTag.H3" Size="TextSize.Size400" Weight="TextWeight.Semibold">@organization.Name</FluentText>
+                    <OrganizationDangerZone Organization="organization" CanPurge="_isAdmin" Changed="ReloadAsync" />
+                </FluentCard>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    private OrganizationSummaryDto? _selected;
+    private List<Project> _projects = [];
+    private List<OrganizationSummaryDto> _deletedOrganizations = [];
+    private bool _isAdmin;
+    private bool _useCurrentUser = true;
+    private string _currentUserId = string.Empty;
+    private string _initialOwnerId = string.Empty;
+    private string _ownerQuery = string.Empty;
+    private List<UserSummaryDto> _ownerResults = [];
+    private string _newName = string.Empty;
+    private string? _error;
+    private string? _searchFeedback;
+    private CancellationTokenSource? _cancellation;
+    private bool _disposed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
+        _isAdmin = user.IsInRole("Admin");
+        _currentUserId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? user.FindFirst("sub")?.Value ?? string.Empty;
+        OrganizationState.OnChange += OnOrganizationChanged;
+        await ReloadAsync();
+    }
+
+    private void OnOrganizationChanged()
+    {
+        if (_disposed) return;
+        _ = InvokeAsync(async () =>
+        {
+            if (_disposed) return;
+            await ReloadAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task ReloadAsync()
+    {
+        if (_disposed) return;
+        var cancellation = new CancellationTokenSource();
+        var previous = _cancellation;
+        _cancellation = cancellation;
+        previous?.Cancel();
+        previous?.Dispose();
+        var token = cancellation.Token;
+        try
+        {
+            var organizations = await Http.GetFromJsonAsync<List<OrganizationSummaryDto>>("api/organizations", token) ?? [];
+            if (_disposed || cancellation != _cancellation) return;
+            var selectedId = OrganizationState.SelectedOrganizationId;
+            _selected = organizations.FirstOrDefault(x => x.OrganizationId == selectedId) ?? organizations.FirstOrDefault();
+            var resolvedId = _selected?.OrganizationId;
+            if (OrganizationState.SelectedOrganizationId != resolvedId)
+            {
+                OrganizationState.OnChange -= OnOrganizationChanged;
+                if (_selected is null) OrganizationState.Clear(); else OrganizationState.SetOrganization(_selected);
+                OrganizationState.OnChange += OnOrganizationChanged;
+                ProjectState.Clear();
+            }
+            _projects = _selected is null ? [] : await Http.GetFromJsonAsync<List<Project>>($"api/organizations/{_selected.OrganizationId}/projects", token) ?? [];
+            if (_disposed || cancellation != _cancellation) return;
+            _deletedOrganizations = await Http.GetFromJsonAsync<List<OrganizationSummaryDto>>("api/organizations/deleted", token) ?? [];
+            if (_disposed || cancellation != _cancellation) return;
+            _error = null;
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (Exception ex) when (!_disposed && cancellation == _cancellation)
+        {
+            Logger.LogError(ex, "Unable to load organization management");
+            _error = "Unable to load organization management.";
+            Notifications.ShowError(_error);
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        _error = null;
+        var ownerId = _useCurrentUser ? _currentUserId : _initialOwnerId.Trim();
+        if (string.IsNullOrWhiteSpace(_newName) || string.IsNullOrWhiteSpace(ownerId))
+        {
+            _error = "Organization name and initial owner are required.";
+            return;
+        }
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/organizations", new CreateOrganizationRequest(_newName.Trim(), ownerId));
+            if (!response.IsSuccessStatusCode) { _error = "Unable to create the organization."; return; }
+            _newName = string.Empty;
+            Notifications.ShowSuccess("Organization created.");
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Unable to create organization");
+            _error = "Unable to create the organization.";
+        }
+    }
+
+    private async Task SearchOwnersAsync()
+    {
+        _searchFeedback = null;
+        if (_ownerQuery.Trim().Length < 2)
+        {
+            _ownerResults = [];
+            _searchFeedback = "Enter at least two characters to search.";
+            return;
+        }
+        try
+        {
+            _ownerResults = await Http.GetFromJsonAsync<List<UserSummaryDto>>($"api/User/admin-search?query={Uri.EscapeDataString(_ownerQuery.Trim())}") ?? [];
+            _searchFeedback = _ownerResults.Count == 0 ? "No users found." : null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Unable to search users");
+            _ownerResults = [];
+            _searchFeedback = "Unable to search users.";
+        }
+    }
+
+    private void UpdateSelected(OrganizationSummaryDto organization)
+    {
+        _selected = organization;
+        OrganizationState.SetOrganization(organization);
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        OrganizationState.OnChange -= OnOrganizationChanged;
+        var cancellation = _cancellation;
+        _cancellation = null;
+        cancellation?.Cancel();
+        cancellation?.Dispose();
+    }
+}

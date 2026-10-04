@@ -1,0 +1,135 @@
+<FluentCard Class="project-list-panel">
+    <div class="panel-header">
+        <div>
+            <FluentText Tag="TextTag.H2" Size="TextSize.Size500" Weight="TextWeight.Semibold">Projects</FluentText>
+            <p class="sp-muted">@Projects.Count project@(Projects.Count == 1 ? string.Empty : "s")</p>
+        </div>
+        @if (IsOwner)
+        {
+            <FluentButton Appearance="ButtonAppearance.Primary" IconStart="@(new Icons.Regular.Size20.Add())" OnClick="ShowCreateForm" Disabled="@_showCreateForm">Add</FluentButton>
+        }
+    </div>
+
+    @if (_showCreateForm)
+    {
+        <div class="editor-card" aria-label="Create project">
+            <label>Project name
+                <FluentTextInput @bind-Value="_newProject.ProjectName" Placeholder="Project name" Required="true" />
+            </label>
+            <label>Description
+                <FluentTextArea @bind-Value="_newProject.Description" Placeholder="What is this project for?" />
+            </label>
+            @if (!string.IsNullOrWhiteSpace(_validationMessage))
+            {
+                <FluentMessageBar Intent="MessageBarIntent.Warning">@_validationMessage</FluentMessageBar>
+            }
+            <div class="sp-row">
+                <FluentButton Appearance="ButtonAppearance.Primary" OnClick="CreateAsync" Disabled="@IsSaving">Save</FluentButton>
+                <FluentButton Appearance="ButtonAppearance.Outline" OnClick="CancelCreate" Disabled="@IsSaving">Cancel</FluentButton>
+            </div>
+        </div>
+    }
+
+    @if (IsLoading)
+    {
+        <AppLoadingState Message="Loading projects..." />
+    }
+    else if (Projects.Count == 0)
+    {
+        <AppEmptyState Title="No projects yet" Message="Create the first project for this organization." Icon="@(new Icons.Regular.Size24.Folder())" />
+    }
+    else
+    {
+        <FluentDataGrid TGridItem="Project" Items="@Projects.AsQueryable()" GridTemplateColumns="1fr auto" Class="management-grid">
+            <PropertyColumn Property="@(project => project.ProjectName)" Title="Project" Sortable="true" />
+            <TemplateColumn Title="Actions" Context="project">
+                <div class="row-actions">
+                    <FluentButton Appearance="@(SelectedProjectId == project.ProjectId ? ButtonAppearance.Primary : ButtonAppearance.Subtle)" OnClick="@(() => OnSelect.InvokeAsync(project))">Select</FluentButton>
+                    @if (IsOwner)
+                    {
+                        <FluentMenu>
+                            <FluentMenuButton Appearance="ButtonAppearance.Subtle" IconStart="@(new Icons.Regular.Size20.MoreHorizontal())" Title="Project actions" />
+                            <FluentMenuList>
+                                <FluentMenuItem OnClick="@(() => StartEdit(project))" IconStart="@(new Icons.Regular.Size20.Edit())">Edit</FluentMenuItem>
+                                <FluentMenuItem OnClick="@(() => OnDelete.InvokeAsync(project))" IconStart="@(new Icons.Regular.Size20.Delete())">Delete</FluentMenuItem>
+                            </FluentMenuList>
+                        </FluentMenu>
+                    }
+                </div>
+            </TemplateColumn>
+        </FluentDataGrid>
+    }
+
+    @if (_editingProject is not null)
+    {
+        <div class="editor-card" role="dialog" aria-modal="false" aria-label="Edit project">
+            <FluentText Tag="TextTag.H3" Size="TextSize.Size400" Weight="TextWeight.Semibold">Edit project</FluentText>
+            <label>Project name
+                <FluentTextInput @bind-Value="_editingProject.ProjectName" Required="true" />
+            </label>
+            <label>Description
+                <FluentTextArea @bind-Value="_editingProject.Description" />
+            </label>
+            <div class="sp-row">
+                <FluentButton Appearance="ButtonAppearance.Primary" OnClick="SaveEditAsync" Disabled="@IsSaving">Save changes</FluentButton>
+                <FluentButton Appearance="ButtonAppearance.Outline" OnClick="CancelEdit" Disabled="@IsSaving">Cancel</FluentButton>
+            </div>
+        </div>
+    }
+</FluentCard>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<Project> Projects { get; set; } = [];
+    [Parameter] public int? SelectedProjectId { get; set; }
+    [Parameter] public bool IsOwner { get; set; }
+    [Parameter] public bool IsLoading { get; set; }
+    [Parameter] public bool IsSaving { get; set; }
+    [Parameter] public EventCallback<Project> OnSelect { get; set; }
+    [Parameter] public EventCallback<ProjectEditorModel> OnCreate { get; set; }
+    [Parameter] public EventCallback<ProjectEditorModel> OnUpdate { get; set; }
+    [Parameter] public EventCallback<Project> OnDelete { get; set; }
+
+    private bool _showCreateForm;
+    private ProjectEditorModel _newProject = new();
+    private ProjectEditorModel? _editingProject;
+    private string? _validationMessage;
+
+    private void ShowCreateForm()
+    {
+        _validationMessage = null;
+        _newProject = new();
+        _showCreateForm = true;
+    }
+
+    private void CancelCreate()
+    {
+        _showCreateForm = false;
+        _validationMessage = null;
+        _newProject = new();
+    }
+
+    private async Task CreateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newProject.ProjectName))
+        {
+            _validationMessage = "Project name is required.";
+            return;
+        }
+        await OnCreate.InvokeAsync(_newProject);
+        CancelCreate();
+    }
+
+    private void StartEdit(Project project)
+    {
+        _editingProject = new ProjectEditorModel(project.ProjectId, project.ProjectName, project.Description ?? string.Empty);
+    }
+
+    private void CancelEdit() => _editingProject = null;
+
+    private async Task SaveEditAsync()
+    {
+        if (_editingProject is null || string.IsNullOrWhiteSpace(_editingProject.ProjectName)) return;
+        await OnUpdate.InvokeAsync(_editingProject);
+        _editingProject = null;
+    }
+}

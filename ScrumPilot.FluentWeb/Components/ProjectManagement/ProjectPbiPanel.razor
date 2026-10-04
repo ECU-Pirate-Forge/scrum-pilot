@@ -1,0 +1,164 @@
+<div class="management-section">
+    <div class="section-header">
+        <FluentText Tag="TextTag.H3" Size="TextSize.Size500" Weight="TextWeight.Semibold">Stories</FluentText>
+        @if (IsOwner)
+        {
+            <FluentButton Appearance="ButtonAppearance.Primary" IconStart="@(new Icons.Regular.Size20.Add())" OnClick="ShowCreate" Disabled="@(_editing is not null)">Add story</FluentButton>
+        }
+    </div>
+
+    <div class="filter-row" aria-label="Story filters">
+        <label>Sprint
+            <select value="@(_filterSprintId?.ToString() ?? string.Empty)" @onchange="OnSprintFilterChangedAsync">
+                <option value="">All sprints</option>
+                @foreach (var sprint in Sprints)
+                {
+                    <option value="@sprint.SprintId">@sprint.SprintTitle</option>
+                }
+            </select>
+        </label>
+        <label>Epic
+            <select value="@(_filterEpicId?.ToString() ?? string.Empty)" @onchange="OnEpicFilterChangedAsync">
+                <option value="">All epics</option>
+                @foreach (var epic in Epics)
+                {
+                    <option value="@epic.EpicId">@epic.Name</option>
+                }
+            </select>
+        </label>
+    </div>
+
+    @if (_editing is not null)
+    {
+        <div class="editor-card" role="dialog" aria-label="@(_editing.PbiId == 0 ? "Create story" : "Edit story")">
+            <FluentText Tag="TextTag.H4" Size="TextSize.Size400" Weight="TextWeight.Semibold">@(_editing.PbiId == 0 ? "New story" : "Edit story")</FluentText>
+            <label>Title <FluentTextInput @bind-Value="_editing.Title" Required="true" /></label>
+            <label>Description <FluentTextArea @bind-Value="_editing.Description" /></label>
+            <div class="field-grid">
+                <label>Type
+                    <select @bind="_editing.Type">
+                        @foreach (var value in Enum.GetValues<PbiType>()) { <option value="@value">@value</option> }
+                    </select>
+                </label>
+                <label>Priority
+                    <select @bind="_editing.Priority">
+                        @foreach (var value in Enum.GetValues<PbiPriority>()) { <option value="@value">@value</option> }
+                    </select>
+                </label>
+                <label>Status
+                    <select @bind="_editing.Status">
+                        @foreach (var value in Enum.GetValues<PbiStatus>()) { <option value="@value">@value</option> }
+                    </select>
+                </label>
+                <label>Story points
+                    <select @bind="_editing.StoryPoints">
+                        @foreach (var value in Enum.GetValues<PbiPoints>()) { <option value="@value">@((int)value)</option> }
+                    </select>
+                </label>
+            </div>
+            <div class="field-grid">
+                <label>Sprint
+                    <select value="@(_editing.SprintId?.ToString() ?? string.Empty)" @onchange="e => _editing.SprintId = ParseNullableInt(e.Value)">
+                        <option value="">Unassigned</option>
+                        @foreach (var sprint in Sprints) { <option value="@sprint.SprintId">@sprint.SprintTitle</option> }
+                    </select>
+                </label>
+                <label>Epic
+                    <select value="@(_editing.EpicId?.ToString() ?? string.Empty)" @onchange="e => _editing.EpicId = ParseNullableInt(e.Value)">
+                        <option value="">None</option>
+                        @foreach (var epic in Epics) { <option value="@epic.EpicId">@epic.Name</option> }
+                    </select>
+                </label>
+            </div>
+            <div class="sp-row">
+                <FluentButton Appearance="ButtonAppearance.Primary" OnClick="SaveAsync" Disabled="@IsSaving">Save story</FluentButton>
+                <FluentButton Appearance="ButtonAppearance.Outline" OnClick="CancelEdit" Disabled="@IsSaving">Cancel</FluentButton>
+            </div>
+        </div>
+    }
+
+    @if (Loading)
+    {
+        <AppLoadingState Message="Loading stories..." />
+    }
+    else if (Pbis.Count == 0)
+    {
+        <AppEmptyState Title="No stories" Message="Stories matching the selected filters will appear here." Icon="@(new Icons.Regular.Size24.TaskListSquareLtr())" />
+    }
+    else
+    {
+        <FluentDataGrid TGridItem="ProductBacklogItem" Items="@Pbis.AsQueryable()" GridTemplateColumns="1.5fr .7fr .7fr .7fr auto" Class="management-grid">
+            <PropertyColumn Property="@(pbi => pbi.Title)" Title="Title" Sortable="true" />
+            <PropertyColumn Property="@(pbi => pbi.Type)" Title="Type" />
+            <PropertyColumn Property="@(pbi => pbi.Priority)" Title="Priority" Sortable="true" />
+            <TemplateColumn Title="Status" Context="pbi"><AppStatusBadge Status="pbi.Status" /></TemplateColumn>
+            <TemplateColumn Title="Actions" Context="pbi">
+                @if (IsOwner)
+                {
+                    <FluentButton Appearance="ButtonAppearance.Subtle" OnClick="@(() => StartEdit(pbi))">Edit</FluentButton>
+                    <FluentButton Appearance="ButtonAppearance.Subtle" OnClick="@(() => OnDelete.InvokeAsync(pbi))">Delete</FluentButton>
+                }
+            </TemplateColumn>
+        </FluentDataGrid>
+    }
+</div>
+
+@code {
+    [Parameter] public int ProjectId { get; set; }
+    [Parameter] public IReadOnlyList<Sprint> Sprints { get; set; } = [];
+    [Parameter] public IReadOnlyList<Epic> Epics { get; set; } = [];
+    [Parameter] public IReadOnlyList<ProductBacklogItem> Pbis { get; set; } = [];
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public bool IsOwner { get; set; }
+    [Parameter] public bool IsSaving { get; set; }
+    [Parameter] public EventCallback<ProjectPbiFilter> OnLoad { get; set; }
+    [Parameter] public EventCallback<ProductBacklogItem> OnSave { get; set; }
+    [Parameter] public EventCallback<ProductBacklogItem> OnDelete { get; set; }
+
+    private int? _filterSprintId;
+    private int? _filterEpicId;
+    private ProductBacklogItem? _editing;
+
+    private void ShowCreate() => _editing = new ProductBacklogItem
+    {
+        ProjectId = ProjectId,
+        Title = string.Empty,
+        Description = string.Empty,
+        Type = PbiType.Story,
+        Status = PbiStatus.ToDo,
+        Priority = PbiPriority.Medium,
+        StoryPoints = PbiPoints.Zero,
+        Origin = PbiOrigin.WebUserCreated,
+        DateCreated = DateTime.UtcNow,
+        LastUpdated = DateTime.UtcNow
+    };
+
+    private void StartEdit(ProductBacklogItem pbi) => _editing = new ProductBacklogItem
+    {
+        PbiId = pbi.PbiId, ProjectId = pbi.ProjectId, Title = pbi.Title, Description = pbi.Description,
+        Type = pbi.Type, Status = pbi.Status, Priority = pbi.Priority, StoryPoints = pbi.StoryPoints,
+        SprintId = pbi.SprintId, EpicId = pbi.EpicId, AssignedToUserId = pbi.AssignedToUserId,
+        IssueLink = pbi.IssueLink, DependsOnPbiId = pbi.DependsOnPbiId, Origin = pbi.Origin,
+        IsDraft = pbi.IsDraft, IsFlagged = pbi.IsFlagged, DateCreated = pbi.DateCreated,
+        LastUpdated = pbi.LastUpdated
+    };
+
+    private void CancelEdit() => _editing = null;
+    private async Task SaveAsync()
+    {
+        if (_editing is null || string.IsNullOrWhiteSpace(_editing.Title)) return;
+        await OnSave.InvokeAsync(_editing);
+        _editing = null;
+    }
+    private async Task OnSprintFilterChangedAsync(ChangeEventArgs args)
+    {
+        _filterSprintId = ParseNullableInt(args.Value);
+        await OnLoad.InvokeAsync(new ProjectPbiFilter(_filterSprintId, _filterEpicId));
+    }
+    private async Task OnEpicFilterChangedAsync(ChangeEventArgs args)
+    {
+        _filterEpicId = ParseNullableInt(args.Value);
+        await OnLoad.InvokeAsync(new ProjectPbiFilter(_filterSprintId, _filterEpicId));
+    }
+    private static int? ParseNullableInt(object? value) => int.TryParse(value?.ToString(), out var result) ? result : null;
+}

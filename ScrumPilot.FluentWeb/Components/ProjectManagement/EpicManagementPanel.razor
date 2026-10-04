@@ -1,0 +1,79 @@
+<div class="management-section">
+    <div class="section-header">
+        <FluentText Tag="TextTag.H3" Size="TextSize.Size500" Weight="TextWeight.Semibold">Epics</FluentText>
+        @if (IsOwner)
+        {
+            <FluentButton Appearance="ButtonAppearance.Primary" IconStart="@(new Icons.Regular.Size20.Add())" OnClick="ShowCreate" Disabled="@_showCreate">Add epic</FluentButton>
+        }
+    </div>
+
+    @if (_showCreate)
+    {
+        <div class="editor-card">
+            <label>Epic name <FluentTextInput @bind-Value="_draftName" Required="true" /></label>
+            <div class="sp-row">
+                <FluentButton Appearance="ButtonAppearance.Primary" OnClick="CreateAsync" Disabled="@IsSaving">Save epic</FluentButton>
+                <FluentButton Appearance="ButtonAppearance.Outline" OnClick="CancelCreate" Disabled="@IsSaving">Cancel</FluentButton>
+            </div>
+        </div>
+    }
+
+    @if (Epics.Count == 0)
+    {
+        <AppEmptyState Title="No epics" Message="Group related stories by adding epics." Icon="@(new Icons.Regular.Size24.Flag())" />
+    }
+    else
+    {
+        <FluentDataGrid TGridItem="Epic" Items="@Epics.AsQueryable()" GridTemplateColumns="1fr auto" Class="management-grid">
+            <PropertyColumn Property="@(epic => epic.Name)" Title="Epic" Sortable="true" />
+            <TemplateColumn Title="Actions" Context="epic">
+                @if (IsOwner)
+                {
+                    <FluentButton Appearance="ButtonAppearance.Subtle" OnClick="@(() => StartEdit(epic))">Edit</FluentButton>
+                    <FluentButton Appearance="ButtonAppearance.Subtle" OnClick="@(() => OnDelete.InvokeAsync(epic))">Delete</FluentButton>
+                }
+            </TemplateColumn>
+        </FluentDataGrid>
+    }
+
+    @if (_editing is not null)
+    {
+        <div class="editor-card" role="dialog" aria-label="Edit epic">
+            <label>Epic name <FluentTextInput @bind-Value="_editing.Name" Required="true" /></label>
+            <div class="sp-row">
+                <FluentButton Appearance="ButtonAppearance.Primary" OnClick="SaveEditAsync" Disabled="@IsSaving">Save changes</FluentButton>
+                <FluentButton Appearance="ButtonAppearance.Outline" OnClick="CancelEdit" Disabled="@IsSaving">Cancel</FluentButton>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<Epic> Epics { get; set; } = [];
+    [Parameter] public bool IsOwner { get; set; }
+    [Parameter] public bool IsSaving { get; set; }
+    [Parameter] public EventCallback<Epic> OnCreate { get; set; }
+    [Parameter] public EventCallback<Epic> OnUpdate { get; set; }
+    [Parameter] public EventCallback<Epic> OnDelete { get; set; }
+
+    private bool _showCreate;
+    private string _draftName = string.Empty;
+    private Epic? _editing;
+    private void ShowCreate() { _draftName = string.Empty; _showCreate = true; }
+    private void CancelCreate() { _draftName = string.Empty; _showCreate = false; }
+    private async Task CreateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_draftName)) return;
+        await OnCreate.InvokeAsync(new Epic { Name = _draftName.Trim() });
+        CancelCreate();
+    }
+    private void StartEdit(Epic epic) => _editing = new Epic { EpicId = epic.EpicId, ProjectId = epic.ProjectId, Name = epic.Name, DateCreated = epic.DateCreated };
+    private void CancelEdit() => _editing = null;
+    private async Task SaveEditAsync()
+    {
+        if (_editing is null || string.IsNullOrWhiteSpace(_editing.Name)) return;
+        _editing.Name = _editing.Name.Trim();
+        await OnUpdate.InvokeAsync(_editing);
+        _editing = null;
+    }
+}
