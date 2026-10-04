@@ -1,0 +1,95 @@
+.widget-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    min-height: 100%;
+    background: var(--colorNeutralBackground1);
+    border: 1px solid var(--colorNeutralStroke2);
+    border-radius: var(--borderRadiusMedium);
+    box-shadow: var(--shadow4);
+    overflow: hidden;
+}
+
+.widget-header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacingHorizontalS);
+    min-height: 2.5rem;
+    padding: 0 var(--spacingHorizontalM);
+    border-bottom: 1px solid var(--colorNeutralStroke2);
+}
+
+.widget-title {
+    color: var(--colorNeutralForeground1);
+}
+
+.widget-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    padding: var(--spacingVerticalS) var(--spacingHorizontalM);
+    color: var(--colorNeutralForeground1);
+}
+
+.widget-loading,
+.widget-error {
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacingHorizontalS);
+    text-align: center;
+}
+
+.widget-error {
+    color: var(--colorPaletteRedForeground1);
+}
+
+::deep .widget-center,
+::deep .widget-empty,
+::deep .stat-card-content {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    align-items: center;
+    justify-content: center;
+}
+
+::deep .widget-empty {
+    color: var(--colorNeutralForeground3);
+    text-align: center;
+    font-size: var(--fontSizeBase300);
+}
+
+::deep .stat-card-content {
+    flex-direction: column;
+    gap: var(--spacingVerticalXS);
+}
+
+::deep .stat-number {
+    font-size: 2.5rem;
+    line-height: 1;
+    font-weight: 700;
+}
+
+::deep .stat-label {
+    color: var(--colorNeutralForeground2);
+    font-size: var(--fontSizeBase300);
+    font-weight: 600;
+}
+
+::deep .stat-caption {
+    color: var(--colorNeutralForeground3);
+}
+
+::deep .metric-progress-track {
+    width: min(16rem, 100%);
+    height: 0.5rem;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--colorNeutralBackground3);
+}
+
+::deep .metric-progress-fill {
+    height: 100%;
+    border-radius: inherit;
+}

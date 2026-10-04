@@ -1,0 +1,64 @@
+@using ApexCharts
+
+<WidgetCard Title="Time in Stage">
+    @if (_loading)
+    {
+        <div class="widget-center"><FluentSpinner Label="Loading time in stage" /></div>
+    }
+    else if (_data.Stages.Count > 0)
+    {
+        <ApexChart @key="_chartKey" TItem="TimeInStagePoint" Options="_options" Height="@("100%")">
+            <ApexPointSeries TItem="TimeInStagePoint" Items="@PointsFor("InProgress")" Name="In Progress" SeriesType="SeriesType.Bar" XValue="@(p => p.Bucket)" YValue="@(p => p.Count)" />
+            <ApexPointSeries TItem="TimeInStagePoint" Items="@PointsFor("InReview")" Name="In Review" SeriesType="SeriesType.Bar" XValue="@(p => p.Bucket)" YValue="@(p => p.Count)" />
+        </ApexChart>
+    }
+    else
+    {
+        <div class="widget-empty">No stage data yet — requires status transition history</div>
+    }
+</WidgetCard>
+
+@code {
+    [Parameter] public int? SprintId { get; set; }
+    [CascadingParameter(Name = "IsDarkMode")] public bool IsDarkMode { get; set; }
+    [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
+    [Inject] private ILogger<TimeInStageWidget> Logger { get; set; } = default!;
+
+    private TimeInStageData _data = new();
+    private ApexChartOptions<TimeInStagePoint> _options = new();
+    private bool _loading = true;
+    private int? _lastSprintId = -1;
+    private bool? _lastTheme;
+    private int _chartKey;
+    private static readonly string[] Buckets = ["≤1d", "2-3d", "4-8d", "9+d"];
+
+    private List<TimeInStagePoint> PointsFor(string stage) =>
+        Buckets.Select(b => _data.Points.FirstOrDefault(p => p.Stage == stage && p.Bucket == b) ?? new TimeInStagePoint(b, stage, 0)).ToList();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var themeChanged = _lastTheme != IsDarkMode;
+        if (_lastSprintId == SprintId && !themeChanged) return;
+        _lastSprintId = SprintId;
+        _lastTheme = IsDarkMode;
+        _loading = true;
+        try { _data = SprintId.HasValue ? await MetricsSvc.GetTimeInStageDataAsync(SprintId.Value) : new(); }
+        catch (Exception ex) { Logger.LogWarning(ex, "Failed to load time in stage for sprint {SprintId}", SprintId); _data = new(); }
+        _options = BuildOptions(IsDarkMode);
+        _chartKey++;
+        _loading = false;
+    }
+
+    private static ApexChartOptions<TimeInStagePoint> BuildOptions(bool isDark) => new()
+    {
+        Theme = MetricsChartTheme.Theme(isDark),
+        Chart = new Chart { Background = "transparent", Toolbar = new Toolbar { Show = false }, Stacked = false },
+        Colors = ["#1e88e5", "#43a047"],
+        PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { BorderRadius = 3, ColumnWidth = "60%" } },
+        Xaxis = new XAxis { Labels = new XAxisLabels { Style = MetricsChartTheme.AxisLabelStyle(isDark) }, Title = new AxisTitle { Text = "Time in Stage", Style = new AxisTitleStyle { Color = MetricsChartTheme.AxisText(isDark), FontSize = "11px" } } },
+        Yaxis = [new YAxis { Min = 0, TickAmount = 5, Labels = new YAxisLabels { Style = MetricsChartTheme.AxisLabelStyle(isDark), Formatter = "function(val) { return Math.floor(val) }" }, Title = new AxisTitle { Text = "Issues", Style = new AxisTitleStyle { Color = MetricsChartTheme.AxisText(isDark), FontSize = "11px" } } }],
+        Grid = new Grid { BorderColor = MetricsChartTheme.GridLine(isDark), Row = new GridRow { Colors = ["transparent"] } },
+        Legend = new Legend { Labels = MetricsChartTheme.LegendLabels(isDark), Position = LegendPosition.Top },
+        Tooltip = new Tooltip { Theme = MetricsChartTheme.GetApexMode(isDark), Y = new TooltipY { Formatter = "function(val) { return Math.floor(val) + ' issue' + (val !== 1 ? 's' : '') }" } }
+    };
+}

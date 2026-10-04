@@ -1,0 +1,238 @@
+@page "/draft-stories"
+@using System.Net.Http.Json
+@using ScrumPilot.FluentWeb.Components.Pbi
+@implements IDisposable
+@inject HttpClient Http
+@inject ProjectStateService ProjectState
+@inject IAppNotificationService Notifications
+@inject ILogger<DraftPbiPage> Logger
+
+<PageTitle>Draft PBIs</PageTitle>
+
+<div class="draft-pbi-page">
+    <AppPageHeader Title="Draft Stories" Subtitle="Review AI-generated PBIs before moving them into the active backlog." />
+
+    @if (!string.IsNullOrWhiteSpace(_successMessage))
+    {
+        <FluentMessageBar Intent="MessageBarIntent.Success">@_successMessage</FluentMessageBar>
+    }
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <FluentMessageBar Intent="MessageBarIntent.Error">@_errorMessage</FluentMessageBar>
+    }
+
+    @if (!ProjectState.SelectedProjectId.HasValue)
+    {
+        <AppEmptyState Title="Select a project" Message="Select a project to view its draft PBIs." Icon="@(new Icons.Regular.Size24.Folder())" />
+    }
+    else if (_loading)
+    {
+        <AppLoadingState Message="Loading draft PBIs..." />
+    }
+    else if (_loadFailed)
+    {
+        <AppErrorState Title="Draft PBIs could not be loaded" Message="Check your connection and try again." RetryLabel="Retry" OnRetry="LoadDraftPbisAsync" />
+    }
+    else if (_draftPbis.Count == 0)
+    {
+        <AppEmptyState Title="No draft PBIs found" Message="Generate PBIs from a problem statement to get started." Icon="@(new Icons.Regular.Size24.DocumentText())" />
+    }
+    else
+    {
+        <section class="sp-panel" aria-labelledby="draft-pbi-list-heading">
+            <h2 id="draft-pbi-list-heading">Draft PBIs (@_draftPbis.Count)</h2>
+            <div class="draft-pbi-list">
+                @foreach (var pbi in _draftPbis)
+                {
+                    <article class="draft-pbi-item">
+                        <div class="draft-pbi-item__content">
+                            <h3>@pbi.Title</h3>
+                            <p>@pbi.Description</p>
+                            <div class="draft-pbi-item__badges">
+                                <FluentBadge Appearance="BadgeAppearance.Tint" Color="BadgeColor.Warning">@pbi.Priority</FluentBadge>
+                                <FluentBadge Appearance="BadgeAppearance.Tint" Color="BadgeColor.Informative">@((int)pbi.StoryPoints) points</FluentBadge>
+                                <small class="sp-muted">Created @pbi.DateCreated.ToLocalTime().ToString("MMM d, yyyy")</small>
+                            </div>
+                        </div>
+                        <div class="draft-pbi-item__actions">
+                            <FluentButton Appearance="ButtonAppearance.Primary" OnClick="@(() => CommitPbiAsync(pbi))" Loading="@_committingIds.Contains(pbi.PbiId)" Disabled="@_committingIds.Contains(pbi.PbiId)">Commit</FluentButton>
+                            <FluentButton Appearance="ButtonAppearance.Outline" OnClick="@(() => ModifyPbi(pbi))">Modify</FluentButton>
+                            <FluentButton Appearance="ButtonAppearance.Outline" OnClick="@(() => RejectPbiAsync(pbi))" Loading="@_rejectingIds.Contains(pbi.PbiId)" Disabled="@_rejectingIds.Contains(pbi.PbiId)">Reject</FluentButton>
+                        </div>
+                    </article>
+                }
+            </div>
+        </section>
+    }
+
+    @if (_modifyingPbi is not null)
+    {
+        <PbiDetailsDialog Pbi="_modifyingPbi"
+                          Open="true"
+                          ProjectId="ProjectState.SelectedProjectId"
+                          OnSaved="HandleModifySaveAsync"
+                          OnCancelled="CloseModifyAsync"
+                          OnDeleted="HandleDeletedAsync" />
+    }
+</div>
+
+@code {
+    private readonly List<ProductBacklogItem> _draftPbis = [];
+    private readonly HashSet<int> _committingIds = [];
+    private readonly HashSet<int> _rejectingIds = [];
+    private bool _loading;
+    private bool _loadFailed;
+    private string _errorMessage = string.Empty;
+    private string _successMessage = string.Empty;
+    private ProductBacklogItem? _modifyingPbi;
+
+    protected override async Task OnInitializedAsync()
+    {
+        ProjectState.OnChange += HandleProjectChanged;
+        await LoadDraftPbisAsync();
+    }
+
+    public void Dispose() => ProjectState.OnChange -= HandleProjectChanged;
+
+    private void HandleProjectChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            _modifyingPbi = null;
+            await LoadDraftPbisAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadDraftPbisAsync()
+    {
+        _draftPbis.Clear();
+        _errorMessage = string.Empty;
+        _successMessage = string.Empty;
+        _loadFailed = false;
+
+        if (!ProjectState.SelectedProjectId.HasValue)
+        {
+            _loading = false;
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            var drafts = await Http.GetFromJsonAsync<List<ProductBacklogItem>>($"api/Pbi/getDraftPbis?projectId={ProjectState.SelectedProjectId.Value}") ?? [];
+            _draftPbis.AddRange(drafts);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Logger.LogWarning(ex, "Failed to load draft PBIs for project {ProjectId}", ProjectState.SelectedProjectId);
+            _loadFailed = true;
+            _errorMessage = "Failed to load draft PBIs.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task CommitPbiAsync(ProductBacklogItem pbi)
+    {
+        if (!_committingIds.Add(pbi.PbiId))
+        {
+            return;
+        }
+
+        _errorMessage = string.Empty;
+        _successMessage = string.Empty;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/Pbi/CommitPbi", pbi);
+            if (!response.IsSuccessStatusCode)
+            {
+                _errorMessage = "Failed to commit draft PBI.";
+                Notifications.ShowError(_errorMessage);
+                return;
+            }
+
+            _draftPbis.Remove(pbi);
+            _successMessage = $"Committed {pbi.Title}.";
+            Notifications.ShowSuccess(_successMessage);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Logger.LogWarning(ex, "Failed to commit draft PBI {PbiId}", pbi.PbiId);
+            _errorMessage = "Failed to connect to server.";
+            Notifications.ShowError(_errorMessage);
+        }
+        finally
+        {
+            _committingIds.Remove(pbi.PbiId);
+        }
+    }
+
+    private void ModifyPbi(ProductBacklogItem pbi) => _modifyingPbi = pbi;
+
+    private Task CloseModifyAsync()
+    {
+        _modifyingPbi = null;
+        return Task.CompletedTask;
+    }
+
+    private Task HandleModifySaveAsync(ProductBacklogItem pbi)
+    {
+        var index = _draftPbis.FindIndex(item => item.PbiId == pbi.PbiId);
+        if (index >= 0)
+        {
+            _draftPbis[index] = pbi;
+        }
+        _modifyingPbi = null;
+        _successMessage = $"Saved {pbi.Title}.";
+        return Task.CompletedTask;
+    }
+
+    private Task HandleDeletedAsync(int pbiId)
+    {
+        var item = _draftPbis.FirstOrDefault(pbi => pbi.PbiId == pbiId);
+        if (item is not null)
+        {
+            _draftPbis.Remove(item);
+        }
+        _modifyingPbi = null;
+        return Task.CompletedTask;
+    }
+
+    private async Task RejectPbiAsync(ProductBacklogItem pbi)
+    {
+        if (!_rejectingIds.Add(pbi.PbiId))
+        {
+            return;
+        }
+
+        _errorMessage = string.Empty;
+        _successMessage = string.Empty;
+        try
+        {
+            var response = await Http.DeleteAsync($"api/Pbi/{pbi.PbiId}");
+            if (!response.IsSuccessStatusCode)
+            {
+                _errorMessage = "Failed to reject draft PBI.";
+                Notifications.ShowError(_errorMessage);
+                return;
+            }
+
+            _draftPbis.Remove(pbi);
+            _successMessage = $"Rejected {pbi.Title}.";
+            Notifications.ShowSuccess(_successMessage);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Logger.LogWarning(ex, "Failed to reject draft PBI {PbiId}", pbi.PbiId);
+            _errorMessage = "Failed to connect to server.";
+            Notifications.ShowError(_errorMessage);
+        }
+        finally
+        {
+            _rejectingIds.Remove(pbi.PbiId);
+        }
+    }
+}

@@ -1,0 +1,13 @@
+.dependency-chart-page {
+    display: grid;
+    gap: var(--spacingVerticalL);
+}
+
+.dependency-chart {
+    min-height: 28rem;
+    overflow: auto;
+    padding: var(--spacingVerticalM) var(--spacingHorizontalM);
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: var(--borderRadiusMedium);
+    background: var(--colorNeutralBackground1);
+}

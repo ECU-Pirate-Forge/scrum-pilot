@@ -1,0 +1,77 @@
+.pp-participants {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacingVerticalS);
+}
+
+.pp-team-row {
+    display: flex;
+    gap: var(--spacingHorizontalM);
+    flex-wrap: wrap;
+    align-items: flex-start;
+}
+
+.pp-participant {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacingVerticalXS);
+    min-width: 5.5rem;
+    text-align: center;
+}
+
+.pp-participant-name {
+    color: var(--colorNeutralForeground1);
+    max-width: 8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pp-flip-card {
+    width: 3.75rem;
+    height: 5rem;
+    perspective: 600px;
+}
+
+.pp-flip-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transition: transform 0.5s ease;
+    transform-style: preserve-3d;
+}
+
+.pp-flip-card.pp-flipped .pp-flip-inner {
+    transform: rotateY(180deg);
+}
+
+.pp-flip-front,
+.pp-flip-back {
+    position: absolute;
+    inset: 0;
+    backface-visibility: hidden;
+    border-radius: var(--borderRadiusMedium);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--fontSizeBase500);
+    font-weight: var(--fontWeightBold);
+}
+
+.pp-flip-front {
+    background: var(--colorBrandBackground);
+    color: var(--colorNeutralForegroundOnBrand);
+    border: 2px solid var(--colorBrandStroke1, var(--colorBrandForeground1));
+}
+
+.pp-flip-back {
+    background: var(--colorNeutralBackground1);
+    color: var(--colorBrandForeground1);
+    border: 2px solid var(--colorBrandStroke1, var(--colorBrandForeground1));
+    transform: rotateY(180deg);
+}
+
+.pp-small {
+    font-size: var(--fontSizeBase200);
+}

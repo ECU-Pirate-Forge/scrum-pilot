@@ -4,13 +4,17 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ScrumPilot.FluentWeb</title>
+    <title>ScrumPilot</title>
     <base href="/" />
     <link rel="preload" id="webassembly" />
     <link href="_content/Microsoft.FluentUI.AspNetCore.Components/css/reboot.css" rel="stylesheet" />
+    <link href="_content/BlazorGridStack/gridstack/gridstack.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="css/brand-tokens.css" />
+    <link rel="stylesheet" href="css/utilities.css" />
     <link rel="stylesheet" href="css/app.css" />
     <link rel="icon" type="image/x-icon" href="favicon.ico" />
     <link href="ScrumPilot.FluentWeb.styles.css" rel="stylesheet" />
+    <script src="js/theme.js"></script>
     <script type="importmap"></script>
 </head>
 
@@ -28,6 +32,11 @@
         <a href="." class="reload">Reload</a>
         <span class="dismiss">🗙</span>
     </div>
+    <script src="_content/BlazorGridStack/gridstack/gridstack-all.js"></script>
+    <script src="js/metrics-gridstack.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script src="js/mermaid-helper.js"></script>
+    <script>if (window.mermaidHelper) { mermaidHelper.init(); }</script>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
 </body>
 

@@ -1,0 +1,46 @@
+.dashboard-tile {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: var(--spacingHorizontalM, 0.75rem);
+    align-items: start;
+    min-height: 8rem;
+    padding: var(--spacingHorizontalL, 1rem);
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: var(--borderRadiusLarge);
+    background: var(--colorNeutralBackground1);
+    color: var(--colorNeutralForeground1);
+    text-decoration: none;
+    box-shadow: var(--shadow2);
+    transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.dashboard-tile:hover {
+    border-color: var(--colorBrandStroke1);
+    box-shadow: var(--shadow4);
+    transform: translateY(-1px);
+}
+
+.dashboard-tile__icon {
+    display: inline-grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: var(--borderRadiusMedium);
+    background: var(--colorBrandBackground2);
+    color: var(--colorBrandForeground1);
+}
+
+.dashboard-tile__content {
+    display: grid;
+    gap: var(--spacingVerticalXS, 0.25rem);
+}
+
+.dashboard-tile__title {
+    font-weight: 600;
+    font-size: var(--fontSizeBase400);
+}
+
+.dashboard-tile__description {
+    color: var(--colorNeutralForeground2);
+    line-height: var(--lineHeightBase300);
+}

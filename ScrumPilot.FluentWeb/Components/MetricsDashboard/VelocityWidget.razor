@@ -1,0 +1,100 @@
+@using ApexCharts
+
+<WidgetCard Title="Sprint Velocity">
+    @if (_loading)
+    {
+        <div class="widget-center"><FluentSpinner Label="Loading velocity" /></div>
+    }
+    else if (_points.Count > 0)
+    {
+        <div class="velocity-stats-strip">
+            <div class="velocity-stat"><span class="velocity-stat-value">@_avgVelocity</span><span class="velocity-stat-label">avg pts / sprint</span></div>
+            <div class="velocity-stat-sep">→</div>
+            <div class="velocity-stat"><span class="velocity-stat-value velocity-recommended">@_recommended</span><span class="velocity-stat-label">recommended next sprint</span></div>
+            @if (_points.Count >= 2)
+            {
+                <div class="velocity-stat-sep"></div>
+                <div class="velocity-stat"><span class="velocity-stat-value @(_trend >= 0 ? "velocity-up" : "velocity-down")">@(_trend >= 0 ? "+" : "")@_trend%</span><span class="velocity-stat-label">trend vs prior sprint</span></div>
+            }
+        </div>
+        <div class="velocity-chart">
+            <ApexChart @key="_chartKey" TItem="VelocityPoint" Options="_options" Height="@("100%")">
+                <ApexPointSeries TItem="VelocityPoint" Items="_points" Name="Committed" SeriesType="SeriesType.Bar" XValue="@(p => p.SprintName)" YValue="@(p => (decimal)p.Committed)" />
+                <ApexPointSeries TItem="VelocityPoint" Items="_points" Name="Completed" SeriesType="SeriesType.Bar" XValue="@(p => p.SprintName)" YValue="@(p => (decimal)p.Completed)" />
+                <ApexPointSeries TItem="VelocityPoint" Items="_points" Name="Velocity Trend" SeriesType="SeriesType.Line" XValue="@(p => p.SprintName)" YValue="@(p => (decimal)p.Completed)" />
+            </ApexChart>
+        </div>
+    }
+    else
+    {
+        <div class="widget-empty">No sprint data yet</div>
+    }
+</WidgetCard>
+
+@code {
+    [Parameter] public int? SprintId { get; set; }
+    [Parameter] public int? ProjectId { get; set; }
+    [CascadingParameter(Name = "IsDarkMode")] public bool IsDarkMode { get; set; }
+    [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
+    [Inject] private ILogger<VelocityWidget> Logger { get; set; } = default!;
+
+    private List<VelocityPoint> _points = [];
+    private ApexChartOptions<VelocityPoint> _options = new();
+    private bool _loading = true;
+    private int? _lastSprintId = -1;
+    private int? _lastProjectId = -1;
+    private bool? _lastTheme;
+    private int _chartKey;
+    private double _avgVelocity;
+    private double _recommended;
+    private int _trend;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var themeChanged = _lastTheme != IsDarkMode;
+        if (_lastSprintId == SprintId && _lastProjectId == ProjectId && !themeChanged) return;
+        _lastSprintId = SprintId;
+        _lastProjectId = ProjectId;
+        _lastTheme = IsDarkMode;
+        _loading = true;
+        try { _points = await MetricsSvc.GetVelocityDataAsync(SprintId, ProjectId); }
+        catch (Exception ex) { Logger.LogWarning(ex, "Failed to load velocity for project {ProjectId} sprint {SprintId}", ProjectId, SprintId); _points = []; }
+        ComputeStats();
+        _options = BuildOptions(_avgVelocity, IsDarkMode);
+        _chartKey++;
+        _loading = false;
+    }
+
+    private void ComputeStats()
+    {
+        _avgVelocity = 0;
+        _recommended = 0;
+        _trend = 0;
+        if (_points.Count == 0) return;
+        _avgVelocity = Math.Round(_points.Average(p => p.Completed), 1);
+        var recent = _points.TakeLast(3).ToList();
+        _recommended = Math.Round(recent.Average(p => p.Completed), 1);
+        if (_points.Count >= 2)
+        {
+            var prev = _points[^2].Completed;
+            var last = _points[^1].Completed;
+            _trend = prev > 0 ? (int)Math.Round((last - prev) / prev * 100) : 0;
+        }
+    }
+
+    private static ApexChartOptions<VelocityPoint> BuildOptions(double avg, bool isDark) => new()
+    {
+        Theme = MetricsChartTheme.Theme(isDark),
+        Chart = new Chart { Background = "transparent", Toolbar = new Toolbar { Show = false } },
+        Colors = ["#64748b", "#1e88e5", "#00d4ff"],
+        PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { ColumnWidth = "55%", BorderRadius = 3 } },
+        Stroke = new Stroke { Width = [0, 0, 3], Curve = [Curve.Straight, Curve.Straight, Curve.Smooth] },
+        Markers = new Markers { Size = 5 },
+        Annotations = new Annotations { Yaxis = [new AnnotationsYAxis { Y = (decimal)avg, BorderColor = "#f59e0b", StrokeDashArray = 5, Label = new Label { Text = $"Avg {avg} pts", BorderColor = "#f59e0b", Style = new Style { Color = "#f59e0b", Background = MetricsChartTheme.AnnotationBackground(isDark), FontSize = "11px" } } }] },
+        Xaxis = new XAxis { Labels = new XAxisLabels { Style = MetricsChartTheme.AxisLabelStyle(isDark) } },
+        Yaxis = [new YAxis { Labels = new YAxisLabels { Style = MetricsChartTheme.AxisLabelStyle(isDark) } }],
+        Grid = new Grid { BorderColor = MetricsChartTheme.GridLine(isDark), Row = new GridRow { Colors = ["transparent"] } },
+        Legend = new Legend { Labels = MetricsChartTheme.LegendLabels(isDark), Position = LegendPosition.Top },
+        Tooltip = MetricsChartTheme.Tooltip(isDark)
+    };
+}

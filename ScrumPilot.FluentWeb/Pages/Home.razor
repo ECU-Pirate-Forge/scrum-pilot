@@ -1,23 +1,22 @@
-﻿@page "/"
+@page "/"
 @using System.Security.Claims
 @inject AuthenticationStateProvider AuthState
 
 <PageTitle>ScrumPilot</PageTitle>
 
-<div class="page-shell">
-    <h1>Welcome back to ScrumPilot, @_userName!</h1>
-    <p class="subtitle">A migration-focused dashboard for sprint execution, planning, and delivery.</p>
+<div class="home-page">
+    <AppPageHeader Title="ScrumPilot dashboard" Subtitle="@($"Welcome back, {_userName}. Choose a workspace area to continue.")" />
 
-    <div class="dashboard-grid">
-        <DashboardTile Title="Scrum Board" Description="Track sprint work and keep delivery moving." Href="/scrum-board" />
-        <DashboardTile Title="Generate PBIs" Description="Create product backlog items quickly." Href="/pbi-generation" />
-        <DashboardTile Title="Draft PBIs" Description="Review and refine draft backlog items." Href="/draft-stories" />
-        <DashboardTile Title="Backlog" Description="Review and arrange backlog priorities." Href="/backlog" />
-        <DashboardTile Title="Metrics Dashboard" Description="Monitor sprint throughput and trends." Href="/metrics" />
-        <DashboardTile Title="Planning Poker" Description="Estimate stories with the team." Href="/planning-poker" />
-        <DashboardTile Title="Manage Project" Description="Operate projects, epics, and milestones." Href="/project-management" />
-        <DashboardTile Title="User Settings" Description="Control account preferences and defaults." Href="/user-settings" />
-    </div>
+    <section class="dashboard-grid" aria-label="ScrumPilot dashboard links">
+        <DashboardTile Title="Scrum Board" Description="View and manage sprint work." Href="/scrum-board" Icon="@(new Icons.Regular.Size20.BoardSplit())" />
+        <DashboardTile Title="Generate PBIs" Description="Create product backlog items quickly." Href="/pbigeneration" Icon="@(new Icons.Regular.Size20.Lightbulb())" />
+        <DashboardTile Title="Draft PBIs" Description="Review and refine drafted product backlog items." Href="/draft-pbis" Icon="@(new Icons.Regular.Size20.DocumentText())" />
+        <DashboardTile Title="Backlog" Description="View and manage backlog items." Href="/backlog" Icon="@(new Icons.Regular.Size20.TaskListSquareLtr())" />
+        <DashboardTile Title="Metrics Dashboard" Description="Sprint metrics and PBI analytics." Href="/metrics" Icon="@(new Icons.Regular.Size20.DataBarVertical())" />
+        <DashboardTile Title="Planning Poker" Description="Estimate stories with your team in real time." Href="/planning-poker" Icon="@(new Icons.Regular.Size20.NumberSymbol())" />
+        <DashboardTile Title="Manage Project" Description="Create and manage projects, sprints, epics, and PBIs." Href="/project-management" Icon="@(new Icons.Regular.Size20.Building())" />
+        <DashboardTile Title="User Settings" Description="Manage your account, theme, and default project." Href="/user-settings" Icon="@(new Icons.Regular.Size20.PersonCircle())" />
+    </section>
 </div>
 
 @code {
@@ -32,20 +31,3 @@
             ?? "there";
     }
 }
-
-<style>
-    .page-shell {
-        padding: 1.5rem;
-    }
-
-    .subtitle {
-        color: var(--neutral-fill-secondary-rest);
-        margin-bottom: 1.5rem;
-    }
-
-    .dashboard-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 1rem;
-    }
-</style>

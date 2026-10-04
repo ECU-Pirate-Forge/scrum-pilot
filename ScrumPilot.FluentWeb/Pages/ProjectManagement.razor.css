@@ -1,0 +1,18 @@
+.project-management-page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacingVerticalL);
+}
+
+.project-management-layout {
+    display: grid;
+    grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+    gap: var(--spacingHorizontalL);
+    align-items: start;
+}
+
+@media (max-width: 900px) {
+    .project-management-layout {
+        grid-template-columns: 1fr;
+    }
+}

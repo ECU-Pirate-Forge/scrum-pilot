@@ -1,0 +1,377 @@
+@page "/metrics"
+@implements IAsyncDisposable
+@using Microsoft.JSInterop
+@using ScrumPilot.FluentWeb.Components.MetricsDashboard
+@inject ProjectStateService ProjectState
+@inject MetricsDashboardService MetricsSvc
+@inject IJSRuntime JS
+@inject ILogger<MetricsDashboard> Logger
+
+<PageTitle>Metrics</PageTitle>
+
+<div class="metrics-root">
+    <AppPageHeader Title="Metrics Dashboard" Subtitle="Inspect sprint health, throughput, and work in progress.">
+        <Actions>
+            <FluentMenu>
+                <FluentMenuButton Appearance="ButtonAppearance.Outline"
+                                  IconStart="@(new Icons.Regular.Size20.CalendarLtr().WithColor("currentColor"))"
+                                  Disabled="@(_sprints.Count == 0)">
+                    @SelectedSprintLabel
+                </FluentMenuButton>
+                <FluentMenuList>
+                    <FluentMenuItem Role="MenuItemRole.MenuItemRadio" Checked="@(!_selectedSprintId.HasValue)" OnClick="@(() => OnSprintChangedAsync(null))">All Sprints</FluentMenuItem>
+                    @foreach (var option in SprintOptions)
+                    {
+                        var sprintId = option.Sprint.SprintId;
+                        <FluentMenuItem Role="MenuItemRole.MenuItemRadio" Checked="@(_selectedSprintId == sprintId)" OnClick="@(() => OnSprintChangedAsync(sprintId))">
+                            @option.Label
+                        </FluentMenuItem>
+                    }
+                </FluentMenuList>
+            </FluentMenu>
+
+            <FluentMenu>
+                <FluentMenuButton Appearance="ButtonAppearance.Primary"
+                                  IconStart="@(new Icons.Regular.Size20.MoreHorizontal().WithColor("currentColor"))"
+                                  Title="Dashboard settings">
+                    Widgets
+                </FluentMenuButton>
+                <FluentMenuList>
+                    @foreach (var widget in _widgetPrefs)
+                    {
+                        var id = widget.Id;
+                        <FluentMenuItem Role="MenuItemRole.MenuItemCheckbox" Checked="@widget.Visible" OnClick="@(() => OnWidgetToggledAsync(id, !widget.Visible))">
+                            @GetWidgetName(id)
+                        </FluentMenuItem>
+                    }
+                    <FluentDivider />
+                    <FluentMenuItem IconStart="@(new Icons.Regular.Size20.ArrowReset())" OnClick="ResetPreferencesAsync">Reset to defaults</FluentMenuItem>
+                </FluentMenuList>
+            </FluentMenu>
+        </Actions>
+    </AppPageHeader>
+
+    @if (_selectedSprint?.SprintGoal is { Length: > 0 } goal)
+    {
+        <FluentCard Class="sprint-goal-card">
+            <FluentText Size="TextSize.Size200" Weight="TextWeight.Semibold">Sprint goal</FluentText>
+            <FluentText Size="TextSize.Size300">@goal</FluentText>
+        </FluentCard>
+    }
+
+    @if (_loading)
+    {
+        <AppLoadingState Message="Loading metrics…" />
+    }
+    else if (!_selectedProjectId.HasValue)
+    {
+        <AppEmptyState Title="Select a project" Message="Choose a project from the header to view dashboard metrics." Icon="@(new Icons.Regular.Size24.DataTrending())" />
+    }
+    else
+    {
+        <div class="grid-stack metrics-grid" data-testid="metrics-grid">
+            @if (IsVisible("days-left"))
+            {
+                var p = GetWidget("days-left");
+                <div class="grid-stack-item" gs-id="days-left" gs-x="@p.X" gs-y="@p.Y" gs-w="@p.W" gs-h="@p.H"><div class="grid-stack-item-content"><DaysLeftWidget Sprint="_selectedSprint" /></div></div>
+            }
+            @if (IsVisible("committed-points"))
+            {
+                var p = GetWidget("committed-points");
+                <div class="grid-stack-item" gs-id="committed-points" gs-x="@p.X" gs-y="@p.Y" gs-w="@p.W" gs-h="@p.H"><div class="grid-stack-item-content"><CommittedPointsWidget SprintId="_selectedSprintId" /></div></div>
+            }
+            @if (IsVisible("remaining-points"))
+            {
+                var p = GetWidget("remaining-points");
+                <div class="grid-stack-item" gs-id="remaining-points" gs-x="@p.X" gs-y="@p.Y" gs-w="@p.W" gs-h="@p.H"><div class="grid-stack-item-content"><RemainingPointsWidget SprintId="_selectedSprintId" /></div></div>
+            }
+            @if (IsVisible("sprint-progress"))
+            {
+                var p = GetWidget("sprint-progress");
+                <div class="grid-stack-item" gs-id="sprint-progress" gs-x="@p.X" gs-y="@p.Y" gs-w="@p.W" gs-h="@p.H"><div class="grid-stack-item-content"><SprintProgressWidget SprintId="_selectedSprintId" /></div></div>
+            }
+            @if (IsVisible("burndown"))
+            {
+                var p = GetWidget("burndown");
+                <div class="grid-stack-item" gs-id="burndown" gs-x="@p.X" gs-y="@p.Y" gs-w="@p.W" gs-h="@p.H"><div class="grid-stack-item-content"><BurndownWidget SprintId="_selectedSprintId" /></div></div>
+            }
+            @if (IsVisible("wip-table"))
+            {
+                var p = GetWidget("wip-table");
+                <div class="grid-stack-item" gs-id="wip-table" gs-x="@p.X" gs-y="@p.Y" gs-w="@p.W" gs-h="@p.H"><div class="grid-stack-item-content"><WipTableWidget SprintId="_selectedSprintId" /></div></div>
+            }
+            @if (IsVisible("velocity"))
+            {
+                var p = GetWidget("velocity");
+                <div class="grid-stack-item" gs-id="velocity" gs-x="@p.X" gs-y="@p.Y" gs-w="@p.W" gs-h="@p.H"><div class="grid-stack-item-content"><VelocityWidget SprintId="_selectedSprintId" ProjectId="_selectedProjectId" /></div></div>
+            }
+            @if (IsVisible("status-distribution"))
+            {
+                var p = GetWidget("status-distribution");
+                <div class="grid-stack-item" gs-id="status-distribution" gs-x="@p.X" gs-y="@p.Y" gs-w="@p.W" gs-h="@p.H"><div class="grid-stack-item-content"><WidgetCard Title="Status Distribution"><StatusDistributionWidget Items="_pbis" /></WidgetCard></div></div>
+            }
+            @if (IsVisible("bug-trend"))
+            {
+                var p = GetWidget("bug-trend");
+                <div class="grid-stack-item" gs-id="bug-trend" gs-x="@p.X" gs-y="@p.Y" gs-w="@p.W" gs-h="@p.H"><div class="grid-stack-item-content"><BugTrendWidget SprintId="_selectedSprintId" /></div></div>
+            }
+            @if (IsVisible("cycle-time"))
+            {
+                var p = GetWidget("cycle-time");
+                <div class="grid-stack-item" gs-id="cycle-time" gs-x="@p.X" gs-y="@p.Y" gs-w="@p.W" gs-h="@p.H"><div class="grid-stack-item-content"><CycleTimeWidget SprintId="_selectedSprintId" /></div></div>
+            }
+            @if (IsVisible("work-by-status"))
+            {
+                var p = GetWidget("work-by-status");
+                <div class="grid-stack-item" gs-id="work-by-status" gs-x="@p.X" gs-y="@p.Y" gs-w="@p.W" gs-h="@p.H"><div class="grid-stack-item-content"><WorkByStatusWidget SprintId="_selectedSprintId" /></div></div>
+            }
+            @if (IsVisible("time-in-stage"))
+            {
+                var p = GetWidget("time-in-stage");
+                <div class="grid-stack-item" gs-id="time-in-stage" gs-x="@p.X" gs-y="@p.Y" gs-w="@p.W" gs-h="@p.H"><div class="grid-stack-item-content"><TimeInStageWidget SprintId="_selectedSprintId" /></div></div>
+            }
+            @if (IsVisible("pbi-type"))
+            {
+                var p = GetWidget("pbi-type");
+                <div class="grid-stack-item" gs-id="pbi-type" gs-x="@p.X" gs-y="@p.Y" gs-w="@p.W" gs-h="@p.H"><div class="grid-stack-item-content"><WidgetCard Title="PBI by Type"><PbiTypeWidget Items="_pbis" /></WidgetCard></div></div>
+            }
+            @if (IsVisible("pbi-priority"))
+            {
+                var p = GetWidget("pbi-priority");
+                <div class="grid-stack-item" gs-id="pbi-priority" gs-x="@p.X" gs-y="@p.Y" gs-w="@p.W" gs-h="@p.H"><div class="grid-stack-item-content"><WidgetCard Title="PBI by Priority"><PriorityWidget Items="_pbis" /></WidgetCard></div></div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [CascadingParameter(Name = "IsDarkMode")] private bool IsDarkMode { get; set; }
+
+    private int? _selectedProjectId => ProjectState.SelectedProjectId;
+    private List<Sprint> _sprints = [];
+    private IReadOnlyList<ProductBacklogItem> _pbis = [];
+    private int? _selectedSprintId;
+    private Sprint? _selectedSprint;
+    private bool _loading = true;
+    private bool _gridInitialized;
+    private bool _gridNeedsReinit;
+    private bool? _lastRenderedTheme;
+    private DotNetObjectReference<MetricsDashboard>? _dotnetRef;
+    private List<DashboardWidgetConfig> _widgetPrefs = DefaultLayout();
+
+    private string SelectedSprintLabel => _selectedSprintId.HasValue ? SprintOptions.FirstOrDefault(o => o.Sprint.SprintId == _selectedSprintId.Value)?.Label ?? "Selected sprint" : "All Sprints";
+
+    private IEnumerable<SprintOption> SprintOptions
+    {
+        get
+        {
+            var allByDate = _sprints.OrderBy(s => s.StartDate ?? DateTime.MaxValue).ThenBy(s => s.SprintId).ToList();
+            foreach (var sprint in allByDate.AsEnumerable().Reverse())
+            {
+                var number = allByDate.IndexOf(sprint) + 1;
+                yield return new SprintOption(sprint, $"Sprint {number}{(sprint.IsOpen ? " ●" : string.Empty)}");
+            }
+        }
+    }
+
+    private static List<DashboardWidgetConfig> DefaultLayout() =>
+    [
+        new() { Id = "days-left", Visible = true, X = 0, Y = 0, W = 3, H = 3 },
+        new() { Id = "committed-points", Visible = true, X = 3, Y = 0, W = 3, H = 3 },
+        new() { Id = "remaining-points", Visible = true, X = 6, Y = 0, W = 3, H = 3 },
+        new() { Id = "sprint-progress", Visible = true, X = 9, Y = 0, W = 3, H = 3 },
+        new() { Id = "burndown", Visible = true, X = 0, Y = 3, W = 6, H = 4 },
+        new() { Id = "wip-table", Visible = true, X = 6, Y = 3, W = 6, H = 4 },
+        new() { Id = "velocity", Visible = true, X = 0, Y = 7, W = 6, H = 4 },
+        new() { Id = "status-distribution", Visible = true, X = 6, Y = 7, W = 6, H = 4 },
+        new() { Id = "bug-trend", Visible = true, X = 0, Y = 11, W = 4, H = 4 },
+        new() { Id = "cycle-time", Visible = true, X = 4, Y = 11, W = 4, H = 4 },
+        new() { Id = "work-by-status", Visible = true, X = 8, Y = 11, W = 4, H = 4 },
+        new() { Id = "time-in-stage", Visible = true, X = 0, Y = 15, W = 12, H = 5 },
+        new() { Id = "pbi-type", Visible = true, X = 0, Y = 20, W = 6, H = 4 },
+        new() { Id = "pbi-priority", Visible = true, X = 6, Y = 20, W = 6, H = 4 },
+    ];
+
+    private static readonly Dictionary<string, string> WidgetNames = new()
+    {
+        ["days-left"] = "Days Left",
+        ["committed-points"] = "Committed Points",
+        ["remaining-points"] = "Remaining Points",
+        ["sprint-progress"] = "Sprint Progress",
+        ["burndown"] = "Burndown Chart",
+        ["wip-table"] = "WIP Table",
+        ["velocity"] = "Velocity",
+        ["status-distribution"] = "Status Distribution",
+        ["bug-trend"] = "Bug Trend",
+        ["cycle-time"] = "Cycle Time",
+        ["work-by-status"] = "Work by Status",
+        ["time-in-stage"] = "Time in Stage",
+        ["pbi-type"] = "PBI by Type",
+        ["pbi-priority"] = "PBI by Priority",
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        ProjectState.OnChange += HandleProjectStateChanged;
+        await LoadForCurrentProjectAsync();
+        _loading = false;
+    }
+
+    private void HandleProjectStateChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            _loading = true;
+            _selectedSprintId = null;
+            _selectedSprint = null;
+            _pbis = [];
+            _sprints = [];
+            StateHasChanged();
+            await LoadForCurrentProjectAsync();
+            _loading = false;
+            _gridNeedsReinit = true;
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadForCurrentProjectAsync()
+    {
+        var projectId = ProjectState.SelectedProjectId;
+        if (!projectId.HasValue) return;
+
+        try
+        {
+            _sprints = await MetricsSvc.GetSprintsByProjectAsync(projectId.Value);
+            var now = DateTime.UtcNow.Date;
+            var mostRecent = _sprints.Where(s => s.IsOpen).OrderByDescending(s => s.StartDate ?? DateTime.MinValue).ThenByDescending(s => s.SprintId).FirstOrDefault()
+                ?? _sprints.Where(s => s.StartDate.HasValue && s.StartDate.Value.Date <= now).OrderByDescending(s => s.StartDate).FirstOrDefault()
+                ?? _sprints.OrderByDescending(s => s.SprintId).FirstOrDefault();
+            _selectedSprintId = mostRecent?.SprintId;
+            _selectedSprint = mostRecent;
+            _pbis = await MetricsSvc.GetPbisForSprintAsync(_selectedSprintId, projectId.Value);
+            _widgetPrefs = DefaultLayout();
+            var saved = await MetricsSvc.GetDashboardPreferencesAsync(projectId.Value);
+            if (saved?.Widgets?.Count > 0) MergePreferences(saved.Widgets);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load metrics dashboard for project {ProjectId}", projectId);
+            _sprints = [];
+            _pbis = [];
+        }
+    }
+
+    private void MergePreferences(List<DashboardWidgetConfig> saved)
+    {
+        foreach (var pref in _widgetPrefs)
+        {
+            var match = saved.FirstOrDefault(s => s.Id == pref.Id);
+            if (match is null) continue;
+            pref.Visible = match.Visible;
+            pref.X = match.X;
+            pref.Y = match.Y;
+            pref.W = match.W > 0 ? match.W : pref.W;
+            pref.H = match.H > 0 ? match.H : pref.H;
+        }
+    }
+
+    private bool IsVisible(string id) => GetWidget(id).Visible;
+    private DashboardWidgetConfig GetWidget(string id) => _widgetPrefs.FirstOrDefault(w => w.Id == id) ?? DefaultLayout().First(w => w.Id == id);
+    private static string GetWidgetName(string id) => WidgetNames.TryGetValue(id, out var name) ? name : id;
+
+    private async Task OnSprintChangedAsync(int? sprintId)
+    {
+        _selectedSprintId = sprintId;
+        _selectedSprint = sprintId.HasValue ? _sprints.FirstOrDefault(s => s.SprintId == sprintId.Value) : null;
+        try { _pbis = await MetricsSvc.GetPbisForSprintAsync(sprintId, _selectedProjectId); }
+        catch (Exception ex) { Logger.LogWarning(ex, "Failed to load PBIs for sprint {SprintId}", sprintId); _pbis = []; }
+        StateHasChanged();
+    }
+
+    private async Task OnWidgetToggledAsync(string id, bool visible)
+    {
+        await CaptureLayoutAsync();
+        var widget = _widgetPrefs.FirstOrDefault(w => w.Id == id);
+        if (widget is not null) widget.Visible = visible;
+        _gridNeedsReinit = true;
+        await SavePreferencesAsync();
+        StateHasChanged();
+    }
+
+    private async Task ResetPreferencesAsync()
+    {
+        _widgetPrefs = DefaultLayout();
+        _gridNeedsReinit = true;
+        await SavePreferencesAsync();
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public async Task OnLayoutChanged(List<DashboardWidgetConfig> layout)
+    {
+        ApplyLayout(layout);
+        await SavePreferencesAsync();
+    }
+
+    private async Task CaptureLayoutAsync()
+    {
+        try
+        {
+            var currentLayout = await JS.InvokeAsync<List<DashboardWidgetConfig>>("metricsGridstack.getLayout");
+            ApplyLayout(currentLayout);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Unable to capture dashboard grid layout before updating visibility");
+        }
+    }
+
+    private void ApplyLayout(IEnumerable<DashboardWidgetConfig> layout)
+    {
+        foreach (var item in layout)
+        {
+            var pref = _widgetPrefs.FirstOrDefault(w => w.Id == item.Id);
+            if (pref is null) continue;
+            pref.X = item.X;
+            pref.Y = item.Y;
+            pref.W = item.W;
+            pref.H = item.H;
+        }
+    }
+
+    private async Task SavePreferencesAsync()
+    {
+        if (!_selectedProjectId.HasValue) return;
+        await MetricsSvc.SaveDashboardPreferencesAsync(new DashboardPreferenceDto { Widgets = _widgetPrefs }, _selectedProjectId.Value);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_lastRenderedTheme != IsDarkMode)
+        {
+            _lastRenderedTheme = IsDarkMode;
+            _gridNeedsReinit = true;
+        }
+
+        if (!_loading && (!_gridInitialized || _gridNeedsReinit))
+        {
+            _gridInitialized = true;
+            _gridNeedsReinit = false;
+            _dotnetRef?.Dispose();
+            _dotnetRef = DotNetObjectReference.Create(this);
+            var visibleLayout = _widgetPrefs.Where(w => w.Visible).Select(w => new { id = w.Id, x = w.X, y = w.Y, w = w.W, h = w.H }).ToList();
+            try { await JS.InvokeVoidAsync("metricsGridstack.init", _dotnetRef, visibleLayout); }
+            catch (Exception ex) { Logger.LogDebug(ex, "Unable to initialize metrics dashboard grid"); }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        ProjectState.OnChange -= HandleProjectStateChanged;
+        try { await JS.InvokeVoidAsync("metricsGridstack.destroy"); }
+        catch (Exception ex) { Logger.LogDebug(ex, "Unable to destroy metrics dashboard grid"); }
+        _dotnetRef?.Dispose();
+    }
+
+    private sealed record SprintOption(Sprint Sprint, string Label);
+}

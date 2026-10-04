@@ -1,0 +1,9 @@
+.details-panel {
+    min-height: 30rem;
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--spacingHorizontalM);
+}

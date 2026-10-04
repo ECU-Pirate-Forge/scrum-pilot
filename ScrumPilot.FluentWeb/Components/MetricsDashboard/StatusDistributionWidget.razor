@@ -1,0 +1,53 @@
+@using ApexCharts
+
+@if (Items.Count > 0)
+{
+    <ApexChart @key="_chartKey" TItem="StatusPoint" Options="_options" Height="@("100%")">
+        <ApexPointSeries TItem="StatusPoint" Items="_points" Name="PBIs" SeriesType="SeriesType.Bar" XValue="@(p => p.Label)" YValue="@(p => p.Count)" />
+    </ApexChart>
+}
+else
+{
+    <div class="widget-empty">No data.</div>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<ProductBacklogItem> Items { get; set; } = [];
+    [CascadingParameter(Name = "IsDarkMode")] public bool IsDarkMode { get; set; }
+
+    private record StatusPoint(string Label, decimal Count);
+    private List<StatusPoint> _points = [];
+    private ApexChartOptions<StatusPoint> _options = new();
+    private bool? _lastTheme;
+    private int _lastCount = -1;
+    private int _chartKey;
+
+    protected override void OnParametersSet()
+    {
+        if (_lastCount == Items.Count && _lastTheme == IsDarkMode) return;
+        _lastCount = Items.Count;
+        _lastTheme = IsDarkMode;
+        _points =
+        [
+            new("To Do", Items.Count(i => i.Status == PbiStatus.ToDo)),
+            new("In Progress", Items.Count(i => i.Status == PbiStatus.InProgress)),
+            new("In Review", Items.Count(i => i.Status == PbiStatus.InReview)),
+            new("Done", Items.Count(i => i.Status == PbiStatus.Done)),
+        ];
+        _options = BuildOptions(IsDarkMode);
+        _chartKey++;
+    }
+
+    private static ApexChartOptions<StatusPoint> BuildOptions(bool isDark) => new()
+    {
+        Theme = MetricsChartTheme.Theme(isDark),
+        Chart = new Chart { Background = "transparent", Toolbar = new Toolbar { Show = false } },
+        Colors = ["#1e88e5"],
+        PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { BorderRadius = 3, ColumnWidth = "55%" } },
+        Xaxis = new XAxis { Labels = new XAxisLabels { Style = MetricsChartTheme.AxisLabelStyle(isDark) } },
+        Yaxis = [new YAxis { Labels = new YAxisLabels { Style = MetricsChartTheme.AxisLabelStyle(isDark) }, TickAmount = 5 }],
+        Grid = new Grid { BorderColor = MetricsChartTheme.GridLine(isDark), Row = new GridRow { Colors = ["transparent"] } },
+        Legend = new Legend { Show = false },
+        Tooltip = MetricsChartTheme.Tooltip(isDark)
+    };
+}

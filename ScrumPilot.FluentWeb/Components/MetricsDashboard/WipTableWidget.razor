@@ -1,0 +1,63 @@
+<WidgetCard Title="Work In Progress">
+    @if (_loading)
+    {
+        <div class="widget-center"><FluentSpinner Label="Loading work in progress" /></div>
+    }
+    else if (_items.Count > 0)
+    {
+        <div class="wip-table-wrap">
+            <table class="wip-table">
+                <thead><tr><th>Title</th><th>Type</th><th>Priority</th><th>Status</th></tr></thead>
+                <tbody>
+                    @foreach (var item in _items)
+                    {
+                        <tr>
+                            <td class="wip-title" title="@item.Title">@item.Title</td>
+                            <td><span class="pill @TypeClass(item.Type)">@item.Type</span></td>
+                            <td><span class="priority @PriorityClass(item.Priority)">@item.Priority</span></td>
+                            <td><span class="pill status-pill">@item.Status</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else
+    {
+        <div class="widget-empty">No items currently in progress</div>
+    }
+</WidgetCard>
+
+@code {
+    [Parameter] public int? SprintId { get; set; }
+    [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
+    [Inject] private ILogger<WipTableWidget> Logger { get; set; } = default!;
+
+    private List<WipItem> _items = [];
+    private bool _loading = true;
+    private int? _lastSprintId = -1;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_lastSprintId == SprintId) return;
+        _lastSprintId = SprintId;
+        _loading = true;
+        try { _items = SprintId.HasValue ? await MetricsSvc.GetWipItemsAsync(SprintId.Value) : []; }
+        catch (Exception ex) { Logger.LogWarning(ex, "Failed to load WIP items for sprint {SprintId}", SprintId); _items = []; }
+        _loading = false;
+    }
+
+    private static string TypeClass(string type) => type.ToLowerInvariant() switch
+    {
+        "bug" => "type-bug",
+        "story" => "type-story",
+        _ => "type-task"
+    };
+
+    private static string PriorityClass(string priority) => priority.ToLowerInvariant() switch
+    {
+        "high" => "priority-high",
+        "medium" => "priority-medium",
+        _ => "priority-low"
+    };
+}

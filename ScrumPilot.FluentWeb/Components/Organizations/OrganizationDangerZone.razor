@@ -1,0 +1,106 @@
+@inject HttpClient Http
+@inject IAppDialogService Dialogs
+@inject ILogger<OrganizationDangerZone> Logger
+
+<FluentCard Class="danger-zone">
+    <FluentText Tag="TextTag.H2" Size="TextSize.Size500" Weight="TextWeight.Semibold">Danger zone</FluentText>
+    @if (!Organization.IsDeleted)
+    {
+        <FluentButton data-action="leave" Appearance="ButtonAppearance.Outline" Disabled="@_busy" OnClick="LeaveAsync">Leave organization</FluentButton>
+    }
+    @if (Organization.Role == OrganizationRole.Owner && !Organization.IsDeleted)
+    {
+        <FluentButton data-action="delete" Appearance="ButtonAppearance.Outline" Disabled="@_busy" OnClick="DeleteAsync">Delete organization</FluentButton>
+    }
+    @if (Organization.IsDeleted && Organization.Role == OrganizationRole.Owner)
+    {
+        <FluentButton data-action="restore" Appearance="ButtonAppearance.Outline" Disabled="@_busy" OnClick="RestoreAsync">Restore organization</FluentButton>
+    }
+    @if (Organization.IsDeleted && CanPurge)
+    {
+        <FluentButton data-action="purge" Appearance="ButtonAppearance.Outline" Disabled="@_busy" OnClick="PurgeAsync">Permanently purge organization</FluentButton>
+    }
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <FluentMessageBar Intent="MessageBarIntent.Error">@_error</FluentMessageBar>
+    }
+</FluentCard>
+
+@code {
+    [Parameter, EditorRequired] public OrganizationSummaryDto Organization { get; set; } = default!;
+    [Parameter] public EventCallback Changed { get; set; }
+    [Parameter] public bool CanPurge { get; set; }
+    [Parameter] public Func<string, string, string, string, bool, Task<bool>>? ConfirmAsync { get; set; }
+
+    private bool _busy;
+    private string? _error;
+    private int? _sourceOrganizationId;
+
+    protected override void OnParametersSet()
+    {
+        if (_sourceOrganizationId == Organization.OrganizationId) return;
+        _sourceOrganizationId = Organization.OrganizationId;
+        _error = null;
+        _busy = false;
+    }
+
+    private async Task LeaveAsync()
+    {
+        if (await ConfirmDialogAsync("Leave organization", $"Leave \"{Organization.Name}\"? You may lose access to its projects.", "Leave", "Cancel", true))
+            await MutateAsync(id => Http.PostAsync($"api/organizations/{id}/leave", null), "Unable to leave the organization.");
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (await ConfirmDialogAsync("Delete organization", $"Delete \"{Organization.Name}\"? This cannot be undone.", "Delete", "Cancel", true))
+            await MutateAsync(id => Http.DeleteAsync($"api/organizations/{id}"), "Unable to delete the organization.");
+    }
+
+    private Task RestoreAsync() => MutateAsync(id => Http.PostAsync($"api/organizations/{id}/restore", null), "Unable to restore the organization.");
+
+    private async Task PurgeAsync()
+    {
+        if (await ConfirmDialogAsync("Permanently purge organization", $"Permanently purge \"{Organization.Name}\"? This cannot be undone.", "Purge", "Cancel", true))
+            await MutateAsync(id => Http.DeleteAsync($"api/organizations/{id}/purge"), "Unable to permanently purge the organization.");
+    }
+
+    private Task<bool> ConfirmDialogAsync(string title, string message, string confirmLabel, string cancelLabel, bool destructive) =>
+        ConfirmAsync?.Invoke(title, message, confirmLabel, cancelLabel, destructive)
+        ?? Dialogs.ConfirmAsync(title, message, confirmLabel, cancelLabel, destructive);
+
+    private async Task MutateAsync(Func<int, Task<HttpResponseMessage>> action, string fallback)
+    {
+        var organizationId = Organization.OrganizationId;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var response = await action(organizationId);
+            if (!IsCurrent(organizationId)) return;
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await ErrorAsync(response, fallback);
+                return;
+            }
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Organization lifecycle action failed for {OrganizationId}", organizationId);
+            if (IsCurrent(organizationId)) _error = fallback;
+        }
+        finally
+        {
+            if (IsCurrent(organizationId)) _busy = false;
+        }
+    }
+
+    private bool IsCurrent(int organizationId) => _sourceOrganizationId == organizationId && Organization.OrganizationId == organizationId;
+    private static async Task<string> ErrorAsync(HttpResponseMessage response, string fallback)
+    {
+        try { return (await response.Content.ReadFromJsonAsync<ProblemDetails>())?.Detail ?? fallback; }
+        catch { return fallback; }
+    }
+    private sealed class ProblemDetails { public string? Detail { get; set; } }
+}
+

@@ -1,9 +1,172 @@
 @page "/login"
+@attribute [AllowAnonymous]
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+@inject ILogger<Login> Logger
+@using System.ComponentModel.DataAnnotations
 
-<PageTitle>Login</PageTitle>
+<PageTitle>Sign In — ScrumPilot</PageTitle>
 
-<div class="page-shell">
-    <h1>Login</h1>
-    <p>Sign in to continue with your ScrumPilot workspace.</p>
-    <FluentButton Appearance="ButtonAppearance.Primary">Continue</FluentButton>
+<div class="login-page">
+    <FluentCard Class="login-card">
+        <div class="login-logo">
+            <img src="images/logo.png" alt="ScrumPilot" />
+        </div>
+
+        <AppPageHeader Title="Sign in to ScrumPilot" Subtitle="Continue to your ScrumPilot workspace." />
+
+        @if (!string.IsNullOrWhiteSpace(_errorMessage))
+        {
+            <FluentMessageBar Intent="MessageBarIntent.Error" Class="login-message">@_errorMessage</FluentMessageBar>
+        }
+
+        <EditForm Model="@_model" OnValidSubmit="HandleLoginAsync" OnInvalidSubmit="HandleInvalidSubmit">
+            <DataAnnotationsValidator />
+
+            <div class="login-form">
+                <FluentTextInput Id="username"
+                                 Label="Username"
+                                 Placeholder="Enter your username"
+                                 AutoComplete="username"
+                                 Required="true"
+                                 Disabled="@_isLoading"
+                                 @bind-Value="_model.UserName" />
+                <ValidationMessage For="() => _model.UserName" />
+
+                <FluentTextInput Id="password"
+                                 Label="Password"
+                                 Placeholder="Enter your password"
+                                 AutoComplete="current-password"
+                                 TextInputType="TextInputType.Password"
+                                 Required="true"
+                                 Disabled="@_isLoading"
+                                 @bind-Value="_model.Password" />
+                <ValidationMessage For="() => _model.Password" />
+
+                <FluentButton Type="ButtonType.Submit"
+                              Appearance="ButtonAppearance.Primary"
+                              Loading="@_isLoading"
+                              Disabled="@_isLoading">
+                    Sign In
+                </FluentButton>
+            </div>
+        </EditForm>
+    </FluentCard>
 </div>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+
+    private readonly LoginForm _model = new();
+    private string _errorMessage = string.Empty;
+    private bool _isLoading;
+
+    private async Task HandleLoginAsync()
+    {
+        _isLoading = true;
+        _errorMessage = string.Empty;
+
+        try
+        {
+            var success = await AuthService.LoginAsync(new LoginRequest
+            {
+                UserName = _model.UserName,
+                Password = _model.Password
+            });
+
+            if (success)
+            {
+                Navigation.NavigateTo(GetSafeReturnUrl(ReturnUrl));
+                return;
+            }
+
+            _errorMessage = "Invalid username or password.";
+        }
+        catch (HttpRequestException ex)
+        {
+            Logger.LogWarning(ex, "Login request failed for {UserName}", _model.UserName);
+            _errorMessage = "Unable to sign in right now. Please try again.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void HandleInvalidSubmit() => _errorMessage = "Enter a username and password.";
+
+    private string GetSafeReturnUrl(string? url)
+    {
+        if (string.IsNullOrEmpty(url))
+            return "/";
+
+        var canonical = url;
+        for (var depth = 0; depth < 4; depth++)
+        {
+            if (canonical.Length == 0
+                || canonical[0] != '/'
+                || canonical.StartsWith("//", StringComparison.Ordinal)
+                || canonical.StartsWith("/\\", StringComparison.Ordinal)
+                || canonical.Any(character =>
+                    character == '\\'
+                    || char.IsControl(character)
+                    || char.IsWhiteSpace(character))
+                || Uri.TryCreate(canonical, UriKind.Absolute, out _))
+            {
+                return "/";
+            }
+
+            string decoded;
+            try
+            {
+                decoded = Uri.UnescapeDataString(canonical);
+            }
+            catch (UriFormatException ex)
+            {
+                Logger.LogWarning(ex, "Rejected malformed login return URL");
+                return "/";
+            }
+
+            if (decoded == canonical)
+                break;
+
+            canonical = decoded;
+        }
+
+        if (canonical.Contains('%', StringComparison.Ordinal))
+            return "/";
+
+        var baseUri = new Uri(Navigation.BaseUri, UriKind.Absolute);
+        if (!Uri.TryCreate(baseUri, canonical, out var resolved)
+            || !string.Equals(resolved.Scheme, baseUri.Scheme, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(resolved.Host, baseUri.Host, StringComparison.OrdinalIgnoreCase)
+            || resolved.Port != baseUri.Port)
+        {
+            return "/";
+        }
+
+        var basePath = baseUri.AbsolutePath.EndsWith("/", StringComparison.Ordinal)
+            ? baseUri.AbsolutePath
+            : $"{baseUri.AbsolutePath}/";
+        if (basePath != "/"
+            && !resolved.AbsolutePath.StartsWith(basePath, StringComparison.Ordinal))
+        {
+            return "/";
+        }
+
+        var safeRelative = resolved.PathAndQuery + resolved.Fragment;
+        return safeRelative.StartsWith("/", StringComparison.Ordinal)
+            && !safeRelative.StartsWith("//", StringComparison.Ordinal)
+            ? safeRelative
+            : "/";
+    }
+
+    private sealed class LoginForm
+    {
+        [Required(ErrorMessage = "Username is required.")]
+        public string UserName { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Password is required.")]
+        public string Password { get; set; } = string.Empty;
+    }
+}

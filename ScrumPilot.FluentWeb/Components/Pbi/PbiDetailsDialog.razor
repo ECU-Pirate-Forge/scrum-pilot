@@ -1,0 +1,456 @@
+@using System.Net.Http.Json
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@using ScrumPilot.Shared.Models
+@inject HttpClient Http
+@inject AuthenticationStateProvider AuthState
+@inject IAppNotificationService Notifications
+@inject ILogger<PbiDetailsDialog> Logger
+@namespace ScrumPilot.FluentWeb.Components.Pbi
+
+@if (Open && Pbi is not null)
+{
+    <div class="pbi-dialog-backdrop" @onclick="CancelAsync">
+        <section class="pbi-dialog" role="dialog" aria-modal="true" aria-labelledby="pbi-details-title" @onclick:stopPropagation="true">
+            <header class="pbi-dialog__header">
+                <div>
+                    <p class="sp-small sp-muted">PBI #@(Pbi.PbiId == 0 ? "new" : Pbi.PbiId)</p>
+                    <h2 id="pbi-details-title">@(Pbi.PbiId == 0 ? "Create PBI" : "PBI details")</h2>
+                </div>
+                <FluentButton Appearance="ButtonAppearance.Transparent" IconOnly="true" Title="Close" OnClick="CancelAsync">
+                    <AppIcon Value="@(new Icons.Regular.Size20.Dismiss())" Label="Close" />
+                </FluentButton>
+            </header>
+
+            @if (!string.IsNullOrWhiteSpace(_errorMessage))
+            {
+                <FluentMessageBar Intent="MessageBarIntent.Error">@_errorMessage</FluentMessageBar>
+            }
+            @if (_aiSuggestion)
+            {
+                <FluentMessageBar Intent="MessageBarIntent.Info">AI suggestions loaded. Review and save to apply them.</FluentMessageBar>
+            }
+            @if (_loadingLookups)
+            {
+                <AppLoadingState Message="Loading editor options..." />
+            }
+
+            @if (_draft is not null)
+            {
+                <EditForm Model="_draft" OnSubmit="SaveAsync">
+                    <div class="pbi-dialog__body">
+                        <PbiDetailsFields Draft="_draft" />
+                        @if (_titleRequired)
+                        {
+                            <p class="pbi-error" role="alert">Title is required.</p>
+                        }
+
+                        <FluentDivider />
+                        <PbiAssignmentFields Draft="_draft"
+                                             Sprints="_sprints"
+                                             Epics="_epics"
+                                             Users="_users"
+                                             CurrentUserId="_currentUserId" />
+
+                        <FluentDivider />
+                        <PbiDependencyFields Draft="_draft" ProjectPbis="_projectPbis" OnNavigateToPbi="OnNavigateToPbi" />
+
+                        @if (Pbi.PbiId > 0)
+                        {
+                            <FluentDivider />
+                            <CommentThread PbiId="Pbi.PbiId" />
+                        }
+                    </div>
+
+                    <footer class="pbi-dialog__footer">
+                        @if (!ReadOnly)
+                        {
+                            <FluentButton Type="ButtonType.Submit" Appearance="ButtonAppearance.Primary" Loading="_saving" Disabled="_saving">Save</FluentButton>
+                            <FluentButton Appearance="ButtonAppearance.Outline" OnClick="CancelAsync" Disabled="_saving">Cancel</FluentButton>
+                            @if (CanUsePersistentActions)
+                            {
+                                <FluentButton Appearance="ButtonAppearance.Outline" OnClick="ImproveWithAiAsync" Loading="_improving" Disabled="_saving || _improving">Improve with AI</FluentButton>
+                                <FluentButton Appearance="ButtonAppearance.Outline" OnClick="OpenFlagDialog" Disabled="_saving">
+                                    @(Pbi.IsFlagged ? "Remove flag" : "Flag")
+                                </FluentButton>
+                                <FluentButton Appearance="ButtonAppearance.Outline" OnClick="ShowDeleteConfirm" Disabled="_saving">Delete</FluentButton>
+                            }
+                        }
+                        else
+                        {
+                            <FluentButton Appearance="ButtonAppearance.Primary" OnClick="CancelAsync">Close</FluentButton>
+                        }
+                    </footer>
+                </EditForm>
+            }
+
+            @if (_confirmDelete)
+            {
+                <div class="pbi-inline-dialog" role="alertdialog" aria-modal="true">
+                    <h3>Delete @Pbi.Title?</h3>
+                    <p>This cannot be undone.</p>
+                    <div class="pbi-actions">
+                        <FluentButton Appearance="ButtonAppearance.Primary" OnClick="DeleteAsync" Loading="_deleting">Yes, delete</FluentButton>
+                        <FluentButton Appearance="ButtonAppearance.Outline" OnClick="@(() => _confirmDelete = false)">Cancel</FluentButton>
+                    </div>
+                </div>
+            }
+
+            <PbiFlagDialog Open="_flagDialogOpen"
+                           Title="@Pbi.Title"
+                           IsUnflagging="Pbi.IsFlagged"
+                           OnSubmit="SaveFlagAsync"
+                           OnCancel="@(() => _flagDialogOpen = false)" />
+        </section>
+    </div>
+}
+
+@code {
+    [Parameter] public ProductBacklogItem? Pbi { get; set; }
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public bool PersistOnSave { get; set; } = true;
+    [Parameter] public int? ProjectId { get; set; }
+    [Parameter] public EventCallback<ProductBacklogItem> OnSaved { get; set; }
+    [Parameter] public EventCallback OnCancelled { get; set; }
+    [Parameter] public EventCallback<int> OnDeleted { get; set; }
+    [Parameter] public EventCallback<int> OnNavigateToPbi { get; set; }
+
+    private ProductBacklogItem? _draft;
+    private ProductBacklogItem? _loadedPbi;
+    private bool _loadingLookups;
+    private bool _saving;
+    private bool _deleting;
+    private bool _improving;
+    private bool _aiSuggestion;
+    private bool _titleRequired;
+    private bool _confirmDelete;
+    private bool _flagDialogOpen;
+    private string _errorMessage = string.Empty;
+    private string? _currentUserId;
+    private string? _currentUserName;
+    private List<Epic> _epics = [];
+    private List<Sprint> _sprints = [];
+    private List<UserSummaryDto> _users = [];
+    private List<ProductBacklogItem> _projectPbis = [];
+    private int? _loadedLookupProjectId;
+
+    private bool CanUsePersistentActions => PersistOnSave && Pbi is { PbiId: > 0 };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Open || Pbi is null)
+        {
+            return;
+        }
+
+        if (!ReferenceEquals(_loadedPbi, Pbi))
+        {
+            _loadedPbi = Pbi;
+            _draft = Clone(Pbi);
+            _errorMessage = string.Empty;
+            _titleRequired = false;
+            _aiSuggestion = false;
+            _confirmDelete = false;
+            _flagDialogOpen = false;
+        }
+
+        if (_currentUserId is null)
+        {
+            var state = await AuthState.GetAuthenticationStateAsync();
+            _currentUserId = state.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? state.User.FindFirst("sub")?.Value
+                ?? state.User.Identity?.Name;
+            _currentUserName = state.User.FindFirst(ClaimTypes.Name)?.Value
+                ?? state.User.Identity?.Name
+                ?? _currentUserId;
+        }
+
+        await LoadLookupsAsync();
+    }
+
+    private async Task LoadLookupsAsync()
+    {
+        if (!ProjectId.HasValue || _loadingLookups || _loadedLookupProjectId == ProjectId)
+        {
+            return;
+        }
+
+        _loadingLookups = true;
+        _loadedLookupProjectId = ProjectId;
+        try
+        {
+            var epicsTask = Http.GetFromJsonAsync<List<Epic>>($"api/Epic?projectId={ProjectId.Value}");
+            var sprintsTask = Http.GetFromJsonAsync<List<Sprint>>($"api/Sprint?projectId={ProjectId.Value}");
+            var usersTask = Http.GetFromJsonAsync<List<UserSummaryDto>>($"api/user/all?projectId={ProjectId.Value}");
+            var pbisTask = Http.GetFromJsonAsync<List<ProductBacklogItem>>($"api/Pbi/getNonDraftPbis?projectId={ProjectId.Value}");
+            await Task.WhenAll(epicsTask, sprintsTask, usersTask, pbisTask);
+            _epics = epicsTask.Result ?? [];
+            _sprints = sprintsTask.Result ?? [];
+            _users = usersTask.Result ?? [];
+            _projectPbis = pbisTask.Result ?? [];
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load PBI editor lookups for project {ProjectId}", ProjectId);
+            _epics = [];
+            _sprints = [];
+            _users = [];
+            _projectPbis = [];
+        }
+        finally
+        {
+            _loadingLookups = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_draft is null || Pbi is null || _saving)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_draft.Title))
+        {
+            _titleRequired = true;
+            _errorMessage = "Save failed: Title is required.";
+            return;
+        }
+
+        _saving = true;
+        _titleRequired = false;
+        _errorMessage = string.Empty;
+        _draft.Title = _draft.Title.Trim();
+        _draft.IssueLink = string.IsNullOrWhiteSpace(_draft.IssueLink) ? null : _draft.IssueLink.Trim();
+        _draft.LastUpdated = DateTime.UtcNow;
+
+        try
+        {
+            if (!PersistOnSave)
+            {
+                Copy(_draft, Pbi);
+                await OnSaved.InvokeAsync(Pbi);
+                return;
+            }
+
+            HttpResponseMessage response;
+            if (_draft.PbiId == 0)
+            {
+                if (!ProjectId.HasValue)
+                {
+                    _errorMessage = "Save failed: select a project first.";
+                    return;
+                }
+
+                response = await Http.PostAsJsonAsync($"api/Pbi/createStory?projectId={ProjectId.Value}", _draft);
+            }
+            else
+            {
+                response = await Http.PutAsJsonAsync("api/Pbi", _draft);
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _errorMessage = "Save failed. Your changes were not applied.";
+                Notifications.ShowError(_errorMessage);
+                return;
+            }
+
+            var saved = await response.Content.ReadFromJsonAsync<ProductBacklogItem>() ?? _draft;
+            Copy(saved, Pbi);
+            _draft = Clone(Pbi);
+            _aiSuggestion = false;
+            Notifications.ShowSuccess("PBI saved.");
+            await OnSaved.InvokeAsync(Pbi);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Logger.LogWarning(ex, "Failed to save PBI {PbiId}", _draft.PbiId);
+            _errorMessage = "Save failed. Unable to connect to the server.";
+            Notifications.ShowError(_errorMessage);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        _errorMessage = string.Empty;
+        _confirmDelete = false;
+        _flagDialogOpen = false;
+        await OnCancelled.InvokeAsync();
+    }
+
+    private async Task ImproveWithAiAsync()
+    {
+        if (!CanUsePersistentActions || Pbi is null || _improving)
+        {
+            return;
+        }
+
+        _improving = true;
+        _errorMessage = string.Empty;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/Pbi/ImprovePbi", Pbi);
+            if (!response.IsSuccessStatusCode)
+            {
+                _errorMessage = "AI improvement failed. Please try again.";
+                return;
+            }
+
+            var improved = await response.Content.ReadFromJsonAsync<ProductBacklogItem>();
+            if (improved is not null)
+            {
+                _draft = Clone(Pbi);
+                _draft.Title = improved.Title;
+                _draft.Description = improved.Description;
+                _draft.Type = improved.Type;
+                _draft.Priority = improved.Priority;
+                _draft.StoryPoints = improved.StoryPoints;
+                _aiSuggestion = true;
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Logger.LogWarning(ex, "Failed to improve PBI {PbiId}", Pbi.PbiId);
+            _errorMessage = "Failed to connect to server.";
+        }
+        finally
+        {
+            _improving = false;
+        }
+    }
+
+    private void OpenFlagDialog() => _flagDialogOpen = true;
+    private void ShowDeleteConfirm() => _confirmDelete = true;
+
+    private async Task SaveFlagAsync(string reason)
+    {
+        if (!CanUsePersistentActions || Pbi is null)
+        {
+            return;
+        }
+
+        var wasFlagged = Pbi.IsFlagged;
+        Pbi.IsFlagged = !wasFlagged;
+        Pbi.LastUpdated = DateTime.UtcNow;
+        _flagDialogOpen = false;
+        _errorMessage = string.Empty;
+
+        try
+        {
+            var update = await Http.PutAsJsonAsync("api/Pbi", Pbi);
+            if (!update.IsSuccessStatusCode)
+            {
+                Pbi.IsFlagged = wasFlagged;
+                _errorMessage = "Unable to update the flag.";
+                return;
+            }
+
+            var comment = new Comment
+            {
+                PbiId = Pbi.PbiId,
+                UserId = _currentUserName ?? _currentUserId ?? "unknown",
+                Body = $"{(wasFlagged ? "🏳️ Flag removed" : "🚩 Flagged")}: {reason}",
+                CreatedDate = DateTime.UtcNow
+            };
+            var posted = await Http.PostAsJsonAsync("api/comments", comment);
+            if (!posted.IsSuccessStatusCode)
+            {
+                _errorMessage = "Flag updated, but the flag reason comment could not be posted.";
+            }
+
+            _draft = Clone(Pbi);
+            await OnSaved.InvokeAsync(Pbi);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Logger.LogWarning(ex, "Failed to flag PBI {PbiId}", Pbi.PbiId);
+            Pbi.IsFlagged = wasFlagged;
+            _errorMessage = "Unable to update the flag.";
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (!CanUsePersistentActions || Pbi is null || _deleting)
+        {
+            return;
+        }
+
+        _deleting = true;
+        _errorMessage = string.Empty;
+        try
+        {
+            var response = await Http.DeleteAsync($"api/Pbi/{Pbi.PbiId}");
+            if (!response.IsSuccessStatusCode)
+            {
+                _errorMessage = "Failed to delete PBI.";
+                return;
+            }
+
+            await OnDeleted.InvokeAsync(Pbi.PbiId);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Logger.LogWarning(ex, "Failed to delete PBI {PbiId}", Pbi.PbiId);
+            _errorMessage = "Failed to connect to server.";
+        }
+        finally
+        {
+            _deleting = false;
+            _confirmDelete = false;
+        }
+    }
+
+    private static ProductBacklogItem Clone(ProductBacklogItem source) => new()
+    {
+        PbiId = source.PbiId,
+        ProjectId = source.ProjectId,
+        Type = source.Type,
+        EpicId = source.EpicId,
+        SprintId = source.SprintId,
+        Title = source.Title,
+        Description = source.Description,
+        Status = source.Status,
+        Priority = source.Priority,
+        StoryPoints = source.StoryPoints,
+        Origin = source.Origin,
+        IsDraft = source.IsDraft,
+        IsFlagged = source.IsFlagged,
+        AssignedToUserId = source.AssignedToUserId,
+        IssueLink = source.IssueLink,
+        DependsOnPbiId = source.DependsOnPbiId,
+        DateCreated = source.DateCreated,
+        LastUpdated = source.LastUpdated,
+        Comments = source.Comments
+    };
+
+    private static void Copy(ProductBacklogItem source, ProductBacklogItem target)
+    {
+        target.PbiId = source.PbiId;
+        target.ProjectId = source.ProjectId;
+        target.Type = source.Type;
+        target.EpicId = source.EpicId;
+        target.SprintId = source.SprintId;
+        target.Title = source.Title;
+        target.Description = source.Description;
+        target.Status = source.Status;
+        target.Priority = source.Priority;
+        target.StoryPoints = source.StoryPoints;
+        target.Origin = source.Origin;
+        target.IsDraft = source.IsDraft;
+        target.IsFlagged = source.IsFlagged;
+        target.AssignedToUserId = source.AssignedToUserId;
+        target.IssueLink = source.IssueLink;
+        target.DependsOnPbiId = source.DependsOnPbiId;
+        target.DateCreated = source.DateCreated;
+        target.LastUpdated = source.LastUpdated;
+        target.Comments = source.Comments;
+    }
+}
+

@@ -1,0 +1,267 @@
+@using System.Net.Http.Json
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@using ScrumPilot.Shared.Models
+@inject HttpClient Http
+@inject AuthenticationStateProvider AuthState
+@inject ILogger<CommentThread> Logger
+@namespace ScrumPilot.FluentWeb.Components.Pbi
+
+<section class="comment-thread" aria-labelledby="comments-heading">
+    <div class="comment-thread__header">
+        <h3 id="comments-heading">Comments</h3>
+        @if (_loading)
+        {
+            <FluentSpinner Label="Loading comments" />
+        }
+    </div>
+
+    <div class="comment-list">
+        @if (!_loading && _comments.Count == 0)
+        {
+            <p class="sp-muted">No comments yet. Be the first to comment.</p>
+        }
+        @foreach (var comment in _comments)
+        {
+            <article class="comment-item">
+                @if (_editingCommentId == comment.CommentId)
+                {
+                    <label class="pbi-field">
+                        <span>Edit comment</span>
+                        <InputTextArea class="pbi-input pbi-textarea" @bind-Value="_editBody" />
+                    </label>
+                    <div class="pbi-actions">
+                        <FluentButton Appearance="ButtonAppearance.Primary" OnClick="SaveEditAsync">Save</FluentButton>
+                        <FluentButton Appearance="ButtonAppearance.Outline" OnClick="CancelEdit">Cancel</FluentButton>
+                    </div>
+                }
+                else
+                {
+                    <p class="comment-item__body">@comment.Body</p>
+                    <div class="comment-item__meta">
+                        <small class="sp-muted">@comment.UserId · @comment.CreatedDate.ToLocalTime().ToString("MMM d, yyyy h:mm tt")</small>
+                        @if (CanEdit(comment))
+                        {
+                            <span class="pbi-actions">
+                                <FluentButton Appearance="ButtonAppearance.Subtle" OnClick="@(() => StartEdit(comment))">Edit</FluentButton>
+                                <FluentButton Appearance="ButtonAppearance.Subtle" OnClick="@(() => ConfirmDelete(comment.CommentId))">Delete</FluentButton>
+                            </span>
+                        }
+                    </div>
+                }
+            </article>
+        }
+    </div>
+
+    @if (_deleteCommentId is not null)
+    {
+        <div class="pbi-inline-dialog" role="alertdialog" aria-modal="true">
+            <p>Delete this comment?</p>
+            <div class="pbi-actions">
+                <FluentButton Appearance="ButtonAppearance.Primary" OnClick="DeleteCommentAsync">Delete</FluentButton>
+                <FluentButton Appearance="ButtonAppearance.Outline" OnClick="@(() => _deleteCommentId = null)">Cancel</FluentButton>
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <FluentMessageBar Intent="MessageBarIntent.Error">@_errorMessage</FluentMessageBar>
+    }
+    <p class="sr-only" aria-live="polite">@_statusMessage</p>
+
+    <div class="comment-input">
+        <label class="pbi-field">
+            <span>Add a comment</span>
+            <InputTextArea class="pbi-input pbi-textarea" @bind-Value="_newCommentBody" @onkeydown="HandleCommentKeyDownAsync" />
+        </label>
+        <FluentButton Appearance="ButtonAppearance.Primary" IconStart="@(new Icons.Regular.Size20.Send())" OnClick="AddCommentAsync" Disabled="@(_submitting || string.IsNullOrWhiteSpace(_newCommentBody))" Loading="_submitting">Post</FluentButton>
+    </div>
+</section>
+
+@code {
+    [Parameter] public int PbiId { get; set; }
+
+    private List<Comment> _comments = [];
+    private bool _loading = true;
+    private bool _submitting;
+    private string _errorMessage = string.Empty;
+    private string _statusMessage = string.Empty;
+    private string _newCommentBody = string.Empty;
+    private string? _currentUserId;
+    private string? _currentUserName;
+    private int? _editingCommentId;
+    private int? _deleteCommentId;
+    private string _editBody = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthState.GetAuthenticationStateAsync();
+        _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? authState.User.FindFirst("sub")?.Value
+            ?? authState.User.Identity?.Name
+            ?? "unknown";
+        _currentUserName = authState.User.FindFirst(ClaimTypes.Name)?.Value
+            ?? authState.User.Identity?.Name
+            ?? _currentUserId;
+        await LoadCommentsAsync();
+    }
+
+    private async Task LoadCommentsAsync()
+    {
+        _loading = true;
+        _errorMessage = string.Empty;
+        try
+        {
+            _comments = await Http.GetFromJsonAsync<List<Comment>>($"api/comments/pbi/{PbiId}") ?? [];
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Logger.LogWarning(ex, "Failed to load comments for PBI {PbiId}", PbiId);
+            _errorMessage = "Failed to load comments.";
+            _comments = [];
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private bool CanEdit(Comment comment) =>
+        string.Equals(comment.UserId, _currentUserName, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(comment.UserId, _currentUserId, StringComparison.OrdinalIgnoreCase);
+
+    private async Task HandleCommentKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await AddCommentAsync();
+        }
+    }
+
+    private async Task AddCommentAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newCommentBody) || _submitting)
+        {
+            return;
+        }
+
+        _submitting = true;
+        _errorMessage = string.Empty;
+        try
+        {
+            var comment = new Comment
+            {
+                PbiId = PbiId,
+                UserId = _currentUserName ?? _currentUserId ?? "unknown",
+                Body = _newCommentBody.Trim(),
+                CreatedDate = DateTime.UtcNow
+            };
+            var response = await Http.PostAsJsonAsync("api/comments", comment);
+            if (!response.IsSuccessStatusCode)
+            {
+                _errorMessage = "Failed to post comment.";
+                return;
+            }
+
+            _newCommentBody = string.Empty;
+            _statusMessage = "Comment posted.";
+            await LoadCommentsAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Logger.LogWarning(ex, "Failed to post comment for PBI {PbiId}", PbiId);
+            _errorMessage = "Failed to connect to server.";
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private void StartEdit(Comment comment)
+    {
+        _editingCommentId = comment.CommentId;
+        _editBody = comment.Body;
+        _errorMessage = string.Empty;
+    }
+
+    private void CancelEdit()
+    {
+        _editingCommentId = null;
+        _editBody = string.Empty;
+    }
+
+    private async Task SaveEditAsync()
+    {
+        if (_editingCommentId is not { } id)
+        {
+            return;
+        }
+
+        var existing = _comments.FirstOrDefault(c => c.CommentId == id);
+        if (existing is null)
+        {
+            return;
+        }
+
+        _errorMessage = string.Empty;
+        try
+        {
+            var updated = new Comment
+            {
+                CommentId = existing.CommentId,
+                PbiId = existing.PbiId,
+                UserId = existing.UserId,
+                Body = _editBody.Trim(),
+                CreatedDate = existing.CreatedDate
+            };
+            var response = await Http.PutAsJsonAsync($"api/comments/{id}", updated);
+            if (!response.IsSuccessStatusCode)
+            {
+                _errorMessage = "Failed to save changes.";
+                return;
+            }
+
+            _editingCommentId = null;
+            _editBody = string.Empty;
+            _statusMessage = "Comment updated.";
+            await LoadCommentsAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Logger.LogWarning(ex, "Failed to update comment {CommentId}", id);
+            _errorMessage = "Failed to connect to server.";
+        }
+    }
+
+    private void ConfirmDelete(int commentId) => _deleteCommentId = commentId;
+
+    private async Task DeleteCommentAsync()
+    {
+        if (_deleteCommentId is not { } id)
+        {
+            return;
+        }
+
+        _errorMessage = string.Empty;
+        try
+        {
+            var response = await Http.DeleteAsync($"api/comments/{id}");
+            if (!response.IsSuccessStatusCode)
+            {
+                _errorMessage = "Failed to delete comment.";
+                return;
+            }
+
+            _deleteCommentId = null;
+            _statusMessage = "Comment deleted.";
+            await LoadCommentsAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Logger.LogWarning(ex, "Failed to delete comment {CommentId}", id);
+            _errorMessage = "Failed to connect to server.";
+        }
+    }
+}
