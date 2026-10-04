@@ -1,0 +1,29 @@
+@using ScrumPilot.Shared.Models
+<FluentBadge Appearance="BadgeAppearance.Tint" Color="@ResolvedColor" Shape="BadgeShape.Rounded">@ResolvedText</FluentBadge>
+
+@code {
+    /// <summary>When set, text and colour are derived from the PBI status.</summary>
+    [Parameter] public PbiStatus? Status { get; set; }
+    [Parameter] public string? Text { get; set; }
+    [Parameter] public BadgeColor Color { get; set; } = BadgeColor.Informative;
+
+    private string ResolvedText => Text ?? (Status is { } s ? StatusLabel(s) : string.Empty);
+
+    private BadgeColor ResolvedColor => Status switch
+    {
+        PbiStatus.ToDo => BadgeColor.Subtle,
+        PbiStatus.InProgress => BadgeColor.Brand,
+        PbiStatus.InReview => BadgeColor.Warning,
+        PbiStatus.Done => BadgeColor.Success,
+        _ => Color,
+    };
+
+    public static string StatusLabel(PbiStatus status) => status switch
+    {
+        PbiStatus.ToDo => "To Do",
+        PbiStatus.InProgress => "In Progress",
+        PbiStatus.InReview => "In Review",
+        PbiStatus.Done => "Done",
+        _ => status.ToString(),
+    };
+}

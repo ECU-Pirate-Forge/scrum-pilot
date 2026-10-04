@@ -1,0 +1,15 @@
+@* Icon wrapper: decorative by default; supply Label to expose it to assistive technology. *@
+@if (string.IsNullOrWhiteSpace(Label))
+{
+    <FluentIcon Value="@Value" Color="@Color" aria-hidden="true" />
+}
+else
+{
+    <FluentIcon Value="@Value" Color="@Color" role="img" aria-label="@Label" Title="@Label" />
+}
+
+@code {
+    [Parameter, EditorRequired] public Icon Value { get; set; } = default!;
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public Color Color { get; set; } = Color.Default;
+}
