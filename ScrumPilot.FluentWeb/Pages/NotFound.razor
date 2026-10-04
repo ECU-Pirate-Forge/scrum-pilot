@@ -1,16 +1,11 @@
 @page "/not-found"
-@layout MainLayout
 @attribute [AllowAnonymous]
 
-<PageTitle>Not found</PageTitle>
+<PageTitle>Not found — ScrumPilot</PageTitle>
 
-<div class="page-shell">
-    <h1>Page not found</h1>
-    <p>The route you requested doesn't exist in the Fluent migration yet.</p>
-</div>
+<AppPageHeader Title="Page not found" Subtitle="The route you requested does not exist in ScrumPilot." />
 
-<style>
-    .page-shell {
-        padding: 1.5rem;
-    }
-</style>
+<FluentCard Class="not-found-card">
+    <FluentText Tag="TextTag.Paragraph">Check the address or return to the ScrumPilot dashboard.</FluentText>
+    <FluentAnchorButton Href="/" Appearance="ButtonAppearance.Primary" IconStart="@(new Icons.Regular.Size20.Home())">Go home</FluentAnchorButton>
+</FluentCard>
