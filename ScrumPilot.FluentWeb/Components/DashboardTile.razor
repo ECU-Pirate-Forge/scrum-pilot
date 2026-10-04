@@ -1,0 +1,48 @@
+@using Microsoft.AspNetCore.Components
+
+<a class="dashboard-tile" href="@Href">
+    <div class="dashboard-tile__header">
+        <span class="dashboard-tile__title">@Title</span>
+    </div>
+    <p class="dashboard-tile__description">@Description</p>
+</a>
+
+@code {
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string Description { get; set; } = string.Empty;
+    [Parameter] public string Href { get; set; } = "/";
+}
+
+<style>
+    .dashboard-tile {
+        display: block;
+        background: var(--neutral-layer-2);
+        border: 1px solid var(--neutral-stroke-rest);
+        border-radius: 12px;
+        text-decoration: none;
+        color: inherit;
+        padding: 1rem;
+        min-height: 120px;
+        transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+
+    .dashboard-tile:hover {
+        transform: translateY(-1px);
+        border-color: var(--accent-fill-rest);
+    }
+
+    .dashboard-tile__header {
+        margin-bottom: 0.5rem;
+    }
+
+    .dashboard-tile__title {
+        font-size: 1.1rem;
+        font-weight: 600;
+    }
+
+    .dashboard-tile__description {
+        margin: 0;
+        color: var(--neutral-foreground-rest);
+        opacity: 0.8;
+    }
+</style>
