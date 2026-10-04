@@ -1,0 +1,7 @@
+.pbi-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacingHorizontalM); }
+.pbi-fields--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.pbi-field { display: grid; gap: var(--spacingVerticalXS); color: var(--colorNeutralForeground2); font-weight: 600; }
+.pbi-field--wide { grid-column: 1 / -1; }
+.pbi-input { width: 100%; min-height: 36px; border: 1px solid var(--colorNeutralStroke1); border-radius: var(--borderRadiusMedium); padding: 0.45rem 0.6rem; background: var(--colorNeutralBackground1); color: var(--colorNeutralForeground1); }
+.pbi-textarea { min-height: 110px; resize: vertical; }
+@media (max-width: 720px) { .pbi-fields, .pbi-fields--three { grid-template-columns: 1fr; } }

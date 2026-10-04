@@ -1,0 +1,28 @@
+@using ScrumPilot.Shared.Models
+@namespace ScrumPilot.FluentWeb.Components.Pbi
+
+<div class="pbi-fields">
+    <label class="pbi-field pbi-field--wide">
+        <span>Depends on</span>
+        <InputSelect class="pbi-input" @bind-Value="Draft.DependsOnPbiId">
+            <option value="">— None —</option>
+            @foreach (var pbi in ProjectPbis.Where(p => p.PbiId != Draft.PbiId))
+            {
+                <option value="@pbi.PbiId">#@pbi.PbiId — @pbi.Title</option>
+            }
+        </InputSelect>
+    </label>
+
+    @if (Draft.DependsOnPbiId is { } dependencyId)
+    {
+        <FluentButton Appearance="ButtonAppearance.Subtle" OnClick="@(() => OnNavigateToPbi.InvokeAsync(dependencyId))">
+            Open dependency #@dependencyId
+        </FluentButton>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ProductBacklogItem Draft { get; set; } = default!;
+    [Parameter] public IReadOnlyList<ProductBacklogItem> ProjectPbis { get; set; } = [];
+    [Parameter] public EventCallback<int> OnNavigateToPbi { get; set; }
+}

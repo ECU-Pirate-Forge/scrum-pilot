@@ -1,0 +1,52 @@
+@using ScrumPilot.Shared.Models
+@namespace ScrumPilot.FluentWeb.Components.Pbi
+
+<div class="pbi-fields pbi-fields--three">
+    <label class="pbi-field">
+        <span>Sprint</span>
+        <InputSelect class="pbi-input" @bind-Value="Draft.SprintId">
+            <option value="">— Unassigned —</option>
+            @foreach (var sprint in Sprints)
+            {
+                <option value="@sprint.SprintId">@(sprint.SprintTitle ?? sprint.SprintGoal ?? $"Sprint {sprint.SprintId}")</option>
+            }
+        </InputSelect>
+    </label>
+
+    <label class="pbi-field">
+        <span>Epic</span>
+        <InputSelect class="pbi-input" @bind-Value="Draft.EpicId">
+            <option value="">— Unassigned —</option>
+            @foreach (var epic in Epics)
+            {
+                <option value="@epic.EpicId">@epic.Name</option>
+            }
+        </InputSelect>
+    </label>
+
+    <label class="pbi-field">
+        <span>Assignee</span>
+        <InputSelect class="pbi-input" @bind-Value="Draft.AssignedToUserId">
+            <option value="">— Unassigned —</option>
+            @foreach (var user in Users)
+            {
+                <option value="@user.Id">@user.UserName</option>
+            }
+        </InputSelect>
+    </label>
+
+    @if (!string.IsNullOrWhiteSpace(CurrentUserId) && Draft.AssignedToUserId != CurrentUserId)
+    {
+        <FluentButton Appearance="ButtonAppearance.Subtle" OnClick="AssignToMe">Assign to me</FluentButton>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ProductBacklogItem Draft { get; set; } = default!;
+    [Parameter] public IReadOnlyList<Sprint> Sprints { get; set; } = [];
+    [Parameter] public IReadOnlyList<Epic> Epics { get; set; } = [];
+    [Parameter] public IReadOnlyList<UserSummaryDto> Users { get; set; } = [];
+    [Parameter] public string? CurrentUserId { get; set; }
+
+    private void AssignToMe() => Draft.AssignedToUserId = CurrentUserId;
+}

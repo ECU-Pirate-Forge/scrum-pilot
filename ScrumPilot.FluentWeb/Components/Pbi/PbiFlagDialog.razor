@@ -1,0 +1,61 @@
+@namespace ScrumPilot.FluentWeb.Components.Pbi
+
+@if (Open)
+{
+    <div class="pbi-inline-dialog" role="dialog" aria-modal="true" aria-labelledby="flag-title">
+        <h3 id="flag-title">@(IsUnflagging ? "Remove flag" : "Flag PBI")</h3>
+        <p>@(IsUnflagging ? "Why are you removing the flag from" : "Why are you flagging") <strong>@Title</strong>? This will be posted as a comment.</p>
+        <label class="pbi-field">
+            <span>Reason <strong aria-hidden="true">*</strong></span>
+            <InputTextArea class="pbi-input pbi-textarea" @bind-Value="Reason" aria-required="true" />
+        </label>
+        @if (ShowRequiredError)
+        {
+            <p class="pbi-error" role="alert">Please provide a reason.</p>
+        }
+        <div class="pbi-actions">
+            <FluentButton Appearance="ButtonAppearance.Primary" OnClick="SubmitAsync">@(IsUnflagging ? "Remove flag" : "Flag")</FluentButton>
+            <FluentButton Appearance="ButtonAppearance.Outline" OnClick="CancelAsync">Cancel</FluentButton>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public string Title { get; set; } = "this PBI";
+    [Parameter] public bool IsUnflagging { get; set; }
+    [Parameter] public EventCallback<string> OnSubmit { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private string Reason { get; set; } = string.Empty;
+    private bool ShowRequiredError { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (!Open)
+        {
+            Reason = string.Empty;
+            ShowRequiredError = false;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (string.IsNullOrWhiteSpace(Reason))
+        {
+            ShowRequiredError = true;
+            return;
+        }
+
+        await OnSubmit.InvokeAsync(Reason.Trim());
+        Reason = string.Empty;
+        ShowRequiredError = false;
+    }
+
+    private async Task CancelAsync()
+    {
+        Reason = string.Empty;
+        ShowRequiredError = false;
+        await OnCancel.InvokeAsync();
+    }
+}
