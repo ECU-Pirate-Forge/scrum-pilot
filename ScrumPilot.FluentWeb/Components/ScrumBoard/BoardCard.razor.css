@@ -1,0 +1,81 @@
+.board-card {
+    position: relative;
+    display: block;
+    overflow: hidden;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: var(--borderRadiusMedium);
+    background: var(--colorNeutralBackground1);
+    box-shadow: var(--shadow4);
+    cursor: pointer;
+}
+
+.board-card:focus-visible {
+    outline: 2px solid var(--colorBrandStroke1, var(--colorBrandBackground));
+    outline-offset: 2px;
+}
+
+.board-card__stripe {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    width: 0.35rem;
+    background: var(--colorNeutralStroke2);
+}
+
+.board-card.priority-high .board-card__stripe {
+    background: var(--colorPaletteRedForeground1);
+}
+
+.board-card.priority-medium .board-card__stripe {
+    background: var(--colorPaletteYellowForeground1, #b7791f);
+}
+
+.board-card.priority-low .board-card__stripe {
+    background: var(--colorPaletteGreenForeground1, #107c10);
+}
+
+.board-card__body {
+    display: grid;
+    gap: var(--spacingVerticalS);
+    padding: var(--spacingVerticalM) var(--spacingHorizontalM) var(--spacingVerticalM) calc(var(--spacingHorizontalM) + 0.35rem);
+}
+
+.board-card__header,
+.board-card__footer,
+.board-card__badges {
+    display: flex;
+    align-items: center;
+    gap: var(--spacingHorizontalS);
+}
+
+.board-card__footer {
+    justify-content: space-between;
+}
+
+.board-card h3 {
+    margin: 0;
+}
+
+.board-card__actions {
+    margin-inline-start: auto;
+}
+
+.board-card__id {
+    margin: 0;
+    color: var(--colorNeutralForeground3);
+    font-size: var(--fontSizeBase200);
+}
+
+.board-card__assignee {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 50%;
+    background: var(--colorBrandBackground);
+    color: var(--colorNeutralForegroundOnBrand);
+    font-size: var(--fontSizeBase200);
+    font-weight: 700;
+}
+

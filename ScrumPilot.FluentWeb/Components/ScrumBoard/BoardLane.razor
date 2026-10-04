@@ -1,0 +1,54 @@
+@using ScrumPilot.Shared.Models
+@namespace ScrumPilot.FluentWeb.Components.ScrumBoard
+
+<section class="board-lane @Lane.CssClass"
+         data-testid="board-lane"
+         aria-labelledby="lane-@Lane.Status"
+         @ondragover:preventDefault="true"
+         @ondragover="OnDragOver"
+         @ondrop="HandleDropAsync">
+    <header class="board-lane__header">
+        <div class="board-lane__title-row">
+            <AppIcon Value="Lane.Icon" Label="" />
+            <h2 id="lane-@Lane.Status">@Lane.Label</h2>
+        </div>
+        <FluentBadge Appearance="BadgeAppearance.Filled" Color="BadgeColor.Subtle">@Items.Count</FluentBadge>
+    </header>
+
+    <div class="board-lane__cards" role="list" aria-label="@($"{Lane.Label} cards")">
+        @if (Items.Count == 0)
+        {
+            <p class="board-lane__empty">No cards in @Lane.Label.</p>
+        }
+        else
+        {
+            @foreach (var item in Items)
+            {
+                <BoardCard Item="item"
+                           Users="Users"
+                           MoveStatuses="MoveStatuses"
+                           OnOpen="OnOpen"
+                           OnMoveRequested="OnMoveRequested"
+                           OnDragStarted="OnDragStarted" />
+            }
+        }
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public BoardLaneDefinition Lane { get; set; } = default!;
+    [Parameter, EditorRequired] public IReadOnlyList<ProductBacklogItem> Items { get; set; } = [];
+    [Parameter] public IReadOnlyList<UserSummaryDto> Users { get; set; } = [];
+    [Parameter] public IReadOnlyList<PbiStatus> MoveStatuses { get; set; } = [];
+    [Parameter] public EventCallback<ProductBacklogItem> OnOpen { get; set; }
+    [Parameter] public EventCallback<(ProductBacklogItem Item, PbiStatus NewStatus)> OnMoveRequested { get; set; }
+    [Parameter] public EventCallback<ProductBacklogItem> OnDragStarted { get; set; }
+    [Parameter] public EventCallback<PbiStatus> OnDropRequested { get; set; }
+
+    private void OnDragOver()
+    {
+    }
+
+    private Task HandleDropAsync() => OnDropRequested.InvokeAsync(Lane.Status);
+}
+

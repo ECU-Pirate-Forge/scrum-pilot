@@ -1,0 +1,126 @@
+@using ScrumPilot.Shared.Models
+@namespace ScrumPilot.FluentWeb.Components.ScrumBoard
+
+<article class="board-card @PriorityClass"
+         data-testid="board-card"
+         role="listitem"
+         tabindex="0"
+         draggable="true"
+         @ondragstart="HandleDragStartAsync"
+         @onclick="OpenAsync"
+         @onkeydown="HandleKeyDownAsync"
+         aria-label="@($"PBI {Item.PbiId}: {Item.Title}. Status {StatusLabel(Item.Status)}")">
+    <div class="board-card__stripe" aria-hidden="true"></div>
+    <div class="board-card__body">
+        <header class="board-card__header">
+            <div class="board-card__badges">
+                @if (Item.StoryPoints != PbiPoints.Zero)
+                {
+                    <FluentBadge Appearance="BadgeAppearance.Filled" Color="BadgeColor.Informative">@((int)Item.StoryPoints) SP</FluentBadge>
+                }
+                else
+                {
+                    <FluentBadge Appearance="BadgeAppearance.Tint" Color="BadgeColor.Warning">Unpointed</FluentBadge>
+                }
+                @if (Item.IsFlagged)
+                {
+                    <FluentBadge Appearance="BadgeAppearance.Filled" Color="BadgeColor.Danger">Flagged</FluentBadge>
+                }
+            </div>
+            <div class="board-card__actions" @onclick:stopPropagation="true">
+                <FluentMenu>
+                    <FluentMenuButton Appearance="ButtonAppearance.Subtle"
+                                      IconStart="@(new Icons.Regular.Size20.MoreHorizontal().WithColor("currentColor"))"
+                                      Title="@($"Move PBI {Item.PbiId}")" />
+                    <FluentMenuList>
+                        @foreach (var status in MoveStatuses)
+                        {
+                            <FluentMenuItem IconStart="@(new Icons.Regular.Size20.ArrowMove())" OnClick="@(() => MoveAsync(status))">Move to @StatusLabel(status)</FluentMenuItem>
+                        }
+                    </FluentMenuList>
+                </FluentMenu>
+            </div>
+        </header>
+
+        <h3>@Item.Title</h3>
+        <p class="board-card__id">PBI #@Item.PbiId</p>
+
+        <footer class="board-card__footer">
+            <FluentBadge Appearance="BadgeAppearance.Tint" Color="@PriorityColor">@Item.Priority</FluentBadge>
+            <span class="board-card__assignee" title="@AssigneeLabel">@AssigneeInitials</span>
+        </footer>
+    </div>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public ProductBacklogItem Item { get; set; } = default!;
+    [Parameter] public IReadOnlyList<UserSummaryDto> Users { get; set; } = [];
+    [Parameter] public IReadOnlyList<PbiStatus> MoveStatuses { get; set; } = [];
+    [Parameter] public EventCallback<ProductBacklogItem> OnOpen { get; set; }
+    [Parameter] public EventCallback<(ProductBacklogItem Item, PbiStatus NewStatus)> OnMoveRequested { get; set; }
+    [Parameter] public EventCallback<ProductBacklogItem> OnDragStarted { get; set; }
+
+    private Task OpenAsync() => OnOpen.InvokeAsync(Item);
+
+    public Task RequestMoveAsync(PbiStatus status) => MoveAsync(status);
+
+    private Task MoveAsync(PbiStatus status) => OnMoveRequested.InvokeAsync((Item, status));
+
+    private Task HandleDragStartAsync() => OnDragStarted.InvokeAsync(Item);
+
+    private async Task HandleKeyDownAsync(KeyboardEventArgs args)
+    {
+        if (args.Key is "Enter" or " ")
+        {
+            await OpenAsync();
+        }
+    }
+
+    private string PriorityClass => $"priority-{Item.Priority.ToString().ToLowerInvariant()}";
+
+    private BadgeColor PriorityColor => Item.Priority switch
+    {
+        PbiPriority.High => BadgeColor.Danger,
+        PbiPriority.Medium => BadgeColor.Warning,
+        PbiPriority.Low => BadgeColor.Success,
+        _ => BadgeColor.Subtle
+    };
+
+    private string AssigneeInitials
+    {
+        get
+        {
+            var user = AssignedUser;
+            if (user is null || string.IsNullOrWhiteSpace(user.UserName))
+            {
+                return "?";
+            }
+
+            var parts = user.UserName.Split([' ', '.', '_', '-'], StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 2)
+            {
+                return string.Concat(parts[0][0], parts[1][0]).ToUpperInvariant();
+            }
+
+            var name = parts.FirstOrDefault() ?? user.UserName.Trim();
+            return name.Length >= 2 ? name[..2].ToUpperInvariant() : name.ToUpperInvariant();
+        }
+    }
+
+    private string AssigneeLabel => AssignedUser?.UserName ?? "Unassigned";
+
+    private UserSummaryDto? AssignedUser => string.IsNullOrWhiteSpace(Item.AssignedToUserId)
+        ? null
+        : Users.FirstOrDefault(u => u.Id == Item.AssignedToUserId);
+
+    private static string StatusLabel(PbiStatus status) => status switch
+    {
+        PbiStatus.ToDo => "To Do",
+        PbiStatus.InProgress => "In Progress",
+        PbiStatus.InReview => "In Review",
+        PbiStatus.Done => "Done",
+        _ => status.ToString()
+    };
+}
+
+

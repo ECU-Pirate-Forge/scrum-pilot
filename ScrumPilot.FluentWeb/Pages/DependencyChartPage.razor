@@ -1,8 +1,103 @@
 @page "/dependency-chart"
+@using ScrumPilot.FluentWeb.Components.DependencyChart
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject ProjectStateService ProjectState
+@inject IAppNotificationService Notifications
+@inject ILogger<DependencyChartPage> Logger
 
 <PageTitle>Dependency Chart</PageTitle>
 
-<div class="page-shell">
-    <h1>Dependency Chart</h1>
-    <p>Surface cross-team blockers and sequencing issues across the program.</p>
+<div class="dependency-chart-page">
+    <AppPageHeader Title="Dependency Chart" Subtitle="@HeaderSubtitle">
+        <Actions>
+            <FluentButton Appearance="ButtonAppearance.Outline" IconStart="@(new Icons.Regular.Size20.ChevronLeft())" OnClick="@(() => Nav.NavigateTo("/scrum-board"))">Back to Board</FluentButton>
+        </Actions>
+    </AppPageHeader>
+
+    @if (_loading)
+    {
+        <AppLoadingState Message="Loading dependency chart…" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <AppErrorState Title="Unable to load dependencies" Message="@_error" RetryLabel="Try again" OnRetry="LoadAsync" />
+    }
+    else
+    {
+        <DependencyChart Pbis="_pbis" SprintId="SprintId" />
+    }
 </div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "sprintId")] public int? SprintId { get; set; }
+    [SupplyParameterFromQuery(Name = "projectId")] public int? ProjectId { get; set; }
+
+    private List<ProductBacklogItem> _pbis = [];
+    private bool _loading = true;
+    private string _error = string.Empty;
+    private string _sprintLabel = string.Empty;
+    private int? _loadedSprintId;
+    private int? _loadedProjectId;
+
+    private int? EffectiveProjectId => ProjectId ?? ProjectState.SelectedProjectId;
+
+    private string HeaderSubtitle => string.IsNullOrWhiteSpace(_sprintLabel)
+        ? "Surface cross-team blockers and sequencing issues across the program."
+        : _sprintLabel;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedSprintId == SprintId && _loadedProjectId == EffectiveProjectId && !_loading)
+        {
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = string.Empty;
+        _pbis = [];
+        _loadedSprintId = SprintId;
+        _loadedProjectId = EffectiveProjectId;
+
+        try
+        {
+            if (!EffectiveProjectId.HasValue)
+            {
+                _error = "Select a project before viewing dependencies.";
+                return;
+            }
+
+            var pbiUrl = SprintId.HasValue
+                ? $"api/Pbi/getNonDraftPbis?projectId={EffectiveProjectId.Value}&sprintId={SprintId.Value}"
+                : $"api/Pbi/getNonDraftPbis?projectId={EffectiveProjectId.Value}";
+
+            _pbis = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(pbiUrl) ?? [];
+
+            if (SprintId.HasValue)
+            {
+                var sprints = await Http.GetFromJsonAsync<List<Sprint>>($"api/Sprint?projectId={EffectiveProjectId.Value}") ?? [];
+                var sprint = sprints.FirstOrDefault(s => s.SprintId == SprintId.Value);
+                _sprintLabel = sprint is null ? $"Sprint {SprintId.Value}" : (sprint.SprintTitle ?? sprint.SprintGoal ?? $"Sprint {sprint.SprintId}");
+            }
+            else
+            {
+                _sprintLabel = "All sprints";
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load dependency chart for project {ProjectId} sprint {SprintId}", EffectiveProjectId, SprintId);
+            _error = "Failed to load PBI data. Please go back and try again.";
+            Notifications.ShowError(_error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}
