@@ -1,9 +1,9 @@
+using System.Security.Claims;
 using Bunit;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FluentUI.AspNetCore.Components;
-using Microsoft.JSInterop;
-using ScrumPilot.FluentWeb.Auth;
 using ScrumPilot.FluentWeb.Services;
 using ScrumPilot.Shared.Models;
 
@@ -15,17 +15,28 @@ public abstract class FluentFrontendTestBase : BunitContext
     {
         Services.AddFluentUIComponents();
         Services.AddAuthorizationCore();
-
-        Services.AddScoped<JwtAuthStateProvider>();
-        Services.AddScoped<AuthenticationStateProvider>(provider => provider.GetRequiredService<JwtAuthStateProvider>());
+        Services.AddSingleton<AuthenticationStateProvider, TestAuthenticationStateProvider>();
         Services.AddScoped<IAuthService, TestAuthService>();
         Services.AddSingleton<ProjectStateService>();
+        Services.AddSingleton(new HttpClient(new StubHttpMessageHandler()) { BaseAddress = new Uri("https://localhost/") });
 
-        var jsRuntime = new BunitJSInterop();
-        jsRuntime.Mode = JSRuntimeMode.Loose;
-        Services.AddSingleton<IJSRuntime>(jsRuntime);
+        Renderer.SetRendererInfo(new RendererInfo("WebAssembly", true));
+        JSInterop.Mode = JSRuntimeMode.Loose;
+    }
 
-        Services.AddSingleton(new HttpClient(new RecordingHttpMessageHandler()));
+    private sealed class TestAuthenticationStateProvider : AuthenticationStateProvider
+    {
+        public override Task<AuthenticationState> GetAuthenticationStateAsync()
+        {
+            var identity = new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.Name, "Test User"),
+                    new Claim(ClaimTypes.NameIdentifier, "test-user")
+                ],
+                "TestAuth");
+
+            return Task.FromResult(new AuthenticationState(new ClaimsPrincipal(identity)));
+        }
     }
 
     private sealed class TestAuthService : IAuthService
@@ -34,7 +45,7 @@ public abstract class FluentFrontendTestBase : BunitContext
         public Task LogoutAsync() => Task.CompletedTask;
     }
 
-    private sealed class RecordingHttpMessageHandler : HttpMessageHandler
+    private sealed class StubHttpMessageHandler : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             => Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK));
