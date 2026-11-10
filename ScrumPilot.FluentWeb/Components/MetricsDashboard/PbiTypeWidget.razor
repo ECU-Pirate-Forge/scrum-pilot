@@ -1,0 +1,49 @@
+@using ApexCharts
+
+@if (Items.Count > 0 && _points.Any(p => p.Count > 0))
+{
+    <ApexChart @key="_chartKey" TItem="TypePoint" Options="_options" Height="@("100%")">
+        <ApexPointSeries TItem="TypePoint" Items="_points" Name="PBIs" SeriesType="SeriesType.Donut" XValue="@(p => p.Label)" YValue="@(p => p.Count)" />
+    </ApexChart>
+}
+else
+{
+    <div class="widget-empty">No data.</div>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<ProductBacklogItem> Items { get; set; } = [];
+    [CascadingParameter(Name = "IsDarkMode")] public bool IsDarkMode { get; set; }
+
+    private record TypePoint(string Label, decimal Count);
+    private List<TypePoint> _points = [];
+    private ApexChartOptions<TypePoint> _options = new();
+    private bool? _lastTheme;
+    private int _lastCount = -1;
+    private int _chartKey;
+
+    protected override void OnParametersSet()
+    {
+        if (_lastCount == Items.Count && _lastTheme == IsDarkMode) return;
+        _lastCount = Items.Count;
+        _lastTheme = IsDarkMode;
+        _points =
+        [
+            new("Stories", Items.Count(i => i.Type == PbiType.Story)),
+            new("Bugs", Items.Count(i => i.Type == PbiType.Bug)),
+            new("Tasks", Items.Count(i => i.Type == PbiType.Task)),
+        ];
+        _options = BuildOptions(IsDarkMode);
+        _chartKey++;
+    }
+
+    private static ApexChartOptions<TypePoint> BuildOptions(bool isDark) => new()
+    {
+        Theme = MetricsChartTheme.Theme(isDark),
+        Chart = new Chart { Background = "transparent", Toolbar = new Toolbar { Show = false } },
+        Colors = ["#22c55e", "#ef4444", "#3b82f6"],
+        Legend = new Legend { Labels = MetricsChartTheme.LegendLabels(isDark), Position = LegendPosition.Bottom },
+        DataLabels = new DataLabels { Enabled = true },
+        Tooltip = MetricsChartTheme.Tooltip(isDark)
+    };
+}

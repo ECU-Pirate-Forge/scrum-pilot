@@ -1,0 +1,107 @@
+@using System.Text
+@using ScrumPilot.Shared.Models
+@inject IJSRuntime JS
+@inject ILogger<DependencyChart> Logger
+@namespace ScrumPilot.FluentWeb.Components.DependencyChart
+
+@if (!Pbis.Any())
+{
+    <AppEmptyState Title="No PBIs available" Message="No PBIs are available to chart." Icon="@(new Icons.Regular.Size24.Diagram())" />
+}
+else
+{
+    @if (!HasAnyDependency)
+    {
+        <FluentMessageBar Intent="MessageBarIntent.Info">None of the PBIs in this sprint have dependencies set. Assign a Depends On PBI inside the PBI card to see relationships here.</FluentMessageBar>
+    }
+    <div class="dependency-chart" id="@_containerId" data-testid="dependency-chart" aria-label="PBI dependency chart"></div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<ProductBacklogItem> Pbis { get; set; } = [];
+    [Parameter] public int? SprintId { get; set; }
+    [CascadingParameter(Name = "IsDarkMode")] public bool IsDarkMode { get; set; }
+
+    private readonly string _containerId = "dep-chart-" + Guid.NewGuid().ToString("N")[..8];
+    private bool _renderRequested;
+    private bool _lastDarkMode;
+    private string? _lastDefinition;
+
+    private bool HasAnyDependency => Pbis.Any(p => p.DependsOnPbiId.HasValue && Pbis.Any(x => x.PbiId == p.DependsOnPbiId.Value));
+
+    protected override void OnParametersSet()
+    {
+        var definition = BuildMermaidDefinition();
+        _renderRequested = _lastDefinition != definition || _lastDarkMode != IsDarkMode;
+        _lastDefinition = definition;
+        _lastDarkMode = IsDarkMode;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if ((firstRender || _renderRequested) && Pbis.Any())
+        {
+            _renderRequested = false;
+            try
+            {
+                await JS.InvokeVoidAsync("mermaidHelper.render", _containerId, _lastDefinition ?? BuildMermaidDefinition());
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Failed to render dependency chart for sprint {SprintId}", SprintId);
+            }
+        }
+    }
+
+    public string BuildMermaidDefinition()
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("flowchart LR");
+        sb.AppendLine("  classDef flagged fill:#fde7e9,stroke:#bc2f32,color:#751d1f,font-weight:bold");
+        sb.AppendLine(IsDarkMode
+            ? "  classDef done fill:#292929,stroke:#8a8886,color:#d2d0ce,font-style:italic"
+            : "  classDef done fill:#f3f2f1,stroke:#8a8886,color:#605e5c,font-style:italic");
+        sb.AppendLine(IsDarkMode
+            ? "  classDef active fill:#332c00,stroke:#c8a300,color:#fff4ce"
+            : "  classDef active fill:#fff4ce,stroke:#c8a300,color:#3b3a39");
+        sb.AppendLine(IsDarkMode
+            ? "  classDef backlog fill:#10243e,stroke:#479ef5,color:#deecf9"
+            : "  classDef backlog fill:#eff6fc,stroke:#479ef5,color:#0f3a5f");
+
+        foreach (var pbi in Pbis)
+        {
+            var label = BuildNodeLabel(pbi);
+            var shapeOpen = pbi.Status == PbiStatus.Done ? "([\"" : "[\"";
+            var shapeClose = pbi.Status == PbiStatus.Done ? "\"])" : "\"]";
+            sb.AppendLine($"  PBI{pbi.PbiId}{shapeOpen}{label}{shapeClose}");
+            sb.AppendLine($"  PBI{pbi.PbiId}:::{NodeClass(pbi)}");
+        }
+
+        foreach (var pbi in Pbis.Where(p => p.DependsOnPbiId.HasValue))
+        {
+            if (Pbis.Any(x => x.PbiId == pbi.DependsOnPbiId!.Value))
+            {
+                sb.AppendLine($"  PBI{pbi.PbiId} -->|depends on| PBI{pbi.DependsOnPbiId}");
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    private static string BuildNodeLabel(ProductBacklogItem pbi)
+    {
+        var safeTitle = (pbi.Title ?? string.Empty).Replace("\"", "'").Replace("\r", " ").Replace("\n", " ");
+        var truncated = safeTitle.Length > 40 ? safeTitle[..40] + "…" : safeTitle;
+        var state = pbi.Status == PbiStatus.Done ? "Done" : pbi.Status.ToString();
+        var flag = pbi.IsFlagged ? " • Flagged" : string.Empty;
+        return $"#{pbi.PbiId} {truncated} ({state}{flag})";
+    }
+
+    private static string NodeClass(ProductBacklogItem pbi) => pbi.IsFlagged
+        ? "flagged"
+        : pbi.Status == PbiStatus.Done
+            ? "done"
+            : pbi.Status == PbiStatus.InProgress || pbi.Status == PbiStatus.InReview
+                ? "active"
+                : "backlog";
+}

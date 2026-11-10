@@ -1,0 +1,37 @@
+.velocity-stats-strip {
+    display: flex;
+    align-items: center;
+    gap: var(--spacingHorizontalM);
+    padding: var(--spacingVerticalXS) 0 var(--spacingVerticalS);
+    flex-wrap: wrap;
+}
+.velocity-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+.velocity-stat-value {
+    font-weight: 700;
+    color: var(--colorNeutralForeground1);
+}
+.velocity-recommended {
+    color: #00d4ff;
+}
+.velocity-stat-label {
+    color: var(--colorNeutralForeground3);
+    font-size: var(--fontSizeBase200);
+}
+.velocity-stat-sep {
+    color: var(--colorNeutralForeground3);
+}
+.velocity-up {
+    color: var(--colorPaletteGreenForeground1, #16a34a);
+}
+.velocity-down {
+    color: var(--colorPaletteRedForeground1);
+}
+.velocity-chart {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}

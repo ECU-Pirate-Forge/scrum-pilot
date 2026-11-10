@@ -1,0 +1,22 @@
+@* Standard page heading: the single h1 on a page plus optional subtitle and action area. *@
+<header class="app-page-header">
+    <div class="app-page-header__text">
+        <h1 class="app-page-header__title" tabindex="-1">@Title</h1>
+        @if (!string.IsNullOrWhiteSpace(Subtitle))
+        {
+            <p class="app-page-header__subtitle">@Subtitle</p>
+        }
+        @ChildContent
+    </div>
+    @if (Actions is not null)
+    {
+        <div class="app-page-header__actions">@Actions</div>
+    }
+</header>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public RenderFragment? Actions { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

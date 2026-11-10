@@ -1,0 +1,33 @@
+@page "/"
+@using System.Security.Claims
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>ScrumPilot</PageTitle>
+
+<div class="home-page">
+    <AppPageHeader Title="ScrumPilot dashboard" Subtitle="@($"Welcome back, {_userName}. Choose a workspace area to continue.")" />
+
+    <section class="dashboard-grid" aria-label="ScrumPilot dashboard links">
+        <DashboardTile Title="Scrum Board" Description="View and manage sprint work." Href="/scrum-board" Icon="@(new Icons.Regular.Size20.BoardSplit())" />
+        <DashboardTile Title="Generate PBIs" Description="Create product backlog items quickly." Href="/pbigeneration" Icon="@(new Icons.Regular.Size20.Lightbulb())" />
+        <DashboardTile Title="Draft PBIs" Description="Review and refine drafted product backlog items." Href="/draft-pbis" Icon="@(new Icons.Regular.Size20.DocumentText())" />
+        <DashboardTile Title="Backlog" Description="View and manage backlog items." Href="/backlog" Icon="@(new Icons.Regular.Size20.TaskListSquareLtr())" />
+        <DashboardTile Title="Metrics Dashboard" Description="Sprint metrics and PBI analytics." Href="/metrics" Icon="@(new Icons.Regular.Size20.DataBarVertical())" />
+        <DashboardTile Title="Planning Poker" Description="Estimate stories with your team in real time." Href="/planning-poker" Icon="@(new Icons.Regular.Size20.NumberSymbol())" />
+        <DashboardTile Title="Manage Project" Description="Create and manage projects, sprints, epics, and PBIs." Href="/project-management" Icon="@(new Icons.Regular.Size20.Building())" />
+        <DashboardTile Title="User Settings" Description="Manage your account, theme, and default project." Href="/user-settings" Icon="@(new Icons.Regular.Size20.PersonCircle())" />
+    </section>
+</div>
+
+@code {
+    private string _userName = "there";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthState.GetAuthenticationStateAsync();
+        _userName = authState.User.FindFirst(ClaimTypes.Name)?.Value
+            ?? authState.User.FindFirst("unique_name")?.Value
+            ?? authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? "there";
+    }
+}

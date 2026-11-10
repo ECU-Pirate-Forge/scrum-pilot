@@ -1,0 +1,21 @@
+.management-section {
+    display: grid;
+    gap: var(--spacingVerticalM);
+    padding-top: var(--spacingVerticalM);
+}
+.section-header, .date-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacingHorizontalM);
+}
+.editor-card {
+    display: grid;
+    gap: var(--spacingVerticalS);
+    padding: var(--spacingVerticalM);
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: var(--borderRadiusMedium);
+    background: var(--colorNeutralBackground2);
+}
+.management-grid { width: 100%; }
+input, select, textarea { min-height: 2rem; }

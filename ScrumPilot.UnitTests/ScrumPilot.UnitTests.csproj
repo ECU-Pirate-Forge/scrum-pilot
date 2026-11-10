@@ -19,11 +19,11 @@
     <PackageReference Include="NSubstitute" Version="5.3.0" />
 
     <!-- BUnit for Blazor component testing -->
-    <PackageReference Include="bunit" Version="2.7.2" />
+    <PackageReference Include="bunit" Version="2.12.5" />
 
     <!-- ASP.NET Core Components for Blazor testing -->
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.3" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.3" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.13" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.13" />
 
     <!-- Microsoft Test SDK -->
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.3.0" />

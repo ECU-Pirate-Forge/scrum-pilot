@@ -1,0 +1,11 @@
+@page "/not-found"
+@attribute [AllowAnonymous]
+
+<PageTitle>Not found — ScrumPilot</PageTitle>
+
+<AppPageHeader Title="Page not found" Subtitle="The route you requested does not exist in ScrumPilot." />
+
+<FluentCard Class="not-found-card">
+    <FluentText Tag="TextTag.Paragraph">Check the address or return to the ScrumPilot dashboard.</FluentText>
+    <FluentAnchorButton Href="/" Appearance="ButtonAppearance.Primary" IconStart="@(new Icons.Regular.Size20.Home())">Go home</FluentAnchorButton>
+</FluentCard>

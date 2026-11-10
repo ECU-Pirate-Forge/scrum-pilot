@@ -1,0 +1,15 @@
+.settings-stack {
+    display: grid;
+    gap: var(--spacingVerticalXL, 1.5rem);
+    max-width: 52rem;
+}
+
+.settings-card {
+    padding: var(--spacingHorizontalXL, 1.5rem);
+}
+
+.settings-form {
+    display: grid;
+    gap: var(--spacingVerticalM, 0.75rem);
+    margin-top: var(--spacingVerticalL, 1rem);
+}

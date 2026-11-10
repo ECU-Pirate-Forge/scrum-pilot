@@ -1,0 +1,22 @@
+@using Microsoft.AspNetCore.Components
+@using Microsoft.FluentUI.AspNetCore.Components
+
+<a class="dashboard-tile sp-focus-ring" href="@Href" aria-label="@Title">
+    <span class="dashboard-tile__icon" aria-hidden="true">
+        @if (Icon is not null)
+        {
+            <AppIcon Value="@Icon" Label="" />
+        }
+    </span>
+    <span class="dashboard-tile__content">
+        <span class="dashboard-tile__title">@Title</span>
+        <span class="dashboard-tile__description">@Description</span>
+    </span>
+</a>
+
+@code {
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string Description { get; set; } = string.Empty;
+    [Parameter] public string Href { get; set; } = "/";
+    [Parameter] public Icon? Icon { get; set; }
+}

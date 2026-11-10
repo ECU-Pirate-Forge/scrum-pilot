@@ -1,0 +1,7 @@
+.generated-dialog-backdrop { position: fixed; inset: 0; z-index: 18; display: grid; place-items: center; padding: var(--spacingHorizontalL); background: rgba(0, 0, 0, 0.45); }
+.generated-dialog { width: min(980px, 96vw); max-height: 92vh; overflow: auto; display: grid; gap: var(--spacingVerticalM); padding: var(--spacingVerticalL) var(--spacingHorizontalL); border-radius: var(--borderRadiusLarge); background: var(--colorNeutralBackground1); box-shadow: var(--shadow16); }
+.generated-dialog__header, .generated-dialog__nav, .generated-dialog__actions { display: flex; align-items: center; justify-content: space-between; gap: var(--spacingHorizontalM); }
+.generated-dialog__header { border-bottom: 1px solid var(--colorNeutralStroke1); padding-bottom: var(--spacingVerticalM); }
+.generated-dialog__header h2 { margin: 0; }
+.generated-dialog__state { display: flex; justify-content: center; }
+.generated-dialog__nav, .generated-dialog__actions { justify-content: center; flex-wrap: wrap; }

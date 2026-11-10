@@ -1,0 +1,10 @@
+.home-page {
+    display: grid;
+    gap: var(--spacingVerticalXL, 1.5rem);
+}
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: var(--spacingHorizontalL, 1rem);
+}

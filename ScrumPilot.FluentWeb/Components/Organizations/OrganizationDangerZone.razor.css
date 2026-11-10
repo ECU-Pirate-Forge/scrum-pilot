@@ -1,0 +1,14 @@
+.organization-card, .danger-zone {
+    display: grid;
+    gap: var(--spacingVerticalM);
+}
+.inline-editor {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--spacingHorizontalM);
+    align-items: end;
+}
+.danger-zone {
+    border: 1px solid var(--colorPaletteRedBorder1, var(--colorNeutralStroke1));
+}
+@media (max-width: 700px) { .inline-editor { grid-template-columns: 1fr; } }

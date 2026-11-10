@@ -1,0 +1,404 @@
+@page "/scrum-board"
+@using ScrumPilot.FluentWeb.Components.Pbi
+@using ScrumPilot.FluentWeb.Components.ScrumBoard
+@inject HttpClient Http
+@inject ProjectStateService ProjectState
+@inject NavigationManager Nav
+@inject IAppNotificationService Notifications
+@inject ILogger<ScrumBoard> Logger
+@implements IDisposable
+
+<PageTitle>Scrum Board</PageTitle>
+
+<div class="scrum-board-root">
+    <AppPageHeader Title="Scrum Board" Subtitle="Track sprint flow, board status, and delivery blockers.">
+        <Actions>
+            <FluentButton Appearance="ButtonAppearance.Primary" IconStart="@(new Icons.Regular.Size20.Add())" OnClick="OpenNewPbiForm" Disabled="@(!_selectedProjectId.HasValue)">New PBI</FluentButton>
+            <FluentButton Appearance="ButtonAppearance.Outline" IconStart="@(new Icons.Regular.Size20.Diagram())" OnClick="OpenDependencyChart">Dependency Chart</FluentButton>
+        </Actions>
+    </AppPageHeader>
+
+    @if (_loading)
+    {
+        <AppLoadingState Message="Loading scrum board…" />
+    }
+    else if (!_selectedProjectId.HasValue)
+    {
+        <AppEmptyState Title="Select a project" Message="Choose a project from the header to view the scrum board." Icon="@(new Icons.Regular.Size24.Board())" />
+    }
+    else
+    {
+        @if (!string.IsNullOrWhiteSpace(_errorMessage))
+        {
+            <FluentMessageBar Intent="MessageBarIntent.Error">@_errorMessage</FluentMessageBar>
+        }
+
+        <section class="board-toolbar" aria-label="Board filters">
+            <FluentSelect TOption="SelectOption" TValue="int?"
+                          Label="Sprint"
+                          Items="@SprintOptions"
+                          OptionText="@(item => item.Label)"
+                          OptionValue="@(item => item.Value)"
+                          OptionValueToString="@(value => value?.ToString() ?? string.Empty)"
+                          Value="@_selectedSprintId"
+                          ValueChanged="OnSprintChanged"
+                          ValueExpression="@(() => _selectedSprintId)" />
+
+            <FluentSelect TOption="SelectOption" TValue="int?"
+                          Label="Epic"
+                          Items="@EpicOptions"
+                          OptionText="@(item => item.Label)"
+                          OptionValue="@(item => item.Value)"
+                          OptionValueToString="@(value => value?.ToString() ?? string.Empty)"
+                          Value="@_selectedEpicId"
+                          ValueChanged="OnEpicChanged"
+                          ValueExpression="@(() => _selectedEpicId)" />
+        </section>
+
+        @if (!_items.Any())
+        {
+            <FluentMessageBar Intent="MessageBarIntent.Info">No PBIs match the selected filters.</FluentMessageBar>
+        }
+
+        <section class="board-lanes" aria-label="Scrum board lanes" data-testid="scrum-board-lanes">
+            @foreach (var lane in _lanes)
+            {
+                var laneItems = _items.Where(i => i.Status == lane.Status).OrderBy(i => i.PbiId).ToList();
+                <BoardLane Lane="lane"
+                           Items="laneItems"
+                           Users="_users"
+                           MoveStatuses="MoveTargets(lane.Status)"
+                           OnOpen="OpenPbiDetails"
+                           OnMoveRequested="MoveItemAsync"
+                           OnDragStarted="StartDragging"
+                           OnDropRequested="DropDraggedItemAsync" />
+            }
+        </section>
+    }
+
+    @if (_showNewPbiForm && _newPbi is not null)
+    {
+        <div class="board-dialog-backdrop" @onclick="CloseNewPbiForm">
+            <section class="board-dialog" role="dialog" aria-modal="true" aria-labelledby="new-pbi-title" @onclick:stopPropagation="true">
+                <header class="board-dialog__header">
+                    <h2 id="new-pbi-title">New PBI</h2>
+                    <FluentButton Appearance="ButtonAppearance.Transparent" IconOnly="true" Title="Close" OnClick="CloseNewPbiForm">
+                        <AppIcon Value="@(new Icons.Regular.Size20.Dismiss())" Label="Close" />
+                    </FluentButton>
+                </header>
+                <PbiCard PbiModel="_newPbi"
+                         StartInEditMode="true"
+                         ProjectId="_selectedProjectId"
+                         OnSave="HandleNewPbiSaved"
+                         OnCancelNew="CloseNewPbiForm" />
+            </section>
+        </div>
+    }
+
+    @if (SelectedPbi is not null)
+    {
+        <PbiDetailsDialog Pbi="SelectedPbi"
+                          Open="true"
+                          ProjectId="_selectedProjectId"
+                          OnSaved="HandlePbiSaved"
+                          OnCancelled="ClosePbiDetails"
+                          OnDeleted="HandlePbiDeleted" />
+    }
+</div>
+
+@code {
+    private readonly IReadOnlyList<BoardLaneDefinition> _lanes =
+    [
+        new(PbiStatus.ToDo, "To Do", new Icons.Regular.Size20.ClipboardTask(), "lane-todo"),
+        new(PbiStatus.InProgress, "In Progress", new Icons.Regular.Size20.ArrowSync(), "lane-progress"),
+        new(PbiStatus.InReview, "In Review", new Icons.Regular.Size20.DocumentEdit(), "lane-review"),
+        new(PbiStatus.Done, "Done", new Icons.Regular.Size20.CheckmarkCircle(), "lane-done")
+    ];
+
+    private List<ProductBacklogItem> _items = [];
+    private List<Sprint> _sprints = [];
+    private List<Epic> _epics = [];
+    private List<UserSummaryDto> _users = [];
+    private int? _selectedProjectId;
+    private int? _selectedSprintId;
+    private int? _selectedEpicId;
+    private bool _loading = true;
+    private string _errorMessage = string.Empty;
+    private bool _showNewPbiForm;
+    private ProductBacklogItem? _newPbi;
+    private ProductBacklogItem? SelectedPbi;
+    private ProductBacklogItem? _draggedItem;
+
+    private IReadOnlyList<SelectOption> SprintOptions =>
+    [
+        new(null, "All"),
+        new(-1, "Unassigned"),
+        .. _sprints.Select(s => new SelectOption(s.SprintId, SprintLabel(s)))
+    ];
+
+    private IReadOnlyList<SelectOption> EpicOptions =>
+    [
+        new(null, "All"),
+        .. _epics.Select(e => new SelectOption(e.EpicId, e.Name))
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _selectedProjectId = ProjectState.SelectedProjectId;
+        ProjectState.OnChange += HandleProjectStateChanged;
+        await LoadDropdownsAsync();
+        ApplyDefaultSprintFilter();
+        await LoadItemsAsync();
+    }
+
+    public void Dispose()
+    {
+        ProjectState.OnChange -= HandleProjectStateChanged;
+    }
+
+    private void HandleProjectStateChanged()
+    {
+        _ = InvokeAsync(async () => await OnProjectChanged(ProjectState.SelectedProjectId));
+    }
+
+    private async Task LoadDropdownsAsync()
+    {
+        if (!_selectedProjectId.HasValue)
+        {
+            _sprints = [];
+            _epics = [];
+            _users = [];
+            return;
+        }
+
+        try
+        {
+            _sprints = await Http.GetFromJsonAsync<List<Sprint>>($"api/Sprint?projectId={_selectedProjectId.Value}") ?? [];
+            _epics = await Http.GetFromJsonAsync<List<Epic>>($"api/Epic?projectId={_selectedProjectId.Value}") ?? [];
+            _users = await Http.GetFromJsonAsync<List<UserSummaryDto>>($"api/user/all?projectId={_selectedProjectId.Value}") ?? [];
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load scrum board dropdown data for project {ProjectId}", _selectedProjectId);
+            Notifications.ShowWarning("Some board filter options could not be loaded.");
+            _sprints = [];
+            _epics = [];
+            _users = [];
+        }
+    }
+
+    private async Task OnProjectChanged(int? value)
+    {
+        _selectedProjectId = value;
+        _selectedSprintId = null;
+        _selectedEpicId = null;
+        _items = [];
+        await LoadDropdownsAsync();
+        ApplyDefaultSprintFilter();
+        await LoadItemsAsync(showLoading: false);
+    }
+
+    private void ApplyDefaultSprintFilter()
+    {
+        if (_sprints.Count == 0)
+        {
+            return;
+        }
+
+        var today = DateTime.UtcNow.Date;
+        _selectedSprintId = (_sprints.FirstOrDefault(s => s.IsOpen && s.StartDate.HasValue && s.EndDate.HasValue && today >= s.StartDate.Value.Date && today <= s.EndDate.Value.Date)
+            ?? _sprints.Where(s => s.IsOpen && s.StartDate.HasValue).OrderByDescending(s => s.StartDate).FirstOrDefault())?.SprintId;
+    }
+
+    private async Task LoadItemsAsync(bool showLoading = true)
+    {
+        if (!_selectedProjectId.HasValue)
+        {
+            _items = [];
+            _loading = false;
+            return;
+        }
+
+        if (showLoading)
+        {
+            _loading = true;
+            _items = [];
+        }
+
+        try
+        {
+            _errorMessage = string.Empty;
+            var items = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(BuildItemUrl());
+            _items = (items ?? []).OrderBy(i => i.PbiId).ToList();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load scrum board PBIs for project {ProjectId}", _selectedProjectId);
+            _errorMessage = "Unable to load PBIs from the server.";
+            Notifications.ShowError(_errorMessage);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private string BuildItemUrl()
+    {
+        var query = new List<string> { $"projectId={_selectedProjectId!.Value}" };
+        if (_selectedSprintId.HasValue)
+        {
+            query.Add($"sprintId={_selectedSprintId.Value}");
+        }
+        if (_selectedEpicId.HasValue)
+        {
+            query.Add($"epicId={_selectedEpicId.Value}");
+        }
+        return $"api/Pbi/getNonDraftPbis?{string.Join("&", query)}";
+    }
+
+    private async Task OnSprintChanged(int? value)
+    {
+        _selectedSprintId = value;
+        await LoadItemsAsync(showLoading: false);
+    }
+
+    private async Task OnEpicChanged(int? value)
+    {
+        _selectedEpicId = value;
+        await LoadItemsAsync(showLoading: false);
+    }
+
+    private IReadOnlyList<PbiStatus> MoveTargets(PbiStatus current) => _lanes.Select(l => l.Status).Where(status => status != current).ToList();
+
+    private void StartDragging(ProductBacklogItem item) => _draggedItem = item;
+
+    private async Task DropDraggedItemAsync(PbiStatus targetStatus)
+    {
+        if (_draggedItem is null)
+        {
+            return;
+        }
+
+        var item = _draggedItem;
+        _draggedItem = null;
+        await MoveItemAsync((item, targetStatus));
+    }
+
+    private async Task MoveItemAsync((ProductBacklogItem Item, PbiStatus NewStatus) move)
+    {
+        var item = move.Item;
+        var newStatus = move.NewStatus;
+        if (item.Status == newStatus)
+        {
+            return;
+        }
+
+        var originalStatus = item.Status;
+        var originalLastUpdated = item.LastUpdated;
+        _errorMessage = string.Empty;
+        item.Status = newStatus;
+        item.LastUpdated = DateTime.UtcNow;
+        StateHasChanged();
+
+        try
+        {
+            var response = await Http.PutAsJsonAsync("api/Pbi", item);
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new HttpRequestException($"Update failed with HTTP {(int)response.StatusCode}.");
+            }
+
+            var updated = await response.Content.ReadFromJsonAsync<ProductBacklogItem>();
+            if (updated is not null)
+            {
+                var index = _items.FindIndex(i => i.PbiId == updated.PbiId);
+                if (index >= 0)
+                {
+                    _items[index] = updated;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to move PBI {PbiId} from {OriginalStatus} to {NewStatus}", item.PbiId, originalStatus, newStatus);
+            item.Status = originalStatus;
+            item.LastUpdated = originalLastUpdated;
+            _errorMessage = "Could not save the status change. The card was returned to its previous column.";
+            Notifications.ShowError(_errorMessage, "Move failed");
+        }
+    }
+
+    private void OpenPbiDetails(ProductBacklogItem pbi) => SelectedPbi = pbi;
+
+    private Task ClosePbiDetails()
+    {
+        SelectedPbi = null;
+        return Task.CompletedTask;
+    }
+
+    private async Task HandlePbiSaved(ProductBacklogItem pbi)
+    {
+        SelectedPbi = null;
+        await LoadItemsAsync(showLoading: false);
+    }
+
+    private async Task HandlePbiDeleted(int pbiId)
+    {
+        SelectedPbi = null;
+        await LoadItemsAsync(showLoading: false);
+    }
+
+    private void OpenNewPbiForm()
+    {
+        if (!_selectedProjectId.HasValue)
+        {
+            return;
+        }
+
+        _newPbi = new ProductBacklogItem
+        {
+            PbiId = 0,
+            ProjectId = _selectedProjectId.Value,
+            Title = string.Empty,
+            Status = PbiStatus.ToDo,
+            Priority = PbiPriority.Medium,
+            Origin = PbiOrigin.WebUserCreated,
+            DateCreated = DateTime.UtcNow,
+            LastUpdated = DateTime.UtcNow
+        };
+        _showNewPbiForm = true;
+    }
+
+    private void CloseNewPbiForm()
+    {
+        _showNewPbiForm = false;
+        _newPbi = null;
+    }
+
+    private async Task HandleNewPbiSaved(ProductBacklogItem saved)
+    {
+        _showNewPbiForm = false;
+        _newPbi = null;
+        await LoadItemsAsync(showLoading: false);
+    }
+
+    private void OpenDependencyChart()
+    {
+        var query = new List<string>();
+        if (_selectedSprintId.HasValue)
+        {
+            query.Add($"sprintId={_selectedSprintId.Value}");
+        }
+        if (_selectedProjectId.HasValue)
+        {
+            query.Add($"projectId={_selectedProjectId.Value}");
+        }
+
+        Nav.NavigateTo(query.Count == 0 ? "/dependency-chart" : $"/dependency-chart?{string.Join("&", query)}");
+    }
+
+    private static string SprintLabel(Sprint sprint) => sprint.SprintTitle ?? sprint.SprintGoal ?? $"Sprint {sprint.SprintId}";
+
+    private sealed record SelectOption(int? Value, string Label);
+}

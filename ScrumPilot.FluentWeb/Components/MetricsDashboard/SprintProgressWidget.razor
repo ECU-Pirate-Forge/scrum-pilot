@@ -1,0 +1,73 @@
+<WidgetCard Title="Sprint Progress">
+    @if (_loading)
+    {
+        <div class="widget-center"><FluentSpinner Label="Loading sprint progress" /></div>
+    }
+    else if (_data is not null)
+    {
+        <div class="progress-content">
+            <div class="progress-row">
+                <div class="progress-label">
+                    <FluentText Size="TextSize.Size200" Class="stat-caption">Committed</FluentText>
+                    <FluentText Size="TextSize.Size300" Weight="TextWeight.Semibold">@_data.CommittedPoints.ToString("0") SP</FluentText>
+                </div>
+                <div class="progress-bar-wrap"><div class="progress-bar-bg"><div class="progress-bar-fill" style="width: 100%; background-color: #1e88e5;"></div></div></div>
+            </div>
+            <div class="progress-row">
+                <div class="progress-label">
+                    <FluentText Size="TextSize.Size200" Class="stat-caption">Completed</FluentText>
+                    <FluentText Size="TextSize.Size300" Weight="TextWeight.Semibold">@_data.CompletedPoints.ToString("0") SP</FluentText>
+                </div>
+                <div class="progress-bar-wrap"><div class="progress-bar-bg"><div class="progress-bar-fill" style="width: @CompletedWidth; background-color: #ff9800;"></div></div></div>
+            </div>
+            <div class="progress-stats">
+                <div><FluentText Size="TextSize.Size200" Class="stat-caption">Issues Committed</FluentText><FluentText Weight="TextWeight.Semibold">@_data.CommittedCount</FluentText></div>
+                <div><FluentText Size="TextSize.Size200" Class="stat-caption">Issues Completed</FluentText><FluentText Weight="TextWeight.Semibold">@_data.CompletedCount</FluentText></div>
+                <div><FluentText Size="TextSize.Size200" Class="stat-caption">Completion</FluentText><FluentText Weight="TextWeight.Semibold">@_completedPct.ToString("0")%</FluentText></div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="widget-empty">No sprint data</div>
+    }
+</WidgetCard>
+
+@code {
+    [Parameter] public int? SprintId { get; set; }
+    [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
+    [Inject] private ILogger<SprintProgressWidget> Logger { get; set; } = default!;
+
+    private SprintProgressDto? _data;
+    private double _completedPct;
+    private bool _loading = true;
+    private int? _lastSprintId = -1;
+    private string CompletedWidth => $"{_completedPct.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}%";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_lastSprintId == SprintId) return;
+        _lastSprintId = SprintId;
+        _loading = true;
+        try
+        {
+            if (SprintId.HasValue)
+            {
+                _data = await MetricsSvc.GetSprintProgressAsync(SprintId.Value);
+                _completedPct = _data.CommittedPoints > 0 ? Math.Clamp(_data.CompletedPoints * 100.0 / _data.CommittedPoints, 0, 100) : 0;
+            }
+            else
+            {
+                _data = null;
+                _completedPct = 0;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load sprint progress for sprint {SprintId}", SprintId);
+            _data = null;
+            _completedPct = 0;
+        }
+        _loading = false;
+    }
+}

@@ -1,0 +1,524 @@
+@page "/backlog"
+@using System.Net.Http.Json
+@using ScrumPilot.FluentWeb.Components.Backlog
+@using ScrumPilot.FluentWeb.Components.Pbi
+@inject HttpClient Http
+@inject ProjectStateService ProjectState
+@inject MetricsDashboardService MetricsSvc
+@inject IAppNotificationService Notifications
+@inject ILogger<Backlog> Logger
+@implements IDisposable
+
+<PageTitle>Backlog</PageTitle>
+
+<div class="bl-page">
+    <AppPageHeader Title="Backlog" Subtitle="Review, prioritize, and sequence work for the next sprint.">
+        <Actions>
+            <FluentButton Appearance="ButtonAppearance.Primary"
+                          IconStart="@(new Icons.Regular.Size20.Add())"
+                          OnClick="OpenNewPbiForm"
+                          Disabled="@(!_selectedProjectId.HasValue)">
+                New PBI
+            </FluentButton>
+        </Actions>
+    </AppPageHeader>
+
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <FluentMessageBar Intent="MessageBarIntent.Error">@_errorMessage</FluentMessageBar>
+    }
+
+    @if (!_selectedProjectId.HasValue)
+    {
+        <AppEmptyState Title="Select a project" Message="Choose a project from the shell to view its backlog." Icon="@(new Icons.Regular.Size24.Board())" />
+    }
+    else
+    {
+        <section class="bl-toolbar" aria-label="Backlog filters">
+            <label class="bl-field">
+                <span>Search</span>
+                <input id="backlog-search"
+                       class="bl-input"
+                       type="search"
+                       value="@_searchText"
+                       @oninput="OnSearchInput"
+                       placeholder="Search PBIs..."
+                       aria-label="Search PBIs" />
+            </label>
+
+            <label class="bl-field">
+                <span>Sprint</span>
+                <select id="backlog-sprint-filter" class="bl-input" value="@_sprintViewFilter" @onchange="OnSprintFilterChanged" aria-label="Filter by sprint">
+                    <option value="-1">All PBIs</option>
+                    <option value="0">Unassigned</option>
+                    @foreach (var sprint in _sprints)
+                    {
+                        <option value="@sprint.SprintId">@(sprint.SprintTitle ?? $"Sprint {sprint.SprintId}")</option>
+                    }
+                </select>
+            </label>
+
+            <label class="bl-field">
+                <span>Status</span>
+                <select id="backlog-status-filter" class="bl-input" value="@(_statusFilter?.ToString() ?? string.Empty)" @onchange="OnStatusFilterChanged" aria-label="Filter by status">
+                    <option value="">All statuses</option>
+                    @foreach (var status in Enum.GetValues<PbiStatus>())
+                    {
+                        <option value="@status">@StatusLabel(status)</option>
+                    }
+                </select>
+            </label>
+
+            <label class="bl-field">
+                <span>Type</span>
+                <select id="backlog-type-filter" class="bl-input" value="@(_typeFilter?.ToString() ?? string.Empty)" @onchange="OnTypeFilterChanged" aria-label="Filter by type">
+                    <option value="">All types</option>
+                    @foreach (var type in Enum.GetValues<PbiType>())
+                    {
+                        <option value="@type">@type</option>
+                    }
+                </select>
+            </label>
+
+            <div class="bl-priority-filter" role="group" aria-label="Priority filter">
+                @foreach (var priority in Enum.GetValues<PbiPriority>())
+                {
+                    <FluentButton Appearance="@(_priorityFilter == priority ? ButtonAppearance.Primary : ButtonAppearance.Outline)"
+                                  OnClick="@(() => TogglePriorityFilter(priority))"
+                                  Title="@($"Filter by {priority} priority")">
+                        @priority
+                    </FluentButton>
+                }
+            </div>
+
+            <p class="bl-count" aria-live="polite">@FilteredPbis.Count() PBIs</p>
+        </section>
+
+        <div class="bl-body">
+            <main class="bl-main" aria-label="Backlog items">
+                @if (_loading)
+                {
+                    <AppLoadingState Message="Loading backlog..." />
+                }
+                else if (!FilteredPbis.Any())
+                {
+                    <AppEmptyState Title="No stories match the filters" Message="Adjust your filters or create a new backlog item." Icon="@(new Icons.Regular.Size24.DocumentText())" />
+                }
+                else
+                {
+                    <div class="bl-list" role="list">
+                        @foreach (var pbi in FilteredPbis)
+                        {
+                            <div role="listitem" @key="pbi.PbiId">
+                                <BacklogPbiRow Pbi="pbi"
+                                               Sprints="_sprints"
+                                               IsDragging="@(_draggedPbi?.PbiId == pbi.PbiId)"
+                                               OnOpenDetails="OpenPbiDetails"
+                                               OnDragStarted="StartDrag"
+                                               OnDragEnded="EndDrag"
+                                               OnAssignSprint="AssignFromMenuAsync" />
+                            </div>
+                        }
+                    </div>
+                }
+            </main>
+
+            <aside class="bl-sprint-panel" aria-label="Sprint assignment">
+                <label class="bl-field bl-field--panel">
+                    <span>Target sprint</span>
+                    <select id="backlog-target-sprint" class="bl-input" value="@(_selectedSprintId?.ToString() ?? string.Empty)" @onchange="OnSelectedSprintChanged" aria-label="Target sprint">
+                        <option value="">Select a sprint</option>
+                        @foreach (var sprint in _sprints)
+                        {
+                            <option value="@sprint.SprintId">@(sprint.SprintTitle ?? $"Sprint {sprint.SprintId}")@(sprint.IsOpen ? " · Open" : string.Empty)</option>
+                        }
+                    </select>
+                </label>
+
+                @if (_selectedSprint is not null)
+                {
+                    <section class="bl-sprint-info" aria-label="Selected sprint summary">
+                        @if (!string.IsNullOrWhiteSpace(_selectedSprint.SprintGoal))
+                        {
+                            <p class="bl-sprint-goal">“@_selectedSprint.SprintGoal”</p>
+                        }
+                        <div class="bl-sprint-facts">
+                            @if (_selectedSprint.StartDate.HasValue && _selectedSprint.EndDate.HasValue)
+                            {
+                                <span>@_selectedSprint.StartDate.Value.ToString("MMM d") – @_selectedSprint.EndDate.Value.ToString("MMM d")</span>
+                            }
+                            <span>@SprintTotalPoints pts</span>
+                            <FluentBadge Appearance="BadgeAppearance.Outline" Color="@(_selectedSprint.IsOpen ? BadgeColor.Success : BadgeColor.Subtle)">
+                                @(_selectedSprint.IsOpen ? "Open" : "Closed")
+                            </FluentBadge>
+                        </div>
+                        @if (_recommendedPoints > 0)
+                        {
+                            <div class="bl-velocity" aria-label="Sprint points versus suggested velocity">
+                                <div class="bl-velocity__bar"><span style="width:@VelocityPercent%"></span></div>
+                                <strong>@SprintTotalPoints / @((int)_recommendedPoints) pts</strong>
+                                <span class="sp-muted">suggested</span>
+                            </div>
+                        }
+                    </section>
+                }
+
+                <section class="bl-drop-zone sp-drop-target @(_isDragOverSprint ? "bl-drop-zone--active" : string.Empty) @(!_selectedSprintId.HasValue ? "bl-drop-zone--disabled" : string.Empty)"
+                         @ondragover:preventDefault="true"
+                         @ondragenter="HandleDragEnterSprint"
+                         @ondragleave="HandleDragLeaveSprint"
+                         @ondrop="HandleDropOnSprint"
+                         aria-label="Drop backlog item on selected sprint">
+                    <AppIcon Value="@(new Icons.Regular.Size24.ArrowMove())" Label="Move" />
+                    <span>@(!_selectedSprintId.HasValue ? "Select a sprint above" : _isDragOverSprint ? "Release to assign" : "Drag stories here")</span>
+                </section>
+
+                <section class="bl-sprint-list" aria-label="Selected sprint items">
+                    @if (_selectedSprintId.HasValue)
+                    {
+                        var sprintPbis = SprintPbis.ToList();
+                        if (sprintPbis.Any())
+                        {
+                            <header class="bl-sprint-list__header">
+                                <span>@sprintPbis.Count @(sprintPbis.Count == 1 ? "story" : "stories")</span>
+                                <span>@SprintTotalPoints@(_recommendedPoints > 0 ? $" / {(int)_recommendedPoints}" : string.Empty) pts</span>
+                            </header>
+                            @foreach (var pbi in sprintPbis)
+                            {
+                                <BacklogPbiRow @key="pbi.PbiId"
+                                               Pbi="pbi"
+                                               Sprints="_sprints"
+                                               Compact="true"
+                                               OnOpenDetails="OpenPbiDetails"
+                                               OnAssignSprint="AssignFromMenuAsync" />
+                            }
+                        }
+                        else
+                        {
+                            <p class="bl-empty-panel">No stories assigned yet</p>
+                        }
+                    }
+                </section>
+            </aside>
+        </div>
+    }
+
+    <PbiDetailsDialog Pbi="SelectedPbi"
+                      Open="@(SelectedPbi is not null)"
+                      ProjectId="@_selectedProjectId"
+                      OnSaved="HandlePbiSave"
+                      OnCancelled="ClosePbiDetails"
+                      OnDeleted="HandlePbiDelete" />
+
+    <PbiDetailsDialog Pbi="_newPbi"
+                      Open="@(_showNewPbiForm && _newPbi is not null)"
+                      ProjectId="@_selectedProjectId"
+
+                      OnSaved="HandleNewPbiSaved"
+                      OnCancelled="CloseNewPbiForm" />
+</div>
+
+@code {
+    private List<ProductBacklogItem> _allPbis = [];
+    private List<Sprint> _sprints = [];
+    private bool _loading = true;
+    private string _errorMessage = string.Empty;
+    private int? _selectedProjectId;
+    private int? _selectedSprintId;
+    private Sprint? _selectedSprint;
+    private string _searchText = string.Empty;
+    private PbiPriority? _priorityFilter;
+    private PbiStatus? _statusFilter;
+    private PbiType? _typeFilter;
+    private int _sprintViewFilter = 0;
+    private ProductBacklogItem? _draggedPbi;
+    private int _dragEnterCount;
+    private ProductBacklogItem? SelectedPbi;
+    private bool _showNewPbiForm;
+    private ProductBacklogItem? _newPbi;
+    private double _recommendedPoints;
+
+    private bool _isDragOverSprint => _dragEnterCount > 0;
+
+    private IEnumerable<ProductBacklogItem> FilteredPbis => _allPbis
+        .Where(p =>
+            (string.IsNullOrWhiteSpace(_searchText) || p.Title.Contains(_searchText, StringComparison.OrdinalIgnoreCase) || p.Description.Contains(_searchText, StringComparison.OrdinalIgnoreCase)) &&
+            (_priorityFilter is null || p.Priority == _priorityFilter) &&
+            (_statusFilter is null || p.Status == _statusFilter) &&
+            (_typeFilter is null || p.Type == _typeFilter) &&
+            (_sprintViewFilter == -1 || (_sprintViewFilter == 0 ? p.SprintId is null : p.SprintId == _sprintViewFilter)))
+        .OrderByDescending(p => (int)p.Priority)
+        .ThenBy(p => p.PbiId);
+
+    private IEnumerable<ProductBacklogItem> SprintPbis => _selectedSprintId.HasValue
+        ? _allPbis.Where(p => p.SprintId == _selectedSprintId).OrderBy(p => p.PbiId)
+        : Enumerable.Empty<ProductBacklogItem>();
+
+    private int SprintTotalPoints => SprintPbis.Sum(p => (int)p.StoryPoints);
+
+    private double VelocityPercent => _recommendedPoints <= 0 ? 0 : Math.Min(SprintTotalPoints / _recommendedPoints * 100, 100);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _selectedProjectId = ProjectState.SelectedProjectId;
+        ProjectState.OnChange += HandleProjectStateChanged;
+        await LoadDataAsync();
+    }
+
+    public void Dispose() => ProjectState.OnChange -= HandleProjectStateChanged;
+
+    private void HandleProjectStateChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            _selectedProjectId = ProjectState.SelectedProjectId;
+            _selectedSprintId = null;
+            _selectedSprint = null;
+            await LoadDataAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _loading = true;
+        _errorMessage = string.Empty;
+        try
+        {
+            if (!_selectedProjectId.HasValue)
+            {
+                _sprints = [];
+                _allPbis = [];
+                _recommendedPoints = 0;
+                return;
+            }
+
+            _sprints = await Http.GetFromJsonAsync<List<Sprint>>($"api/Sprint?projectId={_selectedProjectId.Value}") ?? [];
+            await LoadPbisAsync($"api/Pbi/getNonDraftPbis?projectId={_selectedProjectId.Value}");
+            if (_selectedSprintId.HasValue)
+            {
+                _selectedSprint = _sprints.FirstOrDefault(s => s.SprintId == _selectedSprintId);
+            }
+            await LoadVelocityAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or NotSupportedException)
+        {
+            Logger.LogWarning(ex, "Failed to load backlog for project {ProjectId}", _selectedProjectId);
+            _sprints = [];
+            _allPbis = [];
+            _recommendedPoints = 0;
+            _errorMessage = "Unable to load the backlog. Try again later.";
+            Notifications.ShowError(_errorMessage);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadVelocityAsync()
+    {
+        try
+        {
+            var velocityPoints = await MetricsSvc.GetVelocityDataAsync(projectId: _selectedProjectId);
+            _recommendedPoints = velocityPoints.Count > 0
+                ? Math.Round(velocityPoints.TakeLast(3).Average(p => p.Completed), 1)
+                : 0;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or NotSupportedException)
+        {
+            Logger.LogDebug(ex, "Velocity data unavailable for project {ProjectId}", _selectedProjectId);
+            _recommendedPoints = 0;
+        }
+    }
+
+    private async Task LoadPbisAsync(string? url = null, bool preserveOnFailure = false)
+    {
+        if (!_selectedProjectId.HasValue)
+        {
+            _allPbis = [];
+            return;
+        }
+
+        url ??= $"api/Pbi/getNonDraftPbis?projectId={_selectedProjectId.Value}";
+        try
+        {
+            _allPbis = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(url) ?? [];
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or NotSupportedException)
+        {
+            Logger.LogWarning(ex, "Failed to load PBIs for project {ProjectId}", _selectedProjectId);
+            if (!preserveOnFailure)
+            {
+                throw;
+            }
+            Notifications.ShowWarning("PBI saved, but the backlog could not be refreshed.");
+        }
+    }
+
+    private void OnSearchInput(ChangeEventArgs args) => _searchText = args.Value?.ToString() ?? string.Empty;
+
+    private void OnSprintFilterChanged(ChangeEventArgs args)
+    {
+        if (int.TryParse(args.Value?.ToString(), out var value))
+        {
+            _sprintViewFilter = value;
+        }
+    }
+
+    private void OnStatusFilterChanged(ChangeEventArgs args) =>
+        _statusFilter = Enum.TryParse<PbiStatus>(args.Value?.ToString(), out var value) ? value : null;
+
+    private void OnTypeFilterChanged(ChangeEventArgs args) =>
+        _typeFilter = Enum.TryParse<PbiType>(args.Value?.ToString(), out var value) ? value : null;
+
+    private void OnSelectedSprintChanged(ChangeEventArgs args)
+    {
+        _selectedSprintId = int.TryParse(args.Value?.ToString(), out var value) ? value : null;
+        _selectedSprint = _selectedSprintId.HasValue ? _sprints.FirstOrDefault(s => s.SprintId == _selectedSprintId) : null;
+    }
+
+    private void TogglePriorityFilter(PbiPriority priority) => _priorityFilter = _priorityFilter == priority ? null : priority;
+
+    private void StartDrag(ProductBacklogItem pbi)
+    {
+        _draggedPbi = pbi;
+        _dragEnterCount = 0;
+    }
+
+    private void EndDrag()
+    {
+        _draggedPbi = null;
+        _dragEnterCount = 0;
+    }
+
+    private void HandleDragEnterSprint()
+    {
+        if (_draggedPbi is not null && _selectedSprintId.HasValue)
+        {
+            _dragEnterCount++;
+        }
+    }
+
+    private void HandleDragLeaveSprint() => _dragEnterCount = Math.Max(0, _dragEnterCount - 1);
+
+    private async Task HandleDropOnSprint()
+    {
+        _dragEnterCount = 0;
+        if (_draggedPbi is null || !_selectedSprintId.HasValue)
+        {
+            return;
+        }
+
+        var pbi = _draggedPbi;
+        _draggedPbi = null;
+        await AssignToSprintAsync(pbi, _selectedSprintId);
+    }
+
+    private Task AssignFromMenuAsync(BacklogPbiRow.AssignSprintArgs args) => AssignToSprintAsync(args.Pbi, args.SprintId);
+
+    private async Task AssignToSprintAsync(ProductBacklogItem pbi, int? sprintId)
+    {
+        if (pbi.SprintId == sprintId)
+        {
+            return;
+        }
+
+        var originalSprintId = pbi.SprintId;
+        var originalLastUpdated = pbi.LastUpdated;
+        pbi.SprintId = sprintId;
+        pbi.LastUpdated = DateTime.UtcNow;
+        _errorMessage = string.Empty;
+
+        try
+        {
+            var response = await Http.PutAsJsonAsync("api/Pbi", pbi);
+            if (!response.IsSuccessStatusCode)
+            {
+                RollBackSprintMove(pbi, originalSprintId, originalLastUpdated);
+                _errorMessage = "Failed to update the PBI sprint. Your change was rolled back.";
+                Notifications.ShowError(_errorMessage);
+            }
+            else
+            {
+                Notifications.ShowSuccess(sprintId.HasValue ? "PBI assigned to sprint." : "PBI moved to the backlog.");
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Logger.LogWarning(ex, "Failed to move PBI {PbiId} to sprint {SprintId}", pbi.PbiId, sprintId);
+            RollBackSprintMove(pbi, originalSprintId, originalLastUpdated);
+            _errorMessage = "Unable to update the PBI sprint. Your change was rolled back.";
+            Notifications.ShowError(_errorMessage);
+        }
+    }
+
+    private static void RollBackSprintMove(ProductBacklogItem pbi, int? sprintId, DateTime lastUpdated)
+    {
+        pbi.SprintId = sprintId;
+        pbi.LastUpdated = lastUpdated;
+    }
+
+    private void OpenPbiDetails(ProductBacklogItem pbi) => SelectedPbi = pbi;
+
+    private Task ClosePbiDetails()
+    {
+        SelectedPbi = null;
+        return Task.CompletedTask;
+    }
+
+    private async Task HandlePbiSave(ProductBacklogItem pbi)
+    {
+        SelectedPbi = null;
+        await LoadPbisAsync(preserveOnFailure: true);
+    }
+
+    private Task HandlePbiDelete(int pbiId)
+    {
+        SelectedPbi = null;
+        _allPbis.RemoveAll(p => p.PbiId == pbiId);
+        return Task.CompletedTask;
+    }
+
+    private void OpenNewPbiForm()
+    {
+        _newPbi = new ProductBacklogItem
+        {
+            PbiId = 0,
+            ProjectId = _selectedProjectId ?? 0,
+            Title = string.Empty,
+            Status = PbiStatus.ToDo,
+            Priority = PbiPriority.Medium,
+            Type = PbiType.Story,
+            Origin = PbiOrigin.WebUserCreated,
+            DateCreated = DateTime.UtcNow,
+            LastUpdated = DateTime.UtcNow
+        };
+        _showNewPbiForm = true;
+    }
+
+    private Task CloseNewPbiForm()
+    {
+        _showNewPbiForm = false;
+        _newPbi = null;
+        return Task.CompletedTask;
+    }
+
+    private async Task HandleNewPbiSaved(ProductBacklogItem saved)
+    {
+        _showNewPbiForm = false;
+        _newPbi = null;
+        await LoadPbisAsync(preserveOnFailure: true);
+    }
+
+    private static string StatusLabel(PbiStatus status) => status switch
+    {
+        PbiStatus.ToDo => "To Do",
+        PbiStatus.InProgress => "In Progress",
+        PbiStatus.InReview => "In Review",
+        PbiStatus.Done => "Done",
+        _ => status.ToString()
+    };
+}
+
+

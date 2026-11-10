@@ -1,0 +1,4 @@
+.invitation-card {
+    max-width: 42rem;
+    padding: var(--spacingHorizontalXL, 1.5rem);
+}

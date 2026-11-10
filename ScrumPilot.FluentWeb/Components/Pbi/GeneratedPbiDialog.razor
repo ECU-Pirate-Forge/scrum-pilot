@@ -1,0 +1,227 @@
+@using System.Net.Http.Json
+@using ScrumPilot.Shared.Models
+@inject HttpClient Http
+@inject IAppNotificationService Notifications
+@inject ILogger<GeneratedPbiDialog> Logger
+@namespace ScrumPilot.FluentWeb.Components.Pbi
+
+@if (Open)
+{
+    <div class="generated-dialog-backdrop" @onclick="CloseAsync">
+        <section class="generated-dialog" role="dialog" aria-modal="true" aria-labelledby="generated-pbi-title" @onclick:stopPropagation="true">
+            <header class="generated-dialog__header">
+                <div>
+                    <h2 id="generated-pbi-title">Generated PBIs</h2>
+                    @if (_items.Count > 0)
+                    {
+                        <p class="sp-muted">Review item @(_currentIndex + 1) of @_items.Count.</p>
+                    }
+                </div>
+                <FluentButton Appearance="ButtonAppearance.Transparent" IconOnly="true" Title="Close" OnClick="CloseAsync">
+                    <AppIcon Value="@(new Icons.Regular.Size20.Dismiss())" Label="Close" />
+                </FluentButton>
+            </header>
+
+            @if (!string.IsNullOrWhiteSpace(_errorMessage))
+            {
+                <FluentMessageBar Intent="MessageBarIntent.Error">@_errorMessage</FluentMessageBar>
+            }
+
+            @if (_items.Count == 0)
+            {
+                <AppEmptyState Title="No generated PBIs" Message="The generation response did not contain any PBIs." Icon="@(new Icons.Regular.Size24.DocumentText())" />
+            }
+            else
+            {
+                var current = _items[_currentIndex];
+                <div class="generated-dialog__state">
+                    <FluentBadge Appearance="BadgeAppearance.Filled" Color="@GetStateColor(current.State)">@GetStateLabel(current.State)</FluentBadge>
+                </div>
+
+                <PbiCard PbiModel="current.Pbi"
+                         ProjectId="ProjectId"
+                         PersistOnSave="false"
+                         ReadOnly="@(current.State != GeneratedPbiSaveState.Pending)"
+                         OnChanged="@((ProductBacklogItem pbi) => UpdateCurrent(pbi))" />
+
+                <nav class="generated-dialog__nav" aria-label="Generated PBI navigation">
+                    <FluentButton Appearance="ButtonAppearance.Outline" IconStart="@(new Icons.Regular.Size20.ChevronLeft())" OnClick="ShowPrevious" Disabled="@(_currentIndex == 0 || _isCommitting)">Previous</FluentButton>
+                    <strong>@(_currentIndex + 1) of @_items.Count</strong>
+                    <FluentButton Appearance="ButtonAppearance.Outline" IconEnd="@(new Icons.Regular.Size20.ChevronRight())" OnClick="ShowNext" Disabled="@(_currentIndex >= _items.Count - 1 || _isCommitting)">Next</FluentButton>
+                </nav>
+
+                @if (current.State == GeneratedPbiSaveState.Pending)
+                {
+                    <div class="generated-dialog__actions">
+                        <FluentButton Appearance="ButtonAppearance.Outline" OnClick="SaveCurrentAsDraftAsync" Loading="_isCommitting" Disabled="_isCommitting">Save as Draft</FluentButton>
+                        <FluentButton Appearance="ButtonAppearance.Primary" OnClick="SaveCurrentToBacklogAsync" Loading="_isCommitting" Disabled="_isCommitting">Add to Backlog</FluentButton>
+                    </div>
+                }
+
+                @if (PendingCount > 0)
+                {
+                    <FluentDivider />
+                    <div class="generated-dialog__actions">
+                        <FluentButton Appearance="ButtonAppearance.Outline" IconStart="@(new Icons.Regular.Size20.SaveMultiple())" OnClick="SaveRemainingAsDraftsAsync" Loading="_isCommitting" Disabled="_isCommitting">Save Remaining as Drafts (@PendingCount)</FluentButton>
+                        <FluentButton Appearance="ButtonAppearance.Primary" IconStart="@(new Icons.Regular.Size20.TaskListSquareLtr())" OnClick="SaveRemainingToBacklogAsync" Loading="_isCommitting" Disabled="_isCommitting">Add Remaining to Backlog (@PendingCount)</FluentButton>
+                    </div>
+                }
+                else
+                {
+                    <FluentMessageBar Intent="MessageBarIntent.Success">All generated PBIs have been saved.</FluentMessageBar>
+                }
+            }
+        </section>
+    </div>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<ProductBacklogItem> PBIs { get; set; } = [];
+    [Parameter] public int? ProjectId { get; set; }
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter] public EventCallback OnClosed { get; set; }
+    [Parameter] public EventCallback<IReadOnlyList<ProductBacklogItem>> OnSaved { get; set; }
+
+    private readonly List<GeneratedPbiReviewItem> _items = [];
+    private IReadOnlyList<ProductBacklogItem>? _initializedPbis;
+    private int _currentIndex;
+    private bool _isCommitting;
+    private string _errorMessage = string.Empty;
+    private int PendingCount => _items.Count(item => item.State == GeneratedPbiSaveState.Pending);
+
+    protected override void OnParametersSet()
+    {
+        if (!ReferenceEquals(_initializedPbis, PBIs))
+        {
+            _initializedPbis = PBIs;
+            _items.Clear();
+            _items.AddRange(PBIs.Select(pbi => new GeneratedPbiReviewItem(pbi)));
+            _currentIndex = 0;
+            _errorMessage = string.Empty;
+        }
+    }
+
+    private void UpdateCurrent(ProductBacklogItem pbi)
+    {
+        if (_items.Count > 0)
+        {
+            _items[_currentIndex].Pbi = pbi;
+        }
+    }
+
+    private Task SaveCurrentAsDraftAsync() => SaveItemsAsync([_items[_currentIndex]], asDraft: true);
+    private Task SaveCurrentToBacklogAsync() => SaveItemsAsync([_items[_currentIndex]], asDraft: false);
+    private Task SaveRemainingAsDraftsAsync() => SaveItemsAsync(GetPendingItems(), asDraft: true);
+    private Task SaveRemainingToBacklogAsync() => SaveItemsAsync(GetPendingItems(), asDraft: false);
+
+    private List<GeneratedPbiReviewItem> GetPendingItems() => _items.Where(item => item.State == GeneratedPbiSaveState.Pending).ToList();
+
+    private async Task SaveItemsAsync(List<GeneratedPbiReviewItem> items, bool asDraft)
+    {
+        if (_isCommitting || items.Count == 0)
+        {
+            return;
+        }
+
+        _errorMessage = string.Empty;
+        if (!ProjectId.HasValue)
+        {
+            _errorMessage = "Select a project before saving PBIs.";
+            Notifications.ShowError(_errorMessage);
+            return;
+        }
+
+        _isCommitting = true;
+        try
+        {
+            foreach (var item in items)
+            {
+                item.Pbi.ProjectId = ProjectId.Value;
+            }
+
+            var endpoint = (asDraft ? "api/Pbi/createDraftPbis" : "api/Pbi/createStories") + $"?projectId={ProjectId.Value}";
+            var payload = items.Select(item => item.Pbi).ToList();
+            var response = await Http.PostAsJsonAsync(endpoint, payload);
+            if (!response.IsSuccessStatusCode)
+            {
+                var details = await response.Content.ReadAsStringAsync();
+                _errorMessage = string.IsNullOrWhiteSpace(details) ? "Failed to save PBIs." : $"Failed to save PBIs: {details}";
+                Notifications.ShowError(_errorMessage);
+                return;
+            }
+
+            var savedState = asDraft ? GeneratedPbiSaveState.SavedAsDraft : GeneratedPbiSaveState.AddedToBacklog;
+            foreach (var item in items)
+            {
+                item.State = savedState;
+            }
+
+            Notifications.ShowSuccess($"{items.Count} PBI{(items.Count == 1 ? string.Empty : "s")} saved {(asDraft ? "as drafts" : "to the backlog")}.");
+            await OnSaved.InvokeAsync(payload);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Logger.LogWarning(ex, "Failed to save generated PBIs");
+            _errorMessage = ex is TaskCanceledException ? "Saving PBIs timed out. Please try again." : "Network error while saving PBIs.";
+            Notifications.ShowError(_errorMessage);
+        }
+        finally
+        {
+            _isCommitting = false;
+        }
+    }
+
+    private void ShowPrevious()
+    {
+        if (_currentIndex > 0)
+        {
+            _currentIndex--;
+        }
+    }
+
+    private void ShowNext()
+    {
+        if (_currentIndex < _items.Count - 1)
+        {
+            _currentIndex++;
+        }
+    }
+
+    private async Task CloseAsync()
+    {
+        Open = false;
+        if (OpenChanged.HasDelegate)
+        {
+            await OpenChanged.InvokeAsync(false);
+        }
+        await OnClosed.InvokeAsync();
+    }
+
+    private static BadgeColor GetStateColor(GeneratedPbiSaveState state) => state switch
+    {
+        GeneratedPbiSaveState.SavedAsDraft => BadgeColor.Warning,
+        GeneratedPbiSaveState.AddedToBacklog => BadgeColor.Success,
+        _ => BadgeColor.Informative
+    };
+
+    private static string GetStateLabel(GeneratedPbiSaveState state) => state switch
+    {
+        GeneratedPbiSaveState.SavedAsDraft => "Saved as Draft",
+        GeneratedPbiSaveState.AddedToBacklog => "Added to Backlog",
+        _ => "Pending Review"
+    };
+
+    private sealed class GeneratedPbiReviewItem(ProductBacklogItem pbi)
+    {
+        public ProductBacklogItem Pbi { get; set; } = pbi;
+        public GeneratedPbiSaveState State { get; set; }
+    }
+
+    private enum GeneratedPbiSaveState
+    {
+        Pending,
+        SavedAsDraft,
+        AddedToBacklog
+    }
+}

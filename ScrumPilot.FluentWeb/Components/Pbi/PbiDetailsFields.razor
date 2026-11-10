@@ -1,0 +1,63 @@
+@using ScrumPilot.Shared.Models
+@namespace ScrumPilot.FluentWeb.Components.Pbi
+
+<div class="pbi-fields">
+    <label class="pbi-field">
+        <span>Title <strong aria-hidden="true">*</strong></span>
+        <InputText class="pbi-input" @bind-Value="Draft.Title" aria-required="true" />
+    </label>
+
+    <label class="pbi-field pbi-field--wide">
+        <span>Description</span>
+        <InputTextArea class="pbi-input pbi-textarea" @bind-Value="Draft.Description" />
+    </label>
+
+    <label class="pbi-field">
+        <span>Type</span>
+        <InputSelect class="pbi-input" @bind-Value="Draft.Type">
+            @foreach (var value in Enum.GetValues<PbiType>())
+            {
+                <option value="@value">@value</option>
+            }
+        </InputSelect>
+    </label>
+
+    <label class="pbi-field">
+        <span>Status</span>
+        <InputSelect class="pbi-input" @bind-Value="Draft.Status">
+            @foreach (var value in Enum.GetValues<PbiStatus>())
+            {
+                <option value="@value">@PbiFormatting.Label(value)</option>
+            }
+        </InputSelect>
+    </label>
+
+    <label class="pbi-field">
+        <span>Priority</span>
+        <InputSelect class="pbi-input" @bind-Value="Draft.Priority">
+            @foreach (var value in Enum.GetValues<PbiPriority>())
+            {
+                <option value="@value">@value</option>
+            }
+        </InputSelect>
+    </label>
+
+    <label class="pbi-field">
+        <span>Story points</span>
+        <InputSelect class="pbi-input" @bind-Value="Draft.StoryPoints">
+            @foreach (var value in Enum.GetValues<PbiPoints>())
+            {
+                <option value="@value">@((int)value)</option>
+            }
+        </InputSelect>
+    </label>
+
+    <label class="pbi-field pbi-field--wide">
+        <span>Issue link</span>
+        <InputText class="pbi-input" @bind-Value="Draft.IssueLink" placeholder="https://github.com/org/repo/issues/123" />
+    </label>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ProductBacklogItem Draft { get; set; } = default!;
+}
