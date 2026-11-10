@@ -1,0 +1,8 @@
+::deep .sp-header-button {
+    color: var(--sp-on-brand);
+}
+
+::deep .sp-header-button--project {
+    border-color: rgba(255, 255, 255, 0.55);
+    font-weight: 600;
+}

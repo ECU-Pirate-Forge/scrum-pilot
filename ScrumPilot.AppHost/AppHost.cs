@@ -12,6 +12,10 @@ var web = builder.AddProject<Projects.ScrumPilot_Web>("web")
     .WithReference(webapi)
     .WaitFor(webapi);
 
+var fluentWeb = builder.AddProject<Projects.ScrumPilot_FluentWeb>("fluentweb")
+    .WithExternalHttpEndpoints()
+    .WithReference(webapi)
+    .WaitFor(webapi);
 
 
 builder.Build().Run();

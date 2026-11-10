@@ -1,8 +1,9 @@
-<Project Sdk="Aspire.AppHost.Sdk/13.6.0">
+<Project Sdk="Aspire.AppHost.Sdk/13.6.4">
 
   <ItemGroup>
     <ProjectReference Include="..\ScrumPilot.API\ScrumPilot.API.csproj" />
     <ProjectReference Include="..\ScrumPilot.Web\ScrumPilot.Web.csproj" />
+    <ProjectReference Include="..\ScrumPilot.FluentWeb\ScrumPilot.FluentWeb.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

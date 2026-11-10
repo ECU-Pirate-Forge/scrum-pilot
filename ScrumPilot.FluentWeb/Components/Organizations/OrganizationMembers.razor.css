@@ -1,0 +1,20 @@
+.organization-members, .project-access-editor {
+    display: grid;
+    gap: var(--spacingVerticalM);
+}
+.section-header, .invitation-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacingHorizontalM);
+}
+.invite-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 12rem auto;
+    gap: var(--spacingHorizontalM);
+    align-items: end;
+}
+.management-grid { width: 100%; }
+.error-text { color: var(--colorPaletteRedForeground1); }
+select { min-height: 2rem; }
+@media (max-width: 800px) { .invite-row { grid-template-columns: 1fr; } .invitation-row { align-items: start; flex-direction: column; } }

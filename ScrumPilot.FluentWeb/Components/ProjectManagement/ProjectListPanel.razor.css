@@ -1,0 +1,29 @@
+.project-list-panel, .details-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacingVerticalM);
+}
+
+.panel-header, .row-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacingHorizontalM);
+}
+
+.row-actions {
+    justify-content: flex-end;
+}
+
+.editor-card {
+    display: grid;
+    gap: var(--spacingVerticalS);
+    padding: var(--spacingVerticalM);
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: var(--borderRadiusMedium);
+    background: var(--colorNeutralBackground2);
+}
+
+.management-grid {
+    width: 100%;
+}

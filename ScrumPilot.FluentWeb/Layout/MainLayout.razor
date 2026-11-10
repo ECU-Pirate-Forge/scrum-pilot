@@ -1,0 +1,103 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+
+<FluentLayout HeaderSticky="true">
+    <FluentLayoutItem Area="LayoutArea.Header" Class="sp-header">
+        <FluentLayoutHamburger />
+        <a href="" class="sp-brand-link" aria-label="ScrumPilot home">
+            <img src="images/logo.png" alt="ScrumPilot" />
+        </a>
+        <FluentSpacer />
+        @if (_organizations.Any())
+        {
+            <FluentMenu>
+                <FluentMenuButton Appearance="ButtonAppearance.Transparent"
+                                  Class="sp-header-button"
+                                  IconStart="@(new Icons.Regular.Size20.Building().WithColor("currentColor"))"
+                                  Title="Select organization">
+                    @(OrganizationState.SelectedOrganization?.Name ?? "Select Organization")
+                </FluentMenuButton>
+                <FluentMenuList>
+                    @foreach (var organization in _organizations)
+                    {
+                        var item = organization;
+                        <FluentMenuItem Role="MenuItemRole.MenuItemRadio"
+                                        Checked="@(OrganizationState.SelectedOrganizationId == item.OrganizationId)"
+                                        OnClick="@(() => SelectOrganizationAsync(item))">@item.Name</FluentMenuItem>
+                    }
+                </FluentMenuList>
+            </FluentMenu>
+        }
+        @if (_appBarProjects.Any())
+        {
+            <FluentMenu>
+                <FluentMenuButton Appearance="ButtonAppearance.Outline"
+                                  Class="sp-header-button sp-header-button--project"
+                                  IconStart="@(new Icons.Regular.Size20.Folder().WithColor("currentColor"))"
+                                  Title="Select project">
+                    @(ProjectState.SelectedProject?.ProjectName ?? "Select Project")
+                </FluentMenuButton>
+                <FluentMenuList>
+                    @foreach (var project in _appBarProjects)
+                    {
+                        var p = project;
+                        <FluentMenuItem Role="MenuItemRole.MenuItemRadio"
+                                        Checked="@(ProjectState.SelectedProjectId == p.ProjectId)"
+                                        OnClick="@(() => SetGlobalProject(p))">@p.ProjectName</FluentMenuItem>
+                    }
+                </FluentMenuList>
+            </FluentMenu>
+        }
+        <FluentSpacer />
+        <FluentMenu>
+            <FluentMenuButton Appearance="ButtonAppearance.Transparent"
+                              Class="sp-header-button"
+                              IconOnly="true"
+                              IconStart="@(ThemeIcon.WithColor("currentColor"))"
+                              Title="Theme"
+                              aria-label="Theme" />
+            <FluentMenuList>
+                <FluentMenuItem Role="MenuItemRole.MenuItemRadio" Checked="@(Theme.Preference == UiPreference.System)"
+                                IconStart="@(new Icons.Regular.Size20.DesktopMac())"
+                                OnClick="@(() => SetThemeAsync(UiPreference.System))">System</FluentMenuItem>
+                <FluentMenuItem Role="MenuItemRole.MenuItemRadio" Checked="@(Theme.Preference == UiPreference.Light)"
+                                IconStart="@(new Icons.Regular.Size20.WeatherSunny())"
+                                OnClick="@(() => SetThemeAsync(UiPreference.Light))">Light</FluentMenuItem>
+                <FluentMenuItem Role="MenuItemRole.MenuItemRadio" Checked="@(Theme.Preference == UiPreference.Dark)"
+                                IconStart="@(new Icons.Regular.Size20.WeatherMoon())"
+                                OnClick="@(() => SetThemeAsync(UiPreference.Dark))">Dark</FluentMenuItem>
+            </FluentMenuList>
+        </FluentMenu>
+        <FluentAnchorButton Href="user-settings"
+                            Appearance="ButtonAppearance.Transparent"
+                            Class="sp-header-button"
+                            IconOnly="true"
+                            IconStart="@(new Icons.Regular.Size20.PersonCircle().WithColor("currentColor"))"
+                            Title="User settings"
+                            aria-label="User settings" />
+        <FluentButton Appearance="ButtonAppearance.Transparent"
+                      Class="sp-header-button"
+                      IconOnly="true"
+                      IconStart="@(new Icons.Regular.Size20.SignOut().WithColor("currentColor"))"
+                      Title="Sign out"
+                      aria-label="Sign out"
+                      OnClick="HandleLogout" />
+    </FluentLayoutItem>
+    <FluentLayoutItem Area="LayoutArea.Navigation">
+        <NavMenu />
+    </FluentLayoutItem>
+    <FluentLayoutItem Area="LayoutArea.Content" Class="sp-content">
+        <ErrorBoundary @ref="_errorBoundary">
+            <ChildContent>
+                <CascadingValue Value="Theme.IsDark" Name="IsDarkMode">
+                    @Body
+                </CascadingValue>
+            </ChildContent>
+            <ErrorContent Context="ex">
+                <AppErrorState Title="Something went wrong"
+                               Message="@ex.Message"
+                               OnRetry="@(() => _errorBoundary?.Recover())" />
+            </ErrorContent>
+        </ErrorBoundary>
+    </FluentLayoutItem>
+</FluentLayout>

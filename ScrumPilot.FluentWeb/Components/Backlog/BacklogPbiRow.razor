@@ -1,0 +1,117 @@
+@using ScrumPilot.Shared.Models
+@namespace ScrumPilot.FluentWeb.Components.Backlog
+
+<article class="bl-pbi-row @(Compact ? "bl-pbi-row--compact" : string.Empty) @(IsDragging ? "bl-pbi-row--dragging" : string.Empty)"
+         draggable="@(!Compact)"
+         @ondragstart="HandleDragStartAsync"
+         @ondragend="HandleDragEndAsync"
+         data-testid="pbi-row-@Pbi.PbiId">
+    @if (!Compact)
+    {
+        <span class="bl-pbi-row__drag" aria-hidden="true">
+            <AppIcon Value="@(new Icons.Regular.Size20.ReOrderDotsVertical())" Label="Drag" />
+        </span>
+    }
+
+    <span class="bl-pbi-row__type bl-pbi-row__type--@Pbi.Type.ToString().ToLowerInvariant()" title="@Pbi.Type">
+        <AppIcon Value="@TypeIcon" Label="@Pbi.Type.ToString()" />
+    </span>
+
+    <button type="button" class="bl-pbi-row__title" @onclick="OpenDetailsAsync" title="@Pbi.Title">
+        @Pbi.Title
+    </button>
+
+    <div class="bl-pbi-row__meta" aria-label="PBI metadata">
+        @if (!Compact && Pbi.SprintId.HasValue)
+        {
+            <FluentBadge Appearance="BadgeAppearance.Outline" Color="BadgeColor.Brand">@SprintLabel(Pbi.SprintId)</FluentBadge>
+        }
+        @if (Pbi.IsFlagged)
+        {
+            <FluentBadge Appearance="BadgeAppearance.Filled" Color="BadgeColor.Danger">Flagged</FluentBadge>
+        }
+        <FluentBadge Appearance="BadgeAppearance.Tint" Color="@PriorityColor">@Pbi.Priority</FluentBadge>
+        <AppStatusBadge Status="Pbi.Status" />
+        <span class="bl-pbi-row__points">@((int)Pbi.StoryPoints) pts</span>
+    </div>
+
+    @if (!Compact)
+    {
+        <FluentMenu>
+            <FluentMenuButton Appearance="ButtonAppearance.Transparent"
+                              IconStart="@(new Icons.Regular.Size20.MoreHorizontal())"
+                              Title="@($"Actions for {Pbi.Title}")" />
+            <FluentMenuList>
+                <FluentMenuItem OnClick="OpenDetailsAsync" IconStart="@(new Icons.Regular.Size20.DocumentText())">View details</FluentMenuItem>
+                @if (Pbi.SprintId.HasValue)
+                {
+                    <button type="button"
+                            role="menuitem"
+                            class="bl-menu-action"
+                            @onclick="@(() => AssignAsync(null))"
+                            data-testid="@($"assign-sprint-unassigned-pbi-{Pbi.PbiId}")">
+                        Move to backlog
+                    </button>
+                }
+                @foreach (var sprint in Sprints)
+                {
+                    <button type="button"
+                            role="menuitem"
+                            class="bl-menu-action"
+                            disabled="@(Pbi.SprintId == sprint.SprintId)"
+                            @onclick="@(() => AssignAsync(sprint.SprintId))"
+                            data-testid="@($"assign-sprint-{sprint.SprintId}-pbi-{Pbi.PbiId}")">
+                        Assign to @SprintLabel(sprint.SprintId)
+                    </button>
+                }
+            </FluentMenuList>
+        </FluentMenu>
+    }
+    else
+    {
+        <FluentButton Appearance="ButtonAppearance.Transparent" IconOnly="true" Title="Remove from sprint" OnClick="@(() => AssignAsync(null))">
+            <AppIcon Value="@(new Icons.Regular.Size20.Dismiss())" Label="Remove from sprint" />
+        </FluentButton>
+    }
+</article>
+
+@code {
+    [Parameter, EditorRequired] public ProductBacklogItem Pbi { get; set; } = default!;
+    [Parameter] public IReadOnlyList<Sprint> Sprints { get; set; } = [];
+    [Parameter] public bool Compact { get; set; }
+    [Parameter] public bool IsDragging { get; set; }
+    [Parameter] public EventCallback<ProductBacklogItem> OnOpenDetails { get; set; }
+    [Parameter] public EventCallback<ProductBacklogItem> OnDragStarted { get; set; }
+    [Parameter] public EventCallback OnDragEnded { get; set; }
+    [Parameter] public EventCallback<AssignSprintArgs> OnAssignSprint { get; set; }
+
+    public sealed record AssignSprintArgs(ProductBacklogItem Pbi, int? SprintId);
+
+    private Icon TypeIcon => Pbi.Type switch
+    {
+        PbiType.Bug => new Icons.Regular.Size20.Flag(),
+        PbiType.Task => new Icons.Regular.Size20.TaskListSquareLtr(),
+        _ => new Icons.Regular.Size20.DocumentText()
+    };
+
+    private BadgeColor PriorityColor => Pbi.Priority switch
+    {
+        PbiPriority.High => BadgeColor.Danger,
+        PbiPriority.Medium => BadgeColor.Warning,
+        PbiPriority.Low => BadgeColor.Success,
+        _ => BadgeColor.Subtle
+    };
+
+    private string SprintLabel(int? sprintId) =>
+        Sprints.FirstOrDefault(s => s.SprintId == sprintId)?.SprintTitle ?? $"Sprint {sprintId}";
+
+    private Task OpenDetailsAsync() => OnOpenDetails.InvokeAsync(Pbi);
+
+    private Task HandleDragStartAsync() => Compact ? Task.CompletedTask : OnDragStarted.InvokeAsync(Pbi);
+
+    private Task HandleDragEndAsync() => Compact ? Task.CompletedTask : OnDragEnded.InvokeAsync();
+
+    private Task AssignAsync(int? sprintId) => OnAssignSprint.InvokeAsync(new AssignSprintArgs(Pbi, sprintId));
+}
+
+

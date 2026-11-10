@@ -1,0 +1,60 @@
+@using ApexCharts
+
+<WidgetCard Title="Work by Status">
+    @if (_loading)
+    {
+        <div class="widget-center"><FluentSpinner Label="Loading work by status" /></div>
+    }
+    else if (_points.Count > 0)
+    {
+        <ApexChart @key="_chartKey" TItem="WorkByStatusPoint" Options="_options" Height="@("100%")">
+            <ApexPointSeries TItem="WorkByStatusPoint" Items="_points" Name="Features" SeriesType="SeriesType.Bar" XValue="@(p => p.Status)" YValue="@(p => (decimal)p.Features)" />
+            <ApexPointSeries TItem="WorkByStatusPoint" Items="_points" Name="Bugs" SeriesType="SeriesType.Bar" XValue="@(p => p.Status)" YValue="@(p => (decimal)p.Bugs)" />
+        </ApexChart>
+    }
+    else
+    {
+        <div class="widget-empty">No items in this sprint</div>
+    }
+</WidgetCard>
+
+@code {
+    [Parameter] public int? SprintId { get; set; }
+    [CascadingParameter(Name = "IsDarkMode")] public bool IsDarkMode { get; set; }
+    [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
+    [Inject] private ILogger<WorkByStatusWidget> Logger { get; set; } = default!;
+
+    private List<WorkByStatusPoint> _points = [];
+    private ApexChartOptions<WorkByStatusPoint> _options = new();
+    private bool _loading = true;
+    private int? _lastSprintId = -1;
+    private bool? _lastTheme;
+    private int _chartKey;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var themeChanged = _lastTheme != IsDarkMode;
+        if (_lastSprintId == SprintId && !themeChanged) return;
+        _lastSprintId = SprintId;
+        _lastTheme = IsDarkMode;
+        _loading = true;
+        try { _points = SprintId.HasValue ? await MetricsSvc.GetWorkByStatusAsync(SprintId.Value) : []; }
+        catch (Exception ex) { Logger.LogWarning(ex, "Failed to load work by status for sprint {SprintId}", SprintId); _points = []; }
+        _options = BuildOptions(IsDarkMode);
+        _chartKey++;
+        _loading = false;
+    }
+
+    private static ApexChartOptions<WorkByStatusPoint> BuildOptions(bool isDark) => new()
+    {
+        Theme = MetricsChartTheme.Theme(isDark),
+        Chart = new Chart { Background = "transparent", Toolbar = new Toolbar { Show = false }, Stacked = true },
+        Colors = ["#7c3aed", "#f97316"],
+        PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { Horizontal = true, BorderRadius = 3 } },
+        Xaxis = new XAxis { Labels = new XAxisLabels { Style = MetricsChartTheme.AxisLabelStyle(isDark) } },
+        Yaxis = [new YAxis { Labels = new YAxisLabels { Style = MetricsChartTheme.AxisLabelStyle(isDark) } }],
+        Grid = new Grid { BorderColor = MetricsChartTheme.GridLine(isDark), Row = new GridRow { Colors = ["transparent"] } },
+        Legend = new Legend { Labels = MetricsChartTheme.LegendLabels(isDark), Position = LegendPosition.Top },
+        Tooltip = MetricsChartTheme.Tooltip(isDark)
+    };
+}

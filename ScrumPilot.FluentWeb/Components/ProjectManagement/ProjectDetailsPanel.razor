@@ -1,0 +1,48 @@
+<FluentCard Class="details-panel">
+    @if (Project is null)
+    {
+        <AppEmptyState Title="Select a project" Message="Choose a project to manage its sprints, epics and stories." Icon="@(new Icons.Regular.Size24.Folder())" />
+    }
+    else
+    {
+        <div class="panel-header">
+            <div>
+                <FluentText Tag="TextTag.H2" Size="TextSize.Size600" Weight="TextWeight.Semibold">@Project.ProjectName</FluentText>
+                @if (!string.IsNullOrWhiteSpace(Project.Description))
+                {
+                    <p class="sp-muted">@Project.Description</p>
+                }
+            </div>
+        </div>
+        <FluentTabs>
+            <FluentTab Header="Sprints" IconStart="@(new Icons.Regular.Size20.CalendarLtr())">
+                <SprintManagementPanel Sprints="Sprints" IsOwner="IsOwner" IsSaving="IsSaving" OnCreate="OnCreateSprint" OnUpdate="OnUpdateSprint" OnDelete="OnDeleteSprint" />
+            </FluentTab>
+            <FluentTab Header="Epics" IconStart="@(new Icons.Regular.Size20.Flag())">
+                <EpicManagementPanel Epics="Epics" IsOwner="IsOwner" IsSaving="IsSaving" OnCreate="OnCreateEpic" OnUpdate="OnUpdateEpic" OnDelete="OnDeleteEpic" />
+            </FluentTab>
+            <FluentTab Header="Stories" IconStart="@(new Icons.Regular.Size20.TaskListSquareLtr())">
+                <ProjectPbiPanel ProjectId="Project.ProjectId" Sprints="Sprints" Epics="Epics" Pbis="Pbis" Loading="LoadingStories" IsOwner="IsOwner" IsSaving="IsSaving" OnLoad="OnLoadStories" OnSave="OnSavePbi" OnDelete="OnDeletePbi" />
+            </FluentTab>
+        </FluentTabs>
+    }
+</FluentCard>
+
+@code {
+    [Parameter] public Project? Project { get; set; }
+    [Parameter] public bool IsOwner { get; set; }
+    [Parameter] public bool IsSaving { get; set; }
+    [Parameter] public IReadOnlyList<Sprint> Sprints { get; set; } = [];
+    [Parameter] public IReadOnlyList<Epic> Epics { get; set; } = [];
+    [Parameter] public IReadOnlyList<ProductBacklogItem> Pbis { get; set; } = [];
+    [Parameter] public bool LoadingStories { get; set; }
+    [Parameter] public EventCallback<Sprint> OnCreateSprint { get; set; }
+    [Parameter] public EventCallback<Sprint> OnUpdateSprint { get; set; }
+    [Parameter] public EventCallback<Sprint> OnDeleteSprint { get; set; }
+    [Parameter] public EventCallback<Epic> OnCreateEpic { get; set; }
+    [Parameter] public EventCallback<Epic> OnUpdateEpic { get; set; }
+    [Parameter] public EventCallback<Epic> OnDeleteEpic { get; set; }
+    [Parameter] public EventCallback<ProjectPbiFilter> OnLoadStories { get; set; }
+    [Parameter] public EventCallback<ProductBacklogItem> OnSavePbi { get; set; }
+    [Parameter] public EventCallback<ProductBacklogItem> OnDeletePbi { get; set; }
+}

@@ -1,0 +1,8 @@
+<div class="app-loading-state" role="status" aria-live="polite">
+    <FluentSpinner />
+    <span>@Message</span>
+</div>
+
+@code {
+    [Parameter] public string Message { get; set; } = "Loading…";
+}

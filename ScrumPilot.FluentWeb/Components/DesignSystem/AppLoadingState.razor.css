@@ -1,0 +1,8 @@
+.app-loading-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sp-space-3);
+    padding: var(--sp-space-6) var(--sp-space-4);
+    color: var(--sp-text-muted);
+}

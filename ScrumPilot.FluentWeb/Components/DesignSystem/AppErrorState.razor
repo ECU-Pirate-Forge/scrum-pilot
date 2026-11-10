@@ -1,0 +1,14 @@
+<FluentMessageBar Intent="MessageBarIntent.Error" Title="@Title" role="alert">
+    @Message
+    @if (OnRetry.HasDelegate)
+    {
+        <FluentButton Appearance="ButtonAppearance.Outline" OnClick="OnRetry" Style="margin-left: 8px;">@RetryLabel</FluentButton>
+    }
+</FluentMessageBar>
+
+@code {
+    [Parameter] public string Title { get; set; } = "Something went wrong";
+    [Parameter, EditorRequired] public string Message { get; set; } = string.Empty;
+    [Parameter] public string RetryLabel { get; set; } = "Try again";
+    [Parameter] public EventCallback OnRetry { get; set; }
+}

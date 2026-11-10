@@ -1,0 +1,60 @@
+@using ApexCharts
+
+<WidgetCard Title="Burndown Chart">
+    @if (_loading)
+    {
+        <div class="widget-center"><FluentSpinner Label="Loading burndown" /></div>
+    }
+    else if (_points.Count > 0)
+    {
+        <ApexChart @key="_chartKey" TItem="BurndownPoint" Options="_options" Height="@("100%")">
+            <ApexPointSeries TItem="BurndownPoint" Items="_points" Name="Actual" SeriesType="SeriesType.Line" XValue="@(p => p.Date.ToString("MMM d"))" YValue="@(p => (decimal?)p.Actual)" />
+            <ApexPointSeries TItem="BurndownPoint" Items="_points" Name="Ideal" SeriesType="SeriesType.Line" XValue="@(p => p.Date.ToString("MMM d"))" YValue="@(p => (decimal)p.Ideal)" />
+        </ApexChart>
+    }
+    else
+    {
+        <div class="widget-empty">No burndown data — sprint in progress</div>
+    }
+</WidgetCard>
+
+@code {
+    [Parameter] public int? SprintId { get; set; }
+    [CascadingParameter(Name = "IsDarkMode")] public bool IsDarkMode { get; set; }
+    [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
+    [Inject] private ILogger<BurndownWidget> Logger { get; set; } = default!;
+
+    private List<BurndownPoint> _points = [];
+    private ApexChartOptions<BurndownPoint> _options = new();
+    private bool _loading = true;
+    private int? _lastSprintId = -1;
+    private bool? _lastTheme;
+    private int _chartKey;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var themeChanged = _lastTheme != IsDarkMode;
+        if (_lastSprintId == SprintId && !themeChanged) return;
+        _lastSprintId = SprintId;
+        _lastTheme = IsDarkMode;
+        _loading = true;
+        try { _points = SprintId.HasValue ? await MetricsSvc.GetBurndownDataAsync(SprintId.Value) : []; }
+        catch (Exception ex) { Logger.LogWarning(ex, "Failed to load burndown for sprint {SprintId}", SprintId); _points = []; }
+        _options = BuildOptions(IsDarkMode);
+        _chartKey++;
+        _loading = false;
+    }
+
+    private static ApexChartOptions<BurndownPoint> BuildOptions(bool isDark) => new()
+    {
+        Theme = MetricsChartTheme.Theme(isDark),
+        Chart = new Chart { Background = "transparent", Toolbar = new Toolbar { Show = false }, Animations = new Animations { Enabled = true } },
+        Colors = ["#00d4ff", "#64748b"],
+        Stroke = new Stroke { Curve = [Curve.Smooth, Curve.Straight], Width = [3, 2], DashArray = [0, 6] },
+        Xaxis = new XAxis { Labels = new XAxisLabels { Style = MetricsChartTheme.AxisLabelStyle(isDark) } },
+        Yaxis = [new YAxis { Labels = new YAxisLabels { Style = MetricsChartTheme.AxisLabelStyle(isDark), Formatter = "function(val) { return val != null ? val.toFixed(2) : ''; }" } }],
+        Grid = new Grid { BorderColor = MetricsChartTheme.GridLine(isDark), Row = new GridRow { Colors = ["transparent"] } },
+        Legend = new Legend { Labels = MetricsChartTheme.LegendLabels(isDark), Position = LegendPosition.Top },
+        Tooltip = MetricsChartTheme.Tooltip(isDark, true)
+    };
+}

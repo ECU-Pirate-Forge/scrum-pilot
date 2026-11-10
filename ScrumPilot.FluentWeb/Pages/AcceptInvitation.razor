@@ -1,0 +1,123 @@
+@page "/accept-invitation"
+@attribute [AllowAnonymous]
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject OrganizationStateService OrganizationState
+@inject ILogger<AcceptInvitation> Logger
+
+<PageTitle>Accept Invitation — ScrumPilot</PageTitle>
+
+<AppPageHeader Title="Accept organization invitation" Subtitle="Join the ScrumPilot organization connected to this invitation." />
+
+<FluentCard Class="invitation-card">
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <FluentMessageBar Intent="@_intent">@_message</FluentMessageBar>
+    }
+    else
+    {
+        <AppLoadingState Message="Accepting invitation..." />
+    }
+</FluentCard>
+
+@code {
+    [SupplyParameterFromQuery(Name = "token")] public string? Token { get; set; }
+
+    private string? _message;
+    private MessageBarIntent _intent = MessageBarIntent.Info;
+    private bool _redirecting;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_redirecting)
+            return;
+
+        var user = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
+        if (user.Identity?.IsAuthenticated != true)
+        {
+            _redirecting = true;
+            var relative = Navigation.ToBaseRelativePath(Navigation.Uri);
+            Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/" + relative)}", replace: true);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(Token))
+        {
+            _message = "This invitation link is invalid.";
+            _intent = MessageBarIntent.Error;
+            return;
+        }
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await Http.PostAsJsonAsync("api/organization-invitations/accept", new AcceptOrganizationInvitationRequest(Token));
+        }
+        catch (HttpRequestException ex)
+        {
+            Logger.LogWarning(ex, "Invitation accept request failed");
+            _message = "The invitation could not be accepted. Try again.";
+            _intent = MessageBarIntent.Error;
+            return;
+        }
+
+        if (response.IsSuccessStatusCode)
+        {
+            await HandleAcceptedInvitationAsync(response);
+            return;
+        }
+
+        _intent = MessageBarIntent.Error;
+        _message = response.StatusCode switch
+        {
+            HttpStatusCode.BadRequest => "This invitation is invalid or expired. Ask an owner for a new invitation.",
+            HttpStatusCode.Forbidden => "This invitation cannot be accepted by the signed-in account.",
+            HttpStatusCode.NotFound => "This invitation was not found. Ask an owner for a new invitation.",
+            HttpStatusCode.Conflict => "This invitation was already accepted or conflicts with your membership.",
+            _ => "The invitation could not be accepted. Try again."
+        };
+    }
+
+    private async Task HandleAcceptedInvitationAsync(HttpResponseMessage response)
+    {
+        _redirecting = true;
+        Navigation.NavigateTo("/accept-invitation", replace: true);
+
+        AcceptedOrganizationDto? accepted;
+        try
+        {
+            accepted = await response.Content.ReadFromJsonAsync<AcceptedOrganizationDto>();
+        }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or NotSupportedException)
+        {
+            Logger.LogWarning(ex, "Accepted invitation response could not be parsed");
+            accepted = null;
+        }
+
+        if (accepted is null)
+        {
+            _message = "The invitation was accepted, but this page could not refresh your organization. Refresh the page to continue.";
+            _intent = MessageBarIntent.Warning;
+            return;
+        }
+
+        try
+        {
+            var organizations = await Http.GetFromJsonAsync<List<OrganizationSummaryDto>>("api/organizations") ?? [];
+            var organization = organizations.FirstOrDefault(item => item.OrganizationId == accepted.OrganizationId);
+            if (organization is not null)
+            {
+                OrganizationState.SetOrganization(organization);
+                Navigation.NavigateTo("/organization-management", replace: true);
+                return;
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException or NotSupportedException)
+        {
+            Logger.LogWarning(ex, "Accepted invitation organization refresh failed");
+        }
+
+        Navigation.NavigateTo("/organization-management", forceLoad: true, replace: true);
+    }
+}

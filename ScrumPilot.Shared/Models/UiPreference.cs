@@ -8,6 +8,8 @@ namespace ScrumPilot.Shared.Models
         /// <summary>Light theme.</summary>
         Light,
         /// <summary>Dark theme.</summary>
-        Dark
+        Dark,
+        /// <summary>Follow the operating system colour scheme.</summary>
+        System
     }
 }

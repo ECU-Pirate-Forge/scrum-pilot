@@ -1,0 +1,376 @@
+@page "/user-settings"
+@implements IDisposable
+@inject HttpClient Http
+@inject ProjectStateService ProjectState
+@inject AppThemeService Theme
+@inject NavigationManager Navigation
+@inject ILogger<UserSettings> Logger
+
+<PageTitle>User Settings</PageTitle>
+
+<AppPageHeader Title="User Settings" Subtitle="Manage your account preferences, password, default project, and theme." />
+
+@if (_loading)
+{
+    <AppLoadingState Message="Loading settings..." />
+}
+else
+{
+    <div class="settings-stack">
+        <FluentCard Class="settings-card">
+            <FluentText Tag="TextTag.H2" Size="TextSize.Size500" Weight="TextWeight.Semibold">Change Password</FluentText>
+            <div class="settings-form">
+                <FluentTextInput Id="current-password" Label="Current Password" TextInputType="TextInputType.Password" @bind-Value="_currentPassword" Disabled="@_savingPassword" />
+                <FluentTextInput Id="new-password" Label="New Password" TextInputType="TextInputType.Password" @bind-Value="_newPassword" Disabled="@_savingPassword" />
+                <FluentTextInput Id="confirm-password" Label="Confirm New Password" TextInputType="TextInputType.Password" @bind-Value="_confirmPassword" Disabled="@_savingPassword" />
+
+                @if (_passwordError is not null)
+                {
+                    <FluentMessageBar Intent="MessageBarIntent.Error">@_passwordError</FluentMessageBar>
+                }
+                @if (_passwordSuccess)
+                {
+                    <FluentMessageBar Intent="MessageBarIntent.Success">Password changed successfully.</FluentMessageBar>
+                }
+
+                <div>
+                    <FluentButton Appearance="ButtonAppearance.Primary" Loading="@_savingPassword" Disabled="@_savingPassword" OnClick="SavePasswordAsync" IconStart="@(new Icons.Regular.Size20.Save())">
+                        Update Password
+                    </FluentButton>
+                </div>
+            </div>
+        </FluentCard>
+
+        <FluentCard Class="settings-card">
+            <FluentText Tag="TextTag.H2" Size="TextSize.Size500" Weight="TextWeight.Semibold">Profile &amp; Preferences</FluentText>
+            <div class="settings-form">
+                <FluentTextInput Id="email" Label="Email Address" TextInputType="TextInputType.Email" Value="@_settings.Email" ReadOnly="true" />
+                <p class="sp-small sp-muted">Email changes require a confirmed-email workflow, which is not currently available.</p>
+
+                <FluentTextInput Id="discord" Label="Discord Username" @bind-Value="_settings.DiscordUsername" Disabled="@_savingSettings" />
+                <p class="sp-small sp-muted">Used for Discord integrations and notifications.</p>
+
+                <FluentSelect TOption="ThemeOption" TValue="UiPreference"
+                              Label="UI Theme"
+                              Items="@_themeOptions"
+                              OptionText="@(item => item.Label)"
+                              OptionValue="@(item => item.Value)"
+                              OptionValueToString="@(value => value.ToString())"
+                              Value="@_settings.UiPreference"
+                              ValueChanged="OnThemePreferenceChangedAsync"
+                              ValueExpression="@(() => _settings.UiPreference)"
+                              Disabled="@_savingSettings" />
+                <p class="sp-small sp-muted">Choose System to follow your operating system, or force Light or Dark.</p>
+
+                <FluentSelect TOption="SelectOption" TValue="int?"
+                              Label="Default Organization"
+                              Placeholder="No default organization"
+                              Items="@_organizationOptions"
+                              OptionText="@(item => item.Label)"
+                              OptionValue="@(item => item.Value)"
+                              OptionValueToString="@(value => value?.ToString() ?? string.Empty)"
+                              Value="@_settings.DefaultOrganizationId"
+                              ValueChanged="OnDefaultOrganizationChangedAsync"
+                              ValueExpression="@(() => _settings.DefaultOrganizationId)"
+                              Disabled="@_savingSettings" />
+                <p class="sp-small sp-muted">Projects are loaded from the selected organization.</p>
+
+                <FluentSelect TOption="SelectOption" TValue="int?"
+                              Label="Default Project"
+                              Placeholder="No default project"
+                              Items="@_projectOptions"
+                              OptionText="@(item => item.Label)"
+                              OptionValue="@(item => item.Value)"
+                              OptionValueToString="@(value => value?.ToString() ?? string.Empty)"
+                              @bind-Value="_settings.DefaultProjectId"
+                              Disabled="@(_savingSettings || _projectOptions.Count == 0)" />
+                <p class="sp-small sp-muted">This project will be pre-selected when you log in.</p>
+
+                @if (_settingsError is not null)
+                {
+                    <FluentMessageBar Intent="MessageBarIntent.Error">@_settingsError</FluentMessageBar>
+                }
+                @if (_settingsSuccess)
+                {
+                    <FluentMessageBar Intent="MessageBarIntent.Success">Settings saved successfully.</FluentMessageBar>
+                }
+
+                <div>
+                    <FluentButton Appearance="ButtonAppearance.Primary" Loading="@_savingSettings" Disabled="@_savingSettings" OnClick="SaveSettingsAsync" IconStart="@(new Icons.Regular.Size20.Save())">
+                        Save Preferences
+                    </FluentButton>
+                </div>
+            </div>
+        </FluentCard>
+    </div>
+}
+
+@code {
+    private readonly IReadOnlyList<ThemeOption> _themeOptions =
+    [
+        new(UiPreference.System, "System"),
+        new(UiPreference.Light, "Light"),
+        new(UiPreference.Dark, "Dark")
+    ];
+
+    private UserSettingsDto _settings = new() { UiPreference = UiPreference.System };
+    private List<OrganizationSummaryDto> _organizations = [];
+    private List<Project> _projects = [];
+    private List<SelectOption> _organizationOptions = [];
+    private List<SelectOption> _projectOptions = [];
+    private UiPreference _persistedPreference = UiPreference.System;
+    private bool _loading = true;
+
+    private string _currentPassword = string.Empty;
+    private string _newPassword = string.Empty;
+    private string _confirmPassword = string.Empty;
+    private bool _savingPassword;
+    private string? _passwordError;
+    private bool _passwordSuccess;
+
+    private bool _savingSettings;
+    private string? _settingsError;
+    private bool _settingsSuccess;
+    private CancellationTokenSource? _projectLoadCts;
+    private long _projectLoadGeneration;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var settingsTask = Http.GetFromJsonAsync<UserSettingsDto>("api/user/settings");
+            var organizationsTask = Http.GetFromJsonAsync<List<OrganizationSummaryDto>>("api/organizations");
+            await Task.WhenAll(settingsTask, organizationsTask);
+
+            _settings = await settingsTask ?? new() { UiPreference = UiPreference.System };
+            _persistedPreference = _settings.UiPreference;
+            await Theme.ApplyAsync(_settings.UiPreference);
+
+            _organizations = await organizationsTask ?? [];
+            RefreshOrganizationOptions();
+
+            if (_settings.DefaultOrganizationId.HasValue
+                && _organizations.Any(organization => organization.OrganizationId == _settings.DefaultOrganizationId.Value))
+            {
+                _projects = await LoadProjectsAsync(_settings.DefaultOrganizationId.Value, CancellationToken.None) ?? [];
+                if (_settings.DefaultProjectId.HasValue
+                    && _projects.All(project => project.ProjectId != _settings.DefaultProjectId.Value))
+                {
+                    _settings.DefaultProjectId = null;
+                }
+            }
+            else
+            {
+                _settings.DefaultOrganizationId = null;
+                _settings.DefaultProjectId = null;
+            }
+
+            RefreshProjectOptions();
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            Logger.LogInformation(ex, "Settings load returned unauthorized; redirecting to login");
+            Navigation.NavigateTo("/login", forceLoad: false);
+            return;
+        }
+        catch (HttpRequestException ex)
+        {
+            Logger.LogWarning(ex, "Failed to load user settings");
+            _settingsError = "Failed to load settings. Please try again.";
+        }
+        catch (NotSupportedException ex)
+        {
+            Logger.LogWarning(ex, "Settings response was not JSON");
+            _settingsError = "Failed to load settings. Please try again.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OnThemePreferenceChangedAsync(UiPreference preference)
+    {
+        _settings.UiPreference = preference;
+        _settingsError = null;
+        _settingsSuccess = false;
+        await Theme.ApplyAsync(preference);
+    }
+
+    private async Task OnDefaultOrganizationChangedAsync(int? organizationId)
+    {
+        _projectLoadCts?.Cancel();
+        _projectLoadCts?.Dispose();
+        _projectLoadCts = null;
+        var generation = ++_projectLoadGeneration;
+        _settings.DefaultOrganizationId = organizationId;
+        _settings.DefaultProjectId = null;
+        _projects = [];
+        RefreshProjectOptions();
+        _settingsError = null;
+        _settingsSuccess = false;
+
+        if (!organizationId.HasValue)
+            return;
+
+        var cts = new CancellationTokenSource();
+        _projectLoadCts = cts;
+        try
+        {
+            var projects = await LoadProjectsAsync(organizationId.Value, cts.Token);
+            if (IsCurrentProjectLoad(organizationId.Value, generation, cts))
+            {
+                _projects = projects ?? [];
+                RefreshProjectOptions();
+            }
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            Logger.LogDebug("Cancelled stale project load for organization {OrganizationId}", organizationId.Value);
+        }
+        catch (HttpRequestException ex)
+        {
+            Logger.LogWarning(ex, "Failed to load projects for organization {OrganizationId}", organizationId.Value);
+            if (IsCurrentProjectLoad(organizationId.Value, generation, cts))
+            {
+                _settingsError = "Failed to load projects for the selected organization.";
+            }
+        }
+        finally
+        {
+            if (ReferenceEquals(_projectLoadCts, cts))
+            {
+                _projectLoadCts = null;
+            }
+            cts.Dispose();
+        }
+    }
+
+    private Task<List<Project>?> LoadProjectsAsync(int organizationId, CancellationToken cancellationToken) =>
+        Http.GetFromJsonAsync<List<Project>>($"api/organizations/{organizationId}/projects", cancellationToken);
+
+    private bool IsCurrentProjectLoad(int organizationId, long generation, CancellationTokenSource cts) =>
+        generation == _projectLoadGeneration
+        && ReferenceEquals(_projectLoadCts, cts)
+        && _settings.DefaultOrganizationId == organizationId;
+
+    private async Task SavePasswordAsync()
+    {
+        _passwordError = null;
+        _passwordSuccess = false;
+
+        if (string.IsNullOrWhiteSpace(_currentPassword) || string.IsNullOrWhiteSpace(_newPassword) || string.IsNullOrWhiteSpace(_confirmPassword))
+        {
+            _passwordError = "All password fields are required.";
+            return;
+        }
+        if (_newPassword != _confirmPassword)
+        {
+            _passwordError = "New passwords do not match.";
+            return;
+        }
+
+        _savingPassword = true;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/user/change-password", new ChangePasswordRequest
+            {
+                CurrentPassword = _currentPassword,
+                NewPassword = _newPassword
+            });
+
+            if (response.IsSuccessStatusCode)
+            {
+                _passwordSuccess = true;
+                _currentPassword = string.Empty;
+                _newPassword = string.Empty;
+                _confirmPassword = string.Empty;
+            }
+            else
+            {
+                var body = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+                _passwordError = body?.Errors?.FirstOrDefault() ?? "Failed to change password.";
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or NotSupportedException or System.Text.Json.JsonException)
+        {
+            Logger.LogWarning(ex, "Failed to change password");
+            _passwordError = "An error occurred. Please try again.";
+        }
+        finally
+        {
+            _savingPassword = false;
+        }
+    }
+
+    private async Task SaveSettingsAsync()
+    {
+        _settingsError = null;
+        _settingsSuccess = false;
+        _savingSettings = true;
+        var attemptedPreference = _settings.UiPreference;
+
+        try
+        {
+            var response = await Http.PutAsJsonAsync("api/user/settings", _settings);
+            if (response.IsSuccessStatusCode)
+            {
+                _settingsSuccess = true;
+                _persistedPreference = attemptedPreference;
+                await Theme.ApplyAsync(attemptedPreference);
+
+                if (_settings.DefaultProjectId.HasValue)
+                {
+                    var defaultProject = _projects.FirstOrDefault(project => project.ProjectId == _settings.DefaultProjectId.Value);
+                    if (defaultProject is not null && ProjectState.SelectedProjectId != _settings.DefaultProjectId)
+                        ProjectState.SetProject(defaultProject);
+                }
+            }
+            else
+            {
+                var body = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+                _settingsError = body?.Errors?.FirstOrDefault() ?? "Failed to save settings.";
+                await RollBackThemeAsync();
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or NotSupportedException or System.Text.Json.JsonException)
+        {
+            Logger.LogWarning(ex, "Failed to save user settings");
+            _settingsError = "An error occurred. Please try again.";
+            await RollBackThemeAsync();
+        }
+        finally
+        {
+            _savingSettings = false;
+        }
+    }
+
+    private async Task RollBackThemeAsync()
+    {
+        _settings.UiPreference = _persistedPreference;
+        await Theme.ApplyAsync(_persistedPreference);
+    }
+
+    private void RefreshOrganizationOptions() =>
+        _organizationOptions = _organizations
+            .Select(organization => new SelectOption(organization.OrganizationId, organization.Name))
+            .ToList();
+
+    private void RefreshProjectOptions() =>
+        _projectOptions = _projects
+            .Select(project => new SelectOption(project.ProjectId, project.ProjectName))
+            .ToList();
+
+    private sealed record ThemeOption(UiPreference Value, string Label);
+    private sealed record SelectOption(int? Value, string Label);
+    private sealed record ErrorResponse(IEnumerable<string>? Errors);
+
+    public void Dispose()
+    {
+        ++_projectLoadGeneration;
+        _projectLoadCts?.Cancel();
+        _projectLoadCts?.Dispose();
+        _projectLoadCts = null;
+    }
+}
+

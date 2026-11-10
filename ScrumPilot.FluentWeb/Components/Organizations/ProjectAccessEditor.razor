@@ -1,0 +1,117 @@
+@implements IDisposable
+@inject HttpClient Http
+@inject ILogger<ProjectAccessEditor> Logger
+
+<div class="project-access-editor">
+    @if (_loading)
+    {
+        <FluentSpinner Label="Loading project access" />
+    }
+    else if (_members.Count == 0)
+    {
+        <p class="sp-muted">No organization members available for project access.</p>
+    }
+    else
+    {
+        <FluentDataGrid TGridItem="ProjectMemberAccessDto" Items="@_members.AsQueryable()" GridTemplateColumns="1fr 1fr auto" Class="management-grid">
+            <PropertyColumn Property="@(member => member.UserId)" Title="User" Sortable="true" />
+            <TemplateColumn Title="Access" Context="member">@AccessText(member)</TemplateColumn>
+            <TemplateColumn Title="Actions" Context="member">
+                @if (CanManage)
+                {
+                    var isOwner = member.OrganizationRole == OrganizationRole.Owner;
+                    <FluentButton data-user="@member.UserId" Appearance="ButtonAppearance.Subtle" Disabled="@isOwner" OnClick="@(() => ToggleAsync(member))">
+                        @(member.HasExplicitAccess ? "Remove access" : "Grant access")
+                    </FluentButton>
+                }
+            </TemplateColumn>
+        </FluentDataGrid>
+    }
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <FluentMessageBar Intent="MessageBarIntent.Error">@_error</FluentMessageBar>
+    }
+</div>
+
+@code {
+    [Parameter] public int ProjectId { get; set; }
+    [Parameter] public bool CanManage { get; set; }
+    private List<ProjectMemberAccessDto> _members = [];
+    private string? _error;
+    private bool _loading;
+    private (int ProjectId, bool CanManage)? _lastParameterKey;
+    private CancellationTokenSource? _loadCancellation;
+    private long _generation;
+    private bool _disposed;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var key = (ProjectId, CanManage);
+        if (_lastParameterKey == key) return;
+        _lastParameterKey = key;
+        await LoadAsync(key);
+    }
+
+    private async Task LoadAsync((int ProjectId, bool CanManage) key)
+    {
+        if (_disposed || _lastParameterKey != key) return;
+        var generation = ++_generation;
+        _loadCancellation?.Cancel();
+        _loadCancellation?.Dispose();
+        _loadCancellation = new();
+        var token = _loadCancellation.Token;
+        _members = [];
+        _error = null;
+        _loading = true;
+        try
+        {
+            var members = await Http.GetFromJsonAsync<List<ProjectMemberAccessDto>>($"api/projects/{key.ProjectId}/members", token) ?? [];
+            if (!IsCurrent(key, generation)) return;
+            _members = members;
+            _error = null;
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (Exception ex) when (IsCurrent(key, generation))
+        {
+            Logger.LogError(ex, "Unable to load project access for {ProjectId}", key.ProjectId);
+            _error = "Unable to load project access.";
+        }
+        finally
+        {
+            if (IsCurrent(key, generation)) _loading = false;
+        }
+    }
+
+    private async Task ToggleAsync(ProjectMemberAccessDto member)
+    {
+        var key = (ProjectId, CanManage);
+        var generation = _generation;
+        if (!key.CanManage || !IsCurrent(key, generation)) return;
+        _error = null;
+        var grant = !member.HasExplicitAccess;
+        try
+        {
+            var response = grant
+                ? await Http.PutAsJsonAsync($"api/projects/{key.ProjectId}/members/{Uri.EscapeDataString(member.UserId)}", new SetProjectAccessRequest(true))
+                : await Http.DeleteAsync($"api/projects/{key.ProjectId}/members/{Uri.EscapeDataString(member.UserId)}");
+            if (!IsCurrent(key, generation)) return;
+            if (!response.IsSuccessStatusCode) _error = "Unable to update project access.";
+            else await LoadAsync(key);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Unable to update project access for project {ProjectId}", key.ProjectId);
+            if (IsCurrent(key, generation)) _error = "Unable to update project access.";
+        }
+    }
+
+    private bool IsCurrent((int ProjectId, bool CanManage) key, long generation) => !_disposed && generation == _generation && _lastParameterKey == key && (ProjectId, CanManage) == key;
+    private static string AccessText(ProjectMemberAccessDto member) => member.OrganizationRole == OrganizationRole.Owner ? "Owner — implicit access" : member.HasExplicitAccess ? "Access granted" : "No access";
+    public void Dispose()
+    {
+        _disposed = true;
+        _generation++;
+        _loadCancellation?.Cancel();
+        _loadCancellation?.Dispose();
+    }
+}

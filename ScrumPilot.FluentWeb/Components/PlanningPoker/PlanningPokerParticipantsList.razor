@@ -1,0 +1,74 @@
+@using ScrumPilot.Shared.Models.PlanningPoker
+
+<section class="pp-participants" aria-labelledby="planning-poker-team-heading">
+    <FluentText Tag="TextTag.H2" Size="TextSize.Size400" Weight="TextWeight.Semibold" Id="planning-poker-team-heading">Team votes</FluentText>
+
+    @if (Participants.Count > 0)
+    {
+        <div class="pp-team-row" role="list" aria-live="polite">
+            @foreach (var participant in Participants)
+            {
+                var isMe = participant.ConnectionId == MyConnectionId;
+                var stateText = ParticipantStateText(participant);
+                <article class="pp-participant" role="listitem" aria-label="@($"{participant.DisplayName}{(isMe ? ", you" : string.Empty)}: {stateText}")">
+                    <div class="@($"pp-flip-card {(participant.HasVoted || Revealed ? "pp-flipped" : string.Empty)}")" aria-hidden="true">
+                        <div class="pp-flip-inner">
+                            <div class="pp-flip-front">?</div>
+                            <div class="pp-flip-back">@CardText(participant)</div>
+                        </div>
+                    </div>
+                    <span class="pp-participant-name">
+                        @participant.DisplayName
+                        @if (isMe)
+                        {
+                            <strong> (you)</strong>
+                        }
+                    </span>
+                    <span class="pp-small pp-muted">@stateText</span>
+                </article>
+            }
+        </div>
+    }
+    else if (IsSessionJoined)
+    {
+        <p class="sp-muted">Waiting for team members to join...</p>
+    }
+    else
+    {
+        <p class="sp-muted">Connecting to planning poker...</p>
+    }
+</section>
+
+@code {
+    [Parameter] public IReadOnlyList<ParticipantState> Participants { get; set; } = [];
+    [Parameter] public bool Revealed { get; set; }
+    [Parameter] public string MyConnectionId { get; set; } = string.Empty;
+    [Parameter] public bool IsSessionJoined { get; set; }
+
+    private string CardText(ParticipantState participant)
+    {
+        if (Revealed && participant.HasVoted)
+        {
+            return DisplayPoints(participant.Points);
+        }
+
+        return participant.HasVoted ? "✓" : "…";
+    }
+
+    private string ParticipantStateText(ParticipantState participant)
+    {
+        if (Revealed && participant.HasVoted)
+        {
+            return $"revealed {DisplayPoints(participant.Points)}";
+        }
+
+        return participant.HasVoted ? "vote submitted" : "not voted";
+    }
+
+    private static string DisplayPoints(int? points) => points switch
+    {
+        null => "?",
+        -1 => "?",
+        _ => points.Value.ToString()
+    };
+}

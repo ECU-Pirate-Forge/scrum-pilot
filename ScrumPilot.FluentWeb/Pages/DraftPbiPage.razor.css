@@ -1,0 +1,9 @@
+.draft-pbi-page { display: grid; gap: var(--spacingVerticalL); }
+.draft-pbi-page h2 { margin-top: 0; }
+.draft-pbi-list { display: grid; gap: var(--spacingVerticalM); }
+.draft-pbi-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--spacingHorizontalL); padding: var(--spacingVerticalM) var(--spacingHorizontalM); border: 1px solid var(--colorNeutralStroke1); border-radius: var(--borderRadiusLarge); background: var(--colorNeutralBackground1); }
+.draft-pbi-item h3 { margin: 0; }
+.draft-pbi-item p { color: var(--colorNeutralForeground2); white-space: pre-wrap; }
+.draft-pbi-item__badges, .draft-pbi-item__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--spacingHorizontalS); }
+.draft-pbi-item__actions { justify-content: flex-end; }
+@media (max-width: 760px) { .draft-pbi-item { grid-template-columns: 1fr; } .draft-pbi-item__actions { justify-content: flex-start; } }

@@ -1,0 +1,51 @@
+/* ScrumPilot brand tokens layered on Fluent 2 design tokens. Use --sp-* in app CSS. */
+:root {
+  --sp-font: var(--fontFamilyBase, "Segoe UI Variable", "Segoe UI", sans-serif);
+
+  --sp-surface: var(--colorNeutralBackground1);
+  --sp-surface-alt: var(--colorNeutralBackground2);
+  --sp-surface-sunken: var(--colorNeutralBackground3);
+  --sp-surface-hover: var(--colorNeutralBackground1Hover);
+  --sp-text: var(--colorNeutralForeground1);
+  --sp-text-muted: var(--colorNeutralForeground3);
+  --sp-border: var(--colorNeutralStroke2);
+  --sp-border-strong: var(--colorNeutralStroke1);
+
+  --sp-brand: var(--colorBrandBackground);
+  --sp-brand-hover: var(--colorBrandBackgroundHover);
+  --sp-brand-subtle: var(--colorBrandBackground2);
+  --sp-brand-text: var(--colorBrandForeground1);
+  --sp-on-brand: var(--colorNeutralForegroundOnBrand);
+
+  --sp-success: var(--colorPaletteGreenForeground1);
+  --sp-success-bg: var(--colorPaletteGreenBackground1);
+  --sp-warning: var(--colorPaletteDarkOrangeForeground1);
+  --sp-warning-bg: var(--colorPaletteYellowBackground1);
+  --sp-danger: var(--colorPaletteRedForeground1);
+  --sp-danger-bg: var(--colorPaletteRedBackground1);
+  --sp-info: var(--colorPaletteBlueForeground2);
+  --sp-info-bg: var(--colorPaletteBlueBackground2);
+
+  --sp-radius-sm: var(--borderRadiusSmall, 2px);
+  --sp-radius: var(--borderRadiusMedium, 4px);
+  --sp-radius-lg: var(--borderRadiusLarge, 6px);
+  --sp-radius-xl: var(--borderRadiusXLarge, 8px);
+
+  --sp-shadow-sm: var(--shadow2);
+  --sp-shadow: var(--shadow4);
+  --sp-shadow-lg: var(--shadow16);
+
+  --sp-space-1: 4px;
+  --sp-space-2: 8px;
+  --sp-space-3: 12px;
+  --sp-space-4: 16px;
+  --sp-space-5: 24px;
+  --sp-space-6: 32px;
+
+  /* PBI type accents (match legacy colours) */
+  --sp-type-story: #2e7d32;
+  --sp-type-bug: #c62828;
+  --sp-type-task: #1565c0;
+  --sp-type-spike: #6a1b9a;
+  --sp-type-epic: #ef6c00;
+}
