@@ -1,6 +1,7 @@
 @page "/dependency-chart"
+@page "/organizations/{OrganizationId:int}/dependency-chart"
+@inherits WorkComponentBase
 @using ScrumPilot.FluentWeb.Components.DependencyChart
-@inject HttpClient Http
 @inject NavigationManager Nav
 @inject ProjectStateService ProjectState
 @inject IAppNotificationService Notifications
@@ -11,7 +12,7 @@
 <div class="dependency-chart-page">
     <AppPageHeader Title="Dependency Chart" Subtitle="@HeaderSubtitle">
         <Actions>
-            <FluentButton Appearance="ButtonAppearance.Outline" IconStart="@(new Icons.Regular.Size20.ChevronLeft())" OnClick="@(() => Nav.NavigateTo("/scrum-board"))">Back to Board</FluentButton>
+            <FluentButton Appearance="ButtonAppearance.Outline" IconStart="@(new Icons.Regular.Size20.ChevronLeft())" OnClick="@(() => Nav.NavigateTo(OrganizationRoutes.Page(Scope.OrganizationId, "scrum-board", Scope.ProjectId)))">Back to Board</FluentButton>
         </Actions>
     </AppPageHeader>
 
@@ -40,7 +41,7 @@
     private int? _loadedSprintId;
     private int? _loadedProjectId;
 
-    private int? EffectiveProjectId => ProjectId ?? ProjectState.SelectedProjectId;
+    private int? EffectiveProjectId => Scope.ProjectId;
 
     private string HeaderSubtitle => string.IsNullOrWhiteSpace(_sprintLabel)
         ? "Surface cross-team blockers and sequencing issues across the program."

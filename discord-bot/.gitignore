@@ -1,7 +1,0 @@
-node_modules/
-.env
-*.ogg
-*.mp3
-*.corrupted
-summaries/
-chat-state.json

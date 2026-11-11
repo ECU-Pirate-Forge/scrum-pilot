@@ -7,7 +7,8 @@ using ScrumPilot.Shared.Models;
 namespace ScrumPilot.API.Controllers;
 
 [ApiController]
-[Route("api/metrics")]
+[OrganizationWork]
+[Route("api/organizations/{organizationId:int}/metrics")]
 public class MetricsDashboardController(
     IMetricsDashboardService service,
     ISprintRepository sprintRepository,

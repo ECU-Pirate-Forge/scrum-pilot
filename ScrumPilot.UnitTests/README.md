@@ -1,30 +1,32 @@
 # ScrumPilot.UnitTests
 
-Automated verification for the API, data layer, shared contracts, and Blazor client. The Release suite currently executes 538 test cases.
+Backend, SQL Server 2025, shared contract, HTTP/WebSocket/CLI, and MudBlazor
+component verification. NSubstitute isolates pure dependencies; real SQL Server
+fixtures establish provider-specific constraints, concurrency, and recovery.
 
-## Stack
+## Required tenancy coverage
 
-xUnit v3, NSubstitute, bUnit, EF Core SQLite relational tests, and ASP.NET Core controller/authorization helpers.
+- Central/work model ownership and registered-catalog identity.
+- Equal local IDs in different organizations without read/write leakage.
+- Owner implicit access, Member instance-bound grants, nonmember Admin denial.
+- Removal/rejoin, last-owner safeguards, invitation single-use concurrency.
+- Missing/wrong catalogs and fail-closed authorization without implicit creation.
+- Organization-qualified resource links, defaults, assignments and histories.
+- Provisioning/retry, exact retention boundary, backup/recovery and purge.
+- Interrupted-restore fences and clearing restored Member grants.
+- Hub isolation/eviction and post-inference authorization.
+- URL priority, independent tabs, no implicit default writes, late callback guards.
 
-## Tenancy coverage
-
-- Organization/project-access contracts and EF constraints
-- Pirate Forge migration ordering/backfill and bootstrap invariants
-- Global Admin, Owner/Member, implicit Owner access, explicit Member access, and two-tenant isolation
-- Rename, promotion/demotion, removal, leave, and last-owner safeguards
-- 30-day soft delete, historical-owner restore, and purge timing
-- Invitation hashing, email binding, expiry, resend, revocation, single use, concurrency, delivery audit, and option validation
-- Project-owned controllers/services, metrics, preferences, comments, assignments, and planning-poker authorization
-- Organization switcher/state, management UI, acceptance page, and user defaults
-
-Relational tests use isolated SQLite databases. Email uses test doubles; automated tests do not send through SendGrid.
-
-## Commands
+Fixtures must track and delete only their own catalogs/artifacts. Do not connect
+to a development/production installation or silently skip missing infrastructure.
+AI/email tests use doubles, not real user content.
 
 ```powershell
 dotnet test .\ScrumPilot.UnitTests\ScrumPilot.UnitTests.csproj --configuration Release
-dotnet test .\ScrumPilot.UnitTests\ScrumPilot.UnitTests.csproj --configuration Release --filter "FullyQualifiedName~Organization"
-dotnet test .\ScrumPilot.UnitTests\ScrumPilot.UnitTests.csproj --configuration Release --filter "FullyQualifiedName~TenantIsolation|FullyQualifiedName~ProjectAccess"
+dotnet test .\ScrumPilot.UnitTests\ScrumPilot.UnitTests.csproj --configuration Release --filter "FullyQualifiedName~Tenant"
 ```
 
-CI also verifies formatting, Release build, API/Web publish, Docker builds, and pending EF model changes. New access behavior needs an allowed test and a same-shaped inaccessible-resource test; controller mocks alone are insufficient for persistence isolation.
+Run [FluentWeb tests](../ScrumPilot.FluentWeb.Tests/README.md) and
+[Aspire tests](../ScrumPilot.Aspire.Tests/README.md) too. See
+[full verification](../docs/codebase/TESTING.md). Test counts belong to actual
+run results, not a fixed assertion in this README.

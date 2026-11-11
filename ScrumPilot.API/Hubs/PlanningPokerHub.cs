@@ -12,6 +12,25 @@ public class PlanningPokerHub(
     PlanningPokerSessionService session,
     IOrganizationAccessService accessService) : Hub
 {
+    private readonly IServiceScopeFactory? invocationScopes;
+    [ActivatorUtilitiesConstructor]
+    public PlanningPokerHub(PlanningPokerSessionService session, IServiceScopeFactory scopes, IHttpContextAccessor http)
+        : this(session, (IOrganizationAccessService)null!) { invocationScopes = scopes; }
+    private IOrganizationAccessService Access => invocationScopes is null ? accessService
+        : new InvocationOrganizationAccessService(invocationScopes,
+            Context.Items.TryGetValue("ScrumPilot.OrganizationId", out var selected) && selected is int id ? id : 0,
+            GetAuthenticatedUserId() ?? "");
+    public override Task OnConnectedAsync()
+    {
+        var http = Context.GetHttpContext();
+        // Long-polling's connection HttpContext need not retain routing features.
+        // Bind once to the already endpoint-validated path, never a project/default/body value.
+        var segments = http?.Request.Path.Value?.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments is { Length: 4 } && segments[0] == "hubs" && segments[1] == "organizations"
+            && segments[3] == "planning-poker" && int.TryParse(segments[2], out var organizationId) && organizationId > 0)
+            Context.Items["ScrumPilot.OrganizationId"] = organizationId;
+        return base.OnConnectedAsync();
+    }
     private const string ProjectNotFoundMessage = "Project not found.";
     private const string PbiNotFoundMessage = "Product backlog item not found.";
 
@@ -82,7 +101,7 @@ public class PlanningPokerHub(
         {
             try
             {
-                canAccess = await accessService.CanAccessProjectAsync(
+                canAccess = await Access.CanAccessProjectAsync(
                     userId,
                     sessionKey.Value.ProjectId,
                     Context.ConnectionAborted);
@@ -114,7 +133,7 @@ public class PlanningPokerHub(
         bool canAccess;
         try
         {
-            canAccess = await accessService.CanAccessProjectAsync(
+            canAccess = await Access.CanAccessProjectAsync(
                 userId,
                 projectId,
                 cancellationToken);
@@ -131,7 +150,7 @@ public class PlanningPokerHub(
             throw new HubException(ProjectNotFoundMessage);
         }
 
-        var organizationId = await accessService.GetOrganizationIdForProjectAsync(
+        var organizationId = await Access.GetOrganizationIdForProjectAsync(
             projectId,
             cancellationToken);
         if (!organizationId.HasValue)
@@ -161,7 +180,7 @@ public class PlanningPokerHub(
 
         try
         {
-            canAccess = await accessService.CanAccessProjectAsync(
+            canAccess = await Access.CanAccessProjectAsync(
                 userId,
                 projectId,
                 cancellationToken);
@@ -233,7 +252,7 @@ public class PlanningPokerHub(
         var sessionKey = await GetAuthorizedSessionKeyAsync();
         if (!sessionKey.HasValue) return;
         if (pbiId.HasValue
-            && !await accessService.PbiBelongsToProjectAsync(
+            && !await Access.PbiBelongsToProjectAsync(
                 pbiId.Value,
                 sessionKey.Value.ProjectId,
                 Context.ConnectionAborted))

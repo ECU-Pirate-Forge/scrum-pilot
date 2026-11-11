@@ -1,7 +1,8 @@
 @page "/scrum-board"
+@page "/organizations/{OrganizationId:int}/scrum-board"
+@inherits WorkComponentBase
 @using ScrumPilot.FluentWeb.Components.Pbi
 @using ScrumPilot.FluentWeb.Components.ScrumBoard
-@inject HttpClient Http
 @inject ProjectStateService ProjectState
 @inject NavigationManager Nav
 @inject IAppNotificationService Notifications
@@ -86,7 +87,7 @@
                         <AppIcon Value="@(new Icons.Regular.Size20.Dismiss())" Label="Close" />
                     </FluentButton>
                 </header>
-                <PbiCard PbiModel="_newPbi"
+                <PbiCard PbiModel="_newPbi" CapturedWork="Scope"
                          StartInEditMode="true"
                          ProjectId="_selectedProjectId"
                          OnSave="HandleNewPbiSaved"
@@ -97,7 +98,7 @@
 
     @if (SelectedPbi is not null)
     {
-        <PbiDetailsDialog Pbi="SelectedPbi"
+        <PbiDetailsDialog Pbi="SelectedPbi" CapturedWork="Scope"
                           Open="true"
                           ProjectId="_selectedProjectId"
                           OnSaved="HandlePbiSaved"
@@ -144,8 +145,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _selectedProjectId = ProjectState.SelectedProjectId;
-        ProjectState.OnChange += HandleProjectStateChanged;
+        _selectedProjectId = Scope.ProjectId;
         await LoadDropdownsAsync();
         ApplyDefaultSprintFilter();
         await LoadItemsAsync();
@@ -395,7 +395,8 @@
             query.Add($"projectId={_selectedProjectId.Value}");
         }
 
-        Nav.NavigateTo(query.Count == 0 ? "/dependency-chart" : $"/dependency-chart?{string.Join("&", query)}");
+        var path = OrganizationRoutes.Page(Scope.OrganizationId, "dependency-chart", Scope.ProjectId);
+        Nav.NavigateTo(_selectedSprintId.HasValue ? $"{path}{(path.Contains('?') ? "&" : "?")}sprintId={_selectedSprintId}" : path);
     }
 
     private static string SprintLabel(Sprint sprint) => sprint.SprintTitle ?? sprint.SprintGoal ?? $"Sprint {sprint.SprintId}";

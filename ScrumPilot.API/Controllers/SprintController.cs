@@ -7,7 +7,8 @@ using ScrumPilot.Shared.Models;
 namespace ScrumPilot.API.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[OrganizationWork]
+[Route("api/organizations/{organizationId:int}/[controller]")]
 public class SprintController(
     ISprintService sprintService,
     ISprintRepository sprintRepository,

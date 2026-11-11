@@ -67,7 +67,7 @@ public class PlanningPokerHubTests
 
         var join = setup.Hub.JoinSession("ignored", projectId: 7);
         await organizationLookupStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        await evictor.EvictUserFromProjectAsync("user-1", 7);
+        await evictor.EvictUserFromProjectAsync("user-1", 3, 7);
         Assert.Null(setup.Service.GetSessionKey(ConnectionId));
         releaseOrganizationLookup.SetResult(3);
 
@@ -104,7 +104,7 @@ public class PlanningPokerHubTests
         var join = setup.Hub.JoinSession("ignored", projectId: 7);
         await groupAddStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Equal(SessionKey, setup.Service.GetSessionKey(ConnectionId));
-        await evictor.EvictUserFromProjectAsync("user-1", 7);
+        await evictor.EvictUserFromProjectAsync("user-1", 3, 7);
         releaseGroupAdd.SetResult();
 
         var exception = await Assert.ThrowsAsync<HubException>(() => join);
@@ -136,7 +136,7 @@ public class PlanningPokerHubTests
         await postCheckStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Equal(SessionKey, setup.Service.GetSessionKey(ConnectionId));
         Assert.True(groups.IsMember(ConnectionId, Group));
-        await evictor.EvictUserFromProjectAsync("user-1", 7);
+        await evictor.EvictUserFromProjectAsync("user-1", 3, 7);
         releasePostCheck.SetResult(false);
 
         var exception = await Assert.ThrowsAsync<HubException>(() => join);

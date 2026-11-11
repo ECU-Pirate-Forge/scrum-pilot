@@ -7,6 +7,7 @@ using ScrumPilot.Shared.Models;
 using ScrumPilot.Web.Components.Organizations;
 using ScrumPilot.Web.Pages;
 using ScrumPilot.Web.Services;
+using ScrumPilot.Client;
 
 namespace ScrumPilot.UnitTests.Frontend.PageTests;
 
@@ -14,6 +15,34 @@ public sealed class OrganizationManagementTests : FrontendTestBase
 {
     private static HttpResponseMessage Json(object value, HttpStatusCode status = HttpStatusCode.OK) =>
         new(status) { Content = new StringContent(JsonSerializer.Serialize(value), Encoding.UTF8, "application/json") };
+
+    [Fact]
+    public async Task AdminDirectoryShowsProvisioningFailureAndCanRetryWithoutOpeningWork()
+    {
+        Authorization.SetAuthorized("admin");
+        Authorization.SetRoles("Admin");
+        var retried = false;
+        HttpResponseFactory = request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path.EndsWith("/operations/retry"))
+            {
+                retried = true;
+                return new HttpResponseMessage(HttpStatusCode.NoContent);
+            }
+            if (path.EndsWith("/operations"))
+                return Json(new { organizationId = 7, state = retried ? "Active" : "Failed", operationId = (string?)null, error = retried ? null : "Storage unavailable" });
+            if (path.EndsWith("/organizations"))
+                return Json(new[] { new OrganizationSummaryDto(7, "Forge", OrganizationRole.Member, false) });
+            return Json(Array.Empty<OrganizationSummaryDto>());
+        };
+        var cut = Render<OrganizationManagement>();
+        cut.WaitForState(() => cut.Markup.Contains("Storage status: Failed"));
+        await cut.FindAll("button").Single(button => button.TextContent.Contains("Retry provisioning")).ClickAsync(new());
+        cut.WaitForState(() => cut.Markup.Contains("Storage status: Active"));
+        Assert.Contains(HttpRequestLog, request => request.Method == HttpMethod.Post && request.Url == "api/organizations/7/operations/retry");
+        Assert.DoesNotContain(HttpRequests, path => path.EndsWith("/projects"));
+    }
 
     [Fact]
     public void Owner_sees_management_controls_while_member_does_not()
@@ -85,7 +114,7 @@ public sealed class OrganizationManagementTests : FrontendTestBase
         cut.WaitForState(() => cut.Markup.Contains("member"));
         await cut.Find("button[data-user='member']").ClickAsync(new());
 
-        Assert.Contains(HttpRequestLog, x => x.Method == HttpMethod.Put && x.Url == "api/projects/12/members/member");
+        Assert.Contains(HttpRequestLog, x => x.Method == HttpMethod.Put && x.Url == "api/organizations/1/projects/12/members/member");
         Assert.True(calls >= 2);
     }
 
@@ -174,7 +203,7 @@ public sealed class OrganizationManagementTests : FrontendTestBase
     }
 
     [Fact]
-    public void Reload_replaces_stale_selection_and_clears_project_state()
+    public void DirectoryReloadDoesNotGuessANewOrganizationOrChangeTabSelection()
     {
         var organizationState = Services.GetRequiredService<OrganizationStateService>();
         var projectState = Services.GetRequiredService<ProjectStateService>();
@@ -197,8 +226,8 @@ public sealed class OrganizationManagementTests : FrontendTestBase
         var cut = Render<OrganizationManagement>();
         cut.WaitForState(() => cut.Markup.Contains("B"));
 
-        Assert.Equal(2, organizationState.SelectedOrganizationId);
-        Assert.Null(projectState.SelectedProjectId);
+        Assert.Equal(1, organizationState.SelectedOrganizationId);
+        Assert.Equal(11, projectState.SelectedProjectId);
         Assert.DoesNotContain("A project", cut.Markup);
     }
 
@@ -209,7 +238,7 @@ public sealed class OrganizationManagementTests : FrontendTestBase
             new OrganizationSummaryDto(7, "Forge", OrganizationRole.Member, false));
         HttpResponseFactory = _ => Json(Array.Empty<Project>());
 
-        var cut = Render<ProjectManagement>();
+        var cut = Render<ProjectManagement>(p => p.Add(x => x.CapturedWork, new WorkScope(MockHttpClient, 7, null)));
         cut.WaitForState(() => HttpRequests.Count > 0);
 
         Assert.Contains("api/organizations/7/projects", HttpRequests);
@@ -224,8 +253,9 @@ public sealed class OrganizationManagementTests : FrontendTestBase
         var cut = Render<ProjectManagement>();
 
         Assert.Empty(HttpRequests);
-        cut.InvokeAsync(() => state.SetOrganization(
-            new OrganizationSummaryDto(7, "Forge", OrganizationRole.Owner, false)));
+        state.SetOrganization(new OrganizationSummaryDto(7, "Forge", OrganizationRole.Owner, false));
+        cut.Instance.Dispose();
+        cut = Render<ProjectManagement>(p => p.Add(x => x.CapturedWork, new WorkScope(MockHttpClient, 7, null)));
         cut.WaitForState(() => cut.Markup.Contains("Add Project", StringComparison.Ordinal));
 
         Assert.Contains("api/organizations/7/projects", HttpRequests);
@@ -251,6 +281,9 @@ public sealed class OrganizationManagementTests : FrontendTestBase
 
         await cut.InvokeAsync(() => state.SetOrganization(
             new OrganizationSummaryDto(2, "B", OrganizationRole.Member, false)));
+        TestWork.Dispose();
+        cut.Instance.Dispose();
+        cut = Render<ProjectManagement>(p => p.Add(x => x.CapturedWork, new WorkScope(MockHttpClient, 2, null)));
         cut.WaitForState(() => HttpRequests.Contains("api/organizations/2/projects"));
         delayed.SetResult(Json(new[] { new Project { ProjectId = 10, ProjectName = "A project" } }));
         await cut.InvokeAsync(() => Task.Delay(10));
@@ -315,7 +348,7 @@ public sealed class OrganizationManagementTests : FrontendTestBase
         var cut = Render<ProjectAccessEditor>(parameters => parameters
             .Add(component => component.ProjectId, 1)
             .Add(component => component.CanManage, true));
-        cut.WaitForState(() => HttpRequests.Contains("api/projects/1/members"));
+        cut.WaitForState(() => HttpRequests.Contains("api/organizations/1/projects/1/members"));
 
         cut.Render(parameters => parameters
             .Add(component => component.ProjectId, 2)
@@ -409,7 +442,7 @@ public sealed class OrganizationManagementTests : FrontendTestBase
         Assert.DoesNotContain("member-a", cut.Markup);
         Assert.DoesNotContain("Unable", cut.Markup);
         Assert.Single(HttpRequestLog, request =>
-            request.Method == HttpMethod.Get && request.Url == "api/projects/1/members");
+            request.Method == HttpMethod.Get && request.Url == "api/organizations/1/projects/1/members");
     }
 
     [Fact]
@@ -501,6 +534,9 @@ public sealed class OrganizationManagementTests : FrontendTestBase
 
         await cut.InvokeAsync(() => state.SetOrganization(
             new OrganizationSummaryDto(2, "B", OrganizationRole.Member, false)));
+        TestWork.Dispose();
+        cut.Instance.Dispose();
+        cut = Render<ProjectManagement>(p => p.Add(x => x.CapturedWork, new WorkScope(MockHttpClient, 2, null)));
         cut.WaitForState(() => HttpRequests.Contains("api/organizations/2/projects"));
         delayed.SetResult(Json(new Project { ProjectId = 10, ProjectName = "A project" }, HttpStatusCode.Created));
         await mutation;

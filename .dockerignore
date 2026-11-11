@@ -6,3 +6,14 @@
 **/node_modules
 **/TestResults
 ollama/
+**/.env
+**/.env.*
+**/*.binlog
+**/*.db
+**/*.db-*
+**/*.bak
+**/*.mdf
+**/*.ldf
+**/*.trn
+**/backups
+**/publish

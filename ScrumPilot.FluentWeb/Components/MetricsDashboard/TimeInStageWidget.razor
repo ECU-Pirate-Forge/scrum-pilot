@@ -18,10 +18,10 @@
     }
 </WidgetCard>
 
+@inherits WorkComponentBase
 @code {
     [Parameter] public int? SprintId { get; set; }
     [CascadingParameter(Name = "IsDarkMode")] public bool IsDarkMode { get; set; }
-    [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
     [Inject] private ILogger<TimeInStageWidget> Logger { get; set; } = default!;
 
     private TimeInStageData _data = new();
@@ -44,6 +44,7 @@
         _loading = true;
         try { _data = SprintId.HasValue ? await MetricsSvc.GetTimeInStageDataAsync(SprintId.Value) : new(); }
         catch (Exception ex) { Logger.LogWarning(ex, "Failed to load time in stage for sprint {SprintId}", SprintId); _data = new(); }
+        if (!Scope.IsCurrent) return;
         _options = BuildOptions(IsDarkMode);
         _chartKey++;
         _loading = false;

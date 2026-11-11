@@ -26,7 +26,8 @@
 
 @code {
     [Parameter] public int? SprintId { get; set; }
-    [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
+    [CascadingParameter] public WorkScope Work { get; set; } = default!;
+    private MetricsDashboardService MetricsSvc => new(Work.Http);
 
     private double _committed;
     private int _issueCount;

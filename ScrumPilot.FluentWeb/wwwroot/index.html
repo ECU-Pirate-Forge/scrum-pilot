@@ -6,6 +6,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ScrumPilot</title>
     <base href="/" />
+    <script>
+        if (location.pathname === "/fluentweb" || location.pathname.startsWith("/fluentweb/")) {
+            document.querySelector("base").setAttribute("href", "/fluentweb/");
+        }
+    </script>
     <link rel="preload" id="webassembly" />
     <link href="_content/Microsoft.FluentUI.AspNetCore.Components/css/reboot.css" rel="stylesheet" />
     <link href="_content/BlazorGridStack/gridstack/gridstack.min.css" rel="stylesheet" />

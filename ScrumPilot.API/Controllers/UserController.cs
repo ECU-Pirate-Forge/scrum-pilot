@@ -41,7 +41,8 @@ public class UserController(
     }
 
     /// <summary>Returns a lightweight summary of every registered user for assignment dropdowns.</summary>
-    [HttpGet("all")]
+    [OrganizationWork]
+    [HttpGet("/api/organizations/{organizationId:int}/user/all")]
     public async Task<ActionResult<IEnumerable<UserSummaryDto>>> GetAllUsers(
         [FromQuery] int projectId,
         CancellationToken cancellationToken)

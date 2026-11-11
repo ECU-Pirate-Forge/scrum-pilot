@@ -1,38 +1,33 @@
-# Architecture
+# Codebase Architecture
 
-## Current system
+The canonical [architecture](../architecture.md) describes resource ownership,
+database boundaries, request flow, AI abstraction, and lifecycle invariants.
 
-```text
-Blazor WebAssembly -> authenticated HTTP/SignalR -> ASP.NET Core controllers/hub
-                   -> application services + authorization -> tenant-aware repositories
-                   -> EF Core -> SQLite (development) / PostgreSQL (production)
-```
-
-The Web client owns navigation state; the API owns authorization. `OrganizationStateService` and `ProjectStateService` never establish access by themselves.
-
-## Tenancy boundaries
-
-- Global Identity `Admin` is used for organization creation, initial-owner search, and expired soft-delete purge.
-- `OrganizationMembership` stores organization `Owner`/`Member` roles.
-- `ProjectMembership` stores access/no-access for ordinary members; Owners have implicit access to all organization projects.
-- Every project has a required organization. Child-resource authorization resolves through persisted project relationships.
-- Cross-tenant inaccessible resources are hidden with `404` where appropriate; owner-only operations distinguish an active non-owner with `403`.
-- REST endpoints, metrics, preferences, assignment lists, comments, and SignalR use the persisted access model.
-
-## Workflows
-
-Global Admin creates an organization and identifies its first Owner. Owners rename, manage invitations/members/projects, and soft-delete. The final Owner cannot be demoted, removed, or leave. A historical Owner can restore for 30 days; after that only global Admin can purge.
-
-Invitation state is persisted before SendGrid. Tokens are random, stored as hashes, valid for 72 hours, single-use, revocable, and accepted only by an authenticated confirmed matching email. Acceptance returns the organization ID for client refresh.
-
-`AddOrganizationTenancy` creates Pirate Forge, backfills projects before making organization ownership required, maps global Admin users to Owners, and gives migrated ordinary users explicit access to migrated projects. Startup runs guarded idempotent bootstrap and refuses to continue if Pirate Forge has no global-Admin Owner.
-
-## Layers
+## Layering
 
 | Layer | Responsibility |
 |---|---|
-| Shared | Serializable entities, enums, requests, responses |
-| Data | Relationships, provider-compatible migration, scoped queries, atomic mutations |
-| API | Identity, authorization, business policy, status mapping, integrations |
-| Web | Navigation, management UI, defaults, error presentation |
-| Tests | Unit, relational, isolation, migration, and bUnit verification |
+| AppHost | Resources, private/public parameters, references and dependency ordering |
+| Shared | Domain and wire contracts |
+| Client | Captured tenant route/request scopes, without presentation dependencies |
+| Data | EF models, authorized catalog resolution and SQL operations |
+| API | Authentication, policy, workflow orchestration, HTTP/SignalR |
+| Web / FluentWeb | Separate presentation layers over the same contracts |
+| Tests | Logic, real-engine isolation/recovery, components and hosting |
+
+Control data and organization work data have distinct contexts/databases.
+Authorization resolves current central membership before opening a registered
+organization catalog, then validates local project grants. No cross-database
+foreign keys or joins reconnect these boundaries.
+
+Owners have implicit local project access; Members need a grant matching their
+current membership instance. Global Admin is not a work-access bypass. A removed
+user cannot regain stale project grants by joining again.
+
+Tabs use explicit URL organization identity rather than account-wide active
+selection. Cancellable immutable work scopes keep late async/JS results out of
+new views. Poker and all related callbacks use organization/project composite keys.
+
+Initialization, provisioning, upgrade, backup/recovery and purge are controlled,
+durable operations. The API does not silently recreate lost control data or seed
+accounts at startup. Recovery cannot reactivate old grants.

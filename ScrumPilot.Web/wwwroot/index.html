@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ScrumPilot.Web</title>
     <base href="/" />
+    <script>
+        if (location.pathname === "/web" || location.pathname.startsWith("/web/")) {
+            document.querySelector("base").setAttribute("href", "/web/");
+        }
+    </script>
 
     <!-- Only MudBlazor CSS - no Bootstrap conflicts -->
     <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />

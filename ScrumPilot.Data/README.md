@@ -1,59 +1,39 @@
 # ScrumPilot.Data
 
-EF Core 10 persistence layer for ScrumPilot, with SQLite for local development and PostgreSQL for production.
+EF Core persistence and SQL Server 2025 administration for database-per-organization
+tenancy. Application CRUD uses EF Core; narrowly scoped administrative SQL is
+isolated from repositories and ordinary request connections.
 
-## Tenancy model
+## Contexts
 
-| Entity | Purpose |
-|---|---|
-| `Organization` | Tenant identity, unique normalized name, creation/deletion timestamps, concurrency token |
-| `OrganizationMembership` | User membership with organization-scoped `Owner` or `Member` role |
-| `Project` | Belongs to exactly one organization through required `OrganizationId` |
-| `ProjectMembership` | Explicit project access for ordinary organization members |
-| `OrganizationInvitation` | Email-bound invitation state, hashed token, expiry, delivery audit |
-| `ApplicationUser` | Identity user with optional default organization/project preferences |
+- `ControlPlaneContext`: central Identity, organization directory/memberships,
+  invitations, profile/default references, schema/lifecycle state, backup catalog.
+- `OrganizationContext`: one registered catalog's projects/PBIs/sprints/epics,
+  comments, histories, dependencies, project grants, dashboard preferences,
+  database identity.
 
-Organization owners have implicit access to every project in their organization. Members require a `ProjectMembership`.
+No cross-database EF relationship or join reconnects the contexts. Server-generated
+immutable keys identify catalogs. Normal opens require matching organization/key
+metadata and never create or fall back when a database is absent.
 
-## Pirate Forge migration and bootstrap
+Member project grants carry the immutable current membership-instance ID.
+Removing/rejoining cannot revive an earlier grant, even when cleanup failed.
+Owners' implicit access is derived from the current central membership.
 
-`20261003024314_AddOrganizationTenancy` performs compatibility-safe ordering:
+## Operations
 
-1. Adds nullable project organization and user default-organization columns.
-2. Creates `Pirate Forge`.
-3. Backfills every existing project and user default organization.
-4. Creates memberships: global Admin users become Owners; all others become Members.
-5. Validates project backfill, then makes `Project.OrganizationId` required.
-6. Adds foreign keys and indexes.
-7. Creates explicit project memberships for migrated non-owner members.
-8. Creates invitation storage and token indexes.
+Provisioning, upgrade, maintenance, retention, SQL backup/recovery and purge use
+durable state and controlled administrative permissions. Maintenance precedes
+poker eviction/draining. Ordinary operations can run concurrently; inference
+does not hold an organization-wide exclusive gate.
 
-Startup creates missing development seed users, then runs `PirateForgeBootstrapper` in a serializable transaction (plus a PostgreSQL advisory lock). Only seed users newly created in that invocation receive initial Pirate Forge membership and project access, so manual membership or grant revocations remain durable across restarts. Existing member Admins are promoted to Owner when needed; an Admin without membership is not re-added. The bootstrap retries classified transient conflicts and validates the global-Admin owner invariant.
+Backup restore clears Member grants before reactivation and retains a durable
+restore fence through interruption. Purge includes managed backup/rollback
+artifacts and cannot report success while cleanup is unverified.
 
-## Lifecycle behavior
+Use [EF setup](../ScrumPilot.API/EF_SETUP.md) for both migration histories and
+the [operations runbook](../docs/multi-tenancy-operations.md) for configuration,
+permissions, initialization, recovery, and external SQL storage mapping.
 
-- Organization names remain reserved while soft-deleted.
-- Soft delete records `DeletedAt`, removes active access, and clears affected defaults.
-- A historical owner can restore within 30 days.
-- Only a global Admin can purge, and only after 30 days.
-- The final Owner cannot be demoted, removed, or leave.
-- Removing a member deletes that user's project memberships and clears invalid defaults.
-
-## Provider selection
-
-- `DATABASE_URL` present: PostgreSQL through Npgsql.
-- Otherwise: `ConnectionStrings:DefaultConnection` with SQLite.
-
-`AddOrganizationTenancy` is generated for Npgsql and includes explicit provider branches for PostgreSQL and SQLite. Relational migration tests exercise the SQLite path; production migration SQL is generated with Npgsql.
-
-## Migration commands
-
-```powershell
-$env:DATABASE_URL = 'postgresql://unused:unused@localhost:5432/scrumpilot_design'
-dotnet ef migrations add <MigrationName> --project .\ScrumPilot.Data\ScrumPilot.Data.csproj --startup-project .\ScrumPilot.API\ScrumPilot.API.csproj
-dotnet ef database update --project .\ScrumPilot.Data\ScrumPilot.Data.csproj --startup-project .\ScrumPilot.API\ScrumPilot.API.csproj
-dotnet ef migrations has-pending-model-changes --project .\ScrumPilot.Data\ScrumPilot.Data.csproj --startup-project .\ScrumPilot.API\ScrumPilot.API.csproj
-dotnet ef migrations script --idempotent --project .\ScrumPilot.Data\ScrumPilot.Data.csproj --startup-project .\ScrumPilot.API\ScrumPilot.API.csproj --output .\artifacts\organization-tenancy.sql
-```
-
-The design-time factory requires a PostgreSQL URI. The pending-model and script commands parse the shown non-secret URI to select Npgsql without connecting; use a real deployment connection only for database-access commands. CI installs `dotnet-ef` 10.0.5, matching EF Core, because no tool manifest is present.
+Real SQL Server 2025 tests establish constraints, transactions, isolation,
+permission failures, interruption behavior, and restore safety.

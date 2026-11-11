@@ -1,5 +1,5 @@
 @using System.Net.Http.Json
-@inject HttpClient Http
+@inherits WorkComponentBase
 @inject ISnackbar Snackbar
 
 <MudDialog>
@@ -20,6 +20,7 @@
                 </div>
 
                 <PbiCard PbiModel="@currentItem.Pbi"
+                         CapturedWork="Scope"
                          ProjectId="@ProjectId"
                          PersistOnSave="false"
                          ReadOnly="@(currentItem.State != GeneratedPbiSaveState.Pending)" />
@@ -150,7 +151,7 @@
         _isCommitting = true;
         try
         {
-            if (!ProjectId.HasValue)
+            if (!ProjectId.HasValue || ProjectId != Scope.ProjectId)
             {
                 Snackbar.Add("Select a project before saving PBIs.", Severity.Error);
                 return;
@@ -188,6 +189,7 @@
                 $"{items.Count} PBI{(items.Count == 1 ? "" : "s")} saved {destination}.",
                 Severity.Success);
         }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
         catch (HttpRequestException ex)
         {
             Snackbar.Add($"Network error while saving PBIs: {ex.Message}", Severity.Error);

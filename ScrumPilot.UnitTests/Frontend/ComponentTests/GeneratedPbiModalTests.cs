@@ -6,6 +6,7 @@ using MudBlazor.Services;
 using ScrumPilot.Shared.Models;
 using ScrumPilot.Web.Components;
 using ScrumPilot.Web.Services;
+using ScrumPilot.Client;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -41,7 +42,7 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
                 Assert.Contains("Saved as Draft", component.Markup);
                 var request = Assert.Single(_handler.PostRequests);
                 Assert.EndsWith(
-                    "api/Pbi/createDraftPbis?projectId=17",
+                    "api/organizations/1/Pbi/createDraftPbis?projectId=17",
                     request.Uri,
                     StringComparison.OrdinalIgnoreCase);
                 var payload = JsonSerializer.Deserialize<List<ProductBacklogItem>>(
@@ -68,7 +69,7 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
                 Assert.Equal(2, _handler.PostRequests.Count);
                 var request = _handler.PostRequests[1];
                 Assert.EndsWith(
-                    "api/Pbi/createStories?projectId=17",
+                    "api/organizations/1/Pbi/createStories?projectId=17",
                     request.Uri,
                     StringComparison.OrdinalIgnoreCase);
                 var payload = JsonSerializer.Deserialize<List<ProductBacklogItem>>(
@@ -135,7 +136,8 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
             var parameters = new DialogParameters
             {
                 ["PBIs"] = pbis,
-                ["ProjectId"] = 17
+                ["ProjectId"] = 17,
+                [nameof(GeneratedPbiModal.CapturedWork)] = new WorkScope(Services.GetRequiredService<HttpClient>(), 1, 17)
             };
 
             provider.InvokeAsync(() =>

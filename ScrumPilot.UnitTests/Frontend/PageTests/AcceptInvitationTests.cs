@@ -46,11 +46,11 @@ public sealed class AcceptInvitationTests : FrontendTestBase
         navigation.NavigateTo("/accept-invitation?token=one-time");
 
         var cut = Render<AcceptInvitation>();
-        cut.WaitForState(() => new Uri(navigation.Uri).AbsolutePath == "/organization-management");
+        cut.WaitForState(() => new Uri(navigation.Uri).AbsolutePath == "/organizations/7/organization-management");
 
         Assert.Contains(HttpRequestLog, x => x.Method == HttpMethod.Post && x.Url == "api/organization-invitations/accept");
         Assert.DoesNotContain("token=", navigation.Uri);
-        Assert.Equal(7, Services.GetRequiredService<OrganizationStateService>().SelectedOrganizationId);
+        Assert.Null(Services.GetRequiredService<OrganizationStateService>().SelectedOrganizationId);
     }
 
     [Theory]

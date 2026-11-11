@@ -15,18 +15,19 @@
 
 <MudThemeProvider @ref="@_mudThemeProvider" Theme="currentTheme" IsDarkMode="@_isDarkMode" />
 <MudPopoverProvider />
-<MudDialogProvider />
 <MudSnackbarProvider />
 
 <MudLayout>
-    <MudAppBar Elevation="1" Fixed="true">
+    <div class="appbar-shell">
+    <MudAppBar Elevation="1" Fixed="true" Class="tenant-appbar">
         <MudIconButton Icon="@Icons.Material.Filled.Menu"
                        Color="Color.Inherit"
                        Edge="Edge.Start"
                        OnClick="@ToggleNavMenu"
+                       aria-label="Toggle navigation menu"
                        Title="Toggle navigation menu" />
         <a href="" class="appbar-logo-link">
-            <img src="/images/logo.png" alt="ScrumPilot" class="main-logo" />
+            <img src="images/logo.png" alt="ScrumPilot" class="main-logo" />
         </a>
         <MudSpacer />
         @if (_organizations.Any())
@@ -34,10 +35,11 @@
             <MudMenu Dense="true" ActivationEvent="MouseEvent.LeftClick" AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter">
                 <ActivatorContent>
                     <MudButton Color="Color.Inherit"
+                               Class="appbar-tenant-button"
+                               aria-label="@($"Select organization: {OrganizationState.SelectedOrganization?.Name ?? "none"}")"
                                EndIcon="@Icons.Material.Filled.KeyboardArrowDown"
-                               StartIcon="@Icons.Material.Filled.Business"
-                               Style="text-transform: none; font-size: 1rem; font-weight: 600;">
-                        @(OrganizationState.SelectedOrganization?.Name ?? "Select Organization")
+                               StartIcon="@Icons.Material.Filled.Business">
+                        <span class="appbar-selection-label">@(OrganizationState.SelectedOrganization?.Name ?? "Select Organization")</span>
                     </MudButton>
                 </ActivatorContent>
                 <ChildContent>
@@ -56,10 +58,11 @@
             <MudMenu Dense="true" ActivationEvent="MouseEvent.LeftClick" AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter">
                 <ActivatorContent>
                     <MudButton Color="Color.Inherit"
+                               Class="appbar-tenant-button appbar-project-button"
+                               aria-label="@($"Select project: {ProjectState.SelectedProject?.ProjectName ?? "none"}")"
                                EndIcon="@Icons.Material.Filled.KeyboardArrowDown"
-                               StartIcon="@Icons.Material.Filled.Folder"
-                               Style="text-transform: none; font-size: 1rem; font-weight: 600; border: 2px solid rgba(255,255,255,0.55); border-radius: 8px; padding: 4px 14px; letter-spacing: 0.01em;">
-                        @(ProjectState.SelectedProject?.ProjectName ?? "Select Project")
+                               StartIcon="@Icons.Material.Filled.Folder">
+                        <span class="appbar-selection-label">@(ProjectState.SelectedProject?.ProjectName ?? "Select Project")</span>
                     </MudButton>
                 </ActivatorContent>
                 <ChildContent>
@@ -79,16 +82,20 @@
         <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
                        Color="Color.Inherit"
                        OnClick="@ToggleDarkMode"
+                       aria-label="Toggle dark mode"
                        Title="Toggle dark mode" />
         <MudIconButton Icon="@Icons.Material.Filled.Person"
                        Color="Color.Inherit"
-                       Href="/user-settings"
+                       Href="user-settings"
+                       aria-label="User settings"
                        Title="User settings" />
         <MudIconButton Icon="@Icons.Material.Filled.Logout"
                        Color="Color.Inherit"
                        OnClick="@HandleLogout"
+                       aria-label="Sign out"
                        Title="Sign out" />
     </MudAppBar>
+    </div>
 
     <MudDrawer @bind-Open="@_drawerOpen"
                ClipMode="DrawerClipMode.Always"
@@ -100,7 +107,33 @@
     <MudMainContent>
         <div class="content px-4">
             <CascadingValue Value="_isDarkMode" Name="IsDarkMode">
-                @Body
+                <CascadingValue @key="_work" Value="_work">
+                    <div @key="_work">
+                        <MudDialogProvider />
+                        @if (_routeLoading)
+                        {
+                            <MudProgressCircular Indeterminate="true" />
+                        }
+                        else if (_routeError is not null)
+                        {
+                            <MudAlert Severity="Severity.Error">@_routeError</MudAlert>
+                            <MudButton Href="organization-management">Organization directory</MudButton>
+                        }
+                        else if (_needsOrganization)
+                        {
+                            <MudAlert Severity="Severity.Info">Choose an organization to open this page. Old project-only links cannot identify an organization.</MudAlert>
+                            @foreach (var organization in _organizations.Where(o => !o.IsDeleted))
+                            {
+                                <MudButton OnClick="@(() => SelectOrganizationAsync(organization))">@organization.Name</MudButton>
+                            }
+                            <MudButton Href="organization-management">Organization directory</MudButton>
+                        }
+                        else
+                        {
+                            @Body
+                        }
+                    </div>
+                </CascadingValue>
             </CascadingValue>
         </div>
     </MudMainContent>
@@ -115,15 +148,14 @@
     private List<Project> _appBarProjects = new();
     private UserSettingsDto? _settings;
     private int _loadGeneration;
-    private readonly object _selectionPersistenceLock = new();
-    private Selection? _desiredSelection;
-    private Selection? _persistedSelection;
-    private Task _selectionWriterTask = Task.CompletedTask;
-    private bool _selectionWriterRunning;
-    private CancellationTokenSource? _selectionWriterOwner;
     private CancellationTokenSource? _sessionCancellation;
-    private int _persistenceGeneration;
     private bool _disposed;
+    private bool _routeLoading = true;
+    private bool _authenticated;
+    private string? _routeError;
+    private bool _needsOrganization;
+    private WorkScope? _work;
+    private bool _applyingRoute;
 
     MudTheme currentTheme = new()
     {
@@ -171,8 +203,11 @@
     {
         AuthStateProvider.AuthenticationStateChanged += OnAuthStateChanged;
         ProjectState.OnProjectListChanged += OnProjectListChanged;
+        ProjectState.OnChange += OnProjectSelectionChanged;
+        Navigation.LocationChanged += OnLocationChanged;
         var authenticationState = await AuthStateProvider.GetAuthenticationStateAsync();
-        if (authenticationState.User.Identity?.IsAuthenticated == true)
+        _authenticated = authenticationState.User.Identity?.IsAuthenticated == true;
+        if (_authenticated)
             await LoadSessionAsync();
         else
             ClearSession();
@@ -192,7 +227,8 @@
         _ = InvokeAsync(async () =>
         {
             var state = await task;
-            if (state.User.Identity?.IsAuthenticated == true)
+            _authenticated = state.User.Identity?.IsAuthenticated == true;
+            if (_authenticated)
                 await LoadSessionAsync();
             else
             {
@@ -206,339 +242,141 @@
     {
         _ = InvokeAsync(async () =>
         {
-            var organization = OrganizationState.SelectedOrganization;
-            if (organization is not null)
+            if (_authenticated) await LoadSessionAsync();
+            else
             {
-                var currentProjectId = ProjectState.SelectedProjectId;
-                var result = await LoadProjectsAsync(
-                    organization,
-                    currentProjectId,
-                    _settings?.DefaultProjectId,
-                    persist: false);
-                if (result == ProjectLoadResult.NotFound)
-                    await LoadSessionAsync(new HashSet<int> { organization.OrganizationId });
+                ClearSession();
+                StateHasChanged();
             }
         });
     }
 
-    private async Task LoadSessionAsync(IReadOnlySet<int>? rejectedOrganizationIds = null)
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs args)
     {
+        // Cancel synchronously, before any old continuation can save against a new URL.
+        _work?.Dispose();
+        _ = InvokeAsync(LoadSessionAsync);
+    }
+
+    private void OnProjectSelectionChanged()
+    {
+        if (_applyingRoute || _disposed || _work is not { IsCurrent: true }) return;
+        var uri = new Uri(Navigation.Uri);
+        var projectId = ProjectState.SelectedProjectId;
+        if (OrganizationRoutes.ProjectId(uri) != projectId)
+            Navigation.NavigateTo(OrganizationRoutes.Page(_work.OrganizationId, OrganizationRoutes.CurrentPage(uri), projectId));
+    }
+
+    private async Task LoadSessionAsync()
+    {
+        if (_disposed || !_authenticated) return;
         var generation = ++_loadGeneration;
-        ClearSession(incrementGeneration: false);
-        CancellationTokenSource sessionCancellation;
-        lock (_selectionPersistenceLock)
-        {
-            if (_disposed)
-                return;
-
-            sessionCancellation = new CancellationTokenSource();
-            _sessionCancellation = sessionCancellation;
-        }
-
-        try
-        {
-            var organizations = await Http.GetFromJsonAsync<List<OrganizationSummaryDto>>(
-                "api/organizations", sessionCancellation.Token) ?? [];
-            if (!IsCurrent(generation))
-                return;
-
-            _organizations = organizations
-                .Where(o => !o.IsDeleted
-                    && !(rejectedOrganizationIds?.Contains(o.OrganizationId) ?? false))
-                .ToList();
-
-            _settings = await Http.GetFromJsonAsync<UserSettingsDto>(
-                "api/user/settings", sessionCancellation.Token);
-            if (!IsCurrent(generation))
-                return;
-
-            if (_settings is not null)
-            {
-                _isDarkMode = _settings.UiPreference == UiPreference.Dark;
-                _userPreferenceLoaded = true;
-            }
-
-            lock (_selectionPersistenceLock)
-            {
-                _persistedSelection = _settings?.DefaultOrganizationId is int organizationId
-                    ? new Selection(organizationId, _settings.DefaultProjectId)
-                    : null;
-            }
-
-            var candidates = _organizations
-                .OrderByDescending(o => o.OrganizationId == _settings?.DefaultOrganizationId)
-                .ToList();
-            var attemptedOrganizationIds = new HashSet<int>();
-            foreach (var organization in candidates)
-            {
-                if (!attemptedOrganizationIds.Add(organization.OrganizationId)
-                    || !IsCurrent(generation))
-                    continue;
-
-                OrganizationState.SetOrganization(organization);
-                var result = await LoadProjectsAsync(
-                    organization,
-                    _settings?.DefaultProjectId,
-                    fallbackProjectId: null,
-                    persist: false,
-                    generation);
-                if (result == ProjectLoadResult.Success || result == ProjectLoadResult.Failed)
-                    return;
-            }
-
-            if ((attemptedOrganizationIds.Count > 0 || rejectedOrganizationIds?.Count > 0)
-                && IsCurrent(generation))
-            {
-                ClearSession(incrementGeneration: false);
-                Snackbar.Add("Unable to load organizations and projects.", Severity.Error);
-            }
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-        {
-            if (IsCurrent(generation))
-                ClearSession();
-        }
-        catch (OperationCanceledException) when (sessionCancellation.IsCancellationRequested)
-        {
-        }
-        catch (Exception)
-        {
-            if (IsCurrent(generation))
-            {
-                ClearSession();
-                Snackbar.Add("Unable to load organizations and projects.", Severity.Error);
-            }
-        }
-        finally
-        {
-            if (IsCurrent(generation))
-                StateHasChanged();
-        }
-    }
-
-    private async Task SelectOrganizationAsync(OrganizationSummaryDto organization)
-    {
-        if (!_organizations.Any(o => o.OrganizationId == organization.OrganizationId))
-            return;
-
-        OrganizationState.SetOrganization(organization);
+        _sessionCancellation?.Cancel();
+        _sessionCancellation?.Dispose();
+        var cancellation = new CancellationTokenSource();
+        _sessionCancellation = cancellation;
+        _work?.Dispose();
+        _work = null;
+        _routeLoading = true;
+        _routeError = null;
+        _needsOrganization = false;
         _appBarProjects = [];
+        _applyingRoute = true;
+        OrganizationState.Clear();
         ProjectState.Clear();
-        StateHasChanged();
-        var result = await LoadProjectsAsync(
-            organization,
-            _settings?.DefaultProjectId,
-            fallbackProjectId: null,
-            persist: true);
-        if (result == ProjectLoadResult.NotFound)
-            await LoadSessionAsync(new HashSet<int> { organization.OrganizationId });
-    }
-
-    private async Task<ProjectLoadResult> LoadProjectsAsync(
-        OrganizationSummaryDto organization,
-        int? preferredProjectId,
-        int? fallbackProjectId,
-        bool persist,
-        int? existingGeneration = null)
-    {
-        var generation = existingGeneration ?? ++_loadGeneration;
-        CancellationTokenSource? sessionCancellation;
-        lock (_selectionPersistenceLock)
-            sessionCancellation = _sessionCancellation;
-        if (sessionCancellation is null || sessionCancellation.IsCancellationRequested)
-            return ProjectLoadResult.Failed;
+        _applyingRoute = false;
+        var uri = new Uri(Navigation.Uri);
+        var organizationId = OrganizationRoutes.OrganizationId(uri);
+        var projectId = OrganizationRoutes.ProjectId(uri);
+        var isLanding = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', 2)[0].Length == 0;
 
         try
         {
+            var organizations = await Http.GetFromJsonAsync<List<OrganizationSummaryDto>>("api/organizations", cancellation.Token) ?? [];
+            if (!IsCurrent(generation)) return;
+            _organizations = organizations.Where(o => !o.IsDeleted).ToList();
+            if (_settings is null || (isLanding && string.IsNullOrEmpty(uri.Query)))
+            {
+                _settings = await Http.GetFromJsonAsync<UserSettingsDto>("api/user/settings", cancellation.Token);
+                if (!IsCurrent(generation)) return;
+                if (_settings is not null)
+                {
+                    _isDarkMode = _settings.UiPreference == UiPreference.Dark;
+                    _userPreferenceLoaded = true;
+                }
+            }
+            // Defaults are only an unqualified landing fallback. Never interpret a local ID
+            // in a legacy link using another account preference or the first organization.
+            if (isLanding && string.IsNullOrEmpty(uri.Query)
+                && _settings?.DefaultOrganizationId is int defaultId)
+            {
+                Navigation.NavigateTo(OrganizationRoutes.Page(defaultId, "backlog", _settings.DefaultProjectId), replace: true);
+                return;
+            }
+            if (organizationId is null)
+            {
+                _needsOrganization = OrganizationRoutes.IsLegacyWorkLink(uri)
+                    || (isLanding && projectId.HasValue);
+                return;
+            }
+            var organization = _organizations.FirstOrDefault(o => o.OrganizationId == organizationId);
+            if (organization is null)
+            {
+                _routeError = "This organization is unavailable, deleted, or you do not have membership.";
+                return;
+            }
+            // Even GlobalAdmin accounts must pass the work endpoint's membership check.
             var projects = await Http.GetFromJsonAsync<List<Project>>(
-                $"api/organizations/{organization.OrganizationId}/projects",
-                sessionCancellation.Token) ?? [];
-            if (!IsCurrent(generation)
-                || OrganizationState.SelectedOrganizationId != organization.OrganizationId)
-                return ProjectLoadResult.Failed;
-
+                OrganizationRoutes.Api(organizationId.Value, "projects"), cancellation.Token) ?? [];
+            if (!IsCurrent(generation)) return;
+            var selected = projects.FirstOrDefault(p => p.ProjectId == projectId);
+            if (projectId.HasValue && selected is null)
+            {
+                _routeError = "This project is unavailable or you do not have project access in this organization.";
+                return;
+            }
             _appBarProjects = projects;
-            var selected = preferredProjectId is int projectId
-                ? projects.FirstOrDefault(p => p.ProjectId == projectId)
-                : null;
-            selected ??= fallbackProjectId is int fallbackId
-                ? projects.FirstOrDefault(p => p.ProjectId == fallbackId)
-                : null;
-            selected ??= projects.FirstOrDefault();
+            _applyingRoute = true;
+            OrganizationState.SetOrganization(organization);
             ProjectState.SetProject(selected);
-
-            if (persist)
-                await PersistLatestSelectionAsync(organization.OrganizationId, selected?.ProjectId);
-            return ProjectLoadResult.Success;
+            _applyingRoute = false;
+            _work = new WorkScope(Http, organizationId.Value, projectId);
         }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        catch (HttpRequestException)
         {
             if (IsCurrent(generation))
             {
-                OrganizationState.Clear();
-                _appBarProjects = [];
-                ProjectState.Clear();
+                _routeError = "Unable to open this organization. It may be unavailable, or your access may have changed.";
             }
-            return ProjectLoadResult.NotFound;
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-        {
-            if (IsCurrent(generation))
-                ClearSession();
-            return ProjectLoadResult.Failed;
-        }
-        catch (OperationCanceledException) when (sessionCancellation.IsCancellationRequested)
-        {
-            return ProjectLoadResult.Failed;
-        }
-        catch (Exception)
-        {
-            if (IsCurrent(generation))
-            {
-                _appBarProjects = [];
-                ProjectState.Clear();
-                Snackbar.Add("Unable to load projects.", Severity.Error);
-            }
-            return ProjectLoadResult.Failed;
         }
         finally
         {
             if (IsCurrent(generation))
+            {
+                _routeLoading = false;
                 StateHasChanged();
-        }
-    }
-
-    private async Task SetGlobalProject(Project project)
-    {
-        if (!_appBarProjects.Any(p => p.ProjectId == project.ProjectId))
-            return;
-
-        _loadGeneration++;
-        ProjectState.SetProject(project);
-        if (OrganizationState.SelectedOrganizationId is int organizationId)
-            await PersistLatestSelectionAsync(organizationId, project.ProjectId);
-    }
-
-    private Task PersistLatestSelectionAsync(int organizationId, int? projectId)
-    {
-        lock (_selectionPersistenceLock)
-        {
-            var sessionCancellation = _sessionCancellation;
-            if (_disposed || sessionCancellation is null
-                || sessionCancellation.IsCancellationRequested)
-                return Task.CompletedTask;
-
-            _desiredSelection = new Selection(organizationId, projectId);
-            if (!_selectionWriterRunning
-                || !ReferenceEquals(_selectionWriterOwner, sessionCancellation))
-            {
-                _selectionWriterRunning = true;
-                _selectionWriterOwner = sessionCancellation;
-                _selectionWriterTask = RunSelectionWriterAsync(
-                    _persistenceGeneration, sessionCancellation);
-            }
-
-            return _selectionWriterTask;
-        }
-    }
-
-    private async Task RunSelectionWriterAsync(
-        int persistenceGeneration,
-        CancellationTokenSource sessionCancellation)
-    {
-        try
-        {
-            while (true)
-            {
-                Selection target;
-                lock (_selectionPersistenceLock)
-                {
-                    if (!IsCurrentWriter(persistenceGeneration, sessionCancellation)
-                        || _desiredSelection is not Selection desired
-                        || desired == _persistedSelection)
-                        return;
-
-                    target = desired;
-                }
-
-                try
-                {
-                    var latest = await Http.GetFromJsonAsync<UserSettingsDto>(
-                        "api/user/settings", sessionCancellation.Token)
-                    ?? _settings
-                    ?? new UserSettingsDto();
-                    lock (_selectionPersistenceLock)
-                    {
-                        if (!IsCurrentWriter(persistenceGeneration, sessionCancellation))
-                            return;
-                        if (_desiredSelection is Selection latestDesired)
-                            target = latestDesired;
-                    }
-
-                    var merged = new UserSettingsDto
-                    {
-                        Email = latest.Email,
-                        DiscordUsername = latest.DiscordUsername,
-                        UiPreference = latest.UiPreference,
-                        DefaultOrganizationId = target.OrganizationId,
-                        DefaultProjectId = target.ProjectId
-                    };
-
-                    var response = await Http.PutAsJsonAsync(
-                        "api/user/settings", merged, sessionCancellation.Token);
-                    response.EnsureSuccessStatusCode();
-
-                    lock (_selectionPersistenceLock)
-                    {
-                        if (!IsCurrentWriter(persistenceGeneration, sessionCancellation))
-                            return;
-
-                        _persistedSelection = target;
-                        _settings = merged;
-                    }
-                }
-                catch (OperationCanceledException)
-                    when (sessionCancellation.IsCancellationRequested)
-                {
-                    return;
-                }
-                catch (Exception)
-                {
-                    bool retryLatest;
-                    lock (_selectionPersistenceLock)
-                    {
-                        if (!IsCurrentWriter(persistenceGeneration, sessionCancellation))
-                            return;
-                        retryLatest = _desiredSelection is Selection desired && desired != target;
-                    }
-
-                    Snackbar.Add(
-                        "Unable to save your organization and project selection.", Severity.Error);
-                    if (!retryLatest)
-                        return;
-                }
-            }
-        }
-        finally
-        {
-            lock (_selectionPersistenceLock)
-            {
-                if (ReferenceEquals(_selectionWriterOwner, sessionCancellation))
-                {
-                    _selectionWriterRunning = false;
-                    _selectionWriterOwner = null;
-                }
             }
         }
     }
 
-    private bool IsCurrentWriter(
-        int persistenceGeneration,
-        CancellationTokenSource sessionCancellation) =>
-        !_disposed
-        && persistenceGeneration == _persistenceGeneration
-        && ReferenceEquals(_sessionCancellation, sessionCancellation)
-        && !sessionCancellation.IsCancellationRequested;
+    private Task SelectOrganizationAsync(OrganizationSummaryDto organization)
+    {
+        var page = OrganizationRoutes.CurrentPage(new Uri(Navigation.Uri));
+        if (!OrganizationRoutes.IsWorkPage(new Uri(Navigation.Uri))) page = "backlog";
+        // A project ID from the old tenant is never carried to the new tenant.
+        Navigation.NavigateTo(OrganizationRoutes.Page(organization.OrganizationId, page));
+        return Task.CompletedTask;
+    }
+
+    private Task SetGlobalProject(Project project)
+    {
+        if (_work is not { IsCurrent: true } || !_appBarProjects.Any(p => p.ProjectId == project.ProjectId))
+            return Task.CompletedTask;
+        var uri = new Uri(Navigation.Uri);
+        Navigation.NavigateTo(OrganizationRoutes.Page(_work.OrganizationId, OrganizationRoutes.CurrentPage(uri), project.ProjectId));
+        return Task.CompletedTask;
+    }
 
     private bool IsCurrent(int generation) => !_disposed && generation == _loadGeneration;
 
@@ -549,21 +387,20 @@
         _organizations = [];
         _appBarProjects = [];
         _settings = null;
+        _routeLoading = false;
+        _routeError = null;
+        _needsOrganization = false;
         _isDarkMode = false;
         _userPreferenceLoaded = false;
-        CancellationTokenSource? sessionCancellation;
-        lock (_selectionPersistenceLock)
-        {
-            _persistenceGeneration++;
-            _desiredSelection = null;
-            _persistedSelection = null;
-            sessionCancellation = _sessionCancellation;
-            _sessionCancellation = null;
-        }
-        sessionCancellation?.Cancel();
-        sessionCancellation?.Dispose();
+        _work?.Dispose();
+        _work = null;
+        _sessionCancellation?.Cancel();
+        _sessionCancellation?.Dispose();
+        _sessionCancellation = null;
+        _applyingRoute = true;
         OrganizationState.Clear();
         ProjectState.Clear();
+        _applyingRoute = false;
     }
 
     private void ToggleNavMenu()
@@ -589,7 +426,7 @@
         {
             ClearSession();
             await AuthService.LogoutAsync();
-            Navigation.NavigateTo("/login");
+            Navigation.NavigateTo("login");
         }
     }
 
@@ -597,27 +434,12 @@
     {
         _disposed = true;
         _loadGeneration++;
-        CancellationTokenSource? sessionCancellation;
-        lock (_selectionPersistenceLock)
-        {
-            _persistenceGeneration++;
-            _desiredSelection = null;
-            _persistedSelection = null;
-            sessionCancellation = _sessionCancellation;
-            _sessionCancellation = null;
-        }
-        sessionCancellation?.Cancel();
-        sessionCancellation?.Dispose();
+        _work?.Dispose();
+        _sessionCancellation?.Cancel();
+        _sessionCancellation?.Dispose();
         AuthStateProvider.AuthenticationStateChanged -= OnAuthStateChanged;
         ProjectState.OnProjectListChanged -= OnProjectListChanged;
-    }
-
-    private readonly record struct Selection(int OrganizationId, int? ProjectId);
-
-    private enum ProjectLoadResult
-    {
-        Success,
-        NotFound,
-        Failed
+        ProjectState.OnChange -= OnProjectSelectionChanged;
+        Navigation.LocationChanged -= OnLocationChanged;
     }
 }

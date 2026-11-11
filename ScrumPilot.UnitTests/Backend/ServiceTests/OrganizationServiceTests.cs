@@ -1,4 +1,5 @@
-using Microsoft.Data.Sqlite;
+using ScrumPilot.UnitTests.Backend.Tenancy;
+using ScrumPilot.Data.Tenancy;
 using Microsoft.EntityFrameworkCore;
 using NSubstitute;
 using ScrumPilot.API.Authorization;
@@ -12,8 +13,8 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests;
 
 public sealed class OrganizationServiceTests : IAsyncDisposable
 {
-    private readonly SqliteConnection _connection = new("Data Source=:memory:");
-    private readonly ScrumPilotContext _context;
+    private readonly SqlTestDatabase _database = new();
+    private readonly ControlPlaneContext _context;
     private readonly ICurrentUser _currentUser = Substitute.For<ICurrentUser>();
     private readonly IOrganizationAccessService _access = Substitute.For<IOrganizationAccessService>();
     private readonly IPlanningPokerConnectionEvictor _evictor =
@@ -23,13 +24,10 @@ public sealed class OrganizationServiceTests : IAsyncDisposable
 
     public OrganizationServiceTests()
     {
-        _connection.Open();
-        _context = new ScrumPilotContext(
-            new DbContextOptionsBuilder<ScrumPilotContext>().UseSqlite(_connection).Options);
-        _context.Database.EnsureCreated();
+        _context = _database.Control;
         _currentUser.UserId.Returns("creator");
         _service = new OrganizationService(
-            new OrganizationRepository(_context),
+            new OrganizationRepository(_context) { Operations = _database.Operations, Storage = _database.Storage, Clock = _clock },
             _currentUser,
             _access,
             _clock,
@@ -215,8 +213,8 @@ public sealed class OrganizationServiceTests : IAsyncDisposable
             ProjectName = "Implicit access",
             OrganizationId = organization.OrganizationId
         };
-        _context.Projects.Add(project);
-        await _context.SaveChangesAsync();
+        using (var tenant = _database.Storage.Open(organization))
+        { tenant.Projects.Add(project); await tenant.SaveChangesAsync(); }
         var creator = await _context.Users.SingleAsync(user => user.Id == "creator");
         creator.DefaultOrganizationId = organization.OrganizationId;
         creator.DefaultProjectId = project.ProjectId;
@@ -251,15 +249,17 @@ public sealed class OrganizationServiceTests : IAsyncDisposable
             ("creator", OrganizationRole.Owner),
             ("member", OrganizationRole.Member));
         var project = new Project { ProjectName = "Project", OrganizationId = organization.OrganizationId };
-        _context.Projects.Add(project);
-        await _context.SaveChangesAsync();
-        _context.ProjectMemberships.Add(new()
+        using var tenant = _database.Storage.Open(organization);
+        tenant.Projects.Add(project);
+        await tenant.SaveChangesAsync();
+        tenant.ProjectMemberships.Add(new()
         {
             ProjectId = project.ProjectId,
             UserId = "member",
             GrantedByUserId = "creator",
             GrantedAt = _clock.GetUtcNow().UtcDateTime
         });
+        await tenant.SaveChangesAsync();
         var member = await _context.Users.SingleAsync(x => x.Id == "member");
         member.DefaultOrganizationId = organization.OrganizationId;
         member.DefaultProjectId = project.ProjectId;
@@ -274,7 +274,8 @@ public sealed class OrganizationServiceTests : IAsyncDisposable
             organization.OrganizationId,
             Arg.Any<CancellationToken>());
         Assert.False(await _context.OrganizationMemberships.AnyAsync(x => x.UserId == "member"));
-        Assert.False(await _context.ProjectMemberships.AnyAsync(x => x.UserId == "member"));
+        // Historical local grants may remain, but their membership-instance is permanently invalid.
+        Assert.False(await _context.OrganizationMemberships.AnyAsync(x => x.UserId == "member"));
         await _context.Entry(member).ReloadAsync();
         Assert.Null(member.DefaultOrganizationId);
         Assert.Null(member.DefaultProjectId);
@@ -340,7 +341,7 @@ public sealed class OrganizationServiceTests : IAsyncDisposable
     {
         await SeedUserAsync("creator");
         var organization = await SeedOrganizationAsync("Deleted", ("creator", OrganizationRole.Owner));
-        organization.DeletedAt = _clock.GetUtcNow().AddDays(-30).UtcDateTime;
+        organization.DeletedAt = _clock.GetUtcNow().AddDays(-30).AddTicks(1).UtcDateTime;
         await _context.SaveChangesAsync();
 
         var result = await _service.RestoreAsync(organization.OrganizationId);
@@ -371,8 +372,8 @@ public sealed class OrganizationServiceTests : IAsyncDisposable
             ProjectName = "Dependent project",
             OrganizationId = organization.OrganizationId
         };
-        _context.Projects.Add(project);
-        await _context.SaveChangesAsync();
+        using (var tenant = _database.Storage.Open(organization))
+        { tenant.Projects.Add(project); await tenant.SaveChangesAsync(); }
         var creator = await _context.Users.SingleAsync(x => x.Id == "creator");
         creator.DefaultOrganizationId = organization.OrganizationId;
         creator.DefaultProjectId = project.ProjectId;
@@ -387,8 +388,9 @@ public sealed class OrganizationServiceTests : IAsyncDisposable
         await _evictor.Received(1).EvictOrganizationAsync(
             organization.OrganizationId,
             Arg.Any<CancellationToken>());
-        Assert.Null(await _context.Organizations.FindAsync(organization.OrganizationId));
-        Assert.False(await _context.Projects.AnyAsync(x => x.ProjectId == project.ProjectId));
+        Assert.Equal("Purged", (await _context.Organizations.FindAsync(organization.OrganizationId))!.StorageState);
+        using var admin = new SqlServerAdministrationContext(_database.Storage);
+        Assert.False(await admin.ExistsAsync(TenantStorage.Catalog(organization.StorageKey)));
         await _context.Entry(creator).ReloadAsync();
         Assert.Null(creator.DefaultOrganizationId);
         Assert.Null(creator.DefaultProjectId);
@@ -428,13 +430,14 @@ public sealed class OrganizationServiceTests : IAsyncDisposable
             JoinedAt = _clock.GetUtcNow().UtcDateTime
         }));
         await _context.SaveChangesAsync();
+        await _database.Operations.ProvisionAsync(organization.OrganizationId);
         return organization;
     }
 
     public async ValueTask DisposeAsync()
     {
-        await _context.DisposeAsync();
-        await _connection.DisposeAsync();
+        _database.Dispose();
+        await Task.CompletedTask;
     }
 
     private sealed class TestTimeProvider(DateTimeOffset utcNow) : TimeProvider

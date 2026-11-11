@@ -29,10 +29,11 @@ public sealed class ProjectControllerTests
                     Template: attribute.Template ?? string.Empty)))
             .ToHashSet();
 
-        Assert.Contains(("GET", "organizations/{organizationId:int}/projects"), routes);
+        Assert.Equal("api/organizations/{organizationId:int}", typeof(ProjectController).GetCustomAttribute<RouteAttribute>()!.Template);
+        Assert.Contains(("GET", "projects"), routes);
         Assert.Contains(("GET", "project"), routes);
         Assert.Contains(("GET", "projects/{projectId:int}"), routes);
-        Assert.Contains(("POST", "organizations/{organizationId:int}/projects"), routes);
+        Assert.Contains(("POST", "projects"), routes);
         Assert.Contains(("PUT", "projects/{projectId:int}"), routes);
         Assert.Contains(("DELETE", "projects/{projectId:int}"), routes);
         Assert.Contains(("GET", "projects/{projectId:int}/members"), routes);

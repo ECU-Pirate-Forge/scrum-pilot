@@ -1,10 +1,10 @@
 @page "/backlog"
+@page "/organizations/{OrganizationId:int}/backlog"
+@inherits WorkComponentBase
 @using System.Net.Http.Json
 @using ScrumPilot.FluentWeb.Components.Backlog
 @using ScrumPilot.FluentWeb.Components.Pbi
-@inject HttpClient Http
 @inject ProjectStateService ProjectState
-@inject MetricsDashboardService MetricsSvc
 @inject IAppNotificationService Notifications
 @inject ILogger<Backlog> Logger
 @implements IDisposable
@@ -203,14 +203,14 @@
         </div>
     }
 
-    <PbiDetailsDialog Pbi="SelectedPbi"
+    <PbiDetailsDialog Pbi="SelectedPbi" CapturedWork="Scope"
                       Open="@(SelectedPbi is not null)"
                       ProjectId="@_selectedProjectId"
                       OnSaved="HandlePbiSave"
                       OnCancelled="ClosePbiDetails"
                       OnDeleted="HandlePbiDelete" />
 
-    <PbiDetailsDialog Pbi="_newPbi"
+    <PbiDetailsDialog Pbi="_newPbi" CapturedWork="Scope"
                       Open="@(_showNewPbiForm && _newPbi is not null)"
                       ProjectId="@_selectedProjectId"
 
@@ -260,8 +260,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _selectedProjectId = ProjectState.SelectedProjectId;
-        ProjectState.OnChange += HandleProjectStateChanged;
+        _selectedProjectId = Scope.ProjectId;
         await LoadDataAsync();
     }
 
@@ -520,5 +519,3 @@
         _ => status.ToString()
     };
 }
-
-

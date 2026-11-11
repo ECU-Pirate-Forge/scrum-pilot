@@ -1,36 +1,23 @@
-using Microsoft.Data.Sqlite;
-using Npgsql;
+using Microsoft.Data.SqlClient;
 
 namespace ScrumPilot.Data.Repositories;
 
 public static class TransactionConcurrencyExceptionClassifier
 {
-    public static bool IsConcurrencyConflict(Exception exception)
+    public static bool IsConcurrencyConflict(Exception exception) =>
+        Find(exception)?.Number is 1205 or 1222 or 3960 or 41302 or 41305 or 41325;
+
+    internal static SqlException? Find(Exception? exception)
     {
-        if (Find<PostgresException>(exception) is
-            {
-                SqlState: PostgresErrorCodes.SerializationFailure
-                    or PostgresErrorCodes.DeadlockDetected
-            })
+        while (exception != null)
         {
-            return true;
-        }
-
-        return Find<SqliteException>(exception)?.SqliteErrorCode is 5 or 6;
-    }
-
-    private static T? Find<T>(Exception? exception) where T : Exception
-    {
-        while (exception is not null)
-        {
-            if (exception is T match)
-            {
-                return match;
-            }
-
+            if (exception is SqlException sql) return sql;
             exception = exception.InnerException;
         }
-
         return null;
     }
+
+    internal static bool IsUniqueViolation(Exception exception, string constraint) =>
+        Find(exception) is { Number: 2601 or 2627 } sql
+        && sql.Message.Contains(constraint, StringComparison.Ordinal);
 }

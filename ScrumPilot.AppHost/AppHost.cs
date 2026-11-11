@@ -1,21 +1,10 @@
 
 
+using Microsoft.Extensions.Configuration;
+using Aspire.Hosting.ApplicationModel;
+
 var builder = DistributedApplication.CreateBuilder(args);
-
-
-
-var webapi = builder.AddProject<Projects.ScrumPilot_API>("webapi");
-
-
-var web = builder.AddProject<Projects.ScrumPilot_Web>("web")
-    .WithExternalHttpEndpoints()
-    .WithReference(webapi)
-    .WaitFor(webapi);
-
-var fluentWeb = builder.AddProject<Projects.ScrumPilot_FluentWeb>("fluentweb")
-    .WithExternalHttpEndpoints()
-    .WithReference(webapi)
-    .WaitFor(webapi);
-
-
+ScrumPilot.AppHost.InfrastructureGraph.Configure(builder);
 builder.Build().Run();
+
+public partial class Program;

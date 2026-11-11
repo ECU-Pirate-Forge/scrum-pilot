@@ -92,12 +92,12 @@ public sealed class ProjectService(
         int projectId,
         CancellationToken cancellationToken = default)
     {
-        await RequireProjectOwnerAsync(ownerUserId, projectId, cancellationToken);
+        var organizationId = await RequireProjectOwnerAsync(ownerUserId, projectId, cancellationToken);
         if (!await repository.DeleteAsync(projectId, cancellationToken))
         {
             throw new ProjectNotFoundException();
         }
-        await connectionEvictor.EvictProjectAsync(projectId, cancellationToken);
+        await connectionEvictor.EvictProjectAsync(organizationId, projectId, cancellationToken);
     }
 
     public async Task<IReadOnlyList<ProjectMemberAccessDto>> GetMembersAsync(
@@ -120,7 +120,7 @@ public sealed class ProjectService(
         SetProjectAccessRequest request,
         CancellationToken cancellationToken = default)
     {
-        await RequireProjectOwnerAsync(
+        var organizationId = await RequireProjectOwnerAsync(
             ownerUserId,
             projectId,
             cancellationToken);
@@ -149,6 +149,7 @@ public sealed class ProjectService(
                 {
                     await connectionEvictor.EvictUserFromProjectAsync(
                         userId,
+                        organizationId,
                         projectId,
                         cancellationToken);
                 }

@@ -1,5 +1,6 @@
 @page "/draft-stories"
-@inject HttpClient Http
+@page "/organizations/{OrganizationId:int}/draft-stories"
+@inherits WorkComponentBase
 @inject ScrumPilot.Web.Services.ProjectStateService ProjectState
 @implements IDisposable
 
@@ -163,7 +164,6 @@ else
     protected override async Task OnInitializedAsync()
     {
         _selectedProjectId = ProjectState.SelectedProjectId;
-        ProjectState.OnChange += HandleProjectChanged;
         await LoadDraftPbisAsync();
     }
 

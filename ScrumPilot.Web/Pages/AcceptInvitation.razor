@@ -30,7 +30,7 @@ else
         {
             _redirecting = true;
             var relative = Navigation.ToBaseRelativePath(Navigation.Uri);
-            Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/" + relative)}", replace: true);
+            Navigation.NavigateTo($"login?returnUrl={Uri.EscapeDataString(new Uri(Navigation.Uri).PathAndQuery)}", replace: true);
             return;
         }
         if (string.IsNullOrWhiteSpace(Token))
@@ -56,7 +56,7 @@ else
         if (response.IsSuccessStatusCode)
         {
             _redirecting = true;
-            Navigation.NavigateTo("/accept-invitation", replace: true);
+            Navigation.NavigateTo("accept-invitation", replace: true);
 
             AcceptedOrganizationDto? accepted;
             try
@@ -86,8 +86,7 @@ else
                     item => item.OrganizationId == accepted.OrganizationId);
                 if (organization is not null)
                 {
-                    OrganizationState.SetOrganization(organization);
-                    Navigation.NavigateTo("/organization-management", replace: true);
+                    Navigation.NavigateTo(OrganizationRoutes.Page(accepted.OrganizationId, "organization-management"), replace: true);
                     return;
                 }
             }
@@ -101,7 +100,7 @@ else
             {
             }
 
-            Navigation.NavigateTo("/organization-management", forceLoad: true, replace: true);
+            Navigation.NavigateTo(OrganizationRoutes.Page(accepted.OrganizationId, "organization-management"), replace: true);
             return;
         }
         _severity = Severity.Error;

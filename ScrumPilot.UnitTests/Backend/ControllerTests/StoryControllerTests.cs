@@ -11,6 +11,40 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
 {
     public class PbiControllerTests
     {
+        [Fact]
+        public async Task GenerateAiPbis_RejectsOversizedBatchBeforeCallingAi()
+        {
+            var result = await _controller.GenerateAiPbis(Enumerable.Repeat("Problem", PbiService.MaxGenerationBatchSize + 1).ToList(), 1);
+            Assert.IsType<BadRequestObjectResult>(result.Result);
+            await _mockPbiService.DidNotReceive().GenerateAiPbis(Arg.Any<List<string>>());
+        }
+
+        [Fact]
+        public async Task GenerateAiPbis_RejectsOversizedStatementBeforeCallingAi()
+        {
+            var result = await _controller.GenerateAiPbis([new string('x', PbiService.MaxProblemStatementLength + 1)], 1);
+            Assert.IsType<BadRequestObjectResult>(result.Result);
+            await _mockPbiService.DidNotReceive().GenerateAiPbis(Arg.Any<List<string>>());
+        }
+        [Fact]
+        public async Task GenerateAiPbis_DiscardsLongResponseWhenProjectAccessWasRevoked()
+        {
+            _access.CanAccessProjectAsync("test-user", 1, Arg.Any<CancellationToken>()).Returns(true, false);
+            _mockPbiService.GenerateAiPbis(Arg.Any<List<string>>())
+                .Returns(Task.FromResult(new List<ProductBacklogItem> { new() { Title = "Generated", ProjectId = 1 } }));
+            var result = await _controller.GenerateAiPbis(["A problem"], 1);
+            Assert.IsType<NotFoundResult>(result.Result);
+            await _access.Received(2).CanAccessProjectAsync("test-user", 1, Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
+        public async Task GenerateAiPbis_RequiresProjectAccessBeforeCallingAi()
+        {
+            _access.CanAccessProjectAsync("test-user", 1, Arg.Any<CancellationToken>()).Returns(false);
+            var result = await _controller.GenerateAiPbis(["A problem"], 1);
+            Assert.IsType<NotFoundResult>(result.Result);
+            await _mockPbiService.DidNotReceive().GenerateAiPbis(Arg.Any<List<string>>());
+        }
         private readonly IPbiService _mockPbiService;
         private readonly IPbiRepository _repository;
         private readonly ICurrentUser _currentUser;
@@ -201,7 +235,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             _mockPbiService.GenerateAiPbis(problemStatements).Returns(expectedStories);
 
             // Act
-            var result = await _controller.GenerateAiPbis(problemStatements);
+            var result = await _controller.GenerateAiPbis(problemStatements, 1);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
@@ -217,8 +251,8 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
         public async Task GenerateAiPbi_ReturnsBadRequest_WhenProblemStatementsIsNullOrEmpty()
         {
             // Act
-            var resultNull = await _controller.GenerateAiPbis(null!);
-            var resultEmpty = await _controller.GenerateAiPbis(new List<string>());
+            var resultNull = await _controller.GenerateAiPbis(null!, 1);
+            var resultEmpty = await _controller.GenerateAiPbis(new List<string>(), 1);
 
             // Assert
             Assert.Equal("At least one problem statement is required.", Assert.IsType<BadRequestObjectResult>(resultNull.Result).Value);
@@ -236,7 +270,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             var problemStatements = new List<string> { "Valid statement", invalidStatement! };
 
             // Act
-            var result = await _controller.GenerateAiPbis(problemStatements);
+            var result = await _controller.GenerateAiPbis(problemStatements, 1);
 
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
@@ -254,7 +288,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
                 .Returns(Task.FromException<List<ProductBacklogItem>>(new InvalidOperationException(exceptionMessage)));
 
             // Act
-            var result = await _controller.GenerateAiPbis(problemStatements);
+            var result = await _controller.GenerateAiPbis(problemStatements, 1);
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
             Assert.Equal($"Failed to generate AI PBIs: {exceptionMessage}", badRequestResult.Value);
@@ -271,7 +305,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
                 .Returns(Task.FromException<List<ProductBacklogItem>>(new HttpRequestException(exceptionMessage)));
 
             // Act
-            var result = await _controller.GenerateAiPbis(problemStatements);
+            var result = await _controller.GenerateAiPbis(problemStatements, 1);
             // Assert
             var statusCodeResult = Assert.IsType<ObjectResult>(result.Result);
             Assert.Equal(502, statusCodeResult.StatusCode);
@@ -289,7 +323,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
                 .Returns(Task.FromException<List<ProductBacklogItem>>(new TimeoutException(exceptionMessage)));
 
             // Act
-            var result = await _controller.GenerateAiPbis(problemStatements);
+            var result = await _controller.GenerateAiPbis(problemStatements, 1);
             // Assert
             var statusCodeResult = Assert.IsType<ObjectResult>(result.Result);
             Assert.Equal(408, statusCodeResult.StatusCode);
@@ -307,7 +341,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
                 .Returns(Task.FromException<List<ProductBacklogItem>>(new Exception(exceptionMessage)));
 
             // Act
-            var result = await _controller.GenerateAiPbis(problemStatements);
+            var result = await _controller.GenerateAiPbis(problemStatements, 1);
             // Assert
             var statusCodeResult = Assert.IsType<ObjectResult>(result.Result);
             Assert.Equal(500, statusCodeResult.StatusCode);

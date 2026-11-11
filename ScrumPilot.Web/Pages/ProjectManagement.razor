@@ -1,6 +1,7 @@
 @page "/project-management"
+@page "/organizations/{OrganizationId:int}/project-management"
+@inherits WorkComponentBase
 @implements IDisposable
-@inject HttpClient Http
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject ScrumPilot.Web.Services.ProjectStateService ProjectState
@@ -571,7 +572,6 @@
 
     protected override Task OnInitializedAsync()
     {
-        OrganizationState.OnChange += OnOrganizationChanged;
         return ReloadForOrganizationAsync();
     }
 
@@ -613,7 +613,7 @@
         try
         {
             var projects = await Http.GetFromJsonAsync<List<Project>>(
-                $"api/organizations/{organizationId.Value}/projects",
+                "api/projects",
                 cancellation.Token) ?? [];
             if (_disposed
                 || cancellation.IsCancellationRequested
@@ -667,18 +667,22 @@
         _dialogPbi = null;
         _dialogOrganizationGeneration = 0;
         _dialogOrganizationId = null;
-        ProjectState.SetProject(null);
     }
 
     private bool IsCurrent(long generation, int organizationId) =>
         !_disposed
+        && Scope.IsCurrent
         && generation == _organizationGeneration
         && OrganizationState.SelectedOrganizationId == organizationId;
 
     private async Task SelectProject(Project project)
     {
         _selectedProject = project;
-        ProjectState.SetProject(project);
+        if (Scope.ProjectId != project.ProjectId)
+        {
+            ProjectState.SetProject(project);
+            return;
+        }
         _showAddSprint = false;
         _showAddEpic = false;
         _editingSprintId = null;
@@ -788,7 +792,7 @@
         try
         {
             var created = await Http.PostAsJsonAsync(
-                $"api/organizations/{organizationId.Value}/projects",
+                "api/projects",
                 new CreateProjectRequest(name, description));
             if (!IsCurrent(generation, organizationId.Value)) return;
             if (created.IsSuccessStatusCode)

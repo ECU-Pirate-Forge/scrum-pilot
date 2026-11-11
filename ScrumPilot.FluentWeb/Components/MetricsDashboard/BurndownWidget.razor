@@ -18,10 +18,10 @@
     }
 </WidgetCard>
 
+@inherits WorkComponentBase
 @code {
     [Parameter] public int? SprintId { get; set; }
     [CascadingParameter(Name = "IsDarkMode")] public bool IsDarkMode { get; set; }
-    [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
     [Inject] private ILogger<BurndownWidget> Logger { get; set; } = default!;
 
     private List<BurndownPoint> _points = [];
@@ -40,6 +40,7 @@
         _loading = true;
         try { _points = SprintId.HasValue ? await MetricsSvc.GetBurndownDataAsync(SprintId.Value) : []; }
         catch (Exception ex) { Logger.LogWarning(ex, "Failed to load burndown for sprint {SprintId}", SprintId); _points = []; }
+        if (!Scope.IsCurrent) return;
         _options = BuildOptions(IsDarkMode);
         _chartKey++;
         _loading = false;

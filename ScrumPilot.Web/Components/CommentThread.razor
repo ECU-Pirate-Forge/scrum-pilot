@@ -1,5 +1,5 @@
 @using System.Security.Claims
-@inject HttpClient Http
+@inherits WorkComponentBase
 @inject AuthenticationStateProvider AuthState
 
 <div class="comment-thread">
@@ -59,9 +59,9 @@
                         <div class="comment-meta d-flex justify-space-between align-center mt-2">
                             <MudText Typo="Typo.caption"
                                      Style="color: var(--mud-palette-text-secondary);">
-                                @comment.UserId · @comment.CreatedDate.ToLocalTime().ToString("MMM dd, yyyy h:mm tt")
+                                @(comment.AuthorUserName ?? comment.UserId) · @comment.CreatedDate.ToLocalTime().ToString("MMM dd, yyyy h:mm tt")
                             </MudText>
-                            @if (comment.UserId == _currentUserName)
+                            @if (comment.UserId == _currentUserId)
                             {
                                 <div class="d-flex gap-1">
                                     <MudIconButton Icon="@Icons.Material.Filled.Edit"
@@ -114,7 +114,6 @@
     private string _newCommentBody = "";
     private bool _submitting = false;
     private string _currentUserId = "";
-    private string _currentUserName = "";
 
     private int? _editingCommentId;
     private string _editBody = "";
@@ -126,10 +125,6 @@
                       ?? authState.User.FindFirst("sub")?.Value
                       ?? authState.User.FindFirst("nameid")?.Value
                       ?? "unknown";
-        _currentUserName = authState.User.FindFirst(ClaimTypes.Name)?.Value
-                        ?? authState.User.FindFirst("unique_name")?.Value
-                        ?? _currentUserId;
-
         await LoadComments();
     }
 
@@ -169,7 +164,7 @@
             var comment = new Comment
             {
                 PbiId = PbiId,
-                UserId = _currentUserName,
+                UserId = _currentUserId,
                 Body = _newCommentBody.Trim(),
                 CreatedDate = DateTime.UtcNow
             };

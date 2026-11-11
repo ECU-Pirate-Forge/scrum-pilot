@@ -1,5 +1,10 @@
 # Organization Tenancy Implementation Plan
 
+> Historical design record, superseded by the SQL Server 2025 database-per-organization
+> implementation. Its provider, backfill, implicit bootstrap and shared-database
+> setup steps are not current instructions. Use [architecture](../../architecture.md),
+> [operations](../../multi-tenancy-operations.md) and [testing](../../codebase/TESTING.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add secure multi-organization tenancy to ScrumPilot so users can belong to multiple organizations, owners administer membership, project access is explicit, existing data moves into Pirate Forge, and invitations are delivered through SendGrid.
@@ -1119,15 +1124,13 @@ dotnet ef migrations script --idempotent --project .\ScrumPilot.Data\ScrumPilot.
 
 Expected: all commands exit 0.
 
-- [ ] **Step 6: Run Discord bot tests**
+- [ ] **Step 6: Verify both supported web clients**
 
-```powershell
-npm test --prefix .\discord-bot
-```
-
-Expected: all Jest tests pass.
-
-Task 14 environment result: blocked before Jest execution because the existing `node_modules` is incomplete (`jest` is not installed). The prior `npm install` failed on Node 25 while building native `@discordjs/opus` because Python/native build prerequisites were unavailable. Dependencies were not changed.
+Run the current SQL Server and Aspire validation commands in the
+[operations runbook](../../multi-tenancy-operations.md), including both .NET UI
+test projects. This historical plan is superseded by the database-per-organization
+SQL Server implementation; its older provider/bootstrap commands are not
+current setup instructions.
 
 - [ ] **Step 7: Perform manual acceptance**
 

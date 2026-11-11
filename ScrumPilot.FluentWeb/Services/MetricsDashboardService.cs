@@ -5,16 +5,16 @@ namespace ScrumPilot.FluentWeb.Services;
 
 public class MetricsDashboardService
 {
-    private readonly HttpClient _http;
+    private readonly WorkHttpClient _http;
 
-    public MetricsDashboardService(HttpClient http)
+    public MetricsDashboardService(WorkHttpClient http)
     {
         _http = http;
     }
 
     public async Task<List<Project>> GetProjectsAsync()
     {
-        return await _http.GetFromJsonAsync<List<Project>>("api/project") ?? [];
+        return await _http.GetFromJsonAsync<List<Project>>("api/projects") ?? [];
     }
 
     public async Task<List<Sprint>> GetSprintsByProjectAsync(int projectId)

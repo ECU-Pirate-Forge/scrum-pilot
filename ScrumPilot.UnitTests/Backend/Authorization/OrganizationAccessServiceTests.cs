@@ -1,257 +1,79 @@
-using System.Data.Common;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
-using ScrumPilot.API.Authorization;
-using ScrumPilot.Data.Context;
-using ScrumPilot.Data.Models;
 using ScrumPilot.Shared.Models;
-using Xunit;
+using ScrumPilot.UnitTests.Backend.Tenancy;
 
 namespace ScrumPilot.UnitTests.Backend.Authorization;
 
-public sealed class OrganizationAccessServiceTests : IAsyncLifetime
+public sealed class OrganizationAccessServiceTests
 {
-    private readonly SqliteConnection _connection = new("Data Source=:memory:");
-    private readonly QueryCounter _queryCounter = new();
-    private ScrumPilotContext _context = null!;
-    private OrganizationAccessService _service = null!;
-
-    public async ValueTask InitializeAsync()
+    [Theory]
+    [InlineData("owner", true)]
+    [InlineData("member", true)]
+    [InlineData("admin", false)]
+    [InlineData("unknown", false)]
+    public async Task CurrentMembership_NotGlobalRole_IsRequired(string user, bool allowed)
     {
-        await _connection.OpenAsync();
-        var options = new DbContextOptionsBuilder<ScrumPilotContext>()
-            .UseSqlite(_connection)
-            .AddInterceptors(_queryCounter)
-            .Options;
-        _context = new ScrumPilotContext(options);
-        await _context.Database.EnsureCreatedAsync();
-        await SeedAsync();
-        _service = new OrganizationAccessService(_context);
-        _queryCounter.Reset();
+        using var fixture = new TenantAccessFixture();
+        Assert.Equal(allowed, await fixture.Access.CanAccessProjectAsync(user, fixture.ProjectId));
+        Assert.Equal(user == "owner", await fixture.Access.IsOrganizationOwnerAsync(user, fixture.Organization.OrganizationId));
     }
-
-    public async ValueTask DisposeAsync()
-    {
-        await _context.DisposeAsync();
-        await _connection.DisposeAsync();
-    }
-
     [Fact]
-    public async Task OrganizationChecks_RecognizeMembersAndOwners()
+    public async Task MemberNeedsExplicitGrant()
     {
-        Assert.True(await _service.IsOrganizationMemberAsync("owner", 1));
-        Assert.True(await _service.IsOrganizationMemberAsync("member", 1));
-        Assert.True(await _service.IsOrganizationOwnerAsync("owner", 1));
-        Assert.False(await _service.IsOrganizationOwnerAsync("member", 1));
-        Assert.False(await _service.IsOrganizationMemberAsync("outsider", 1));
+        using var fixture = new TenantAccessFixture(grant: false);
+        Assert.False(await fixture.Access.CanAccessProjectAsync("member", fixture.ProjectId));
+        Assert.True(await fixture.Access.CanAccessProjectAsync("owner", fixture.ProjectId));
     }
-
     [Fact]
-    public async Task CanAccessProject_AllowsOwnerImplicitlyInOneQuery()
+    public async Task LeaveAndRejoin_InvalidatesOldMembershipInstance()
     {
-        Assert.True(await _service.CanAccessProjectAsync("owner", 10));
-        Assert.Equal(1, _queryCounter.Count);
+        using var fixture = new TenantAccessFixture();
+        fixture.Files.Control.OrganizationMemberships.Remove(fixture.Member); await fixture.Files.Control.SaveChangesAsync();
+        fixture.Files.Control.OrganizationMemberships.Add(new() { OrganizationId = fixture.Organization.OrganizationId, UserId = "member", Role = OrganizationRole.Member });
+        await fixture.Files.Control.SaveChangesAsync();
+        Assert.False(await fixture.Access.CanAccessProjectAsync("member", fixture.ProjectId));
     }
-
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DeletedOrMaintenanceOrganization_DeniesWork(bool deleted)
+    {
+        using var fixture = new TenantAccessFixture();
+        if (deleted) fixture.Organization.DeletedAt = DateTime.UtcNow; else fixture.Organization.StorageState = "Maintenance";
+        await fixture.Files.Control.SaveChangesAsync();
+        Assert.False(await fixture.Access.CanAccessProjectAsync("owner", fixture.ProjectId));
+    }
     [Fact]
-    public async Task CanAccessProject_AllowsExplicitMemberOnlyForGrantedProject()
+    public async Task HierarchyQueries_UseCurrentCatalogAndPersistedParent()
     {
-        Assert.True(await _service.CanAccessProjectAsync("member", 10));
-        Assert.False(await _service.CanAccessProjectAsync("member", 11));
+        using var fixture = new TenantAccessFixture();
+        var sprint = new Sprint { ProjectId = fixture.ProjectId, SprintTitle = "Sprint" };
+        var epic = new Epic { ProjectId = fixture.ProjectId, Name = "Epic" };
+        fixture.Tenant.Sprints.Add(sprint); fixture.Tenant.Epics.Add(epic); await fixture.Tenant.SaveChangesAsync();
+        var pbi = new ProductBacklogItem { ProjectId = fixture.ProjectId, Title = "Story", SprintId = sprint.SprintId, EpicId = epic.EpicId };
+        fixture.Tenant.Stories.Add(pbi); await fixture.Tenant.SaveChangesAsync();
+        Assert.Equal(fixture.Organization.OrganizationId, await fixture.Access.GetOrganizationIdForPbiAsync(pbi.PbiId));
+        Assert.Equal(fixture.Organization.OrganizationId, await fixture.Access.GetOrganizationIdForSprintAsync(sprint.SprintId));
+        Assert.Equal(fixture.Organization.OrganizationId, await fixture.Access.GetOrganizationIdForEpicAsync(epic.EpicId));
+        Assert.True(await fixture.Access.SprintBelongsToProjectAsync(sprint.SprintId, fixture.ProjectId));
+        Assert.False(await fixture.Access.SprintBelongsToProjectAsync(sprint.SprintId, 999));
+        Assert.False(await fixture.Access.EpicBelongsToProjectAsync(epic.EpicId, 999));
+        Assert.False(await fixture.Access.PbiBelongsToProjectAsync(pbi.PbiId, 999));
+        Assert.Null(await fixture.Access.GetOrganizationIdForPbiAsync(999));
     }
-
     [Fact]
-    public async Task CanAccessProject_DeniesStaleProjectMembershipInOneQuery()
+    public async Task AssigneeValidation_UsesCurrentAccess()
     {
-        Assert.False(await _service.CanAccessProjectAsync("stale-member", 10));
-        Assert.Equal(1, _queryCounter.Count);
+        using var fixture = new TenantAccessFixture();
+        Assert.True(await fixture.Access.UserCanBeAssignedToProjectAsync("member", fixture.ProjectId));
+        await fixture.Tenant.ProjectMemberships.ExecuteDeleteAsync();
+        Assert.False(await fixture.Access.UserCanBeAssignedToProjectAsync("member", fixture.ProjectId));
+        Assert.False(await fixture.Access.UserCanBeAssignedToProjectAsync("admin", fixture.ProjectId));
     }
-
     [Fact]
-    public async Task CanAccessProject_DeniesForeignOrganizationAndMissingProject()
+    public async Task Cancellation_PropagatesToSqlQueries()
     {
-        Assert.False(await _service.CanAccessProjectAsync("foreign-owner", 10));
-        Assert.False(await _service.CanAccessProjectAsync("owner", 999));
-    }
-
-    [Fact]
-    public async Task DeletedOrganization_DeniesAllAccess()
-    {
-        Assert.False(await _service.IsOrganizationMemberAsync("deleted-owner", 3));
-        Assert.False(await _service.IsOrganizationOwnerAsync("deleted-owner", 3));
-        Assert.False(await _service.CanAccessProjectAsync("deleted-owner", 30));
-        Assert.Null(await _service.GetOrganizationIdForProjectAsync(30));
-        Assert.Null(await _service.GetOrganizationIdForPbiAsync(300));
-        Assert.Null(await _service.GetOrganizationIdForSprintAsync(301));
-        Assert.Null(await _service.GetOrganizationIdForEpicAsync(302));
-    }
-
-    [Fact]
-    public async Task ResourceOrganizationLookups_ResolvePersistedHierarchy()
-    {
-        Assert.Equal(1, await _service.GetOrganizationIdForProjectAsync(10));
-        Assert.Equal(1, await _service.GetOrganizationIdForPbiAsync(100));
-        Assert.Equal(1, await _service.GetOrganizationIdForSprintAsync(101));
-        Assert.Equal(1, await _service.GetOrganizationIdForEpicAsync(102));
-    }
-
-    [Fact]
-    public async Task ResourceOrganizationLookups_ReturnNullForMissingIds()
-    {
-        Assert.Null(await _service.GetOrganizationIdForProjectAsync(999));
-        Assert.Null(await _service.GetOrganizationIdForPbiAsync(999));
-        Assert.Null(await _service.GetOrganizationIdForSprintAsync(999));
-        Assert.Null(await _service.GetOrganizationIdForEpicAsync(999));
-    }
-
-    [Fact]
-    public async Task HierarchyChecks_RequireMatchingPersistedProject()
-    {
-        Assert.True(await _service.SprintBelongsToProjectAsync(101, 10));
-        Assert.True(await _service.EpicBelongsToProjectAsync(102, 10));
-        Assert.True(await _service.PbiBelongsToProjectAsync(100, 10));
-        Assert.False(await _service.SprintBelongsToProjectAsync(101, 20));
-        Assert.False(await _service.EpicBelongsToProjectAsync(102, 20));
-        Assert.False(await _service.PbiBelongsToProjectAsync(100, 20));
-    }
-
-    [Fact]
-    public async Task UserCanBeAssignedToProject_UsesProjectAccessNotGlobalRole()
-    {
-        Assert.True(await _service.UserCanBeAssignedToProjectAsync("owner", 10));
-        Assert.True(await _service.UserCanBeAssignedToProjectAsync("member", 10));
-        Assert.False(await _service.UserCanBeAssignedToProjectAsync("admin", 10));
-    }
-
-    [Fact]
-    public async Task UserCanBeAssignedToProject_DeniesStaleProjectMembership()
-    {
-        Assert.False(await _service.UserCanBeAssignedToProjectAsync("stale-member", 10));
-    }
-
-    [Fact]
-    public async Task IsOrganizationOwner_DeniesGlobalAdminWithoutOwnerMembership()
-    {
-        Assert.False(await _service.IsOrganizationOwnerAsync("admin", 1));
-    }
-
-    [Fact]
-    public async Task CancellationToken_IsPropagatedToEfQueries()
-    {
-        using var cancellation = new CancellationTokenSource();
-        await cancellation.CancelAsync();
-
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => _service.IsOrganizationMemberAsync("owner", 1, cancellation.Token));
-    }
-
-    private async Task SeedAsync()
-    {
-        _context.Users.AddRange(
-            User("owner"),
-            User("member"),
-            User("outsider"),
-            User("foreign-owner"),
-            User("deleted-owner"),
-            User("admin"),
-            User("stale-member"));
-        _context.Roles.Add(
-            new IdentityRole
-            {
-                Id = "admin-role",
-                Name = "Admin",
-                NormalizedName = "ADMIN"
-            });
-        _context.UserRoles.Add(
-            new IdentityUserRole<string> { UserId = "admin", RoleId = "admin-role" });
-        _context.Organizations.AddRange(
-            Organization(1, "Active"),
-            Organization(2, "Foreign"),
-            Organization(3, "Deleted", DateTime.UtcNow));
-        _context.OrganizationMemberships.AddRange(
-            Membership(1, "owner", OrganizationRole.Owner),
-            Membership(1, "member", OrganizationRole.Member),
-            Membership(2, "foreign-owner", OrganizationRole.Owner),
-            Membership(3, "deleted-owner", OrganizationRole.Owner));
-        _context.Projects.AddRange(
-            Project(10, 1),
-            Project(11, 1),
-            Project(20, 2),
-            Project(30, 3));
-        _context.ProjectMemberships.AddRange(
-            new ProjectMembership
-            {
-                ProjectId = 10,
-                UserId = "member",
-                GrantedByUserId = "owner",
-                GrantedAt = DateTime.UtcNow
-            },
-            new ProjectMembership
-            {
-                ProjectId = 10,
-                UserId = "stale-member",
-                GrantedByUserId = "owner",
-                GrantedAt = DateTime.UtcNow
-            });
-        _context.Stories.AddRange(Pbi(100, 10), Pbi(300, 30));
-        _context.Sprints.AddRange(Sprint(101, 10), Sprint(301, 30));
-        _context.Epics.AddRange(Epic(102, 10), Epic(302, 30));
-        await _context.SaveChangesAsync();
-    }
-
-    private static ApplicationUser User(string id) =>
-        new() { Id = id, UserName = id, NormalizedUserName = id.ToUpperInvariant() };
-
-    private static Organization Organization(int id, string name, DateTime? deletedAt = null) =>
-        new()
-        {
-            OrganizationId = id,
-            Name = name,
-            NormalizedName = name.ToUpperInvariant(),
-            CreatedAt = DateTime.UtcNow,
-            DeletedAt = deletedAt
-        };
-
-    private static OrganizationMembership Membership(
-        int organizationId,
-        string userId,
-        OrganizationRole role) =>
-        new()
-        {
-            OrganizationId = organizationId,
-            UserId = userId,
-            Role = role,
-            JoinedAt = DateTime.UtcNow
-        };
-
-    private static Project Project(int id, int organizationId) =>
-        new() { ProjectId = id, OrganizationId = organizationId, ProjectName = $"Project {id}" };
-
-    private static ProductBacklogItem Pbi(int id, int projectId) =>
-        new() { PbiId = id, ProjectId = projectId, Title = $"PBI {id}" };
-
-    private static Sprint Sprint(int id, int projectId) =>
-        new() { SprintId = id, ProjectId = projectId };
-
-    private static Epic Epic(int id, int projectId) =>
-        new() { EpicId = id, ProjectId = projectId, Name = $"Epic {id}" };
-
-    private sealed class QueryCounter : DbCommandInterceptor
-    {
-        public int Count { get; private set; }
-
-        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
-            DbCommand command,
-            CommandEventData eventData,
-            InterceptionResult<DbDataReader> result,
-            CancellationToken cancellationToken = default)
-        {
-            Count++;
-            return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
-        }
-
-        public void Reset() => Count = 0;
+        using var fixture = new TenantAccessFixture(); using var ct = new CancellationTokenSource(); ct.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fixture.Access.CanAccessProjectAsync("owner", fixture.ProjectId, ct.Token));
     }
 }

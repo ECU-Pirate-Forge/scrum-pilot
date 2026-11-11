@@ -2,7 +2,7 @@
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
 @using ScrumPilot.Shared.Models
-@inject HttpClient Http
+@inherits WorkComponentBase
 @inject AuthenticationStateProvider AuthState
 @inject IAppNotificationService Notifications
 @inject ILogger<PbiDetailsDialog> Logger
@@ -58,7 +58,7 @@
                         @if (Pbi.PbiId > 0)
                         {
                             <FluentDivider />
-                            <CommentThread PbiId="Pbi.PbiId" />
+                            <CommentThread @key="Pbi" PbiId="Pbi.PbiId" CapturedWork="Scope" />
                         }
                     </div>
 
@@ -185,6 +185,7 @@
             var usersTask = Http.GetFromJsonAsync<List<UserSummaryDto>>($"api/user/all?projectId={ProjectId.Value}");
             var pbisTask = Http.GetFromJsonAsync<List<ProductBacklogItem>>($"api/Pbi/getNonDraftPbis?projectId={ProjectId.Value}");
             await Task.WhenAll(epicsTask, sprintsTask, usersTask, pbisTask);
+            Scope.ThrowIfStale();
             _epics = epicsTask.Result ?? [];
             _sprints = sprintsTask.Result ?? [];
             _users = usersTask.Result ?? [];
@@ -206,6 +207,7 @@
 
     private async Task SaveAsync()
     {
+        if (!Scope.IsCurrent) return;
         if (_draft is null || Pbi is null || _saving)
         {
             return;
@@ -258,6 +260,7 @@
             }
 
             var saved = await response.Content.ReadFromJsonAsync<ProductBacklogItem>() ?? _draft;
+            Scope.ThrowIfStale();
             Copy(saved, Pbi);
             _draft = Clone(Pbi);
             _aiSuggestion = false;
@@ -293,6 +296,7 @@
 
         _improving = true;
         _errorMessage = string.Empty;
+        var capturedPbi = Pbi;
         try
         {
             var response = await Http.PostAsJsonAsync("api/Pbi/ImprovePbi", Pbi);
@@ -303,6 +307,8 @@
             }
 
             var improved = await response.Content.ReadFromJsonAsync<ProductBacklogItem>();
+            Scope.ThrowIfStale();
+            if (!ReferenceEquals(Pbi, capturedPbi)) return;
             if (improved is not null)
             {
                 _draft = Clone(Pbi);
@@ -365,6 +371,7 @@
             }
 
             _draft = Clone(Pbi);
+            Scope.ThrowIfStale();
             await OnSaved.InvokeAsync(Pbi);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
@@ -453,4 +460,3 @@
         target.Comments = source.Comments;
     }
 }
-

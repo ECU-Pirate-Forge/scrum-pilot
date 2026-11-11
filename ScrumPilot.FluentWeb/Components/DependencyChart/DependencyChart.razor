@@ -3,6 +3,7 @@
 @inject IJSRuntime JS
 @inject ILogger<DependencyChart> Logger
 @namespace ScrumPilot.FluentWeb.Components.DependencyChart
+@inherits WorkComponentBase
 
 @if (!Pbis.Any())
 {
@@ -39,12 +40,13 @@ else
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (!Scope.IsCurrent) return;
         if ((firstRender || _renderRequested) && Pbis.Any())
         {
             _renderRequested = false;
             try
             {
-                await JS.InvokeVoidAsync("mermaidHelper.render", _containerId, _lastDefinition ?? BuildMermaidDefinition());
+                await JS.InvokeVoidAsync("mermaidHelper.render", Scope.Cancellation, _containerId, _lastDefinition ?? BuildMermaidDefinition());
             }
             catch (Exception ex)
             {

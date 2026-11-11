@@ -1,7 +1,8 @@
 @page "/project-management"
+@page "/organizations/{OrganizationId:int}/project-management"
+@inherits WorkComponentBase
 @implements IDisposable
 @using ScrumPilot.FluentWeb.Components.ProjectManagement
-@inject HttpClient Http
 @inject ProjectStateService ProjectState
 @inject OrganizationStateService OrganizationState
 @inject IAppNotificationService Notifications
@@ -76,7 +77,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        OrganizationState.OnChange += OnOrganizationChanged;
         await ReloadForOrganizationAsync();
     }
 
@@ -95,8 +95,8 @@
     {
         if (_disposed) return;
 
-        var selectedProjectId = ProjectState.SelectedProjectId;
-        var organizationId = OrganizationState.SelectedOrganizationId;
+        var selectedProjectId = Scope.ProjectId;
+        int? organizationId = Scope.OrganizationId;
         var generation = ++_generation;
         _loadCancellation?.Cancel();
         _loadCancellation?.Dispose();
@@ -110,14 +110,14 @@
         _loadingProjects = true;
         try
         {
-            var projects = await Http.GetFromJsonAsync<List<Project>>($"api/organizations/{organizationId.Value}/projects", _loadCancellation.Token) ?? [];
+            var projects = await Http.GetFromJsonAsync<List<Project>>("api/projects", _loadCancellation.Token) ?? [];
             if (!IsCurrent(generation, organizationId.Value)) return;
 
             _projects.Clear();
             _projects.AddRange(projects);
             var selected = selectedProjectId.HasValue
                 ? _projects.FirstOrDefault(project => project.ProjectId == selectedProjectId.Value)
-                : _projects.FirstOrDefault();
+                : null;
             if (selected is not null)
                 await SelectProjectAsync(selected);
         }
@@ -147,12 +147,17 @@
     }
 
     private bool IsCurrent(long generation, int organizationId) =>
-        !_disposed && generation == _generation && OrganizationState.SelectedOrganizationId == organizationId;
+        !_disposed && Scope.IsCurrent && generation == _generation && Scope.OrganizationId == organizationId;
 
     private async Task SelectProjectAsync(Project project)
     {
+        Scope.ThrowIfStale();
         _selectedProject = project;
-        ProjectState.SetProject(project);
+        if (Scope.ProjectId != project.ProjectId)
+        {
+            ProjectState.SetProject(project);
+            return;
+        }
         _sprints.Clear();
         _epics.Clear();
         _pbis.Clear();
@@ -225,24 +230,28 @@
 
     private async Task CreateProjectAsync(ProjectEditorModel model)
     {
-        var organizationId = OrganizationState.SelectedOrganizationId;
-        if (!organizationId.HasValue || string.IsNullOrWhiteSpace(model.ProjectName)) return;
+        if (string.IsNullOrWhiteSpace(model.ProjectName)) return;
+        Scope.ThrowIfStale();
         _saving = true;
         try
         {
-            var response = await Http.PostAsJsonAsync($"api/organizations/{organizationId.Value}/projects", new CreateProjectRequest(model.ProjectName.Trim(), NullIfWhiteSpace(model.Description)));
+            var response = await Http.PostAsJsonAsync("api/projects", new CreateProjectRequest(model.ProjectName.Trim(), NullIfWhiteSpace(model.Description)));
             if (!response.IsSuccessStatusCode)
             {
                 Notifications.ShowError("Failed to create project.");
                 return;
             }
-            var project = await response.Content.ReadFromJsonAsync<Project>();
+            var project = await response.Content.ReadFromJsonAsync<Project>(Scope.Cancellation);
+            Scope.ThrowIfStale();
             if (project is not null)
             {
                 _projects.Add(project);
-                ProjectState.NotifyProjectListChanged();
                 Notifications.ShowSuccess("Project created.");
                 await SelectProjectAsync(project);
+                // Selection may synchronously replace this view. Refresh the list only
+                // for the organization that owned the successful creation.
+                if (OrganizationState.SelectedOrganizationId == Scope.OrganizationId)
+                    ProjectState.NotifyProjectListChanged();
             }
         }
         catch (Exception ex)

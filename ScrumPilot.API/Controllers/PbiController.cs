@@ -7,7 +7,8 @@ using ScrumPilot.Shared.Models;
 namespace ScrumPilot.API.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[OrganizationWork]
+[Route("api/organizations/{organizationId:int}/[controller]")]
 public class PbiController(
     IPbiService pbiService,
     IPbiRepository pbiRepository,
@@ -51,16 +52,22 @@ public class PbiController(
 
     [HttpPost("generateAiPbis")]
     public async Task<ActionResult<List<ProductBacklogItem>>> GenerateAiPbis(
-        [FromBody] List<string> problemStatements)
+        [FromBody] List<string> problemStatements, [FromQuery] int projectId, CancellationToken cancellationToken = default)
     {
+        if (!await CanAccess(projectId, cancellationToken)) return NotFound();
         if (problemStatements is null || problemStatements.Count == 0)
             return BadRequest("At least one problem statement is required.");
         if (problemStatements.Any(string.IsNullOrWhiteSpace))
             return BadRequest("All problem statements must be non-empty strings.");
+        if (problemStatements.Count > PbiService.MaxGenerationBatchSize
+            || problemStatements.Any(s => s.Length > PbiService.MaxProblemStatementLength))
+            return BadRequest("AI generation supports at most 10 problem statements of at most 10000 characters each.");
 
         try
         {
-            return Ok(await pbiService.GenerateAiPbis(problemStatements));
+            var result = await pbiService.GenerateAiPbis(problemStatements, cancellationToken);
+            if (!await CanAccess(projectId, cancellationToken)) return NotFound();
+            return Ok(result);
         }
         catch (InvalidOperationException ex) { return BadRequest($"Failed to generate AI PBIs: {ex.Message}"); }
         catch (HttpRequestException ex) { return StatusCode(502, $"Failed to communicate with AI service: {ex.Message}"); }
@@ -79,7 +86,9 @@ public class PbiController(
         if (!await ChangedRelatedIdsBelongToProject(existing, request, cancellationToken))
             return NotFound();
         ApplyMutableFields(existing, request);
-        return Ok(await pbiService.ImprovePbiAsync(existing));
+        var improved = await pbiService.ImprovePbiAsync(existing, cancellationToken);
+        if (!await CanAccess(existing.ProjectId, cancellationToken)) return NotFound();
+        return Ok(improved);
     }
 
     [HttpPost("createStory")]

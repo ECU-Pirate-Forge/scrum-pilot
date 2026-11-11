@@ -3,6 +3,7 @@ namespace ScrumPilot.Shared.Models;
 /// <summary>Associates a user with an organization and a role.</summary>
 public class OrganizationMembership
 {
+    public Guid MembershipInstanceId { get; set; } = Guid.NewGuid();
     /// <summary>Identifier of the organization the user belongs to.</summary>
     public int OrganizationId { get; set; }
 

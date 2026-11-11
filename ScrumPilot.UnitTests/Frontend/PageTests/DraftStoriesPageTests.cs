@@ -63,7 +63,7 @@ namespace ScrumPilot.UnitTests.Frontend.PageTests
         }
 
         [Fact]
-        public void DraftPbiPage_RequestsSelectedProject_AndReloadsWhenSelectionChanges()
+        public void DraftPbiPage_RequestsSelectedProject_AndNewBoundaryReloadsSelection()
         {
             var projectState = Services.GetRequiredService<ProjectStateService>();
             projectState.SetProject(new Project { ProjectId = 7, ProjectName = "Seven" });
@@ -71,12 +71,14 @@ namespace ScrumPilot.UnitTests.Frontend.PageTests
             var component = Render<DraftPbiPage>();
 
             component.WaitForAssertion(() =>
-                Assert.Contains("api/Pbi/getDraftPbis?projectId=7", HttpRequests));
+                Assert.Contains("api/organizations/1/Pbi/getDraftPbis?projectId=7", HttpRequests));
 
             projectState.SetProject(new Project { ProjectId = 9, ProjectName = "Nine" });
+            component.Instance.Dispose();
+            var replacement = Render<DraftPbiPage>();
 
-            component.WaitForAssertion(() =>
-                Assert.Contains("api/Pbi/getDraftPbis?projectId=9", HttpRequests));
+            replacement.WaitForAssertion(() =>
+                Assert.Contains("api/organizations/1/Pbi/getDraftPbis?projectId=9", HttpRequests));
             Assert.Equal(2, HttpRequests.Count);
         }
 

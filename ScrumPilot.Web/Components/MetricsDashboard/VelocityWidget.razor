@@ -62,7 +62,8 @@
 @code {
     [Parameter] public int? SprintId { get; set; }
     [Parameter] public int? ProjectId { get; set; }
-    [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
+    [CascadingParameter] public WorkScope Work { get; set; } = default!;
+    private MetricsDashboardService MetricsSvc => new(Work.Http);
 
     private List<VelocityPoint> _points = [];
     private ApexChartOptions<VelocityPoint> _options = new();

@@ -1,5 +1,6 @@
 using ApexCharts;
 using Bunit;
+using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using ScrumPilot.FluentWeb.Components.MetricsDashboard;
 using ScrumPilot.FluentWeb.Services;
@@ -11,6 +12,22 @@ namespace ScrumPilot.FluentWeb.Tests.Metrics;
 
 public class MetricsDashboardTests : FluentFrontendTestBase
 {
+    [Fact]
+    public async Task Sprint_and_widget_controls_use_real_menu_change_events()
+    {
+        ArrangeProjectAndMetricEndpoints();
+        using var cut = Render<MetricsPage>();
+        cut.WaitForAssertion(() => Assert.Contains("Ship metrics", cut.Markup), TimeSpan.FromSeconds(10));
+        var allSprints = cut.FindAll("fluent-menu-item").Single(item => item.TextContent.Trim() == "All Sprints");
+        await allSprints.TriggerEventAsync("onmenuitemchange", new MenuItemEventArgs { Id = allSprints.Id, Checked = true });
+        cut.WaitForAssertion(() => Assert.DoesNotContain("sprint-goal-card", cut.Markup), TimeSpan.FromSeconds(10));
+
+        Assert.Single(cut.FindAll("[gs-id='days-left']"));
+        var daysLeft = cut.FindAll("fluent-menu-item").Single(item => item.TextContent.Trim() == "Days Left");
+        await daysLeft.TriggerEventAsync("onmenuitemchange", new MenuItemEventArgs { Id = daysLeft.Id, Checked = false });
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[gs-id='days-left']")), TimeSpan.FromSeconds(10));
+    }
+
     [Fact]
     public void Dashboard_renders_widget_cards_for_configured_widgets()
     {
@@ -31,7 +48,7 @@ public class MetricsDashboardTests : FluentFrontendTestBase
             Assert.Contains("Status Distribution", cut.Markup);
             Assert.Contains("PBI by Type", cut.Markup);
             Assert.DoesNotContain("mud-", cut.Markup, StringComparison.OrdinalIgnoreCase);
-        });
+        }, TimeSpan.FromSeconds(10));
     }
 
     [Fact]

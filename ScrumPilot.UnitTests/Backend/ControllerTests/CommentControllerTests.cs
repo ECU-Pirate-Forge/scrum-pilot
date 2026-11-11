@@ -72,10 +72,13 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             var created = MakeComment(5, 10, input.Body);
             _mockRepo.AddAsync(Arg.Any<Comment>()).Returns(created);
 
-            var result = await _controller.AddComment(input);
+            var result = await _controller.AddComment(1, input);
 
             var createdAt = Assert.IsType<CreatedAtActionResult>(result.Result);
             Assert.Equal(201, createdAt.StatusCode);
+            Assert.Equal(nameof(CommentController.GetComment), createdAt.ActionName);
+            Assert.Equal(1, createdAt.RouteValues!["organizationId"]);
+            Assert.Equal(5, createdAt.RouteValues["commentId"]);
             var returned = Assert.IsType<Comment>(createdAt.Value);
             Assert.Equal(5, returned.CommentId);
             Assert.Equal("🚩 Flagged: blocking dependency", returned.Body);
@@ -88,7 +91,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             var input = new Comment { PbiId = 10, UserId = "user1", Body = "any" };
             _mockRepo.AddAsync(Arg.Any<Comment>()).Returns(c => c.Arg<Comment>());
 
-            await _controller.AddComment(input);
+            await _controller.AddComment(1, input);
 
             await _mockRepo.Received(1).AddAsync(Arg.Is<Comment>(c => c.CreatedDate >= before));
         }
@@ -100,7 +103,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             var saved = MakeComment(3, 7, flagComment.Body);
             _mockRepo.AddAsync(Arg.Any<Comment>()).Returns(saved);
 
-            var result = await _controller.AddComment(flagComment);
+            var result = await _controller.AddComment(1, flagComment);
 
             Assert.IsType<CreatedAtActionResult>(result.Result);
         }
@@ -112,7 +115,7 @@ namespace ScrumPilot.UnitTests.Backend.ControllerTests
             var saved = MakeComment(4, 7, unflagComment.Body);
             _mockRepo.AddAsync(Arg.Any<Comment>()).Returns(saved);
 
-            var result = await _controller.AddComment(unflagComment);
+            var result = await _controller.AddComment(1, unflagComment);
 
             Assert.IsType<CreatedAtActionResult>(result.Result);
         }

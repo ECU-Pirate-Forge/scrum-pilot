@@ -1,7 +1,7 @@
 # Copilot Agent Instructions
 
-This file defines how the Copilot Agent should behave when assisting with this project.  
-Students should expand this file as they refine their workflow.
+This file defines the agent workflow for ScrumPilot. Project-wide architecture
+and coding rules live in the [project instructions](.github/copilot-instructions.md).
 
 ---
 
@@ -15,12 +15,11 @@ Your responsibilities include:
 ---
 
 ## 🧠 Project Knowledge
-The agent should understand:
-- The purpose of the project (students fill this in)
-- The folder structure
-- Any important architectural decisions
-
-Students should update this section as the project evolves.
+Use the [architecture](docs/architecture.md) and
+[contribution guide](CONTRIBUTING.md) to understand the API, SQL Server control
+and organization databases, shared client transport, Aspire, and both web clients.
+Read the [operations runbook](docs/multi-tenancy-operations.md) before changing
+lifecycle or recovery behavior. Do not use shared installations as test fixtures.
 
 ---
 
@@ -30,10 +29,9 @@ The agent may:
 - Suggest improvements
 - Run tasks or commands that the student explicitly approves
 
-Students may add:
-- Build commands  
-- Test commands  
-- Linting or formatting commands  
+An approved implementation plan authorizes its described changes and validation.
+Use the [testing guide](docs/codebase/TESTING.md) for commands, isolated SQL
+fixtures, and the required distinction between automated and live UI evidence.
 
 ---
 
@@ -43,9 +41,9 @@ The agent should NOT:
 - Introduce new frameworks without approval
 - Make large refactors unless requested
 
-Students may add:
-- Security restrictions  
-- API boundaries  
+Preserve unrelated working changes and existing data. Stop when the user pauses
+work and resume only on explicit instruction. Do not claim full parity from
+route inventories or passing unit tests alone.
 - Performance constraints  
 
 ---
@@ -57,7 +55,5 @@ When performing tasks, the agent should:
 3. Apply changes in small steps  
 4. Summarize what changed  
 
-Students may add:
-- Branching rules  
-- Commit message conventions  
-- Review workflows  
+Report the actual validation results, unresolved failures, and limitations.
+Keep changes small, maintain documentation, and follow the contribution guide.

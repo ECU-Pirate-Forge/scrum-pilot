@@ -18,10 +18,10 @@
     }
 </WidgetCard>
 
+@inherits WorkComponentBase
 @code {
     [Parameter] public int? SprintId { get; set; }
     [CascadingParameter(Name = "IsDarkMode")] public bool IsDarkMode { get; set; }
-    [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
     [Inject] private ILogger<BugTrendWidget> Logger { get; set; } = default!;
 
     private List<BugTrendPoint> _points = [];
@@ -40,6 +40,7 @@
         _loading = true;
         try { _points = SprintId.HasValue ? await MetricsSvc.GetBugTrendAsync(SprintId.Value) : []; }
         catch (Exception ex) { Logger.LogWarning(ex, "Failed to load bug trend for sprint {SprintId}", SprintId); _points = []; }
+        if (!Scope.IsCurrent) return;
         _options = BuildOptions(IsDarkMode);
         _chartKey++;
         _loading = false;

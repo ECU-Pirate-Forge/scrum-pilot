@@ -1,5 +1,11 @@
 # Fluent UI Blazor v5 Migration Implementation Plan
 
+> Historical migration plan. Its cutover/removal proposal is superseded: both Web
+> and FluentWeb remain supported until reviewed functionality, visualization and
+> presentation parity and separate retirement approval. Current multi-tenancy and
+> Aspire setup are documented in [architecture](../../architecture.md) and
+> [operations](../../multi-tenancy-operations.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a new Fluent UI Blazor WebAssembly v5 frontend for ScrumPilot, migrate every existing workflow with a new Fluent 2 brand and Fluent System Icons, validate feature and accessibility parity, then cut over and remove the MudBlazor frontend.
@@ -739,7 +745,7 @@ Cover invalid form submission, failed login, successful login redirect, accessib
 
 - [ ] **Step 1: Port all settings**
 
-Preserve email, Discord username, password change, default project, and UI preference.
+Preserve email, password change, validated default organization/project pair, and UI preference.
 
 - [ ] **Step 2: Use typed v5 list controls**
 
@@ -1103,7 +1109,7 @@ Pin the resolved Playwright package version in the project file after the first 
 
 - [ ] **Step 2: Create deterministic test data setup**
 
-Use the existing seeded development users and API seed data. Do not place passwords in source beyond credentials already documented for local seed data. Read E2E credentials from environment variables, with local user-secrets or CI secrets supplying values.
+Create explicit isolated fixture users and SQL Server 2025 organization data. Read E2E credentials from environment variables supplied by local user-secrets or CI secrets; never rely on known seeded accounts or commit credentials.
 
 - [ ] **Step 3: Add critical smoke tests**
 

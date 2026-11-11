@@ -13,7 +13,7 @@
     <MudPaper Class="pa-8 login-card" Elevation="8"
               Style="background: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 100%);">
         <div class="login-logo mb-4">
-            <img src="/images/logo.png" alt="ScrumPilot" style="max-height: 60px;" />
+            <img src="images/logo.png" alt="ScrumPilot" style="max-height: 60px;" />
         </div>
 
         <MudText Typo="Typo.h5" Align="Align.Center" Class="mb-6" Style="color: white; font-weight: 600;">Sign In</MudText>
@@ -139,7 +139,10 @@
         var success = await AuthService.LoginAsync(_model);
 
         if (success)
-            Navigation.NavigateTo(GetSafeReturnUrl(ReturnUrl));
+        {
+            var target = GetSafeReturnUrl(ReturnUrl);
+            Navigation.NavigateTo(target == "/" ? Navigation.BaseUri : target);
+        }
         else
             _errorMessage = "Invalid username or password.";
 

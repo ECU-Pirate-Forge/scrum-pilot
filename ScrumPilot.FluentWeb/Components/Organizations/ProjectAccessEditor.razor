@@ -1,5 +1,5 @@
 @implements IDisposable
-@inject HttpClient Http
+@inherits WorkComponentBase
 @inject ILogger<ProjectAccessEditor> Logger
 
 <div class="project-access-editor">
@@ -105,7 +105,7 @@
         }
     }
 
-    private bool IsCurrent((int ProjectId, bool CanManage) key, long generation) => !_disposed && generation == _generation && _lastParameterKey == key && (ProjectId, CanManage) == key;
+    private bool IsCurrent((int ProjectId, bool CanManage) key, long generation) => !_disposed && Scope.IsCurrent && generation == _generation && _lastParameterKey == key && (ProjectId, CanManage) == key;
     private static string AccessText(ProjectMemberAccessDto member) => member.OrganizationRole == OrganizationRole.Owner ? "Owner — implicit access" : member.HasExplicitAccess ? "Access granted" : "No access";
     public void Dispose()
     {

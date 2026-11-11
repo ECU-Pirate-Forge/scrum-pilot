@@ -1,115 +1,110 @@
 # ScrumPilot
 
-> AI-powered Scrum project management for multi-organization teams.
-
-ScrumPilot is a .NET 10 application for backlog management, Scrum boards, sprint metrics, AI-assisted story generation, and real-time planning poker. It is developed through ECU Pirate Forge and includes a Blazor WebAssembly client, ASP.NET Core API, EF Core data layer, and the ScrumLord Discord bot.
+AI-assisted Scrum project management for multi-organization teams, built with
+.NET 10, SQL Server 2025, EF Core, and Aspire.
 
 ## Features
 
-- Organization tenancy with global administrators and organization-scoped owners/members
-- Explicit project access for ordinary organization members
-- Scrum board, backlog, sprints, epics, comments, dependencies, and dashboards
-- AI story generation through Groq or local Ollama
-- SignalR planning poker with project authorization
-- Organization invitations delivered through SendGrid
-- 30-day organization soft-delete and restore lifecycle
+- One account can belong to multiple organizations with independent roles.
+- A central Identity/control database and a separate database per organization.
+- Backlogs, Scrum boards, sprints, epics, comments, assignments, and dependencies.
+- Metrics dashboards and dependency visualizations.
+- Organization-scoped SignalR planning poker.
+- Local Ollama story generation and improvement behind a replaceable AI interface.
+- Invitations, project access, provisioning/retry, and 30-day deletion/restore.
+- SQL Server backup/recovery and retention-gated permanent purge.
 
-## Organization tenancy
-
-- The ASP.NET Core Identity `Admin` role is global. Only a global Admin can create an organization or permanently purge one after its retention period.
-- `Owner` and `Member` are organization membership roles. Owners can rename and soft-delete their organization, manage invitations and members, promote or demote members, manage projects, and grant or revoke project access.
-- Owners implicitly access every project in their organization. They do not need `ProjectMembership` rows.
-- Members see only projects for which they have explicit project access. Organization membership alone is not project access.
-- The final owner cannot leave, be removed, or be demoted. Promote another member to Owner before the current final owner leaves or transfers responsibility.
-- Deleting an organization is reversible for 30 days. A historical owner can restore it during that window. After 30 days, only a global Admin can permanently purge it.
-
-### Pirate Forge migration and bootstrap
-
-The `AddOrganizationTenancy` migration creates `Pirate Forge`, assigns every existing project to it, makes existing global Admin users owners, makes other existing users members, and gives those members explicit access to all migrated projects. Startup grants initial Pirate Forge membership and project access only to development seed users created during that startup; deliberately removed users are not recreated as members. Existing member Admins may be promoted to Owner, and startup validation fails with an actionable error if Pirate Forge has no owner backed by a global Admin.
-
-### Invitations
-
-An owner invites an email address as Owner or Member. Invitation tokens are random, stored only as hashes, expire after 72 hours, and are single-use and revocable. Acceptance requires an authenticated account with a confirmed Identity email matching the invitation. The acceptance API returns the joined organization ID so the Web client can select it.
-
-The Web route is `/accept-invitation?token=...`. Anonymous recipients are sent through login and returned to the acceptance page; after success the token is removed from the browser URL.
+Both **MudBlazor Web** and **FluentWeb** are supported. FluentWeb must reach
+reviewed functional, visualization, and presentation parity before Web is retired.
 
 ## Architecture
 
 ```text
-ScrumPilot.Web -> HTTPS/JSON + SignalR -> ScrumPilot.API -> ScrumPilot.Data -> SQLite/PostgreSQL
+Aspire AppHost -> SQL Server 2025 + API + both browser clients + host Ollama
+Web / FluentWeb -> organization-qualified HTTP and SignalR -> API
+API -> EF Core -> control database + selected organization's database
 ```
 
-| Project | Responsibility |
-|---|---|
-| `ScrumPilot.API` | REST endpoints, authorization, services, SignalR, AI and email integrations |
-| `ScrumPilot.Web` | Blazor WebAssembly UI, organization/project selection, settings |
-| `ScrumPilot.Shared` | Shared entities, enums, request and response contracts |
-| `ScrumPilot.Data` | EF Core context, repositories, migrations, Identity, bootstrap |
-| `ScrumPilot.UnitTests` | xUnit, NSubstitute, bUnit, and relational tests |
-| `ScrumPilot.AppHost` | Aspire local orchestration |
-| `discord-bot` | ScrumLord Discord integration |
+Owners implicitly access every project in their organization. Members need an
+explicit project grant bound to their current membership. Global Admin manages
+platform operations but needs organization membership to read work. The final
+Owner cannot leave or be demoted/removed.
+
+Work URLs identify the organization. Browser tabs remain independent; switching
+does not overwrite account-wide defaults. Only deliberate settings changes save
+default organization/project selections.
 
 ## Getting started
 
-### Prerequisites
-
-- .NET SDK 10.0.401 or a compatible 10.0 SDK
-- Node.js for the optional Discord bot
-- Optional: Ollama for local AI generation
+Prerequisites: the .NET SDK selected by [global.json](global.json), a compatible
+Aspire CLI, a Linux-container runtime for local SQL Server 2025, and an existing
+host Ollama installation for AI. SQL Server 2025 can also be supplied externally.
+Browser-interoperability tests use Node.js 22+ with its built-in test runner;
+there is no root npm dependency restore.
 
 ```powershell
 dotnet restore .\ScrumPilot.slnx
-dotnet run --project .\ScrumPilot.API\ScrumPilot.API.csproj
-dotnet run --project .\ScrumPilot.Web\ScrumPilot.Web.csproj
+dotnet tool restore
+dotnet build .\ScrumPilot.slnx --configuration Release
+aspire start --non-interactive --isolated --apphost .\ScrumPilot.AppHost\ScrumPilot.AppHost.csproj
+aspire wait webapi
+aspire describe
 ```
 
-The standard development endpoints are API `http://localhost:5219`, Swagger `http://localhost:5219/swagger`, and Web `http://localhost:5199`.
+Use the discovered browser/gateway URLs rather than assuming fixed ports. A
+fresh installation requires explicit control-plane initialization and Admin
+bootstrap; normal startup never recreates missing control data or seeds default
+credentials. Follow the [operations runbook](docs/multi-tenancy-operations.md)
+before the first start.
 
-## Configuration
+AppHost is authoritative for resources, references, secrets, and configuration.
+Individual projects accept the same configuration names as direct-start
+fallbacks. Only public endpoint/proxy settings are sent to browsers.
 
-Do not commit production credentials. ASP.NET Core maps double underscores in environment variables to configuration section separators.
+Ollama defaults to `http://localhost:11434` and `gemma4:latest`; configure the
+endpoint/model in AppHost. Model installation is an explicit operator action,
+not an automatic application download. Inference unavailability must not prevent
+ordinary Scrum work.
 
-| Variable | Purpose |
+## Projects
+
+| Project | Responsibility |
 |---|---|
-| `DATABASE_URL` | PostgreSQL connection URI; absence selects configured SQLite |
-| `GroqApiKey` | Optional Groq key; absence uses Ollama |
-| `SendGrid__ApiKey` | SendGrid API key |
-| `SendGrid__FromEmail` | Verified sender email |
-| `SendGrid__FromName` | Invitation sender display name |
-| `SendGrid__InvitationBaseUrl` | Absolute Web URL ending at `/accept-invitation` |
+| [AppHost](ScrumPilot.AppHost/README.md) | Resources, configuration, migration ordering, gateways |
+| [API](ScrumPilot.API/README.md) | Authentication, authorization, HTTP/SignalR, workflows |
+| [Data](ScrumPilot.Data/README.md) | EF Core contexts, SQL Server migrations and operations |
+| [Shared](ScrumPilot.Shared/README.md) | Domain models and API contracts |
+| [Client](ScrumPilot.Client/README.md) | UI-neutral tenant routes and request lifetimes |
+| [Web](ScrumPilot.Web/README.md) | Supported MudBlazor client |
+| [FluentWeb](ScrumPilot.FluentWeb/README.md) | Fluent UI client and visualizations |
+| [ServiceDefaults](ScrumPilot.ServiceDefaults/README.md) | Server discovery, health, resilience, telemetry |
+| [UnitTests](ScrumPilot.UnitTests/README.md) | Backend, SQL Server, and MudBlazor tests |
+| [FluentWeb.Tests](ScrumPilot.FluentWeb.Tests/README.md) | Fluent UI behavior tests |
+| [Aspire.Tests](ScrumPilot.Aspire.Tests/README.md) | Resource/configuration integration tests |
 
-For local development, `SendGrid__InvitationBaseUrl` may use HTTP only with a loopback host, for example `http://localhost:5199/accept-invitation`. Production and every non-loopback URL must use HTTPS, for example `https://your-web-host/accept-invitation`.
-
-SendGrid options are validated lazily on the first invitation delivery, not during API startup. Invalid configuration produces an invitation delivery error. After correcting environment variables or configuration, restart the API so configuration is reloaded, especially if options were already cached.
-
-Committed `appsettings.json` contains empty SendGrid placeholders only. Docker Compose passes the four variables from the host without defining values. Render operators must configure the same variables as secrets/environment variables on the API service; the deployment workflow builds images and triggers Render but does not copy secret values into images.
-
-## Organization UI
-
-The application shell includes a persistent organization switcher and an accessible-project switcher. Selection falls back to the user's default organization/project from `/user-settings`, and inaccessible selections are cleared. `/organization-management` provides Admin-only organization creation and owner controls for rename, invitations, membership roles, project access, leave, and delete. It also lists deleted organizations for historical owners (and all deleted organizations for global Admins), with restore and retention-gated purge actions according to permissions. `/user-settings` manages default organization and project preferences.
-
-## Verification commands
+## Verification
 
 ```powershell
 dotnet format .\ScrumPilot.slnx --verify-no-changes
 dotnet test .\ScrumPilot.UnitTests\ScrumPilot.UnitTests.csproj --configuration Release
-dotnet build .\ScrumPilot.slnx --configuration Release
-$env:DATABASE_URL = 'postgresql://unused:unused@localhost:5432/scrumpilot_design'
-dotnet ef migrations has-pending-model-changes --project .\ScrumPilot.Data\ScrumPilot.Data.csproj --startup-project .\ScrumPilot.API\ScrumPilot.API.csproj
-npm test --prefix .\discord-bot
+dotnet test .\ScrumPilot.FluentWeb.Tests\ScrumPilot.FluentWeb.Tests.csproj --configuration Release
+dotnet test .\ScrumPilot.Aspire.Tests\ScrumPilot.Aspire.Tests.csproj --configuration Release
+node --test .\ScrumPilot.FluentWeb.Tests\JavaScript\dual-web-interop.test.cjs
 ```
 
-The design-time URI is parsed to select Npgsql but the pending-model check does not connect to that database. Replace it with the deployment connection only for commands that actually access a database.
+Database guarantees require actual SQL Server 2025, not a substitute provider.
+See [testing](docs/codebase/TESTING.md) for provider fixtures, migration checks,
+publish commands, and the two-organization browser acceptance matrix.
 
-## Deployment
+## Operations and contribution
 
-Render hosts the API and Web images. The API applies EF migrations and then runs the idempotent Pirate Forge bootstrap at startup. Configure `DATABASE_URL`, JWT settings, AI provider settings, and all four SendGrid variables in the API service. `SendGrid__InvitationBaseUrl` must point to the deployed Web `/accept-invitation` route over HTTPS.
+Production needs persistent SQL data/backup storage, protected secrets, trusted
+SQL TLS certificates, and least-privileged runtime access. One API process is
+supported while poker state and draining coordination remain process-local.
+This release is a fresh deployment; it does not import or delete an old installation.
 
-## Project documentation
-
-- [API](ScrumPilot.API/README.md)
-- [Data](ScrumPilot.Data/README.md)
-- [Web](ScrumPilot.Web/README.md)
-- [Shared](ScrumPilot.Shared/README.md)
-- [Tests](ScrumPilot.UnitTests/README.md)
-- [Discord bot](discord-bot/README.md)
+- [Operations and recovery](docs/multi-tenancy-operations.md)
+- [Architecture](docs/architecture.md)
+- [API contracts](docs/api.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Contributing](CONTRIBUTING.md)

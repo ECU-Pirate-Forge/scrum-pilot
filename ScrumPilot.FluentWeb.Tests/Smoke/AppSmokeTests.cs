@@ -9,6 +9,8 @@ public class AppSmokeTests : FluentFrontendTestBase
     [Fact]
     public void App_renders_home_page_and_has_no_mud_classes()
     {
+        Http.OnGetJson("api/organizations", new List<ScrumPilot.Shared.Models.OrganizationSummaryDto>());
+        Http.OnGetJson("api/user/settings", new ScrumPilot.Shared.Models.UserSettingsDto());
         using var cut = Render<ScrumPilot.FluentWeb.App>();
 
         var heading = cut.Find("h1");

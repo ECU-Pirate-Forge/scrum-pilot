@@ -1,5 +1,6 @@
 @inject HttpClient Http
 @inject ILogger<OrganizationDetails> Logger
+@implements IDisposable
 
 <FluentCard Class="organization-card">
     <div>
@@ -30,6 +31,7 @@
     private int? _sourceOrganizationId;
     private string? _sourceName;
     private long _generation;
+    private bool _disposed;
 
     protected override void OnParametersSet()
     {
@@ -70,7 +72,8 @@
             if (!IsCurrent(generation, organizationId)) return;
             if (!response.IsSuccessStatusCode)
             {
-                _error = await ErrorAsync(response, "Unable to rename the organization.");
+                var error = await ErrorAsync(response, "Unable to rename the organization.");
+                if (IsCurrent(generation, organizationId)) _error = error;
                 return;
             }
             var updated = await response.Content.ReadFromJsonAsync<OrganizationSummaryDto>();
@@ -94,11 +97,12 @@
         }
     }
 
-    private bool IsCurrent(long generation, int organizationId) => generation == _generation && _sourceOrganizationId == organizationId && Organization.OrganizationId == organizationId;
+    private bool IsCurrent(long generation, int organizationId) => !_disposed && generation == _generation && _sourceOrganizationId == organizationId && Organization.OrganizationId == organizationId;
     private static async Task<string> ErrorAsync(HttpResponseMessage response, string fallback)
     {
         try { return (await response.Content.ReadFromJsonAsync<ProblemDetails>())?.Detail ?? fallback; }
         catch { return fallback; }
     }
     private sealed class ProblemDetails { public string? Detail { get; set; } }
+    public void Dispose() => _disposed = true;
 }

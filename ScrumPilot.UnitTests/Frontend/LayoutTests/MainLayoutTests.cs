@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using Bunit;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
@@ -11,6 +12,7 @@ using NSubstitute;
 using ScrumPilot.Shared.Models;
 using ScrumPilot.Web.Layout;
 using ScrumPilot.Web.Services;
+using ScrumPilot.Client;
 
 namespace ScrumPilot.UnitTests.Frontend.LayoutTests;
 
@@ -28,11 +30,120 @@ public class MainLayoutTests : BunitContext
         Services.AddSingleton<AuthenticationStateProvider>(_authentication);
         Services.AddSingleton(Substitute.For<IAuthService>());
         JSInterop.Mode = JSRuntimeMode.Loose;
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/organizations/1/backlog?projectId=11");
+    }
+
+    [Fact]
+    public async Task IndependentTabsKeepTheirOwnScopeWithoutWritingDefaults()
+    {
+        await using var otherTab = new MainLayoutTests();
+        foreach (var tab in new[] { this, otherTab })
+        {
+            tab._handler.Respond("api/organizations", new[] { Organization(1, "First"), Organization(2, "Second") });
+            tab._handler.Respond("api/user/settings", new UserSettingsDto { DefaultOrganizationId = 2, DefaultProjectId = 11 });
+            tab._handler.Respond("api/organizations/1/projects", new[] { Project(11, 1, "First project 11") });
+            tab._handler.Respond("api/organizations/2/projects", new[] { Project(11, 2, "Second project 11") });
+        }
+        otherTab.Services.GetRequiredService<NavigationManager>().NavigateTo("/organizations/2/backlog?projectId=11");
+        using var first = Render<MainLayout>(p => p.Add(x => x.Body, builder =>
+        {
+            builder.OpenComponent<WorkProbe>(0);
+            builder.CloseComponent();
+        }));
+        using var second = otherTab.Render<MainLayout>(p => p.Add(x => x.Body, builder =>
+        {
+            builder.OpenComponent<WorkProbe>(0);
+            builder.CloseComponent();
+        }));
+        var secondScope = second.FindComponent<WorkProbe>().Instance.Work;
+
+        await first.InvokeAsync(() => Services.GetRequiredService<NavigationManager>().NavigateTo("/organizations/2/backlog?projectId=11"));
+
+        Assert.True(secondScope.IsCurrent);
+        Assert.Same(secondScope, second.FindComponent<WorkProbe>().Instance.Work);
+        Assert.Equal(2, otherTab.Services.GetRequiredService<OrganizationStateService>().SelectedOrganizationId);
+        Assert.Empty(_handler.JsonBodies);
+        Assert.Empty(otherTab._handler.JsonBodies);
+    }
+
+    [Fact]
+    public async Task ExplicitRouteWinsOverDefaultsAndSameLocalProjectIdsRemountTheBoundary()
+    {
+        _handler.Respond("api/organizations", new[] { Organization(1, "First"), Organization(2, "Second") });
+        _handler.Respond("api/user/settings", new UserSettingsDto { DefaultOrganizationId = 2, DefaultProjectId = 11 });
+        _handler.Respond("api/organizations/1/projects", new[] { Project(11, 1, "First project 11") });
+        _handler.Respond("api/organizations/2/projects", new[] { Project(11, 2, "Second project 11") });
+        var cut = Render<MainLayout>(parameters => parameters.Add(layout => layout.Body, builder =>
+        {
+            builder.OpenComponent<WorkProbe>(0);
+            builder.CloseComponent();
+        }));
+        var old = cut.FindComponent<WorkProbe>().Instance;
+        Assert.Equal(1, old.Work.OrganizationId);
+        Assert.Equal(11, old.Work.ProjectId);
+
+        await cut.InvokeAsync(() => Services.GetRequiredService<NavigationManager>()
+            .NavigateTo("/organizations/2/backlog?projectId=11"));
+
+        cut.WaitForAssertion(() =>
+        {
+            var current = cut.FindComponent<WorkProbe>().Instance;
+            Assert.NotSame(old, current);
+            Assert.False(old.Work.IsCurrent);
+            Assert.Equal(2, current.Work.OrganizationId);
+            Assert.Equal(11, current.Work.ProjectId);
+            Assert.Equal(2, Services.GetRequiredService<ProjectStateService>().SelectedProject!.OrganizationId);
+        });
+        Assert.Empty(_handler.JsonBodies);
+    }
+
+    [Fact]
+    public void LegacyProjectOnlyLinkShowsPickerAndNeverUsesDefaultsToGuessTenant()
+    {
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/backlog?projectId=11");
+        _handler.Respond("api/organizations", new[] { Organization(1, "First") });
+        _handler.Respond("api/user/settings", new UserSettingsDto { DefaultOrganizationId = 1, DefaultProjectId = 11 });
+        var cut = Render<MainLayout>();
+        Assert.Contains("Old project-only links cannot identify an organization", cut.Markup);
+        Assert.Null(Services.GetRequiredService<OrganizationStateService>().SelectedOrganizationId);
+        Assert.DoesNotContain(_handler.Requests, path => path.EndsWith("/projects"));
+    }
+
+    public sealed class WorkProbe : ComponentBase
+    {
+        [CascadingParameter] public WorkScope Work { get; set; } = default!;
+        protected override void BuildRenderTree(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder) =>
+            builder.AddContent(0, $"{Work.OrganizationId}/{Work.ProjectId}");
+    }
+
+    [Fact]
+    public async Task AnonymousGlobalNavigationDoesNotLoadTenantDataOrHideLogin()
+    {
+        _authentication.SetAuthenticated(false);
+        var cut = Render<MainLayout>(parameters => parameters.Add(layout => layout.Body,
+            builder => builder.AddContent(0, "Global login content")));
+        await cut.InvokeAsync(() => Services.GetRequiredService<NavigationManager>().NavigateTo("/login"));
+        Assert.Empty(_handler.Requests);
+        Assert.Contains("Global login content", cut.Markup);
+        Assert.DoesNotContain("Unable to open", cut.Markup);
+    }
+
+    [Fact]
+    public void AdminWithoutMembershipCannotOpenWorkAndNeverFallsBack()
+    {
+        _handler.Respond("api/organizations", new[] { Organization(1, "Directory only"), Organization(2, "Other") });
+        _handler.Respond("api/user/settings", new UserSettingsDto { DefaultOrganizationId = 2 });
+        _handler.RespondStatus("api/organizations/1/projects", HttpMethod.Get, HttpStatusCode.Forbidden);
+        var cut = Render<MainLayout>();
+        Assert.Contains("Unable to open this organization.", cut.Markup);
+        Assert.DoesNotContain("api/organizations/2/projects", _handler.Requests);
+        Assert.Null(Services.GetRequiredService<OrganizationStateService>().SelectedOrganizationId);
     }
 
     [Fact]
     public void AuthenticatedStartup_SelectsAccessibleDefaultsAndUsesOrganizationRoute()
     {
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/");
         _handler.Respond("api/organizations", new[]
         {
             Organization(1, "First"),
@@ -41,7 +152,6 @@ public class MainLayoutTests : BunitContext
         _handler.Respond("api/user/settings", new UserSettingsDto
         {
             Email = "user@example.com",
-            DiscordUsername = "user",
             UiPreference = UiPreference.Dark,
             DefaultOrganizationId = 2,
             DefaultProjectId = 22
@@ -61,8 +171,9 @@ public class MainLayoutTests : BunitContext
     }
 
     [Fact]
-    public void Startup_IgnoresInaccessibleDefaultsAndSelectsFirstAccessibleItems()
+    public void Startup_ShowsUnavailableDefaultWithoutFallingBackToAnotherOrganization()
     {
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/");
         _handler.Respond("api/organizations", new[] { Organization(4, "Accessible") });
         _handler.Respond("api/user/settings", new UserSettingsDto
         {
@@ -76,14 +187,15 @@ public class MainLayoutTests : BunitContext
 
         var cut = Render<MainLayout>();
 
-        Assert.Equal(4, Services.GetRequiredService<OrganizationStateService>().SelectedOrganizationId);
-        Assert.Equal(41, Services.GetRequiredService<ProjectStateService>().SelectedProjectId);
-        Assert.Contains("Accessible", cut.Markup);
-        Assert.DoesNotContain("Inaccessible", cut.Markup);
+        Assert.Null(Services.GetRequiredService<OrganizationStateService>().SelectedOrganizationId);
+        Assert.Null(Services.GetRequiredService<ProjectStateService>().SelectedProjectId);
+        Assert.Contains("api/organizations", _handler.Requests);
+        Assert.Contains("unavailable", cut.Markup);
+        Assert.DoesNotContain("api/organizations/4/projects", _handler.Requests);
     }
 
     [Fact]
-    public async Task OrganizationChange_ClearsProjectLoadsScopedRouteAndPersistsMergedSettings()
+    public async Task OrganizationChange_ClearsProjectAndDoesNotPersistAccountDefaults()
     {
         _handler.Respond("api/organizations", new[]
         {
@@ -93,7 +205,6 @@ public class MainLayoutTests : BunitContext
         _handler.Respond("api/user/settings", new UserSettingsDto
         {
             Email = "keep@example.com",
-            DiscordUsername = "keep-discord",
             UiPreference = UiPreference.Dark,
             DefaultOrganizationId = 1,
             DefaultProjectId = 11
@@ -123,13 +234,11 @@ public class MainLayoutTests : BunitContext
             Content = JsonContent.Create(new[] { Project(21, 2, "New") })
         });
         await selectionTask;
-
-        var saved = Assert.Single(_handler.JsonBodies);
-        Assert.Equal("keep@example.com", saved.Email);
-        Assert.Equal("keep-discord", saved.DiscordUsername);
-        Assert.Equal(UiPreference.Dark, saved.UiPreference);
-        Assert.Equal(2, saved.DefaultOrganizationId);
-        Assert.Equal(21, saved.DefaultProjectId);
+        cut.WaitForAssertion(() =>
+            Assert.Equal(2, Services.GetRequiredService<OrganizationStateService>().SelectedOrganizationId));
+        Assert.Null(Services.GetRequiredService<ProjectStateService>().SelectedProjectId);
+        Assert.Empty(_handler.JsonBodies);
+        Assert.EndsWith("/organizations/2/backlog", Services.GetRequiredService<NavigationManager>().Uri);
     }
 
     [Fact]
@@ -169,7 +278,7 @@ public class MainLayoutTests : BunitContext
         _handler.RespondStatus("api/user/settings", HttpMethod.Put, HttpStatusCode.NoContent);
 
         var cut = Render<MainLayout>();
-        cut.FindAll("button").Single(button => button.TextContent.Contains("First")).Click();
+        cut.FindAll("button").Single(button => button.TextContent.Contains("Select Organization")).Click();
         var second = cut.FindComponents<MudMenuItem>()
             .Single(item => item.Markup.Contains("Second"));
         await cut.InvokeAsync(() => second.Instance.OnClick.InvokeAsync(new MouseEventArgs()));
@@ -182,12 +291,12 @@ public class MainLayoutTests : BunitContext
         cut.WaitForAssertion(() =>
         {
             Assert.Equal(2, Services.GetRequiredService<OrganizationStateService>().SelectedOrganizationId);
-            Assert.Equal(21, Services.GetRequiredService<ProjectStateService>().SelectedProjectId);
+            Assert.Null(Services.GetRequiredService<ProjectStateService>().SelectedProjectId);
         });
     }
 
     [Fact]
-    public async Task ProjectChange_PersistsSelectionWithoutOverwritingOtherSettings()
+    public async Task ProjectChange_UpdatesOnlyTheRouteNotAccountSettings()
     {
         _handler.Respond("api/organizations", new[] { Organization(1, "Organization") });
         var settingsRequest = 0;
@@ -198,7 +307,6 @@ public class MainLayoutTests : BunitContext
                 ? new UserSettingsDto
                 {
                     Email = "old@example.com",
-                    DiscordUsername = "old-discord",
                     UiPreference = UiPreference.Light,
                     DefaultOrganizationId = 1,
                     DefaultProjectId = 11
@@ -206,7 +314,6 @@ public class MainLayoutTests : BunitContext
                 : new UserSettingsDto
                 {
                     Email = "latest@example.com",
-                    DiscordUsername = "latest-discord",
                     UiPreference = UiPreference.Dark,
                     DefaultOrganizationId = 1,
                     DefaultProjectId = 11
@@ -229,12 +336,10 @@ public class MainLayoutTests : BunitContext
 
         await cut.InvokeAsync(() => second.Instance.OnClick.InvokeAsync(new MouseEventArgs()));
 
-        var saved = Assert.Single(_handler.JsonBodies);
-        Assert.Equal("latest@example.com", saved.Email);
-        Assert.Equal("latest-discord", saved.DiscordUsername);
-        Assert.Equal(UiPreference.Dark, saved.UiPreference);
-        Assert.Equal(1, saved.DefaultOrganizationId);
-        Assert.Equal(12, saved.DefaultProjectId);
+        Assert.Empty(_handler.JsonBodies);
+        Assert.Equal(1, settingsRequest);
+        Assert.Equal(12, Services.GetRequiredService<ProjectStateService>().SelectedProjectId);
+        Assert.EndsWith("/organizations/1/backlog?projectId=12", Services.GetRequiredService<NavigationManager>().Uri);
     }
 
     [Fact]
@@ -269,12 +374,12 @@ public class MainLayoutTests : BunitContext
         {
             Assert.Null(Services.GetRequiredService<OrganizationStateService>().SelectedOrganization);
             Assert.Null(Services.GetRequiredService<ProjectStateService>().SelectedProject);
-            Assert.Contains("Unable to load organizations and projects.", cut.Markup);
+            Assert.Contains("Unable to open this organization.", cut.Markup);
         });
     }
 
     [Fact]
-    public async Task Startup_WhenEveryOrganizationIsStale_AttemptsEachOnceAndStops()
+    public async Task Startup_WhenExplicitOrganizationIsStale_NeverAttemptsAnother()
     {
         _handler.Respond("api/organizations", new[]
         {
@@ -296,11 +401,9 @@ public class MainLayoutTests : BunitContext
         {
             Assert.Null(Services.GetRequiredService<OrganizationStateService>().SelectedOrganization);
             Assert.Null(Services.GetRequiredService<ProjectStateService>().SelectedProject);
-            Assert.Contains("Unable to load organizations and projects.", cut.Markup);
-            Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(
-                cut.Markup, "Unable to load organizations and projects\\.").Count);
+            Assert.Contains("Unable to open this organization.", cut.Markup);
             Assert.Equal(1, _handler.Requests.Count(r => r == "api/organizations/1/projects"));
-            Assert.Equal(1, _handler.Requests.Count(r => r == "api/organizations/2/projects"));
+            Assert.DoesNotContain("api/organizations/2/projects", _handler.Requests);
         });
         var requestCount = _handler.Requests.Count;
 
@@ -310,7 +413,7 @@ public class MainLayoutTests : BunitContext
     }
 
     [Fact]
-    public async Task RapidProjectChanges_SerializeWritesAndPersistLatestSelectionLast()
+    public async Task RapidProjectChanges_UseLatestUrlWithoutWritingDefaults()
     {
         _handler.Respond("api/organizations", new[] { Organization(1, "Organization") });
         _handler.Respond("api/user/settings", new UserSettingsDto
@@ -358,7 +461,7 @@ public class MainLayoutTests : BunitContext
         {
             secondSelection = second.Instance.OnClick.InvokeAsync(new MouseEventArgs());
         });
-        cut.WaitForAssertion(() => Assert.Single(_handler.JsonBodies));
+        Assert.Empty(_handler.JsonBodies);
 
         Task thirdSelection = Task.CompletedTask;
         var thirdDispatch = cut.InvokeAsync(() =>
@@ -367,20 +470,19 @@ public class MainLayoutTests : BunitContext
         });
         cut.WaitForAssertion(() =>
             Assert.Equal(13, Services.GetRequiredService<ProjectStateService>().SelectedProjectId));
-        Assert.Single(_handler.JsonBodies);
+        Assert.Empty(_handler.JsonBodies);
 
         firstPut.SetResult(new HttpResponseMessage(HttpStatusCode.NoContent));
         await Task.WhenAll(secondSelection, thirdDispatch);
         await thirdSelection;
 
-        Assert.Equal(2, _handler.JsonBodies.Count);
-        Assert.Equal(12, _handler.JsonBodies[0].DefaultProjectId);
-        Assert.Equal(13, _handler.JsonBodies[1].DefaultProjectId);
-        Assert.Equal(1, maximumActivePuts);
+        Assert.Empty(_handler.JsonBodies);
+        Assert.Equal(0, maximumActivePuts);
+        Assert.EndsWith("projectId=13", Services.GetRequiredService<NavigationManager>().Uri);
     }
 
     [Fact]
-    public async Task Logout_CancelsBlockedPreferenceWriteAndExitsWithoutSnackbar()
+    public async Task Logout_AfterSwitchNeverStartsAPreferenceWrite()
     {
         _handler.Respond("api/organizations", new[] { Organization(1, "Organization") });
         _handler.Respond("api/user/settings", new UserSettingsDto
@@ -418,19 +520,19 @@ public class MainLayoutTests : BunitContext
 
         var selectionTask = cut.InvokeAsync(
             () => second.Instance.OnClick.InvokeAsync(new MouseEventArgs()));
-        await putStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await selectionTask;
+        Assert.False(putStarted.Task.IsCompleted);
         cut.Find("[title='Sign out']").Click();
         cut.FindAll("button").Single(button => button.TextContent.Trim() == "Sign Out").Click();
 
-        await putCanceled.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        await selectionTask.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.False(putCanceled.Task.IsCompleted);
         Assert.Equal(0, completedPuts);
         Assert.DoesNotContain(
             "Unable to save your organization and project selection.", cut.Markup);
     }
 
     [Fact]
-    public async Task Dispose_CancelsBlockedPreferenceWriteAndWriterExits()
+    public async Task Dispose_AfterSwitchNeverStartsAPreferenceWrite()
     {
         _handler.Respond("api/organizations", new[] { Organization(1, "Organization") });
         _handler.Respond("api/user/settings", new UserSettingsDto
@@ -466,15 +568,16 @@ public class MainLayoutTests : BunitContext
 
         var selectionTask = cut.InvokeAsync(
             () => second.Instance.OnClick.InvokeAsync(new MouseEventArgs()));
-        await putStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await selectionTask;
+        Assert.False(putStarted.Task.IsCompleted);
         cut.Instance.Dispose();
 
-        await putCanceled.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        await selectionTask.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.False(putCanceled.Task.IsCompleted);
+        Assert.Empty(_handler.JsonBodies);
     }
 
     [Fact]
-    public async Task NewSessionWriter_IsNotBlockedOrOverwrittenByStaleWriter()
+    public async Task NewSessionSelection_UsesUrlWithoutAnySettingsWriter()
     {
         _handler.Respond("api/organizations", new[] { Organization(1, "Organization") });
         _handler.Respond("api/user/settings", new UserSettingsDto
@@ -510,29 +613,30 @@ public class MainLayoutTests : BunitContext
             .Single(item => item.Markup.Contains("Second"));
         var staleSelection = cut.InvokeAsync(
             () => second.Instance.OnClick.InvokeAsync(new MouseEventArgs()));
-        await stalePutStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await staleSelection;
+        Assert.False(stalePutStarted.Task.IsCompleted);
 
         _authentication.SetAuthenticated(false);
         cut.WaitForAssertion(() =>
             Assert.Null(Services.GetRequiredService<ProjectStateService>().SelectedProject));
         _authentication.SetAuthenticated(true);
         cut.WaitForAssertion(() =>
-            Assert.Equal(11, Services.GetRequiredService<ProjectStateService>().SelectedProjectId));
-        cut.FindAll("button").Single(button => button.TextContent.Contains("First")).Click();
+            Assert.Equal(12, Services.GetRequiredService<ProjectStateService>().SelectedProjectId));
+        cut.FindAll("button").Single(button => button.TextContent.Contains("Second")).Click();
         var third = cut.FindComponents<MudMenuItem>()
             .Single(item => item.Markup.Contains("Third"));
 
         await cut.InvokeAsync(
             () => third.Instance.OnClick.InvokeAsync(new MouseEventArgs()))
             .WaitAsync(TimeSpan.FromSeconds(5));
-        Assert.Equal(2, putCount);
+        Assert.Equal(0, putCount);
 
         releaseStalePut.SetResult(new HttpResponseMessage(HttpStatusCode.NoContent));
         await staleSelection.WaitAsync(TimeSpan.FromSeconds(5));
         await cut.InvokeAsync(
             () => third.Instance.OnClick.InvokeAsync(new MouseEventArgs()));
 
-        Assert.Equal(2, putCount);
+        Assert.Equal(0, putCount);
     }
 
     [Fact]
@@ -557,14 +661,14 @@ public class MainLayoutTests : BunitContext
 
         cut.WaitForAssertion(() =>
         {
-            Assert.Equal(2, _handler.Requests.Count(
-                r => r == "api/organizations/1/projects"));
+            Assert.True(_handler.Requests.Count(
+                r => r == "api/organizations/1/projects") >= 2);
             Assert.Equal(12, Services.GetRequiredService<ProjectStateService>().SelectedProjectId);
         });
     }
 
     [Fact]
-    public async Task ProjectChange_WhenSettingsAreNull_PersistsSelectionFromNewSettings()
+    public async Task ProjectChange_WhenSettingsAreNull_StillNeverPersistsDefaults()
     {
         _handler.Respond("api/organizations", new[] { Organization(1, "Organization") });
         _handler.RespondAsync("api/user/settings", HttpMethod.Get, _ =>
@@ -587,9 +691,8 @@ public class MainLayoutTests : BunitContext
 
         cut.WaitForAssertion(() =>
         {
-            var saved = Assert.Single(_handler.JsonBodies);
-            Assert.Equal(1, saved.DefaultOrganizationId);
-            Assert.Equal(12, saved.DefaultProjectId);
+            Assert.Empty(_handler.JsonBodies);
+            Assert.Equal(12, Services.GetRequiredService<ProjectStateService>().SelectedProjectId);
         });
     }
 

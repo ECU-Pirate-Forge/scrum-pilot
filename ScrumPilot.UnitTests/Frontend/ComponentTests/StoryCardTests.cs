@@ -30,6 +30,16 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
         }
 
         [Fact]
+        public void HistoricalAssigneeNameDoesNotRequireCurrentProjectEligibility()
+        {
+            var pbi = CreateTestPbi();
+            pbi.AssignedToUserId = "removed-member";
+            pbi.AssignedToUserName = "Historical teammate";
+            var cut = Render<PbiCard>(parameters => parameters.Add(component => component.PbiModel, pbi));
+            Assert.Contains("Historical teammate", cut.Markup);
+        }
+
+        [Fact]
         public void PbiCard_RendersWithValidPbi()
         {
             // Arrange
@@ -198,7 +208,7 @@ namespace ScrumPilot.UnitTests.Frontend.ComponentTests
 
             component.WaitForAssertion(() =>
                 Assert.Contains(HttpRequests, request =>
-                    request.Equals("api/Pbi", StringComparison.OrdinalIgnoreCase)));
+                    request.Equals("api/organizations/1/Pbi", StringComparison.OrdinalIgnoreCase)));
         }
 
         [Theory]

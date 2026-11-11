@@ -29,6 +29,7 @@ public class ManagementPageTests : FluentFrontendTestBase
     {
         SelectOrganization();
         RegisterProjectManagementRoutes([Project(10, "Apollo", "Migration work")]);
+        _projectState.SetProject(Project(10, "Apollo", "Migration work"));
 
         using var cut = Render<ProjectManagement>();
 
@@ -45,7 +46,12 @@ public class ManagementPageTests : FluentFrontendTestBase
         Http.On(HttpMethod.Post, "api/organizations/7/projects", (_, body) =>
             MockHttpHandler.Json(Project(44, "Roadmap", "Quarterly plan"), HttpStatusCode.OK));
         var notified = false;
-        _projectState.OnProjectListChanged += () => notified = true;
+        int? projectWhenNotified = null;
+        _projectState.OnProjectListChanged += () =>
+        {
+            notified = true;
+            projectWhenNotified = _projectState.SelectedProjectId;
+        };
 
         using var cut = Render<ProjectManagement>();
         cut.WaitForAssertion(() => Assert.Contains("No projects yet", cut.Markup));
@@ -63,6 +69,7 @@ public class ManagementPageTests : FluentFrontendTestBase
             Assert.Equal("Roadmap", document.RootElement.GetProperty("projectName").GetString());
             Assert.Equal("Quarterly plan", document.RootElement.GetProperty("description").GetString());
             Assert.True(notified);
+            Assert.Equal(44, projectWhenNotified);
         });
     }
 
@@ -132,4 +139,3 @@ public class ManagementPageTests : FluentFrontendTestBase
         return Task.FromResult(_nextConfirmation);
     }
 }
-

@@ -2,21 +2,26 @@
 
 | Path | Responsibility |
 |---|---|
-| `ScrumPilot.API/Authorization` | Current identity and persisted access checks |
-| `ScrumPilot.API/Configuration` | Typed options and SendGrid validation |
-| `ScrumPilot.API/Controllers` | REST boundaries and problem responses |
-| `ScrumPilot.API/Hubs` | Authorized planning poker |
-| `ScrumPilot.API/Services` | Organization, invitation, project, settings, Scrum and AI workflows |
-| `ScrumPilot.Data/Context` | EF Core model and constraints |
-| `ScrumPilot.Data/Repositories` | Tenant-aware queries and atomic mutations |
-| `ScrumPilot.Data/Migrations` | Provider-compatible schema/backfill history |
-| `ScrumPilot.Data/Seeders`, `Services` | Idempotent seeds, Pirate Forge bootstrap and validation |
-| `ScrumPilot.Shared/Models` | Domain models, tenancy enums and DTOs |
-| `ScrumPilot.Web/Layout` | Organization/project switchers |
-| `ScrumPilot.Web/Components/Organizations` | Details, members, invitations, access and danger-zone UI |
-| `ScrumPilot.Web/Pages` | Feature routes, management, acceptance |
-| `ScrumPilot.UnitTests` | Backend, relational, hub, frontend and contract tests |
-| `docs/codebase` | Exactly seven implementation-analysis documents |
-| `docs/superpowers/plans` | Historical plan with implementation divergences |
+| `ScrumPilot.AppHost` | Authoritative resource graph and deployment configuration |
+| `ScrumPilot.ServiceDefaults` | Server discovery, resilience, health, OpenTelemetry |
+| `ScrumPilot.API/Authorization` | Central membership and selected-project access |
+| `ScrumPilot.API/Configuration` | Typed options, validation, operator commands |
+| `ScrumPilot.API/Controllers` | HTTP boundaries, status and resource links |
+| `ScrumPilot.API/Hubs` | Organization-bound poker with invocation-scoped access |
+| `ScrumPilot.API/Services` | Workflows, invitations, settings, provider-neutral AI |
+| `ScrumPilot.Data/Context` | Independent control and organization EF models |
+| `ScrumPilot.Data/Migrations` | Separate SQL Server migration histories |
+| `ScrumPilot.Data/Repositories` | EF queries and bounded atomic mutations |
+| `ScrumPilot.Data/Tenancy` | Safe catalog resolution and administrative lifecycle |
+| `ScrumPilot.Shared` | Serializable entities, enums and API contracts |
+| `ScrumPilot.Client` | UI-neutral routing and request lifetime primitives |
+| `ScrumPilot.Web` | Supported MudBlazor client |
+| `ScrumPilot.FluentWeb` | Fluent UI client, design system and visualizations |
+| `ScrumPilot.UnitTests` | Backend/SQL/MudBlazor verification |
+| `ScrumPilot.FluentWeb.Tests` | Fluent UI verification |
+| `ScrumPilot.Aspire.Tests` | Resource/configuration integration tests |
+| `docs` | Current contracts, operations and contributor documentation |
+| `docs/superpowers/plans` | Historical plans; not current deployment instructions |
 
-The solution includes API, Data, Shared, Web, UnitTests, AppHost, and ServiceDefaults projects plus `discord-bot`. EF migrations live in `ScrumPilot.Data`; there are no separate migration utility projects.
+Do not make either web application depend on the other. Shared client primitives
+must remain independent of visual libraries and private server configuration.
