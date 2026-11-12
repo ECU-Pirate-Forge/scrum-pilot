@@ -30,14 +30,15 @@ function mermaidFixture(site) {
 function bootstrapBase(site, pathname) {
     const html = fs.readFileSync(path.resolve(__dirname, '..', '..', site, 'wwwroot/index.html'), 'utf8');
     const head = html.split('</head>')[0];
+    const staticHref = /<base\s+href="([^"]+)"/.exec(head)[1];
     const base = {
-        href: /<base\s+href="([^"]+)"/.exec(head)[1],
+        href: staticHref,
         setAttribute(name, value) { this[name] = value; }
     };
     for (const script of head.matchAll(/<script>([\s\S]*?)<\/script>/g)) {
         vm.runInNewContext(script[1], { location: { pathname }, document: { querySelector: () => base } });
     }
-    return { html, head, href: base.href };
+    return { html, head, staticHref, href: base.href };
 }
 
 test('Fluent shell: narrow tenant pickers have compact labels without hiding header actions', () => {
@@ -84,6 +85,17 @@ for (const site of ['ScrumPilot.Web', 'ScrumPilot.FluentWeb']) {
             const baseUri = new URL(result.href, 'https://gateway.test');
             assert.equal(new URL('_blazor/_configuration', baseUri).pathname, `/${app}/_blazor/_configuration`);
             assert.equal(new URL('_framework/blazor.webassembly.js', baseUri).pathname, `/${app}/_framework/blazor.webassembly.js`);
+        }
+    });
+
+    test(`${site}: speculative preloads resolve bootstrap assets under the gateway prefix`, () => {
+        const app = site === 'ScrumPilot.Web' ? 'web' : 'fluentweb';
+        const { html, staticHref } = bootstrapBase(site, `/${app}/organizations/1/backlog`);
+        // Preload scanners resolve relative assets with the markup base, not the script-adjusted one.
+        assert.equal(staticHref, `/${app}/`);
+        const baseIndex = html.indexOf('<base');
+        for (const asset of html.matchAll(/<(?:link|script)\b[^>]*\s(?:href|src)="(?!https?:)[^"]+"/g)) {
+            assert.ok(baseIndex < asset.index, `${asset[0]} precedes <base>`);
         }
     });
 

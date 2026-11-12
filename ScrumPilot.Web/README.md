@@ -21,6 +21,12 @@ AppHost supplies browser-safe runtime endpoint configuration through the gateway
 For direct startup, public `wwwroot/appsettings.json` supplies `ApiBaseUrl`;
 private server connections/keys must never be copied into this application.
 
+The site is hosted under `/web/`, matching the gateway. `index.html` declares
+that base statically because browsers preload stylesheets/scripts from markup
+before inline scripts run; a root-hosted copy still switches its base to `/`
+at runtime but may log speculative `/web/...` 404s. Launch profiles set the
+DevServer `pathbase`, so direct startup serves `http://localhost:5199/web/`.
+
 ```powershell
 dotnet run --project .\ScrumPilot.Web\ScrumPilot.Web.csproj
 dotnet publish .\ScrumPilot.Web\ScrumPilot.Web.csproj --configuration Release

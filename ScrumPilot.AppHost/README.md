@@ -25,8 +25,10 @@ not private credentials. Project settings remain compatible direct-start fallbac
 
 Local gateway startup is ordered so Web finishes its client build before
 FluentWeb builds the shared Client/Shared projects. Both sites keep independent
-gateways and endpoints under `/web/` and `/fluentweb/`. Published deployments
-do not inherit this build ordering.
+gateways and endpoints under `/web/` and `/fluentweb/`; each client's
+`index.html` declares its gateway prefix as the static base so browser preloads
+never request unprefixed assets. Published deployments do not inherit this
+build ordering.
 On Windows, the local AppHost also disables MSBuild node reuse and its build
 server for its own process and child builds. The preview Blazor gateway runner
 waits for redirected output to close, which reusable build nodes can keep open

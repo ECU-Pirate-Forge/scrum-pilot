@@ -16,6 +16,12 @@ AppHost provides safe browser runtime configuration via the gateway and telemetr
 proxy. Direct startup falls back to public `ApiBaseUrl`. No private server
 configuration belongs in WASM settings or publish artifacts.
 
+The site is hosted under `/fluentweb/`, matching the gateway. `index.html`
+declares that base statically because browsers preload stylesheets/scripts from
+markup before inline scripts run; a root-hosted copy still switches its base to
+`/` at runtime but may log speculative `/fluentweb/...` 404s. Launch profiles set
+the DevServer `pathbase`, so direct startup serves `http://localhost:5299/fluentweb/`.
+
 ```powershell
 dotnet run --project .\ScrumPilot.FluentWeb\ScrumPilot.FluentWeb.csproj
 dotnet test .\ScrumPilot.FluentWeb.Tests\ScrumPilot.FluentWeb.Tests.csproj --configuration Release

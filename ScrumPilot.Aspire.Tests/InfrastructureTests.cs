@@ -233,8 +233,11 @@ public sealed class InfrastructureTests(ITestOutputHelper output)
             using var deepLink = await client.GetAsync($"/{site}/organizations/{Guid.NewGuid():D}/backlog", timeout.Token);
             Assert.True(deepLink.IsSuccessStatusCode, $"{gateway}: deep link returned {(int)deepLink.StatusCode}.");
             var html = await deepLink.Content.ReadAsStringAsync(timeout.Token);
-            Assert.Contains($"location.pathname.startsWith(\"/{site}/\")", html);
-            Assert.Contains($"document.querySelector(\"base\").setAttribute(\"href\", \"/{site}/\");", html);
+            Assert.Contains($"<base href=\"/{site}/\" />", html);
+            Assert.Contains($"!location.pathname.startsWith(\"/{site}/\")", html);
+            Assert.Contains("document.querySelector(\"base\").setAttribute(\"href\", \"/\");", html);
+            Assert.True(html.IndexOf("<base", StringComparison.Ordinal) <
+                html.IndexOf("<link", StringComparison.Ordinal));
             Assert.True(html.IndexOf("location.pathname", StringComparison.Ordinal) <
                 html.IndexOf("<link", StringComparison.Ordinal));
             using var apiHealth = await client.GetAsync($"/{site}/_api/webapi/health", timeout.Token);
