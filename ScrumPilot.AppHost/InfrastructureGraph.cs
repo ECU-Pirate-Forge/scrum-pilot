@@ -200,6 +200,16 @@ public static class InfrastructureGraph
 #pragma warning restore ASPIREBLAZOR001
         if (!builder.ExecutionContext.IsPublishMode)
         {
+            if (OperatingSystem.IsWindows())
+            {
+                // Preview gateway builds wait for output EOF; reused MSBuild nodes retain those handles.
+                System.Environment.SetEnvironmentVariable("MSBUILDDISABLENODEREUSE", "1",
+                    EnvironmentVariableTarget.Process);
+                System.Environment.SetEnvironmentVariable("DOTNET_CLI_USE_MSBUILD_SERVER", "false",
+                    EnvironmentVariableTarget.Process);
+            }
+            // Gateway environment callbacks build clients sharing the same obj outputs.
+            fluentGateway.WaitFor(webGateway);
             // Both supported gateways execute the same file-based helper. The
             // SDK's shared runfile cache can rewrite a DLL already loaded by the
             // other gateway on Windows. Give each helper its own temp/build cache.

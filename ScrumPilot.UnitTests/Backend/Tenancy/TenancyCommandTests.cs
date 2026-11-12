@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ScrumPilot.API.Configuration;
 using ScrumPilot.Data.Extensions;
+using ScrumPilot.Data.Tenancy;
 using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.UnitTests.Backend.Tenancy;
@@ -73,7 +74,7 @@ public sealed class TenancyCommandTests
         }
     }
 
-    private static async Task RunCliAsync(IConfiguration configuration, string[] arguments, bool succeeds = true)
+    private static async Task<string> RunCliAsync(IConfiguration configuration, string[] arguments, bool succeeds = true)
     {
         var assembly = typeof(Program).Assembly.Location;
         var start = new ProcessStartInfo("dotnet")
@@ -104,6 +105,7 @@ public sealed class TenancyCommandTests
         finally { if (!process.HasExited) process.Kill(entireProcessTree: true); }
         Assert.True((process.ExitCode == 0) == succeeds,
             $"Operator process exit {process.ExitCode} for {string.Join(" ", arguments)}:\n{await output}\n{await error}");
+        return await output;
     }
 
     [Fact]
@@ -145,5 +147,45 @@ public sealed class TenancyCommandTests
         using var provider = services.BuildServiceProvider();
         Assert.True(await TenancyCommands.ExecuteAsync(["--renew-membership-instances"], provider, files.Database.Configuration));
         await files.Control.Entry(member).ReloadAsync(); Assert.NotEqual(instance, member.MembershipInstanceId);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Migrate_UnavailableOrganizationDoesNotBlockOtherOrganizationsOrControlStartup(bool restorePending)
+    {
+        using var files = new TenantStorageTests();
+        var unavailable = await files.Create("Unavailable");
+        var healthy = await files.Create("Healthy");
+        var unavailableOperation = unavailable.OperationId;
+        var healthyOperation = healthy.OperationId;
+        var project = await files.Project(healthy, "Preserved");
+        unavailable.RestorePending = restorePending;
+        await files.Control.SaveChangesAsync();
+        using var admin = new SqlServerAdministrationContext(files.Storage);
+        await admin.DropAsync(TenantStorage.Catalog(unavailable.StorageKey), default);
+
+        var output = await RunCliAsync(files.Database.Configuration, ["--migrate"]);
+        Assert.Contains("1 organization(s) verified/upgraded; 1 unavailable organization(s).", output);
+        Assert.Contains(unavailable.OrganizationId.ToString(), output);
+
+        await files.Control.Entry(unavailable).ReloadAsync();
+        await files.Control.Entry(healthy).ReloadAsync();
+        Assert.Equal("Maintenance", unavailable.StorageState);
+        Assert.Equal(restorePending, unavailable.RestorePending);
+        Assert.NotEqual(unavailableOperation, unavailable.OperationId);
+        Assert.NotNull(unavailable.OperationError);
+        Assert.Throws<TenantUnavailableException>(() => files.Storage.Open(unavailable));
+        Assert.False(await admin.ExistsAsync(TenantStorage.Catalog(unavailable.StorageKey)));
+        Assert.Equal("Active", healthy.StorageState);
+        Assert.NotEqual(healthyOperation, healthy.OperationId);
+        using (var tenant = files.Storage.Open(healthy))
+            Assert.Equal("Preserved", (await tenant.Projects.SingleAsync(x => x.ProjectId == project)).ProjectName);
+
+        var services = new ServiceCollection().AddLogging();
+        services.AddDataServices(files.Database.Configuration);
+        using var provider = services.BuildServiceProvider();
+        Assert.False(await TenancyCommands.ExecuteAsync([], provider, files.Database.Configuration));
+        await RunCliAsync(files.Database.Configuration, ["--upgrade-organization", unavailable.OrganizationId.ToString()], succeeds: false);
     }
 }

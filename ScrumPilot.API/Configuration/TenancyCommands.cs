@@ -69,9 +69,23 @@ public static class TenancyCommands
         {
             var ids = await control.Organizations.Where(x => x.StorageState == "Active" || x.StorageState == "Maintenance")
                 .Select(x => x.OrganizationId).ToListAsync();
+            var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(TenancyCommands));
+            var unavailable = 0;
             foreach (var id in ids)
-                await scope.ServiceProvider.GetRequiredService<TenantOperations>().UpgradeAsync(id);
-            Console.WriteLine("Control plane and active organization schemas verified/upgraded.");
+            {
+                try
+                {
+                    await scope.ServiceProvider.GetRequiredService<TenantOperations>().UpgradeAsync(id);
+                }
+                catch (TenantUnavailableException)
+                {
+                    unavailable++;
+                    logger.LogWarning(
+                        "Organization {OrganizationId} could not be upgraded and remains unavailable. Inspect its operation status and SQL backup storage before retrying --upgrade-organization {OrganizationId}.",
+                        id, id);
+                }
+            }
+            Console.WriteLine($"Control plane verified/upgraded; {ids.Count - unavailable} organization(s) verified/upgraded; {unavailable} unavailable organization(s).");
             return true;
         }
         if (args.Contains("--renew-membership-instances"))

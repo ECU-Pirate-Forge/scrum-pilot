@@ -81,6 +81,14 @@ Use the discovered gateway endpoints and wait for the corresponding resource.
 Do not assume fixed ports. A missing optional inference service or one failed
 organization must not make all ordinary API readiness fail.
 
+The batch `--migrate` command reports unavailable organizations individually and
+continues verifying the other organizations. It reports verified and unavailable
+counts separately; control-plane failures still fail startup. An organization
+whose upgrade fails remains fenced in Maintenance, including any pending restore
+fence. Repair its backup/storage configuration and retry its explicit
+`--upgrade-organization` command, which still exits unsuccessfully on failure.
+Do not manually clear maintenance or recovery flags to enable sign-in.
+
 For direct startup, supply private configuration to the API explicitly and the
 public API endpoint to each client. Run each project independently only after
 the same controlled initialization/upgrade has completed.
@@ -184,6 +192,11 @@ map a restricted WSL ext4 directory with `-WslDistribution`, or accept an explic
 compatible UNC `-BackupDirectory`. A Windows bind mount can fail SQL native backup
 file operations even when normal file creation succeeds. The helper does not
 silently change Docker Desktop distribution-integration settings.
+
+SQL error 3634 with OS error 31 during `DiskChangeFileSize` is one such failure.
+It can surface as `TenantUnavailableException` and process exit `-532462766`
+during a controlled upgrade. Inspect the SQL resource's logs and use the explicit
+native Linux backup mapping rather than disabling rollback backups.
 
 Protect native SQL backups and their catalog/manifests as sensitive tenant data.
 Use backup identity, organization/key, schema, integrity/hash and storage
