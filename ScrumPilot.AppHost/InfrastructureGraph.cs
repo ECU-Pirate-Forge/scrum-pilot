@@ -152,7 +152,11 @@ public static class InfrastructureGraph
             .WithEnvironment("SqlServer__BackupServerPath",
                 backupServerPath)
             .WithEnvironment("SqlServer__BackupApplicationPath", backupDirectory ?? "")
-            .WithHttpHealthCheck("/health")
+            // Locally the API 307-redirects HTTP to its HTTPS origin (see apiScheme
+            // below), so probe the HTTPS endpoint directly; published containers
+            // drop HTTPS endpoints and keep the HTTP probe.
+            .WithHttpHealthCheck("/health",
+                endpointName: builder.ExecutionContext.IsPublishMode ? "http" : "https")
             .WaitForCompletion(migration);
         migration.WithEnvironment("SqlServer__BackupServerPath", backupServerPath)
             .WithEnvironment("SqlServer__BackupApplicationPath", backupDirectory ?? "");
