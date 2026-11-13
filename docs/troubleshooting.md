@@ -62,6 +62,14 @@ grants must be cleared before activation.
 Do not manually clear lifecycle or restore-fence fields to make the UI green.
 Keep the organization unavailable until verified recovery completes.
 
+For SQL error 3634 / OS error 31 during `DiskChangeFileSize`, a Windows drive
+backup bind mount is unsupported even if ordinary file writes work. Prepare
+native WSL storage with
+[`Initialize-WslBackupStorage.ps1`](../ScrumPilot.AppHost/scripts/Initialize-WslBackupStorage.ps1)
+and follow the [mapping and controlled retry procedure](multi-tenancy-operations.md#backup-storage-and-recovery).
+AppHost rejects this local configuration before an upgrade can fence another
+organization. Existing fenced organizations still require verified recovery.
+
 ## SQL tests fail before running
 
 Confirm Docker/SQL resources are available and the test runner has its isolated

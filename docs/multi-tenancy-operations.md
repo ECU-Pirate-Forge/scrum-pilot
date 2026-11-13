@@ -198,6 +198,38 @@ It can surface as `TenantUnavailableException` and process exit `-532462766`
 during a controlled upgrade. Inspect the SQL resource's logs and use the explicit
 native Linux backup mapping rather than disabling rollback backups.
 
+For normal local Windows startup, prepare the mapping for the **intended
+worktree**, using an installed WSL distribution with `setfacl` available:
+
+```powershell
+$mapping = & .\ScrumPilot.AppHost\scripts\Initialize-WslBackupStorage.ps1 -WslDistribution Ubuntu
+$env:SqlServer__BackupApplicationPath = $mapping.ApplicationPath
+$env:SqlServer__BackupMountSource = $mapping.MountSource
+$env:SqlServer__BackupServerPath = '/var/opt/mssql/backups'
+aspire start --non-interactive --isolated --apphost .\ScrumPilot.AppHost\ScrumPilot.AppHost.csproj
+```
+
+The helper returns paths only; it does not start services, change credentials,
+modify Docker Desktop integration, copy existing backups, or clear maintenance.
+It prepares a restricted native directory scoped to the worktree and maps the
+same files to the Windows API host and Linux SQL container. Test fixtures reuse
+it with a separate storage name. Repeat preparation after WSL restarts, and
+supply both mapping keys on every AppHost start (or persist them in protected
+local configuration).
+
+AppHost rejects local Windows drive backup mounts before starting resources,
+including Docker Desktop's `/run/desktop/mnt/host/c/...` equivalent. External SQL
+and published deployments retain their operator-reviewed mapping configuration.
+Changing mappings does not move old backups: retain the original directory and
+transfer registered artifacts only through an approved recovery procedure.
+
+For an already running installation, stop and restart **only its exact AppHost**
+in a coordinated maintenance window with the repaired mapping. Do not start a
+second API against the same catalogs. The startup migration retries upgrades;
+confirm the affected organization's status becomes Active. If necessary, run
+`--upgrade-organization` for its trusted registry ID with the same private
+connections and mapping. Never use `--initialize` or manually clear its fence.
+
 Protect native SQL backups and their catalog/manifests as sensitive tenant data.
 Use backup identity, organization/key, schema, integrity/hash and storage
 validation before recovery. Never select files by user-controlled paths or a

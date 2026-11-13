@@ -31,20 +31,10 @@ if ($IsWindows) {
     if ($LASTEXITCODE) { throw 'Could not restrict SQL state directory.' }
 }
 if ($IsWindows -and $WslDistribution) {
-    # SQL BACKUP needs a native Linux filesystem; Docker Desktop Windows shares
-    # can fail DiskChangeFileSize. WSL exposes the SAME ext4 files to the API host.
-    $scope = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
-        [Text.Encoding]::UTF8.GetBytes($appHost))).Substring(0, 16).ToLowerInvariant()
-    $linuxDirectory = & wsl --distribution $WslDistribution --exec sh -c `
-        'set -eu; umask 077; p="$HOME/.local/share/scrumpilot/aspire-test-sql/$1"; mkdir -p "$p"; setfacl -m "u:10001:rwx,d:u:10001:rwx,d:u:$(id -u):rwx,d:o::---" "$p"; printf "%s" "$p"' sh $scope
-    if ($LASTEXITCODE) { throw 'Could not prepare restricted native WSL backup directory.' }
-    $backups = "\\wsl.localhost\$WslDistribution$($linuxDirectory.Replace('/', '\'))"
-    # Share only this owned ext4 directory with Docker Desktop, without changing
-    # the user's Docker Desktop distro integration settings.
-    & wsl --distribution $WslDistribution --user root --exec sh -c `
-        'set -eu; p="/mnt/wsl/scrumpilot-$1"; mkdir -p "$p"; mountpoint -q "$p" || mount --bind "$2" "$p"' sh $scope $linuxDirectory
-    if ($LASTEXITCODE) { throw 'Could not share the owned native backup directory with Docker Desktop.' }
-    $env:SqlServer__BackupMountSource = "/run/desktop/mnt/host/wsl/scrumpilot-$scope"
+    $mapping = & (Join-Path $PSScriptRoot 'Initialize-WslBackupStorage.ps1') `
+        -WslDistribution $WslDistribution -StorageName 'aspire-test-sql'
+    $backups = $mapping.ApplicationPath
+    $env:SqlServer__BackupMountSource = $mapping.MountSource
 } else {
     if ($IsWindows -and !$BackupDirectory) {
         throw 'On Windows, specify -WslDistribution or a SQL-compatible native Linux -BackupDirectory UNC path.'

@@ -27,6 +27,8 @@ public sealed class InfrastructureTests(ITestOutputHelper output)
             // manifests beneath AppHostDirectory, even with isolated build outputs.
             "--Aspire:Store:Path=" + Directory.CreateTempSubdirectory("scrumpilot-aspire-graph-state-").FullName,
             "--Infrastructure:EphemeralTests=true",
+            "--SqlServer:BackupApplicationPath=",
+            "--SqlServer:BackupMountSource=",
             "--Parameters:jwt-key=integration-only-not-a-production-signing-key",
             "--Parameters:sendgrid-key=integration-private-sendgrid",
             .. extra
@@ -119,11 +121,43 @@ public sealed class InfrastructureTests(ITestOutputHelper output)
         Assert.Contains(builder.Resources, r => r.Name == "tenant-admin");
     }
 
+    [Theory]
+    [InlineData(@"C:\Backups\ScrumPilot", "")]
+    [InlineData(@"C:\Backups\ScrumPilot", "/run/desktop/mnt/host/c/Backups/ScrumPilot")]
+    public async Task LocalSqlRejectsWindowsBackupMountBeforeStartingResources(string applicationPath, string mountSource)
+    {
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await using var builder = await Graph(
+                "--SqlServer:BackupApplicationPath=" + applicationPath,
+                "--SqlServer:BackupMountSource=" + mountSource);
+        });
+        Assert.Contains("Initialize-WslBackupStorage.ps1", exception.Message);
+        Assert.Contains("DiskChangeFileSize", exception.Message);
+    }
+
+    [Fact]
+    public async Task LocalSqlUsesExplicitNativeBackupMountWithHostReadMapping()
+    {
+        const string applicationPath = @"\\wsl.localhost\Ubuntu\home\operator\backups";
+        const string mountSource = "/run/desktop/mnt/host/wsl/scrumpilot-local";
+        await using var builder = await Graph(
+            "--SqlServer:BackupApplicationPath=" + applicationPath,
+            "--SqlServer:BackupMountSource=" + mountSource);
+        var sql = Assert.Single(builder.Resources.OfType<SqlServerServerResource>());
+        var mount = Assert.Single(sql.Annotations.OfType<ContainerMountAnnotation>());
+        Assert.Equal(mountSource, mount.Source);
+        Assert.Equal(InfrastructureGraph.BackupServerPath, mount.Target);
+        var api = await Environment(builder, builder.Resources.Single(r => r.Name == "webapi"));
+        Assert.Equal(applicationPath, api["SqlServer__BackupApplicationPath"]);
+    }
+
     [Fact]
     public async Task SqlOnlyModeRequiresNoApplicationSecretsOrGateways()
     {
         await using var builder = await DistributedApplicationTestingBuilder
-            .CreateAsync<Projects.ScrumPilot_AppHost>(["--Infrastructure:SqlOnly=true"]);
+            .CreateAsync<Projects.ScrumPilot_AppHost>(
+                ["--Infrastructure:SqlOnly=true", "--SqlServer:BackupApplicationPath=", "--SqlServer:BackupMountSource="]);
         Assert.Single(builder.Resources.OfType<SqlServerServerResource>());
         Assert.DoesNotContain(builder.Resources, resource => resource is ProjectResource);
     }
@@ -135,7 +169,8 @@ public sealed class InfrastructureTests(ITestOutputHelper output)
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
         await using var builder = await DistributedApplicationTestingBuilder
             .CreateAsync<Projects.ScrumPilot_AppHost>(
-                ["--Infrastructure:SqlOnly=true", "--Infrastructure:EphemeralTests=true"], timeout.Token);
+                ["--Infrastructure:SqlOnly=true", "--Infrastructure:EphemeralTests=true",
+                    "--SqlServer:BackupApplicationPath=", "--SqlServer:BackupMountSource="], timeout.Token);
         await using var app = await builder.BuildAsync(timeout.Token);
         await app.StartAsync(timeout.Token);
         await app.ResourceNotifications.WaitForResourceHealthyAsync("sql", timeout.Token);
@@ -394,6 +429,9 @@ public sealed class InfrastructureTests(ITestOutputHelper output)
             await using var backup = new SqlCommand($"BACKUP DATABASE [{catalog}] TO DISK=@path WITH COPY_ONLY,CHECKSUM,INIT;", connection);
             backup.Parameters.AddWithValue("@path", serverPath.TrimEnd('/') + "/" + fileName);
             await backup.ExecuteNonQueryAsync(timeout.Token);
+            await using var verify = new SqlCommand("RESTORE VERIFYONLY FROM DISK=@path WITH CHECKSUM;", connection);
+            verify.Parameters.AddWithValue("@path", serverPath.TrimEnd('/') + "/" + fileName);
+            await verify.ExecuteNonQueryAsync(timeout.Token);
             Assert.True(File.Exists(hostFile), "The API host must see the actual SQL backup through the explicit path mapping.");
             await using var file = File.OpenRead(hostFile);
             Assert.True(file.Length > 0);

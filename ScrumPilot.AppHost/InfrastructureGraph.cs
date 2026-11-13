@@ -29,6 +29,14 @@ public static class InfrastructureGraph
         if (!sqlOnly && !ephemeral && !builder.ExecutionContext.IsPublishMode &&
             string.IsNullOrWhiteSpace(backupDirectory))
             throw new InvalidOperationException("Set SqlServer:BackupApplicationPath to restricted native backup storage visible to the API host.");
+        var mountSource = builder.Configuration["SqlServer:BackupMountSource"];
+        var backupSource = string.IsNullOrWhiteSpace(mountSource) ? backupDirectory : mountSource;
+        if (local && !builder.ExecutionContext.IsPublishMode && backupSource is not null &&
+            System.Text.RegularExpressions.Regex.IsMatch(backupSource,
+                @"\A(?:[a-zA-Z]:[\\/]|/run/desktop/mnt/host/[a-zA-Z]/|/host_mnt/[a-zA-Z]/)"))
+            throw new InvalidOperationException(
+                "SQL Server native backups cannot use a Windows drive bind mount (SQL error 3634, OS error 31 during DiskChangeFileSize). " +
+                "Run scripts\\Initialize-WslBackupStorage.ps1 and configure SqlServer:BackupApplicationPath and SqlServer:BackupMountSource for the same native Linux directory.");
 
         if (local)
         {
@@ -43,7 +51,6 @@ public static class InfrastructureGraph
                 sql.WithDataVolume();
             if (!builder.ExecutionContext.IsPublishMode && !string.IsNullOrWhiteSpace(backupDirectory))
             {
-                var mountSource = builder.Configuration["SqlServer:BackupMountSource"];
                 if (string.IsNullOrWhiteSpace(mountSource))
                     sql.WithBindMount(backupDirectory, backupServerPath);
                 else
