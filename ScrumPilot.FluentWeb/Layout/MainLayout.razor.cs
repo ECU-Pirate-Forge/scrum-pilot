@@ -137,6 +137,7 @@ public partial class MainLayout
         var organizationId = OrganizationRoutes.OrganizationId(uri);
         var projectId = OrganizationRoutes.ProjectId(uri);
         var isLanding = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', 2)[0].Length == 0;
+        var redirecting = false;
         try
         {
             var organizations = await Http.GetFromJsonAsync<List<OrganizationSummaryDto>>("api/organizations", cancellation.Token) ?? [];
@@ -153,6 +154,7 @@ public partial class MainLayout
             if (isLanding && string.IsNullOrEmpty(uri.Query) && _settings?.DefaultOrganizationId is int defaultId)
             {
                 Navigation.NavigateTo(OrganizationRoutes.Page(defaultId, "backlog", _settings.DefaultProjectId), replace: true);
+                redirecting = true;
                 return;
             }
             if (organizationId is null)
@@ -190,7 +192,7 @@ public partial class MainLayout
         }
         finally
         {
-            if (IsCurrent(generation)) { _routeLoading = false; StateHasChanged(); }
+            if (IsCurrent(generation) && !redirecting) { _routeLoading = false; StateHasChanged(); }
         }
     }
 

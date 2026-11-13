@@ -41,6 +41,15 @@ Use an explicit `/organizations/{organizationId}/...` URL. Switching must cancel
 old requests and rebuild poker scope without saving account defaults. Invalid
 default pairs return the user to the central chooser, never a guessed project.
 
+In FluentWeb, leaving a work page or changing organization/project cancels that
+page's requests. Backlog, board and dependency-chart loaders discard these
+superseded requests without error toasts; genuine failures in the current scope
+still show their loading errors. If old load-error toasts persist after deploying
+a fix, reload the client and inspect the failed request status and browser
+console. HTTP `200` work responses are not evidence of an unavailable database.
+The default-project redirect also keeps the shell loading until the target
+route's work scope is ready; it must not mount a backlog with a null scope.
+
 For direct startup, verify public `ApiBaseUrl`. Under Aspire, inspect the gateway's
 browser runtime configuration, HTTP/WebSocket routing and telemetry proxy rather
 than assuming WASM reads server-process environment variables.

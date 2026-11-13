@@ -59,6 +59,7 @@
 
     private async Task LoadAsync()
     {
+        if (!Scope.IsCurrent) return;
         _loading = true;
         _error = string.Empty;
         _pbis = [];
@@ -90,8 +91,10 @@
                 _sprintLabel = "All sprints";
             }
         }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
         catch (Exception ex)
         {
+            if (!Scope.IsCurrent) return;
             Logger.LogError(ex, "Failed to load dependency chart for project {ProjectId} sprint {SprintId}", EffectiveProjectId, SprintId);
             _error = "Failed to load PBI data. Please go back and try again.";
             Notifications.ShowError(_error);

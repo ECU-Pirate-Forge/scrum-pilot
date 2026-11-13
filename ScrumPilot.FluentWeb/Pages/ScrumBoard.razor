@@ -163,6 +163,7 @@
 
     private async Task LoadDropdownsAsync()
     {
+        if (!Scope.IsCurrent) return;
         if (!_selectedProjectId.HasValue)
         {
             _sprints = [];
@@ -177,8 +178,10 @@
             _epics = await Http.GetFromJsonAsync<List<Epic>>($"api/Epic?projectId={_selectedProjectId.Value}") ?? [];
             _users = await Http.GetFromJsonAsync<List<UserSummaryDto>>($"api/user/all?projectId={_selectedProjectId.Value}") ?? [];
         }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
         catch (Exception ex)
         {
+            if (!Scope.IsCurrent) return;
             Logger.LogWarning(ex, "Failed to load scrum board dropdown data for project {ProjectId}", _selectedProjectId);
             Notifications.ShowWarning("Some board filter options could not be loaded.");
             _sprints = [];
@@ -212,6 +215,11 @@
 
     private async Task LoadItemsAsync(bool showLoading = true)
     {
+        if (!Scope.IsCurrent)
+        {
+            _loading = false;
+            return;
+        }
         if (!_selectedProjectId.HasValue)
         {
             _items = [];
@@ -231,8 +239,10 @@
             var items = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(BuildItemUrl());
             _items = (items ?? []).OrderBy(i => i.PbiId).ToList();
         }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
         catch (Exception ex)
         {
+            if (!Scope.IsCurrent) return;
             Logger.LogError(ex, "Failed to load scrum board PBIs for project {ProjectId}", _selectedProjectId);
             _errorMessage = "Unable to load PBIs from the server.";
             Notifications.ShowError(_errorMessage);

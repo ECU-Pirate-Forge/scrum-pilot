@@ -2,11 +2,16 @@ using System.Net;
 using System.Net.Http.Json;
 using ApexCharts;
 using Bunit;
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Rendering;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.FluentUI.AspNetCore.Components;
+using NSubstitute;
 using ScrumPilot.Client;
 using ScrumPilot.FluentWeb.Components.MetricsDashboard;
 using ScrumPilot.FluentWeb.Components.Pbi;
 using ScrumPilot.FluentWeb.Pages;
+using ScrumPilot.FluentWeb.Services;
 using ScrumPilot.Shared.Models;
 using Xunit;
 
@@ -14,6 +19,85 @@ namespace ScrumPilot.FluentWeb.Tests.Pbi;
 
 public sealed class WorkLifetimeTests : FluentFrontendTestBase
 {
+    [Theory]
+    [InlineData("backlog", "Sprint")]
+    [InlineData("backlog", "Pbi/getNonDraftPbis")]
+    [InlineData("scrum-board", "Sprint")]
+    [InlineData("scrum-board", "Pbi/getNonDraftPbis")]
+    [InlineData("dependency-chart", "Pbi/getNonDraftPbis")]
+    [InlineData("backlog", "Sprint", false)]
+    [InlineData("scrum-board", "Sprint", false)]
+    [InlineData("scrum-board", "Pbi/getNonDraftPbis", false)]
+    [InlineData("dependency-chart", "Pbi/getNonDraftPbis", false)]
+    [InlineData("backlog", "Pbi/getNonDraftPbis", true, "success")]
+    [InlineData("scrum-board", "Sprint", true, "failure")]
+    public async Task Page_load_reports_only_current_scope_failures(
+        string page, string delayedResource, bool superseded = true, string completion = "cancel")
+    {
+        var delayed = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var notifications = Substitute.For<IAppNotificationService>();
+        using var context = new BunitContext();
+        context.Services.AddFluentUIComponents();
+        context.Services.AddLogging();
+        context.Services.AddSingleton(notifications);
+        context.Services.AddScoped<ProjectStateService>();
+        context.Services.AddScoped<AppThemeService>();
+        context.Services.AddScoped<IAppDialogService, AppDialogService>();
+        context.JSInterop.Mode = JSRuntimeMode.Loose;
+        using var client = new HttpClient(new Handler((request, _) =>
+        {
+            if (!request.RequestUri!.AbsolutePath.EndsWith("/" + delayedResource, StringComparison.OrdinalIgnoreCase))
+                return Task.FromResult(Json(Array.Empty<object>()));
+            started.TrySetResult();
+            return delayed.Task;
+        }))
+        { BaseAddress = new Uri("https://localhost/") };
+        using var work = new WorkScope(client, 1, 7);
+        using var cut = context.Render<LoadTestPage>(p => p.Add(x => x.Work, work).Add(x => x.Page, page));
+        cut.WaitForState(() => started.Task.IsCompleted);
+
+        if (superseded)
+        {
+            work.Dispose();
+            if (completion == "success") delayed.SetResult(Json(Array.Empty<object>()));
+            else if (completion == "failure") delayed.SetResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+            else delayed.SetCanceled(work.Cancellation);
+        }
+        else
+        {
+            delayed.SetResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+        }
+        cut.WaitForAssertion(() => Assert.DoesNotContain("Loading", cut.Markup));
+
+        await cut.InvokeAsync(() => Task.CompletedTask);
+        if (superseded) Assert.Empty(notifications.ReceivedCalls());
+        else Assert.NotEmpty(notifications.ReceivedCalls());
+    }
+
+    private sealed class LoadTestPage : ComponentBase
+    {
+        [Parameter] public WorkScope Work { get; set; } = default!;
+        [Parameter] public string Page { get; set; } = "";
+        protected override void BuildRenderTree(RenderTreeBuilder builder)
+        {
+            var type = Page switch
+            {
+                "backlog" => typeof(ScrumPilot.FluentWeb.Pages.Backlog),
+                "scrum-board" => typeof(ScrumPilot.FluentWeb.Pages.ScrumBoard),
+                _ => typeof(DependencyChartPage)
+            };
+            builder.OpenComponent<CascadingValue<WorkScope>>(0);
+            builder.AddAttribute(1, "Value", Work);
+            builder.AddAttribute(2, "ChildContent", (RenderFragment)(child =>
+            {
+                child.OpenComponent(0, type);
+                child.CloseComponent();
+            }));
+            builder.CloseComponent();
+        }
+    }
+
     [Fact]
     public async Task Generation_uses_explicit_project_and_discards_cancellation_ignoring_response()
     {

@@ -280,6 +280,7 @@
 
     private async Task LoadDataAsync()
     {
+        if (!Scope.IsCurrent) return;
         _loading = true;
         _errorMessage = string.Empty;
         try
@@ -300,8 +301,10 @@
             }
             await LoadVelocityAsync();
         }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or NotSupportedException)
         {
+            if (!Scope.IsCurrent) return;
             Logger.LogWarning(ex, "Failed to load backlog for project {ProjectId}", _selectedProjectId);
             _sprints = [];
             _allPbis = [];
@@ -317,6 +320,7 @@
 
     private async Task LoadVelocityAsync()
     {
+        if (!Scope.IsCurrent) return;
         try
         {
             var velocityPoints = await MetricsSvc.GetVelocityDataAsync(projectId: _selectedProjectId);
@@ -324,8 +328,10 @@
                 ? Math.Round(velocityPoints.TakeLast(3).Average(p => p.Completed), 1)
                 : 0;
         }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or NotSupportedException)
         {
+            if (!Scope.IsCurrent) return;
             Logger.LogDebug(ex, "Velocity data unavailable for project {ProjectId}", _selectedProjectId);
             _recommendedPoints = 0;
         }
@@ -333,6 +339,7 @@
 
     private async Task LoadPbisAsync(string? url = null, bool preserveOnFailure = false)
     {
+        Scope.ThrowIfStale();
         if (!_selectedProjectId.HasValue)
         {
             _allPbis = [];
@@ -346,6 +353,7 @@
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or NotSupportedException)
         {
+            Scope.ThrowIfStale();
             Logger.LogWarning(ex, "Failed to load PBIs for project {ProjectId}", _selectedProjectId);
             if (!preserveOnFailure)
             {

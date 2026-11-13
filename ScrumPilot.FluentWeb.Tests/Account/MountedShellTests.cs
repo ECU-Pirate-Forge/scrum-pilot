@@ -19,6 +19,48 @@ namespace ScrumPilot.FluentWeb.Tests.Account;
 public sealed class MountedShellTests : BunitContext
 {
     [Fact]
+    public async Task Default_project_redirect_waits_for_a_work_scope_before_mounting_the_backlog()
+    {
+        var navigation = new MountedNavigation("", deferLocationChanged: true);
+        var handler = new SessionHandler(hasProject: true, useDefaultProject: true);
+        Services.AddFluentUIComponents();
+        Services.AddSingleton<NavigationManager>(navigation);
+        Services.AddSingleton(new HttpClient(handler) { BaseAddress = new Uri("https://gateway.test/fluentweb/_api/webapi/") });
+        Services.AddScoped<OrganizationStateService>();
+        Services.AddScoped<ProjectStateService>();
+        Services.AddScoped<AppThemeService>();
+        Services.AddScoped<IAppNotificationService, AppNotificationService>();
+        Services.AddScoped<IAppDialogService, AppDialogService>();
+        Services.AddSingleton<AuthenticationStateProvider>(new AdminAuthentication());
+        Services.AddSingleton(Substitute.For<IAuthService>());
+        Services.AddLogging();
+        Renderer.SetRendererInfo(new RendererInfo("WebAssembly", true));
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        using var cut = Render<MainLayout>(p => p.Add(x => x.Body, builder =>
+        {
+            if (OrganizationRoutes.OrganizationId(new Uri(navigation.Uri)) is null)
+                builder.AddContent(0, "Central landing page");
+            else
+            {
+                builder.OpenComponent<ScrumPilot.FluentWeb.Pages.Backlog>(0);
+                builder.CloseComponent();
+            }
+        }));
+
+        Assert.EndsWith("/organizations/3/backlog?projectId=1", navigation.Uri);
+        Assert.Empty(cut.FindComponents<ScrumPilot.FluentWeb.Pages.Backlog>());
+        Assert.DoesNotContain("Something went wrong", cut.Markup);
+        await cut.InvokeAsync(navigation.DispatchLocationChanged);
+        cut.WaitForAssertion(() =>
+        {
+            Assert.EndsWith("/organizations/3/backlog?projectId=1", navigation.Uri);
+            Assert.Single(cut.FindComponents<ScrumPilot.FluentWeb.Pages.Backlog>());
+            Assert.DoesNotContain("Something went wrong", cut.Markup);
+            Assert.DoesNotContain("Work requires an organization route boundary", cut.Markup);
+        });
+    }
+
+    [Fact]
     public async Task Navigation_links_follow_the_mounted_url_before_session_load_and_after_tenant_switch()
     {
         var navigation = new MountedNavigation("organizations/3/backlog");
@@ -129,12 +171,20 @@ public sealed class MountedShellTests : BunitContext
 
     private sealed class MountedNavigation : NavigationManager
     {
-        public MountedNavigation(string route) => Initialize("https://gateway.test/fluentweb/", "https://gateway.test/fluentweb/" + route);
+        private readonly bool _deferLocationChanged;
+        public MountedNavigation(string route, bool deferLocationChanged = false)
+        {
+            _deferLocationChanged = deferLocationChanged;
+            Initialize("https://gateway.test/fluentweb/", "https://gateway.test/fluentweb/" + route);
+        }
         protected override void NavigateToCore(string uri, bool forceLoad)
         {
             Uri = ToAbsoluteUri(uri).AbsoluteUri;
-            NotifyLocationChanged(false);
+            if (!_deferLocationChanged) NotifyLocationChanged(false);
         }
+        protected override void NavigateToCore(string uri, NavigationOptions options) =>
+            NavigateToCore(uri, options.ForceLoad);
+        public void DispatchLocationChanged() => NotifyLocationChanged(false);
     }
 
     private sealed class AdminAuthentication : AuthenticationStateProvider
@@ -148,7 +198,7 @@ public sealed class MountedShellTests : BunitContext
         [CascadingParameter] public WorkScope Work { get; set; } = default!;
     }
 
-    private sealed class SessionHandler(bool hasProject = false) : HttpMessageHandler
+    private sealed class SessionHandler(bool hasProject = false, bool useDefaultProject = false) : HttpMessageHandler
     {
         public List<string> Requests { get; } = [];
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -156,7 +206,11 @@ public sealed class MountedShellTests : BunitContext
             var path = request.RequestUri!.AbsolutePath;
             Requests.Add(path);
             object payload = path.EndsWith("/settings", StringComparison.Ordinal)
-            ? new UserSettingsDto()
+            ? new UserSettingsDto
+            {
+                DefaultOrganizationId = useDefaultProject ? 3 : null,
+                DefaultProjectId = useDefaultProject ? 1 : null
+            }
             : hasProject && path.EndsWith("/organizations", StringComparison.Ordinal)
                 ? new[] { new OrganizationSummaryDto(2, "ALPHA", OrganizationRole.Owner, false), new OrganizationSummaryDto(3, "BETA", OrganizationRole.Owner, false) }
                 : hasProject && path.EndsWith("/projects", StringComparison.Ordinal)
