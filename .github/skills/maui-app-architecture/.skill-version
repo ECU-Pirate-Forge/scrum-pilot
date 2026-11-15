@@ -1,0 +1,10 @@
+{
+  "contentHash": "d59469b717da7d345026f9b2eba3a6b7d09d20a79b852b4ede06d3c496cddb07",
+  "resolvedCommit": "425472b75b4b473b0ac2337c60c66536207d5f85",
+  "name": "maui-app-architecture",
+  "commit": "a90865a2da0513b3f16c5317e455af7c12566d5c",
+  "branch": "main",
+  "updatedAt": "2026-11-12T04:11:09.7301073Z",
+  "source": "dotnet/maui-labs",
+  "pluginPath": "plugins/dotnet-maui/skills/maui-app-architecture"
+}
