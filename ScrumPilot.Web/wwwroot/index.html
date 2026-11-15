@@ -4,7 +4,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ScrumPilot.Web</title>
-    <base href="/" />
+    <!-- Browsers preload assets against the static base before scripts run, so it
+         names the gateway prefix; root-hosted copies fall back to "/" at runtime. -->
+    <base href="/web/" />
+    <script>
+        if (location.pathname !== "/web" && !location.pathname.startsWith("/web/")) {
+            document.querySelector("base").setAttribute("href", "/");
+        }
+    </script>
 
     <!-- Only MudBlazor CSS - no Bootstrap conflicts -->
     <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />

@@ -22,9 +22,9 @@
     }
 </WidgetCard>
 
+@inherits WorkComponentBase
 @code {
     [Parameter] public int? SprintId { get; set; }
-    [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
     [Inject] private ILogger<CommittedPointsWidget> Logger { get; set; } = default!;
 
     private double _committed;

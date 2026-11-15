@@ -32,7 +32,7 @@ public class AuthHeaderHandler : DelegatingHandler
             {
                 await _js.InvokeVoidAsync("localStorage.removeItem", "authToken");
                 _authStateProvider.NotifyAuthChanged(null);
-                _navigation.NavigateTo("/login");
+                _navigation.NavigateTo("login");
                 return new HttpResponseMessage(System.Net.HttpStatusCode.Unauthorized);
             }
 

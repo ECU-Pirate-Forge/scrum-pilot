@@ -3,7 +3,6 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -14,6 +13,7 @@ using ScrumPilot.API.Configuration;
 using ScrumPilot.API.Hubs;
 using ScrumPilot.API.Services;
 using ScrumPilot.Data.Context;
+using ScrumPilot.Data.Tenancy;
 using ScrumPilot.Shared.Models;
 using Xunit;
 
@@ -21,6 +21,19 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests;
 
 public sealed class TaskSpecificationServiceTests
 {
+    [Fact]
+    public async Task SuspendedCentralRegistrationInvalidatesApprovedScope()
+    {
+        await using var f = await TaskPlanningFixture.CreateAsync();
+        await f.ApproveAsync();
+        var registration = await f.Control.GitHubRepositoryRegistrations.SingleAsync();
+        registration.State = ScrumPilot.Data.Models.RepositoryRegistrationState.Suspended;
+        await f.Control.SaveChangesAsync();
+        var status = await f.Specs.StatusAsync(f.ProjectId, f.TaskId, default);
+        Assert.False(status.IsCurrent);
+        Assert.Contains(status.ReviewReasons, reason => reason.Contains("registration", StringComparison.OrdinalIgnoreCase));
+    }
+
     [Fact]
     public async Task SaveAndApprove_AppendRevisionsAndPreserveExactManifestIncludingTests()
     {
@@ -138,8 +151,7 @@ internal sealed class TaskPlanningFixture : IAsyncDisposable
     public const string SnapshotSha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     public const string OtherSha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     public const string HeadSha = "cccccccccccccccccccccccccccccccccccccccc";
-    private readonly SqliteConnection _connection = new(
-        $"Data Source=task-planning-{Guid.NewGuid():N};Mode=Memory;Cache=Shared;Foreign Keys=True;Default Timeout=1");
+    private PlanningSqlFixture _sql = default!;
     private readonly HttpClient _client;
     private static readonly Lazy<string> AppKey = new(() =>
     {
@@ -147,11 +159,15 @@ internal sealed class TaskPlanningFixture : IAsyncDisposable
         return rsa.ExportPkcs8PrivateKeyPem();
     });
 
-    public ScrumPilotContext Db { get; private set; } = default!;
+    public OrganizationContext Db => _sql.Db;
+    public ControlPlaneContext Control => _sql.Control;
+    public GitHubRepositoryRegistry Registry => _sql.Registry;
+    public TenantSelection Selection => _sql.Selection;
+    public PlanningInferenceSession Inference => _sql.Inference;
+    public ControlPlaneContext NewControl() => _sql.NewControl();
     public PlanningGitHubHandler Http { get; } = new();
     public GitHubAppClient GitHub { get; }
-    public ProjectWorkNotifier Notifier { get; } = new(Substitute.For<IHubContext<ProjectWorkHub>>(),
-        new ProjectWorkSubscriptions(), Substitute.For<IOrganizationAccessService>(), NullLogger<ProjectWorkNotifier>.Instance);
+    public ProjectWorkNotifier Notifier { get; private set; } = default!;
     public TaskSpecificationService Specs { get; private set; } = default!;
     public Project Project { get; private set; } = default!;
     public ProductBacklogItem Story { get; private set; } = default!;
@@ -160,8 +176,7 @@ internal sealed class TaskPlanningFixture : IAsyncDisposable
     public RepositorySnapshot Snapshot { get; private set; } = default!;
     public int ProjectId => Project.ProjectId;
     public int TaskId => TaskItem.PbiId;
-    public ScrumPilotContext NewContext() =>
-        new(new DbContextOptionsBuilder<ScrumPilotContext>().UseSqlite(_connection.ConnectionString).Options);
+    public OrganizationContext NewContext() => _sql.NewContext();
     public TaskFileProposal[] Manifest { get; } =
     [
         new("docs/task.md", AllowedFileCategory.Documentation, AllowedFileOperation.Modify, "Describe the changed behavior."),
@@ -178,15 +193,10 @@ internal sealed class TaskPlanningFixture : IAsyncDisposable
     public static async Task<TaskPlanningFixture> CreateAsync()
     {
         var f = new TaskPlanningFixture();
-        await f._connection.OpenAsync();
-        f.Db = new(new DbContextOptionsBuilder<ScrumPilotContext>().UseSqlite(f._connection)
-            // The migrations were scaffolded for the production provider; use the same
-            // SQLite migration policy as PlanningPersistenceTests.
-            .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning)).Options);
-        await f.Db.Database.MigrateAsync();
-        var org = new Organization { Name = "Task QA", NormalizedName = "TASK QA" };
-        f.Db.Organizations.Add(org);
-        await f.Db.SaveChangesAsync();
+        f._sql = await PlanningSqlFixture.CreateAsync();
+        f.Notifier = new(Substitute.For<IHubContext<ProjectWorkHub>>(), new ProjectWorkSubscriptions(),
+            Substitute.For<IOrganizationAccessService>(), NullLogger<ProjectWorkNotifier>.Instance, f.Selection);
+        var org = f._sql.Organization;
         f.Project = new() { ProjectName = "Task planning", OrganizationId = org.OrganizationId };
         f.Db.Projects.Add(f.Project);
         await f.Db.SaveChangesAsync();
@@ -238,7 +248,8 @@ internal sealed class TaskPlanningFixture : IAsyncDisposable
         };
         f.Db.AddRange(f.TaskItem, f.Snapshot);
         await f.Db.SaveChangesAsync();
-        f.Specs = new(f.Db, f.GitHub, f.Notifier);
+        await f._sql.RegisterAsync(f.Repository);
+        f.Specs = new(f.Db, f.GitHub, f.Notifier, f.Registry);
         return f;
     }
 
@@ -287,18 +298,19 @@ internal sealed class TaskPlanningFixture : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _client.Dispose();
-        await Db.DisposeAsync();
-        await _connection.DisposeAsync();
+        await _sql.DisposeAsync();
     }
 }
 
 internal sealed class PlanningGitHubHandler : HttpMessageHandler
 {
+    public long RepositoryId { get; set; } = 99;
     public string BranchSha { get; set; } = TaskPlanningFixture.SnapshotSha;
     public string MergeBaseSha { get; set; } = TaskPlanningFixture.SnapshotSha;
     public string BaseSha { get; set; } = TaskPlanningFixture.SnapshotSha;
     public int? ChangedFilesCount { get; set; }
     public HttpStatusCode MetadataStatus { get; set; } = HttpStatusCode.OK;
+    public bool UnavailableOriginalInstallation { get; set; }
     public int[] OpenPullRequestNumbers { get; set; } = [7];
     public Func<JsonElement, CancellationToken, Task>? BeforeCheckResponse { get; set; }
     public List<string> Requests { get; } = [];
@@ -320,11 +332,13 @@ internal sealed class PlanningGitHubHandler : HttpMessageHandler
         var path = Uri.UnescapeDataString(request.RequestUri.AbsolutePath);
         Requests.Add(path);
         object response;
-        if (request.Method == HttpMethod.Post && path == "/app/installations/42/access_tokens")
+        if (UnavailableOriginalInstallation && path == "/app/installations/42/access_tokens")
+            return new(HttpStatusCode.Forbidden);
+        if (request.Method == HttpMethod.Post && path is "/app/installations/42/access_tokens" or "/app/installations/43/access_tokens")
             response = new { token = "test-only-installation-token" };
         else if (request.Method == HttpMethod.Get && path == "/repos/owner/repository")
-            response = new { id = 99 };
-        else if (request.Method == HttpMethod.Get && path == "/repos/owner/repository/commits/release/planning")
+            response = new { id = RepositoryId };
+        else if (request.Method == HttpMethod.Get && path is "/repos/owner/repository/commits/release/planning" or "/repos/owner/repository/commits/main")
             response = new { sha = BranchSha, commit = new { tree = new { sha = "tree" } } };
         else if (request.Method == HttpMethod.Get && path.StartsWith("/repos/owner/repository/git/commits/", StringComparison.Ordinal))
             response = new { tree = new { sha = "tree" } };

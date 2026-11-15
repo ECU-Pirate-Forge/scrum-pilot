@@ -13,6 +13,9 @@ namespace ScrumPilot.Shared.Models
 
         /// <summary>Identity ID of the user who authored this comment.</summary>
         public required string UserId { get; set; }
+        /// <summary>Read-only author display projection; not a cross-database relationship.</summary>
+        [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+        public string? AuthorUserName { get; set; }
 
         /// <summary>Text content of the comment.</summary>
         public required string Body { get; set; }

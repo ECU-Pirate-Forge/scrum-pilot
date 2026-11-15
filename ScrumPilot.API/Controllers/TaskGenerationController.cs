@@ -6,7 +6,7 @@ using ScrumPilot.Shared.Models;
 namespace ScrumPilot.API.Controllers;
 
 [ApiController]
-[Route("api/projects/{projectId:int}/task-generation")]
+[Route("api/organizations/{organizationId:int}/projects/{projectId:int}/task-generation")]
 [ServiceFilter(typeof(PlanningErrorFilter))]
 public sealed class TaskGenerationController(ICurrentUser user, IOrganizationAccessService access,
     TaskGenerationService generation) : ProjectPlanningControllerBase(user, access)

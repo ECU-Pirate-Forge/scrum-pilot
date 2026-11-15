@@ -5,7 +5,8 @@ using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.API.Services;
 
-public sealed class PullRequestScopeService(ScrumPilotContext db, GitHubAppClient github, TaskSpecificationService specs)
+public sealed class PullRequestScopeService(OrganizationContext db, GitHubAppClient github, TaskSpecificationService specs,
+    ControlPlaneContext control, GitHubRepositoryRegistry registry)
 {
     public async Task<PullRequestScopeCheck> BindAsync(int projectId, int taskId, int number, string actor, CancellationToken ct)
     {
@@ -15,6 +16,7 @@ public sealed class PullRequestScopeService(ScrumPilotContext db, GitHubAppClien
         if (!status.IsCurrent) throw new InvalidOperationException(string.Join(" ", status.ReviewReasons));
         var repository = await db.ProjectRepositories.SingleOrDefaultAsync(item => item.ProjectId == projectId, ct)
             ?? throw new InvalidOperationException("Configure the project's GitHub App repository first.");
+        await registry.RequireCurrentAsync(repository, ct);
         if (await db.NonTaskPullRequestExceptions.AnyAsync(item => item.ProjectRepositoryId == repository.ProjectRepositoryId
             && item.PullRequestNumber == number, ct)) throw new InvalidOperationException("This PR already has a non-task exception.");
         var binding = await db.TaskPullRequestBindings.SingleOrDefaultAsync(item =>
@@ -54,6 +56,7 @@ public sealed class PullRequestScopeService(ScrumPilotContext db, GitHubAppClien
     private async Task<PullRequestScopeCheck> ValidateLockedAsync(TaskPullRequestBinding binding,
         ProjectRepository repository, string expectedHead, CancellationToken ct)
     {
+        await registry.RequireCurrentAsync(repository, ct);
         var identity = await github.GetPullRequestIdentityAsync(repository.InstallationId, repository.GitHubRepositoryId,
             repository.Owner, repository.Name, binding.PullRequestNumber, ct);
         if (identity.HeadSha != expectedHead) throw new InvalidOperationException("The PR head changed. Retry to register its new head before validation.");
@@ -81,11 +84,18 @@ public sealed class PullRequestScopeService(ScrumPilotContext db, GitHubAppClien
             + (success ? "Every net changed file and operation is approved. This does not verify semantics or test execution." : string.Join("\n", errors));
         var checkId = await github.PublishCheckAsync(repository.InstallationId, repository.GitHubRepositoryId,
             repository.Owner, repository.Name, pr.HeadSha, success, summary, ct);
+        if (success && !await registry.IsCurrentAsync(repository, ct))
+        {
+            await github.PublishCheckAsync(repository.InstallationId, repository.GitHubRepositoryId,
+                repository.Owner, repository.Name, pr.HeadSha, false, "Repository authority changed during validation.", ct);
+            throw new InvalidOperationException("Repository authority changed during validation. Reconcile before retrying.");
+        }
         var check = new PullRequestScopeCheck
         {
             ProjectId = binding.ProjectId,
             TaskPullRequestBindingId = binding.TaskPullRequestBindingId,
             TaskSpecificationRevisionId = spec.TaskSpecificationRevisionId,
+            RepositoryVersion = repository.Version,
             HeadSha = pr.HeadSha,
             BaseSha = pr.BaseSha,
             MergeBaseSha = pr.MergeBaseSha,
@@ -116,13 +126,15 @@ public sealed class PullRequestScopeService(ScrumPilotContext db, GitHubAppClien
 
     private async Task<HashSet<string>> InvalidateKnownHeadsAsync(ProjectRepository repository, int number, string reason, CancellationToken ct)
     {
-        var attempts = db.PullRequestScopeAttempts.Where(item => item.ProjectRepositoryId == repository.ProjectRepositoryId
-            && item.PullRequestNumber == number).Select(item => item.HeadSha);
+        var registration = await registry.RequireOwnedAsync(repository, ct);
+        var attempts = await control.PullRequestScopeAttempts.AsNoTracking().Where(item =>
+            item.RegistrationId == registration.RegistrationId && item.PullRequestNumber == number)
+            .Select(item => item.HeadSha).ToListAsync(ct);
         var previousChecks = from check in db.PullRequestScopeChecks
                              join binding in db.TaskPullRequestBindings on check.TaskPullRequestBindingId equals binding.TaskPullRequestBindingId
                              where binding.ProjectRepositoryId == repository.ProjectRepositoryId && binding.PullRequestNumber == number
                              select check.HeadSha;
-        var heads = (await attempts.Union(previousChecks).ToListAsync(ct)).ToHashSet(StringComparer.Ordinal);
+        var heads = attempts.Concat(await previousChecks.ToListAsync(ct)).ToHashSet(StringComparer.Ordinal);
         foreach (var head in heads)
             await github.PublishCheckAsync(repository.InstallationId, repository.GitHubRepositoryId,
                 repository.Owner, repository.Name, head, false, reason, ct);
@@ -135,6 +147,7 @@ public sealed class PullRequestScopeService(ScrumPilotContext db, GitHubAppClien
             throw new InvalidOperationException("Scope validation must register its recovery head outside any enclosing transaction.");
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
         await db.AcquirePlanningPolicyLockAsync(repository.ProjectId, ct);
+        var registration = await registry.RequireCurrentAsync(repository, ct);
         const string pending = "Scope verification is in progress; prior results are invalid.";
         var known = await InvalidateKnownHeadsAsync(repository, number, pending, ct);
         var identity = await github.GetPullRequestIdentityAsync(repository.InstallationId, repository.GitHubRepositoryId,
@@ -143,15 +156,18 @@ public sealed class PullRequestScopeService(ScrumPilotContext db, GitHubAppClien
             await github.PublishCheckAsync(repository.InstallationId, repository.GitHubRepositoryId,
                 repository.Owner, repository.Name, identity.HeadSha, false, pending, ct);
         if (!identity.IsOpen) throw new InvalidOperationException("Only an open PR can receive current scope approval.");
-        db.PullRequestScopeAttempts.Add(new()
+        control.PullRequestScopeAttempts.Add(new()
         {
+            RegistrationId = registration.RegistrationId,
+            OrganizationId = registration.OrganizationId,
+            StorageKey = registration.StorageKey,
             ProjectId = repository.ProjectId,
             ProjectRepositoryId = repository.ProjectRepositoryId,
             PullRequestNumber = number,
             HeadSha = identity.HeadSha
         });
         // Recovery heads must survive cancellation or rollback after GitHub has accepted a success.
-        await db.SaveChangesAsync(ct);
+        await control.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return identity.HeadSha;
     }
@@ -166,6 +182,7 @@ public sealed class PullRequestScopeService(ScrumPilotContext db, GitHubAppClien
             var head = await RecordAttemptAsync(repository, number, ct);
             await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
             await db.AcquirePlanningPolicyLockAsync(repository.ProjectId, ct);
+            await registry.RequireCurrentAsync(repository, ct);
             var binding = await db.TaskPullRequestBindings.SingleOrDefaultAsync(item =>
                 item.ProjectRepositoryId == repository.ProjectRepositoryId && item.PullRequestNumber == number, ct);
             if (binding is not null) { await ValidateLockedAsync(binding, repository, head, ct); await transaction.CommitAsync(ct); continue; }
@@ -180,6 +197,12 @@ public sealed class PullRequestScopeService(ScrumPilotContext db, GitHubAppClien
                 exception is not null, exception is null
                     ? "Strict scope policy: bind an approved task or obtain an Owner-approved non-task exception."
                     : $"Owner-approved non-task exception: {exception.Reason}", ct);
+            if (exception is not null && !await registry.IsCurrentAsync(repository, ct))
+            {
+                await github.PublishCheckAsync(installationId, repositoryId, repository.Owner, repository.Name, pr.HeadSha,
+                    false, "Repository authority changed during classification.", ct);
+                throw new InvalidOperationException("Repository authority changed during classification.");
+            }
             await transaction.CommitAsync(ct);
         }
     }

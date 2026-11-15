@@ -92,13 +92,14 @@ public sealed class ProjectService(
         int projectId,
         CancellationToken cancellationToken = default)
     {
-        await RequireProjectOwnerAsync(ownerUserId, projectId, cancellationToken);
+        var organizationId = await RequireProjectOwnerAsync(ownerUserId, projectId, cancellationToken);
         if (!await repository.DeleteAsync(projectId, cancellationToken))
         {
             throw new ProjectNotFoundException();
         }
-        await connectionEvictor.EvictProjectAsync(projectId, cancellationToken);
-        if (workConnections is not null) await workConnections.EvictAsync(projectId: projectId, ct: cancellationToken);
+        await connectionEvictor.EvictProjectAsync(organizationId, projectId, cancellationToken);
+        if (workConnections is not null) await workConnections.EvictAsync(
+            projectId: projectId, organizationId: organizationId, ct: cancellationToken);
     }
 
     public async Task<IReadOnlyList<ProjectMemberAccessDto>> GetMembersAsync(
@@ -121,7 +122,7 @@ public sealed class ProjectService(
         SetProjectAccessRequest request,
         CancellationToken cancellationToken = default)
     {
-        await RequireProjectOwnerAsync(
+        var organizationId = await RequireProjectOwnerAsync(
             ownerUserId,
             projectId,
             cancellationToken);
@@ -150,10 +151,11 @@ public sealed class ProjectService(
                 {
                     await connectionEvictor.EvictUserFromProjectAsync(
                         userId,
+                        organizationId,
                         projectId,
                         cancellationToken);
                     if (workConnections is not null) await workConnections.EvictAsync(
-                        projectId: projectId, userId: userId, ct: cancellationToken);
+                        projectId: projectId, organizationId: organizationId, userId: userId, ct: cancellationToken);
                 }
                 return;
             case ProjectAccessMutationResult.ProjectNotFound:

@@ -7,10 +7,11 @@ namespace ScrumPilot.FluentWeb.Services;
 public interface IProjectWorkClient : IAsyncDisposable
 {
     string Status { get; }
-    Task StartAsync(int projectId, Func<Task> refresh);
+    Task StartAsync(WorkScope scope, Func<Task> refresh);
+    Task StopAsync(WorkScope scope);
 }
 
-public sealed class ProjectWorkClient(HttpClient http, IJSRuntime js, ILogger<ProjectWorkClient> logger) : IProjectWorkClient
+public sealed class ProjectWorkClient(IJSRuntime js, ILogger<ProjectWorkClient> logger) : IProjectWorkClient
 {
     private HubConnection? _connection;
     private CancellationTokenSource? _stop;
@@ -19,68 +20,90 @@ public sealed class ProjectWorkClient(HttpClient http, IJSRuntime js, ILogger<Pr
     private readonly string _observerId = Guid.NewGuid().ToString("N");
     private DotNetObjectReference<ProjectWorkClient>? _reference;
     private Func<Task>? _refresh;
+    private long _generation;
+    private WorkScope? _owner;
     public string Status { get; private set; } = "Connecting live updates";
 
-    public async Task StartAsync(int projectId, Func<Task> refresh)
+    public async Task StartAsync(WorkScope scope, Func<Task> refresh)
     {
+        scope.ThrowIfStale();
+        var projectId = scope.ProjectId ?? throw new InvalidOperationException("Project work requires a project scope.");
+        var generation = Interlocked.Increment(ref _generation);
         _stop?.Cancel();
         await _transition.WaitAsync();
         try
         {
             await StopCoreAsync();
-            var stop = _stop = new();
-            var connection = _connection = new HubConnectionBuilder().WithUrl(new Uri(http.BaseAddress!, "hubs/project-work"), options =>
-                options.AccessTokenProvider = async () => await js.InvokeAsync<string?>("localStorage.getItem", "authToken"))
+            if (generation != _generation || !scope.IsCurrent) return;
+            _owner = scope;
+            Status = "Connecting live updates";
+            var stop = _stop = CancellationTokenSource.CreateLinkedTokenSource(scope.Cancellation);
+            bool Current() => generation == _generation && !stop.IsCancellationRequested && scope.IsCurrent;
+            async Task RefreshCurrentAsync() { if (Current()) await refresh(); }
+            var apiBase = scope.Http.BaseAddress ?? throw new InvalidOperationException("API base address is required.");
+            var connection = _connection = new HubConnectionBuilder().WithUrl(new Uri(apiBase, OrganizationRoutes.ProjectWorkHub(scope.OrganizationId)), options =>
+                options.AccessTokenProvider = async () =>
+                {
+                    scope.ThrowIfStale();
+                    return await js.InvokeAsync<string?>("localStorage.getItem", stop.Token, "authToken");
+                })
                 .WithAutomaticReconnect().Build();
-            _refresh = refresh;
+            _refresh = RefreshCurrentAsync;
             connection.On<int, long>("ProjectWorkChanged", async (changedProject, _) =>
             {
-                if (!stop.IsCancellationRequested && changedProject == projectId) await refresh();
+                if (Current() && changedProject == projectId) await RefreshCurrentAsync();
             });
             connection.On<int>("ProjectAccessRevoked", async changedProject =>
             {
-                if (!stop.IsCancellationRequested && changedProject == projectId) await refresh();
+                if (Current() && changedProject == projectId) await RefreshCurrentAsync();
             });
             connection.Reconnected += async _ =>
             {
                 try
                 {
-                    if (stop.IsCancellationRequested) return;
+                    if (!Current()) return;
                     await connection.InvokeAsync("Subscribe", projectId, stop.Token);
-                    await refresh();
+                    await RefreshCurrentAsync().WaitAsync(stop.Token);
                 }
+                catch (OperationCanceledException) when (!Current()) { }
                 catch (Exception ex) when (ex is HttpRequestException or HubException)
                 {
+                    if (!Current()) return;
                     logger.LogWarning(ex, "Unable to rejoin project work subscription");
                     Status = "Live subscription unavailable; periodic reconciliation enabled";
-                    await refresh();
+                    await RefreshCurrentAsync();
                 }
             };
             try
             {
                 await connection.StartAsync(stop.Token);
                 await connection.InvokeAsync("Subscribe", projectId, stop.Token);
+                if (!Current()) return;
                 Status = "Live updates connected; periodic reconciliation enabled";
             }
             catch (OperationCanceledException) when (stop.IsCancellationRequested) { return; }
             catch (Exception ex) when (ex is HttpRequestException or HubException or InvalidOperationException or JSException)
             {
+                if (!Current()) return;
                 logger.LogWarning(ex, "Project work live connection unavailable for {ProjectId}", projectId);
                 Status = "Live connection unavailable; refreshing every 10 seconds";
             }
             _reference = DotNetObjectReference.Create(this);
-            try { await js.InvokeVoidAsync("mermaidHelper.observeFocus", _observerId, _reference); }
-            catch (JSException ex) { logger.LogWarning(ex, "Focus reconciliation unavailable; periodic reconciliation remains enabled"); }
-            _poll = ReconcileAsync(refresh, stop.Token);
-            await refresh();
+            if (!Current()) return;
+            try { await js.InvokeVoidAsync("mermaidHelper.observeFocus", _observerId, _reference, generation); }
+            catch (JSException ex) { if (Current()) logger.LogWarning(ex, "Focus reconciliation unavailable; periodic reconciliation remains enabled"); }
+            if (!Current()) return;
+            _poll = ReconcileAsync(RefreshCurrentAsync, stop.Token);
+            try { await RefreshCurrentAsync().WaitAsync(stop.Token); }
+            catch (OperationCanceledException) when (stop.IsCancellationRequested) { }
         }
         finally { _transition.Release(); }
     }
 
     [JSInvokable]
-    public async Task ReconcileOnFocus()
+    public async Task ReconcileOnFocus(long generation)
     {
-        if (_refresh is not null && _stop?.IsCancellationRequested == false) await _refresh();
+        if (generation == _generation && _refresh is not null && _stop?.IsCancellationRequested == false) await _refresh();
     }
 
     private async Task ReconcileAsync(Func<Task> refresh, CancellationToken ct)
@@ -88,7 +111,7 @@ public sealed class ProjectWorkClient(HttpClient http, IJSRuntime js, ILogger<Pr
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
         try
         {
-            while (await timer.WaitForNextTickAsync(ct)) await refresh();
+            while (await timer.WaitForNextTickAsync(ct)) await refresh().WaitAsync(ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
     }
@@ -110,10 +133,23 @@ public sealed class ProjectWorkClient(HttpClient http, IJSRuntime js, ILogger<Pr
         _connection = null;
         _poll = null;
         _refresh = null;
+        _owner = null;
+    }
+
+    public async Task StopAsync(WorkScope scope)
+    {
+        await _transition.WaitAsync();
+        try
+        {
+            // A retired page must not dispose the shared client's newer tenant subscription.
+            if (ReferenceEquals(_owner, scope)) await StopCoreAsync();
+        }
+        finally { _transition.Release(); }
     }
 
     public async ValueTask DisposeAsync()
     {
+        Interlocked.Increment(ref _generation);
         _stop?.Cancel();
         await _transition.WaitAsync();
         try { await StopCoreAsync(); }

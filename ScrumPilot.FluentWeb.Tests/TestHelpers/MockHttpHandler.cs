@@ -10,22 +10,27 @@ namespace ScrumPilot.FluentWeb.Tests.TestHelpers;
 /// </summary>
 public sealed class MockHttpHandler : HttpMessageHandler
 {
-    private readonly List<(HttpMethod Method, Func<string, bool> Match, Func<HttpRequestMessage, string?, HttpResponseMessage> Respond)> _routes = [];
+    private readonly List<(HttpMethod Method, Func<string, bool> Match, Func<HttpRequestMessage, string?, Task<HttpResponseMessage>> Respond)> _routes = [];
     private readonly object _gate = new();
 
     public List<RecordedRequest> Requests { get; } = [];
+    public int DefaultOrganizationId { get; set; } = 1;
 
     public MockHttpHandler On(HttpMethod method, string path, Func<HttpRequestMessage, string?, HttpResponseMessage> respond)
     {
-        var normalized = Normalize(path);
-        lock (_gate) _routes.Add((method, p => p == normalized, respond));
+        lock (_gate) _routes.Add((method, p => p == Normalize(path), (request, body) => Task.FromResult(respond(request, body))));
+        return this;
+    }
+
+    public MockHttpHandler OnAsync(HttpMethod method, string path, Func<HttpRequestMessage, string?, Task<HttpResponseMessage>> respond)
+    {
+        lock (_gate) _routes.Add((method, p => p == Normalize(path), respond));
         return this;
     }
 
     public MockHttpHandler OnPrefix(HttpMethod method, string pathPrefix, Func<HttpRequestMessage, string?, HttpResponseMessage> respond)
     {
-        var normalized = Normalize(pathPrefix);
-        lock (_gate) _routes.Add((method, p => p.StartsWith(normalized, StringComparison.Ordinal), respond));
+        lock (_gate) _routes.Add((method, p => p.StartsWith(Normalize(pathPrefix), StringComparison.Ordinal), (request, body) => Task.FromResult(respond(request, body))));
         return this;
     }
 
@@ -49,9 +54,10 @@ public sealed class MockHttpHandler : HttpMessageHandler
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         var body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
-        var path = Normalize(request.RequestUri!.AbsolutePath);
+        // Never translate actual requests: a production call missing the tenant must fail.
+        var path = request.RequestUri!.AbsolutePath.Trim('/').ToLowerInvariant();
 
-        Func<HttpRequestMessage, string?, HttpResponseMessage>? responder = null;
+        Func<HttpRequestMessage, string?, Task<HttpResponseMessage>>? responder = null;
         lock (_gate)
         {
             Requests.Add(new RecordedRequest(request.Method, path, request.RequestUri.Query, body));
@@ -65,10 +71,18 @@ public sealed class MockHttpHandler : HttpMessageHandler
             }
         }
 
-        return responder?.Invoke(request, body) ?? new HttpResponseMessage(HttpStatusCode.NotFound);
+        return responder is null ? new HttpResponseMessage(HttpStatusCode.NotFound) : await responder(request, body);
     }
 
-    private static string Normalize(string path) => path.Trim('/').ToLowerInvariant();
+    private string Normalize(string path)
+    {
+        path = path.Trim('/').ToLowerInvariant();
+        var resource = path.Split('/').ElementAtOrDefault(1);
+        if (resource is "pbi" or "project" or "projects" or "sprint" or "epic" or "metrics" or "comments" or "dashboard-preferences"
+            || path.StartsWith("api/user/all"))
+            return $"api/organizations/{DefaultOrganizationId}/{path[4..]}";
+        return path;
+    }
 
     public sealed record RecordedRequest(HttpMethod Method, string Path, string Query, string? Body);
 }

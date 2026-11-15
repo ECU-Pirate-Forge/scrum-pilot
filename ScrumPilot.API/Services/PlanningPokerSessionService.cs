@@ -64,8 +64,9 @@ public class PlanningPokerSessionService
 
     public IReadOnlyList<PlanningPokerConnection> RemoveUserFromProject(
         string userId,
+        int organizationId,
         int projectId) =>
-        RemoveConnections(x => x.UserId == userId && x.SessionKey.ProjectId == projectId);
+        RemoveConnections(x => x.UserId == userId && x.SessionKey.OrganizationId == organizationId && x.SessionKey.ProjectId == projectId);
 
     public IReadOnlyList<PlanningPokerConnection> RemoveUserFromOrganization(
         string userId,
@@ -73,8 +74,8 @@ public class PlanningPokerSessionService
         RemoveConnections(x =>
             x.UserId == userId && x.SessionKey.OrganizationId == organizationId);
 
-    public IReadOnlyList<PlanningPokerConnection> RemoveProject(int projectId) =>
-        RemoveConnections(x => x.SessionKey.ProjectId == projectId);
+    public IReadOnlyList<PlanningPokerConnection> RemoveProject(int organizationId, int projectId) =>
+        RemoveConnections(x => x.SessionKey.OrganizationId == organizationId && x.SessionKey.ProjectId == projectId);
 
     public IReadOnlyList<PlanningPokerConnection> RemoveOrganization(int organizationId) =>
         RemoveConnections(x => x.SessionKey.OrganizationId == organizationId);

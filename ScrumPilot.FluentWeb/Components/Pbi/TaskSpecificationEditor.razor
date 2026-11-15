@@ -1,6 +1,6 @@
 @using System.Text.Json
 @using System.Text.Json.Serialization
-@inject HttpClient Http
+@inherits PlanningComponentBase
 @inject IJSRuntime JS
 @inject ILogger<TaskSpecificationEditor> Logger
 
@@ -46,6 +46,7 @@
 @code {
     [Parameter] public int ProjectId { get; set; }
     [Parameter] public int TaskId { get; set; }
+    protected override object PlanningIdentity => (ProjectId, TaskId);
     [Parameter] public bool IsOwner { get; set; }
     [Parameter] public RepositorySnapshot[] Snapshots { get; set; } = [];
     private static readonly JsonSerializerOptions EditorJson = new(JsonSerializerDefaults.Web)
@@ -75,7 +76,8 @@
                 new TaskFileProposal(file.Path, file.Category, file.Operation, file.Rationale, file.RenameFromPath)).ToArray() ?? [], EditorJson);
             _checkResult = await Http.GetStringAsync(Url + "/pull-requests");
         }
-        catch (HttpRequestException ex) { Logger.LogWarning(ex, "Task specification load failed"); _error = "Unable to load the specification."; }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
+        catch (HttpRequestException ex) { if (!Scope.IsCurrent) return; Logger.LogWarning(ex, "Task specification load failed"); _error = "Unable to load the specification."; }
     }
     private async Task SaveAsync()
     {
@@ -95,10 +97,11 @@
         try
         {
             using var response = await send();
-            if (!response.IsSuccessStatusCode) { _error = await response.Content.ReadAsStringAsync(); return; }
+            if (!response.IsSuccessStatusCode) { _error = await Http.ReadAsStringAsync(response.Content); return; }
             await LoadAsync();
         }
-        catch (HttpRequestException ex) { Logger.LogWarning(ex, "Task specification mutation failed"); _error = "Unable to save/validate task scope."; }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
+        catch (HttpRequestException ex) { if (!Scope.IsCurrent) return; Logger.LogWarning(ex, "Task specification mutation failed"); _error = "Unable to save/validate task scope."; }
     }
     private async Task ExportAsync()
     {
@@ -107,8 +110,9 @@
             var markdown = await Http.GetStringAsync(Url + "/specifications/export");
             await JS.InvokeVoidAsync("mermaidHelper.downloadText", $"task-{TaskId}-specification.md", markdown);
         }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
         catch (Exception ex) when (ex is HttpRequestException or JSException)
-        { Logger.LogWarning(ex, "Task specification export failed"); _error = "Unable to export the task specification."; }
+        { if (!Scope.IsCurrent) return; Logger.LogWarning(ex, "Task specification export failed"); _error = "Unable to export the task specification."; }
     }
     private async Task ExportManifestAsync()
     {
@@ -117,7 +121,8 @@
             var manifest = await Http.GetStringAsync(Url + "/specifications/manifest");
             await JS.InvokeVoidAsync("mermaidHelper.downloadText", $"task-{TaskId}-scope.json", manifest);
         }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
         catch (Exception ex) when (ex is HttpRequestException or JSException)
-        { Logger.LogWarning(ex, "Task scope manifest export failed"); _error = "Unable to export the task scope manifest."; }
+        { if (!Scope.IsCurrent) return; Logger.LogWarning(ex, "Task scope manifest export failed"); _error = "Unable to export the task scope manifest."; }
     }
 }

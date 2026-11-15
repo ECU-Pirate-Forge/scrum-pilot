@@ -1,16 +1,19 @@
 using Microsoft.AspNetCore.SignalR;
 using ScrumPilot.API.Authorization;
 using ScrumPilot.API.Hubs;
+using ScrumPilot.Data.Tenancy;
 
 namespace ScrumPilot.API.Services;
 
 public sealed class ProjectWorkNotifier(IHubContext<ProjectWorkHub> hub,
     ProjectWorkSubscriptions subscriptions, IOrganizationAccessService access,
-    ILogger<ProjectWorkNotifier> logger)
+    ILogger<ProjectWorkNotifier> logger, TenantSelection selection)
 {
     public async Task NotifyAsync(int projectId, long revision, CancellationToken ct)
     {
-        foreach (var connection in subscriptions.Connections.Where(pair => pair.Value.ProjectId == projectId))
+        var organizationId = selection.OrganizationId ?? throw new TenantUnavailableException();
+        foreach (var connection in subscriptions.Connections.Where(pair => pair.Value.ProjectId == projectId
+            && pair.Value.OrganizationId == organizationId))
         {
             try
             {

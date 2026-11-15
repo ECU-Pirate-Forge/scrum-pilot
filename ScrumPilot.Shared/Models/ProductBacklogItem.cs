@@ -35,7 +35,7 @@
         /// <summary>Fibonacci story point estimate for this PBI.</summary>
         public PbiPoints StoryPoints { get; set; }
 
-        /// <summary>Indicates how this PBI was created (AI, bot, or manual).</summary>
+        /// <summary>Indicates whether this PBI was AI-generated or manually created.</summary>
         public PbiOrigin Origin { get; set; }
 
         /// <summary>When <c>true</c>, this PBI is in draft state and not yet committed to the backlog.</summary>
@@ -46,6 +46,9 @@
 
         /// <summary>Identity ID of the team member assigned to this PBI, or <c>null</c> if unassigned.</summary>
         public string? AssignedToUserId { get; set; }
+        /// <summary>Read-only display projection, including former project members.</summary>
+        [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+        public string? AssignedToUserName { get; set; }
 
         /// <summary>Optional URL linking this PBI to an external issue tracker.</summary>
         public string? IssueLink { get; set; }

@@ -1,4 +1,5 @@
-using Microsoft.Data.Sqlite;
+using ScrumPilot.UnitTests.Backend.Tenancy;
+using ScrumPilot.Data.Tenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using ScrumPilot.Data.Context;
@@ -10,21 +11,14 @@ namespace ScrumPilot.UnitTests.Backend.DataTests;
 
 public sealed class OrganizationModelTests : IDisposable
 {
-    private readonly SqliteConnection _connection;
-    private readonly ScrumPilotContext _context;
+    private readonly SqlTestDatabase _database = new();
+    private readonly ControlPlaneContext _context;
+    private readonly OrganizationContext _tenant = new OrganizationContextFactory().CreateDbContext([]);
     private readonly IModel _model;
 
     public OrganizationModelTests()
     {
-        _connection = new SqliteConnection("Data Source=:memory:");
-        _connection.Open();
-
-        var options = new DbContextOptionsBuilder<ScrumPilotContext>()
-            .UseSqlite(_connection)
-            .Options;
-
-        _context = new ScrumPilotContext(options);
-        _context.Database.EnsureCreated();
+        _context = _database.Control;
         _model = _context.Model;
     }
 
@@ -108,23 +102,19 @@ public sealed class OrganizationModelTests : IDisposable
     [Fact]
     public async Task SaveChangesAsync_ThrowsWhenOrganizationWasUpdatedByAnotherContext()
     {
-        var databaseName = $"organization-concurrency-{Guid.NewGuid():N}";
-        var connectionString = $"Data Source={databaseName};Mode=Memory;Cache=Shared";
-        await using var keepAliveConnection = new SqliteConnection(connectionString);
-        await keepAliveConnection.OpenAsync();
-        var options = new DbContextOptionsBuilder<ScrumPilotContext>()
-            .UseSqlite(connectionString)
+        var options = new DbContextOptionsBuilder<ControlPlaneContext>()
+            .UseSqlServer(_database.Storage.Options.ControlConnectionString)
             .Options;
 
-        await using (var setupContext = new ScrumPilotContext(options))
+        await using (var setupContext = new ControlPlaneContext(options))
         {
             await setupContext.Database.EnsureCreatedAsync();
             setupContext.Organizations.Add(CreateOrganization("Shared Organization"));
             await setupContext.SaveChangesAsync();
         }
 
-        await using var firstContext = new ScrumPilotContext(options);
-        await using var secondContext = new ScrumPilotContext(options);
+        await using var firstContext = new ControlPlaneContext(options);
+        await using var secondContext = new ControlPlaneContext(options);
         var firstOrganization = await firstContext.Organizations.SingleAsync();
         var secondOrganization = await secondContext.Organizations.SingleAsync();
 
@@ -161,12 +151,7 @@ public sealed class OrganizationModelTests : IDisposable
         AssertForeignKey<ProjectMembership, Project>(
             [nameof(ProjectMembership.ProjectId)],
             DeleteBehavior.Cascade);
-        AssertForeignKey<ProjectMembership, ApplicationUser>(
-            [nameof(ProjectMembership.UserId)],
-            DeleteBehavior.Cascade);
-        AssertForeignKey<ProjectMembership, ApplicationUser>(
-            [nameof(ProjectMembership.GrantedByUserId)],
-            DeleteBehavior.Restrict);
+        Assert.DoesNotContain(Entity<ProjectMembership>().GetForeignKeys(), fk => fk.PrincipalEntityType.ClrType == typeof(ApplicationUser));
     }
 
     [Fact]
@@ -200,9 +185,7 @@ public sealed class OrganizationModelTests : IDisposable
 
         Assert.False(project.FindProperty(nameof(Project.OrganizationId))!.IsNullable);
         AssertIndex(project, [nameof(Project.OrganizationId)], unique: false);
-        AssertForeignKey<Project, Organization>(
-            [nameof(Project.OrganizationId)],
-            DeleteBehavior.Restrict);
+        Assert.DoesNotContain(project.GetForeignKeys(), fk => fk.PrincipalEntityType.ClrType == typeof(Organization));
     }
 
     [Fact]
@@ -214,10 +197,8 @@ public sealed class OrganizationModelTests : IDisposable
         Assert.True(user.FindProperty(nameof(ApplicationUser.DefaultProjectId))!.IsNullable);
         AssertForeignKey<ApplicationUser, Organization>(
             ["DefaultOrganizationId"],
-            DeleteBehavior.SetNull);
-        AssertForeignKey<ApplicationUser, Project>(
-            [nameof(ApplicationUser.DefaultProjectId)],
-            DeleteBehavior.SetNull);
+            DeleteBehavior.NoAction);
+        Assert.DoesNotContain(user.GetForeignKeys(), fk => fk.PrincipalEntityType.ClrType == typeof(Project));
     }
 
     [Fact]
@@ -228,9 +209,7 @@ public sealed class OrganizationModelTests : IDisposable
         Assert.Equal(
             [nameof(UserDashboardPreference.UserId), nameof(UserDashboardPreference.ProjectId)],
             preference.FindPrimaryKey()!.Properties.Select(property => property.Name));
-        AssertForeignKey<UserDashboardPreference, ApplicationUser>(
-            [nameof(UserDashboardPreference.UserId)],
-            DeleteBehavior.Cascade);
+        Assert.DoesNotContain(preference.GetForeignKeys(), fk => fk.PrincipalEntityType.ClrType == typeof(ApplicationUser));
         AssertForeignKey<UserDashboardPreference, Project>(
             [nameof(UserDashboardPreference.ProjectId)],
             DeleteBehavior.Cascade);
@@ -238,11 +217,11 @@ public sealed class OrganizationModelTests : IDisposable
 
     public void Dispose()
     {
-        _context.Dispose();
-        _connection.Dispose();
+        _tenant.Dispose();
+        _database.Dispose();
     }
 
-    private IEntityType Entity<TEntity>() => _model.FindEntityType(typeof(TEntity))!;
+    private IEntityType Entity<TEntity>() => _model.FindEntityType(typeof(TEntity)) ?? _tenant.Model.FindEntityType(typeof(TEntity))!;
 
     private static Organization CreateOrganization(string name) =>
         new()

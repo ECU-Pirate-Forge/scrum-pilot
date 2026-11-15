@@ -11,12 +11,14 @@ namespace ScrumPilot.API.Services;
 
 public class UserSettingsService : IUserSettingsService
 {
+    public ScrumPilot.Data.Tenancy.TenantStorage? Storage { get; init; }
+    public IServiceProvider? Services { get; init; }
     private readonly UserManager<ApplicationUser> _userManager;
-    private readonly ScrumPilotContext _context;
+    private readonly ControlPlaneContext _context;
 
     public UserSettingsService(
         UserManager<ApplicationUser> userManager,
-        ScrumPilotContext context)
+        ControlPlaneContext context)
     {
         _userManager = userManager;
         _context = context;
@@ -26,14 +28,25 @@ public class UserSettingsService : IUserSettingsService
     {
         var user = await _userManager.FindByIdAsync(userId);
         if (user is null) return null;
+        var defaultOrg = user.DefaultOrganizationId;
+        var defaultProject = user.DefaultProjectId;
+        if (!defaultOrg.HasValue) defaultProject = null;
+        if (Storage != null && defaultOrg.HasValue)
+        {
+            var membership = await _context.OrganizationMemberships.AsNoTracking().SingleOrDefaultAsync(m =>
+                m.UserId == userId && m.OrganizationId == defaultOrg && m.Organization!.DeletedAt == null
+                && m.Organization.StorageState == "Active");
+            if (membership is null) { defaultOrg = null; defaultProject = null; }
+            else if (defaultProject.HasValue && !await ValidateTenantProject(userId, defaultOrg.Value, defaultProject.Value, CancellationToken.None))
+                defaultProject = null;
+        }
 
         return new UserSettingsDto
         {
             Email = user.Email,
-            DiscordUsername = user.DiscordUsername,
             UiPreference = user.UiPreference,
-            DefaultProjectId = user.DefaultProjectId,
-            DefaultOrganizationId = user.DefaultOrganizationId
+            DefaultProjectId = defaultProject,
+            DefaultOrganizationId = defaultOrg
         };
     }
 
@@ -42,8 +55,33 @@ public class UserSettingsService : IUserSettingsService
         UserSettingsDto dto,
         CancellationToken cancellationToken = default)
     {
+        OrganizationContext? selectedTenant = null;
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? selectedWork = null;
         try
         {
+            // Hold local project/grant read locks through the central commit. Membership is
+            // re-read under the central serializable transaction, including its current role.
+            Guid? validatedMembership = null;
+            var projectExists = false;
+            var explicitGrant = false;
+            if (Storage != null && dto.DefaultProjectId.HasValue && dto.DefaultOrganizationId.HasValue)
+            {
+                validatedMembership = await _context.OrganizationMemberships.AsNoTracking()
+                    .Where(m => m.OrganizationId == dto.DefaultOrganizationId && m.UserId == userId)
+                    .Select(m => (Guid?)m.MembershipInstanceId).SingleOrDefaultAsync(cancellationToken);
+                var organization = await _context.Organizations.AsNoTracking()
+                    .SingleOrDefaultAsync(x => x.OrganizationId == dto.DefaultOrganizationId, cancellationToken);
+                if (organization == null || validatedMembership == null)
+                    return UserSettingsUpdateResult.Validation("The selected default project is not available.");
+                try { selectedTenant = Storage.Open(organization); }
+                catch (ScrumPilot.Data.Tenancy.TenantUnavailableException)
+                { return UserSettingsUpdateResult.Validation("The selected default project is not available."); }
+                selectedWork = await selectedTenant.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+                projectExists = await selectedTenant.Projects.AnyAsync(p => p.ProjectId == dto.DefaultProjectId
+                    && p.OrganizationId == dto.DefaultOrganizationId, cancellationToken);
+                explicitGrant = await selectedTenant.ProjectMemberships.AnyAsync(g => g.ProjectId == dto.DefaultProjectId
+                    && g.UserId == userId && g.MembershipInstanceId == validatedMembership, cancellationToken);
+            }
             await using var transaction = await _context.Database.BeginTransactionAsync(
                 IsolationLevel.Serializable,
                 cancellationToken);
@@ -71,7 +109,9 @@ public class UserSettingsService : IUserSettingsService
                         membership.UserId == userId
                         && membership.OrganizationId == dto.DefaultOrganizationId.Value
                         && membership.Organization != null
-                        && membership.Organization.DeletedAt == null,
+                        && membership.Organization.DeletedAt == null
+                        && membership.Organization.StorageState == "Active"
+                        && !membership.Organization.RestorePending,
                     cancellationToken);
             if (!hasOrganizationAccess)
             {
@@ -81,20 +121,11 @@ public class UserSettingsService : IUserSettingsService
 
             if (dto.DefaultProjectId.HasValue)
             {
-                var hasProjectAccess = await _context.Projects.AnyAsync(
-                    project =>
-                        project.ProjectId == dto.DefaultProjectId.Value
-                        && project.OrganizationId == dto.DefaultOrganizationId!.Value
-                        && project.Organization != null
-                        && project.Organization.DeletedAt == null
-                        && _context.OrganizationMemberships.Any(membership =>
-                            membership.UserId == userId
-                            && membership.OrganizationId == project.OrganizationId
-                            && (membership.Role == OrganizationRole.Owner
-                                || _context.ProjectMemberships.Any(projectMembership =>
-                                    projectMembership.ProjectId == project.ProjectId
-                                    && projectMembership.UserId == userId))),
-                    cancellationToken);
+                var hasProjectAccess = projectExists && validatedMembership.HasValue
+                        && await _context.OrganizationMemberships.AsNoTracking().AnyAsync(m =>
+                            m.OrganizationId == dto.DefaultOrganizationId && m.UserId == userId
+                            && m.MembershipInstanceId == validatedMembership
+                            && (m.Role == OrganizationRole.Owner || explicitGrant), cancellationToken);
                 if (!hasProjectAccess)
                 {
                     return UserSettingsUpdateResult.Validation(
@@ -102,7 +133,6 @@ public class UserSettingsService : IUserSettingsService
                 }
             }
 
-            user.DiscordUsername = dto.DiscordUsername;
             user.UiPreference = dto.UiPreference;
             user.DefaultOrganizationId = dto.DefaultOrganizationId;
             user.DefaultProjectId = dto.DefaultProjectId;
@@ -117,6 +147,11 @@ public class UserSettingsService : IUserSettingsService
         {
             return UserSettingsUpdateResult.Conflict(
                 "Settings changed concurrently. Please reload and try again.");
+        }
+        finally
+        {
+            if (selectedWork != null) await selectedWork.DisposeAsync();
+            if (selectedTenant != null) await selectedTenant.DisposeAsync();
         }
     }
 
@@ -133,25 +168,33 @@ public class UserSettingsService : IUserSettingsService
 
     public async Task<IEnumerable<UserSummaryDto>> GetProjectUsersAsync(
         int projectId,
-        CancellationToken cancellationToken = default) =>
-        await (
-            from user in _context.Users.AsNoTracking()
-            where _context.Projects.Any(project =>
-                project.ProjectId == projectId
-                && project.Organization != null
-                && project.Organization.DeletedAt == null
-                && (_context.OrganizationMemberships.Any(m =>
-                        m.UserId == user.Id
-                        && m.OrganizationId == project.OrganizationId
-                        && m.Role == OrganizationRole.Owner)
-                    || (_context.ProjectMemberships.Any(m =>
-                            m.ProjectId == projectId && m.UserId == user.Id)
-                        && _context.OrganizationMemberships.Any(m =>
-                            m.UserId == user.Id
-                            && m.OrganizationId == project.OrganizationId))))
-            orderby user.UserName
-            select new UserSummaryDto { Id = user.Id, UserName = user.UserName ?? "" })
-            .ToListAsync(cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        if (Services != null)
+        {
+            var members = await Services.GetRequiredService<IProjectAccessRepository>().GetMembersAsync(projectId, cancellationToken);
+            var ids = members.Select(m => m.UserId).ToArray();
+            return await _context.Users.AsNoTracking().Where(u => ids.Contains(u.Id))
+                .OrderBy(u => u.UserName).Select(u => new UserSummaryDto { Id = u.Id, UserName = u.UserName ?? "" }).ToListAsync(cancellationToken);
+        }
+        throw new InvalidOperationException("The selected organization's project access service is required.");
+    }
+
+    private async Task<bool> ValidateTenantProject(string userId, int organizationId, int projectId, CancellationToken ct)
+    {
+        var org = await _context.Organizations.AsNoTracking().SingleOrDefaultAsync(x => x.OrganizationId == organizationId, ct);
+        var membership = await _context.OrganizationMemberships.AsNoTracking().SingleOrDefaultAsync(x =>
+            x.OrganizationId == organizationId && x.UserId == userId, ct);
+        if (org is null || membership is null || org.DeletedAt != null || org.StorageState != "Active") return false;
+        try
+        {
+            using var tenant = Storage!.Open(org);
+            return await tenant.Projects.AnyAsync(p => p.ProjectId == projectId && p.OrganizationId == organizationId
+                && (membership.Role == OrganizationRole.Owner || tenant.ProjectMemberships.Any(g =>
+                    g.ProjectId == projectId && g.UserId == userId && g.MembershipInstanceId == membership.MembershipInstanceId)), ct);
+        }
+        catch (ScrumPilot.Data.Tenancy.TenantUnavailableException) { return false; }
+    }
 
     public async Task<IReadOnlyList<UserSummaryDto>> SearchUsersAsync(
         string query,

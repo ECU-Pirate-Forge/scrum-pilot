@@ -4,8 +4,10 @@ using Microsoft.Extensions.DependencyInjection;
 using MudBlazor;
 using MudBlazor.Services;
 using ScrumPilot.Web.Services;
+using ScrumPilot.Client;
 using System.Net;
 using NSubstitute;
+using Microsoft.AspNetCore.Components;
 
 namespace ScrumPilot.UnitTests.Frontend
 {
@@ -19,6 +21,7 @@ namespace ScrumPilot.UnitTests.Frontend
         protected Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? HttpResponseFactoryAsync { get; set; }
         protected dynamic Authorization { get; }
         protected IAuthService AuthService { get; }
+        protected WorkScope TestWork { get; }
 
         protected FrontendTestBase()
         {
@@ -46,8 +49,9 @@ namespace ScrumPilot.UnitTests.Frontend
             AuthService = Substitute.For<IAuthService>();
             Services.AddSingleton(AuthService);
 
-            // Register MetricsDashboardService so Backlog (and other pages that inject it) can be rendered.
-            Services.AddSingleton(new MetricsDashboardService(MockHttpClient));
+            TestWork = new WorkScope(MockHttpClient, 1, 17);
+            RenderTree.Add<CascadingValue<WorkScope>>(parameters => parameters
+                .Add(value => value.Value, TestWork));
 
             // Use loose mode to ignore JSInterop issues - focus on component logic instead
             JSInterop.Mode = JSRuntimeMode.Loose;

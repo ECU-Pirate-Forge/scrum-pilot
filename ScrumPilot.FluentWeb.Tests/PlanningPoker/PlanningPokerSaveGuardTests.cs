@@ -5,6 +5,14 @@ namespace ScrumPilot.FluentWeb.Tests.PlanningPoker;
 
 public class PlanningPokerSaveGuardTests
 {
+    [Fact]
+    public void Equal_local_ids_in_another_organization_cannot_clear_a_selection()
+    {
+        var hub = new object();
+        Assert.False(PlanningPokerSaveGuard.ShouldClearSelection(42, 42, 7, hub, 42, 7, hub, [],
+            capturedOrganizationId: 1, currentOrganizationId: 2));
+    }
+
     private readonly object _capturedHub = new();
 
     [Fact]

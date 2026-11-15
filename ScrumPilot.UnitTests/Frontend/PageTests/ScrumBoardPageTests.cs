@@ -145,7 +145,7 @@ namespace ScrumPilot.UnitTests.Frontend.PageTests
             {
                 var url = request.RequestUri!.PathAndQuery.TrimStart('/');
                 if (request.Method == HttpMethod.Get &&
-                    url.StartsWith("api/Pbi/getNonDraftPbis", StringComparison.OrdinalIgnoreCase))
+                    url.StartsWith("api/organizations/1/Pbi/getNonDraftPbis", StringComparison.OrdinalIgnoreCase))
                 {
                     itemGetCount++;
                     return JsonResponse(itemGetCount == 1
@@ -154,7 +154,7 @@ namespace ScrumPilot.UnitTests.Frontend.PageTests
                 }
 
                 if (request.Method == HttpMethod.Put &&
-                    url.Equals("api/Pbi", StringComparison.OrdinalIgnoreCase))
+                    url.Equals("api/organizations/1/Pbi", StringComparison.OrdinalIgnoreCase))
                 {
                     return JsonResponse(original);
                 }

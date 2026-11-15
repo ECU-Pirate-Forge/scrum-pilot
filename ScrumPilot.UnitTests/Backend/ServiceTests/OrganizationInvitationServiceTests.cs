@@ -1,5 +1,5 @@
 using System.Security.Cryptography;
-using Microsoft.Data.Sqlite;
+using ScrumPilot.UnitTests.Backend.Tenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
@@ -14,8 +14,8 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests;
 
 public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
 {
-    private readonly SqliteConnection _connection = new("Data Source=:memory:");
-    private readonly ScrumPilotContext _context;
+    private readonly SqlTestDatabase _database = new();
+    private readonly ControlPlaneContext _context;
     private readonly ICurrentUser _currentUser = Substitute.For<ICurrentUser>();
     private readonly IInvitationAcceptanceUserLookup _userLookup =
         Substitute.For<IInvitationAcceptanceUserLookup>();
@@ -29,10 +29,7 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
 
     public OrganizationInvitationServiceTests()
     {
-        _connection.Open();
-        _context = new ScrumPilotContext(
-            new DbContextOptionsBuilder<ScrumPilotContext>().UseSqlite(_connection).Options);
-        _context.Database.EnsureCreated();
+        _context = _database.Control;
         _currentUser.UserId.Returns("owner");
         _currentUser.Email.Returns("owner@example.com");
         _userLookup.FindByIdAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
@@ -539,8 +536,8 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        await _context.DisposeAsync();
-        await _connection.DisposeAsync();
+        _database.Dispose();
+        await Task.CompletedTask;
     }
 
     private sealed class FakeInvitationEmailSender : IInvitationEmailSender

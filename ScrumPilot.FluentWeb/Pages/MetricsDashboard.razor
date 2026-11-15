@@ -1,9 +1,10 @@
 @page "/metrics"
+@page "/organizations/{OrganizationId:int}/metrics"
+@inherits WorkComponentBase
 @implements IAsyncDisposable
 @using Microsoft.JSInterop
 @using ScrumPilot.FluentWeb.Components.MetricsDashboard
 @inject ProjectStateService ProjectState
-@inject MetricsDashboardService MetricsSvc
 @inject IJSRuntime JS
 @inject ILogger<MetricsDashboard> Logger
 
@@ -19,11 +20,11 @@
                     @SelectedSprintLabel
                 </FluentMenuButton>
                 <FluentMenuList>
-                    <FluentMenuItem Role="MenuItemRole.MenuItemRadio" Checked="@(!_selectedSprintId.HasValue)" OnClick="@(() => OnSprintChangedAsync(null))">All Sprints</FluentMenuItem>
+                    <FluentMenuItem Role="MenuItemRole.Radio" Checked="@(!_selectedSprintId.HasValue)" CheckedChanged="@(selected => selected == true ? OnSprintChangedAsync(null) : Task.CompletedTask)">All Sprints</FluentMenuItem>
                     @foreach (var option in SprintOptions)
                     {
                         var sprintId = option.Sprint.SprintId;
-                        <FluentMenuItem Role="MenuItemRole.MenuItemRadio" Checked="@(_selectedSprintId == sprintId)" OnClick="@(() => OnSprintChangedAsync(sprintId))">
+                        <FluentMenuItem Role="MenuItemRole.Radio" Checked="@(_selectedSprintId == sprintId)" CheckedChanged="@(selected => selected == true ? OnSprintChangedAsync(sprintId) : Task.CompletedTask)">
                             @option.Label
                         </FluentMenuItem>
                     }
@@ -40,7 +41,7 @@
                     @foreach (var widget in _widgetPrefs)
                     {
                         var id = widget.Id;
-                        <FluentMenuItem Role="MenuItemRole.MenuItemCheckbox" Checked="@widget.Visible" OnClick="@(() => OnWidgetToggledAsync(id, !widget.Visible))">
+                        <FluentMenuItem Role="MenuItemRole.Checkbox" Checked="@widget.Visible" CheckedChanged="@(visible => OnWidgetToggledAsync(id, visible == true))">
                             @GetWidgetName(id)
                         </FluentMenuItem>
                     }
@@ -147,7 +148,8 @@
 @code {
     [CascadingParameter(Name = "IsDarkMode")] private bool IsDarkMode { get; set; }
 
-    private int? _selectedProjectId => ProjectState.SelectedProjectId;
+    private int? _selectedProjectId => Scope.ProjectId;
+    private readonly string _gridOwner = Guid.NewGuid().ToString("N");
     private List<Sprint> _sprints = [];
     private IReadOnlyList<ProductBacklogItem> _pbis = [];
     private int? _selectedSprintId;
@@ -212,7 +214,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        ProjectState.OnChange += HandleProjectStateChanged;
         await LoadForCurrentProjectAsync();
         _loading = false;
     }
@@ -236,7 +237,7 @@
 
     private async Task LoadForCurrentProjectAsync()
     {
-        var projectId = ProjectState.SelectedProjectId;
+        var projectId = Scope.ProjectId;
         if (!projectId.HasValue) return;
 
         try
@@ -309,6 +310,7 @@
     [JSInvokable]
     public async Task OnLayoutChanged(List<DashboardWidgetConfig> layout)
     {
+        if (!Scope.IsCurrent) return;
         ApplyLayout(layout);
         await SavePreferencesAsync();
     }
@@ -317,7 +319,8 @@
     {
         try
         {
-            var currentLayout = await JS.InvokeAsync<List<DashboardWidgetConfig>>("metricsGridstack.getLayout");
+            var currentLayout = await JS.InvokeAsync<List<DashboardWidgetConfig>>("metricsGridstack.getLayout", Scope.Cancellation, _gridOwner);
+            if (!Scope.IsCurrent) return;
             ApplyLayout(currentLayout);
         }
         catch (Exception ex)
@@ -341,12 +344,13 @@
 
     private async Task SavePreferencesAsync()
     {
-        if (!_selectedProjectId.HasValue) return;
+        if (!Scope.IsCurrent || !_selectedProjectId.HasValue) return;
         await MetricsSvc.SaveDashboardPreferencesAsync(new DashboardPreferenceDto { Widgets = _widgetPrefs }, _selectedProjectId.Value);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (!Scope.IsCurrent) return;
         if (_lastRenderedTheme != IsDarkMode)
         {
             _lastRenderedTheme = IsDarkMode;
@@ -360,7 +364,7 @@
             _dotnetRef?.Dispose();
             _dotnetRef = DotNetObjectReference.Create(this);
             var visibleLayout = _widgetPrefs.Where(w => w.Visible).Select(w => new { id = w.Id, x = w.X, y = w.Y, w = w.W, h = w.H }).ToList();
-            try { await JS.InvokeVoidAsync("metricsGridstack.init", _dotnetRef, visibleLayout); }
+            try { await JS.InvokeVoidAsync("metricsGridstack.init", Scope.Cancellation, _dotnetRef, visibleLayout, _gridOwner); }
             catch (Exception ex) { Logger.LogDebug(ex, "Unable to initialize metrics dashboard grid"); }
         }
     }
@@ -368,7 +372,7 @@
     public async ValueTask DisposeAsync()
     {
         ProjectState.OnChange -= HandleProjectStateChanged;
-        try { await JS.InvokeVoidAsync("metricsGridstack.destroy"); }
+        try { await JS.InvokeVoidAsync("metricsGridstack.destroy", _gridOwner); }
         catch (Exception ex) { Logger.LogDebug(ex, "Unable to destroy metrics dashboard grid"); }
         _dotnetRef?.Dispose();
     }

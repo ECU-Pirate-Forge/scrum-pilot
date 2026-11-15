@@ -31,11 +31,11 @@
     }
 </WidgetCard>
 
+@inherits WorkComponentBase
 @code {
     [Parameter] public int? SprintId { get; set; }
     [Parameter] public int? ProjectId { get; set; }
     [CascadingParameter(Name = "IsDarkMode")] public bool IsDarkMode { get; set; }
-    [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
     [Inject] private ILogger<VelocityWidget> Logger { get; set; } = default!;
 
     private List<VelocityPoint> _points = [];
@@ -59,6 +59,7 @@
         _loading = true;
         try { _points = await MetricsSvc.GetVelocityDataAsync(SprintId, ProjectId); }
         catch (Exception ex) { Logger.LogWarning(ex, "Failed to load velocity for project {ProjectId} sprint {SprintId}", ProjectId, SprintId); _points = []; }
+        if (!Scope.IsCurrent) return;
         ComputeStats();
         _options = BuildOptions(_avgVelocity, IsDarkMode);
         _chartKey++;

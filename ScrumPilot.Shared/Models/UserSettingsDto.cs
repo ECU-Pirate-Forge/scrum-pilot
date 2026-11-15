@@ -8,9 +8,6 @@ public class UserSettingsDto
     /// <summary>The user's email address.</summary>
     public string? Email { get; set; }
 
-    /// <summary>The user's Discord username for bot integrations.</summary>
-    public string? DiscordUsername { get; set; }
-
     /// <summary>The user's preferred UI colour scheme.</summary>
     public UiPreference UiPreference { get; set; }
 

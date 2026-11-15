@@ -1,4 +1,4 @@
-@inject HttpClient Http
+@inherits PlanningComponentBase
 @inject ILogger<ProjectRepositorySettings> Logger
 
 <section aria-label="Repository configuration">
@@ -21,6 +21,7 @@
 
 @code {
     [Parameter] public int ProjectId { get; set; }
+    protected override object PlanningIdentity => ProjectId;
     [Parameter] public bool IsOwner { get; set; }
     [Parameter] public EventCallback OnSaved { get; set; }
     private ProjectRepositoryStatus? _status;
@@ -49,7 +50,8 @@
             _owner = repository?.Owner ?? ""; _name = repository?.Name ?? ""; _branch = repository?.DefaultBranch ?? "main";
             _version = repository?.Version ?? 0;
         }
-        catch (HttpRequestException ex) { Logger.LogWarning(ex, "Repository settings failed to load"); _error = "Unable to load repository settings."; }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
+        catch (HttpRequestException ex) { if (!Scope.IsCurrent) return; Logger.LogWarning(ex, "Repository settings failed to load"); _error = "Unable to load repository settings."; }
     }
 
     private async Task SaveAsync()
@@ -59,10 +61,11 @@
         {
             using var response = await Http.PutAsJsonAsync($"api/projects/{ProjectId}/repository",
                 new ConfigureProjectRepositoryRequest(_repositoryId, _installationId, _owner, _name, _branch, _version));
-            if (!response.IsSuccessStatusCode) { _error = await response.Content.ReadAsStringAsync(); return; }
+            if (!response.IsSuccessStatusCode) { _error = await Http.ReadAsStringAsync(response.Content); return; }
             await LoadAsync(); await OnSaved.InvokeAsync();
         }
-        catch (HttpRequestException ex) { Logger.LogWarning(ex, "Repository settings save failed"); _error = "Unable to verify repository access."; }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
+        catch (HttpRequestException ex) { if (!Scope.IsCurrent) return; Logger.LogWarning(ex, "Repository settings save failed"); _error = "Unable to verify repository access."; }
         finally { _saving = false; }
     }
 }

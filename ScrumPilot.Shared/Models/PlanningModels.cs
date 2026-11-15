@@ -63,6 +63,7 @@ public class ProjectRepository
 {
     public int ProjectRepositoryId { get; set; }
     public int ProjectId { get; set; }
+    public Guid RegistrationId { get; set; }
     public long GitHubRepositoryId { get; set; }
     public long InstallationId { get; set; }
     public required string Owner { get; set; }
@@ -190,6 +191,7 @@ public class PullRequestScopeCheck
     public int ProjectId { get; set; }
     public int TaskPullRequestBindingId { get; set; }
     public int TaskSpecificationRevisionId { get; set; }
+    public long RepositoryVersion { get; set; }
     public required string HeadSha { get; set; }
     public string BaseSha { get; set; } = "";
     public string MergeBaseSha { get; set; } = "";

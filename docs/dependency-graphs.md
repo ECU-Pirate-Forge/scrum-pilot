@@ -10,6 +10,12 @@ In FluentWeb, select a project, open `/scrum-board`, select a sprint, and follow
 
 Members with project access can edit dependencies and review acceptance. External boundary work is read-only in this view. The original Web client remains compatibility-only.
 
+The selected organization and project are part of the client work scope, not
+inferred from the numeric sprint/project ID. Server graph routes are under
+`/api/organizations/{organizationId}/projects/{projectId}`; the live connection
+uses `/hubs/organizations/{organizationId}/project-work`. Equal local IDs in
+different organization catalogs do not share subscriptions or notifications.
+
 ## Direction and Relationships
 
 Arrows point from prerequisite to dependent:
@@ -110,15 +116,16 @@ readiness rules. No custom graph editor or new framework is required initially.
 ### Renderer validation and performance
 
 The pure evaluator's **200-node/1,000-edge fixture passes**. A separate synthetic
-200-node/1,000-edge directed acyclic graph was measured using the actual
+200-node/1,000-edge directed acyclic graph was measured after the SQL tenancy
+port using the actual
 FluentWeb `mermaid-helper.js` and existing Mermaid 10 CDN renderer:
 
 | Environment / result | Observation |
 |---|---|
-| Browser / OS | Chrome 157 on Windows |
+| Browser / OS | VS Code integrated browser, Chrome 150 / Electron 43 on Windows |
 | Browser-reported hardware | 16 logical processors; 32 GiB memory |
-| Browser viewport / fixture | 929 × 861 / 1100 × 600 |
-| Initial render / rerender | 1,617 ms / 1,521 ms |
+| Browser viewport / fixture | 341 × 573 / 1100 × 600 |
+| Initial render / rerender | 1,210 ms / 1,155 ms |
 | Rendered content | Exactly 200 nodes and 1,000 edges |
 | Interaction / SVG checks | Zoom and keyboard node activation passed; no unsafe SVG elements found |
 
@@ -127,7 +134,8 @@ and explicit accessible fallback when the renderer is missing. These are bounded
 renderer-only observations, not a latency guarantee or full authenticated,
 multi-client application/Ollama/GitHub end-to-end validation. Dense graphs still
 need filters and the dependency list for practical navigation. The validation
-server was stopped after the checks.
+server was stopped after these checks. This synthetic renderer measurement does
+not establish whole-page mobile usability or authenticated application latency.
 
 See [task scope versus readiness](task-specifications.md#readiness-is-not-scope-approval)
 and [API graph contracts](api.md).

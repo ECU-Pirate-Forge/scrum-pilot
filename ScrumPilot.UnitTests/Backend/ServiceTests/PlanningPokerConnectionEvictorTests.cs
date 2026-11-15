@@ -23,7 +23,7 @@ public sealed class PlanningPokerConnectionEvictorTests
         clients.Group("planning-poker-3-7").Returns(proxy);
         var evictor = new PlanningPokerConnectionEvictor(sessions, hub);
 
-        await evictor.EvictUserFromProjectAsync("user-1", 7);
+        await evictor.EvictUserFromProjectAsync("user-1", 3, 7);
 
         await groups.Received(1).RemoveFromGroupAsync(
             "removed",

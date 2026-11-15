@@ -10,9 +10,12 @@ public static class PlanningPokerSaveGuard
         int? currentPbiId,
         int? currentProjectId,
         object? currentHub,
-        IReadOnlyCollection<int> refreshedPbiIds)
+        IReadOnlyCollection<int> refreshedPbiIds,
+        int? capturedOrganizationId = null,
+        int? currentOrganizationId = null)
     {
         return savedPbiId == capturedPbiId
+            && capturedOrganizationId == currentOrganizationId
             && currentPbiId == capturedPbiId
             && currentProjectId == capturedProjectId
             && ReferenceEquals(currentHub, capturedHub)

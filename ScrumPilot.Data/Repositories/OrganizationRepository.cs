@@ -1,14 +1,25 @@
 using System.Data;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Data.Sqlite;
-using Npgsql;
+using Microsoft.Data.SqlClient;
 using ScrumPilot.Data.Context;
+using ScrumPilot.Data.Tenancy;
 using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.Data.Repositories;
 
-public sealed class OrganizationRepository(ScrumPilotContext context) : IOrganizationRepository
+public sealed class OrganizationRepository(ControlPlaneContext context,
+    IEnumerable<ITenantLifecycleObserver>? lifecycleObservers = null) : IOrganizationRepository
 {
+    public ScrumPilot.Data.Tenancy.TenantOperations? Operations { get; init; }
+    public ScrumPilot.Data.Tenancy.TenantStorage? Storage { get; init; }
+    public TimeProvider Clock { get; init; } = TimeProvider.System;
+    public async Task<IReadOnlyList<OrganizationSummaryDto>> ListForAdminAsync(
+        string userId, CancellationToken cancellationToken = default) =>
+        await context.Organizations.AsNoTracking().Where(x => x.DeletedAt == null)
+            .OrderBy(x => x.Name).Select(x => new OrganizationSummaryDto(
+                x.OrganizationId, x.Name,
+                x.OrganizationMemberships.Where(m => m.UserId == userId).Select(m => (OrganizationRole?)m.Role)
+                    .FirstOrDefault() ?? OrganizationRole.Member, false)).ToListAsync(cancellationToken);
     public async Task<IReadOnlyList<OrganizationSummaryDto>> ListForUserAsync(
         string userId,
         CancellationToken cancellationToken = default) =>
@@ -144,6 +155,7 @@ public sealed class OrganizationRepository(ScrumPilotContext context) : IOrganiz
                 "The organization could not be created because its name is reserved.",
                 exception);
         }
+        if (Operations != null) await Operations.ProvisionAsync(organization.OrganizationId, cancellationToken);
         return new(organization.OrganizationId, organization.Name, initialOwnerUserId);
     }
 
@@ -176,6 +188,10 @@ public sealed class OrganizationRepository(ScrumPilotContext context) : IOrganiz
         DateTime utcNow,
         CancellationToken cancellationToken = default)
     {
+        var observers = lifecycleObservers?.ToArray() ?? [];
+        if (Storage is null && observers.Length != 0)
+            throw new InvalidOperationException("Tenant storage is required for lifecycle observers.");
+        using var operation = Storage is null ? null : await Storage.AcquireOperationAsync(organizationId, cancellationToken);
         var organization = await context.Organizations.SingleOrDefaultAsync(
             x => x.OrganizationId == organizationId && x.DeletedAt == null,
             cancellationToken);
@@ -185,7 +201,18 @@ public sealed class OrganizationRepository(ScrumPilotContext context) : IOrganiz
         }
 
         organization.DeletedAt = utcNow;
-        return await SaveMutationAsync(cancellationToken);
+        var result = await SaveMutationAsync(cancellationToken);
+        if (result != OrganizationMutationResult.Success || Storage is null)
+            return result;
+
+        // Persist the work fence before waiting for existing shared work leases.
+        // Keep both exclusive leases through observer eviction/check suspension.
+        using var lease = Storage.Acquire(organizationId);
+        using var sqlLease = Storage.AcquireExclusiveSqlLease(organization.StorageKey);
+        foreach (var observer in observers)
+            await observer.OnDrainedAsync(organizationId, organization.StorageKey,
+                TenantLifecycleOperation.Delete, cancellationToken);
+        return result;
     }
 
     public async Task<OrganizationMutationResult> RestoreAsync(
@@ -200,6 +227,14 @@ public sealed class OrganizationRepository(ScrumPilotContext context) : IOrganiz
             return OrganizationMutationResult.NotFound;
         }
 
+        if (Storage != null)
+        {
+            if (organization.DeletedAt!.Value.AddDays(30) <= Clock.GetUtcNow().UtcDateTime)
+                return OrganizationMutationResult.NotFound;
+            using var lease = Storage.Acquire(organizationId);
+            using var tenant = Storage.OpenFile(organization.StorageKey);
+            ScrumPilot.Data.Tenancy.TenantStorage.Verify(tenant, organization);
+        }
         organization.DeletedAt = null;
         return await SaveMutationAsync(cancellationToken);
     }
@@ -208,50 +243,9 @@ public sealed class OrganizationRepository(ScrumPilotContext context) : IOrganiz
         int organizationId,
         CancellationToken cancellationToken = default)
     {
-        await using var transaction = await context.Database.BeginTransactionAsync(
-            IsolationLevel.Serializable,
-            cancellationToken);
-        var organization = await context.Organizations.AsNoTracking().SingleOrDefaultAsync(
-            x => x.OrganizationId == organizationId && x.DeletedAt != null,
-            cancellationToken);
-        if (organization is null)
-        {
-            return OrganizationMutationResult.NotFound;
-        }
-
-        var projectIds = context.Projects
-            .Where(x => x.OrganizationId == organizationId)
-            .Select(x => x.ProjectId);
-        foreach (var projectId in await projectIds.ToListAsync(cancellationToken))
-            await context.PurgeProjectPlanningAsync(projectId, cancellationToken);
-        await context.Users
-            .Where(x => x.DefaultOrganizationId == organizationId)
-            .ExecuteUpdateAsync(
-                setters => setters.SetProperty(x => x.DefaultOrganizationId, (int?)null),
-                cancellationToken);
-        await context.Users
-            .Where(x => x.DefaultProjectId != null && projectIds.Contains(x.DefaultProjectId.Value))
-            .ExecuteUpdateAsync(
-                setters => setters.SetProperty(x => x.DefaultProjectId, (int?)null),
-                cancellationToken);
-        await context.Projects
-            .Where(x => x.OrganizationId == organizationId)
-            .ExecuteDeleteAsync(cancellationToken);
-        var deleted = await context.Organizations
-            .Where(x => x.OrganizationId == organizationId && x.DeletedAt != null)
-            .ExecuteDeleteAsync(cancellationToken);
-        if (deleted == 1)
-        {
-            await transaction.CommitAsync(cancellationToken);
-            foreach (var entry in context.ChangeTracker.Entries<Organization>()
-                         .Where(x => x.Entity.OrganizationId == organizationId)
-                         .ToList())
-            {
-                entry.State = EntityState.Detached;
-            }
-            return OrganizationMutationResult.Success;
-        }
-        return OrganizationMutationResult.ConcurrencyConflict;
+        if (Operations == null) throw new InvalidOperationException("Tenant operations are required.");
+        return await Operations.PurgeAsync(organizationId, Clock.GetUtcNow().UtcDateTime, cancellationToken)
+            ? OrganizationMutationResult.Success : OrganizationMutationResult.NotFound;
     }
 
     public async Task<IReadOnlyList<OrganizationMemberDto>> ListMembersAsync(
@@ -296,27 +290,12 @@ public sealed class OrganizationRepository(ScrumPilotContext context) : IOrganiz
 
         if (membership.Role == OrganizationRole.Owner && role != OrganizationRole.Owner)
         {
-            var user = await context.Users.SingleAsync(
-                candidate => candidate.Id == userId,
-                cancellationToken);
-            if (user.DefaultProjectId.HasValue
-                && await context.Projects.AnyAsync(
-                    project =>
-                        project.ProjectId == user.DefaultProjectId.Value
-                        && project.OrganizationId == organizationId,
-                    cancellationToken)
-                && !await context.ProjectMemberships.AnyAsync(
-                    projectMembership =>
-                        projectMembership.ProjectId == user.DefaultProjectId.Value
-                        && projectMembership.UserId == userId,
-                    cancellationToken))
-            {
-                user.DefaultProjectId = null;
-            }
+            var user = await context.Users.SingleAsync(x => x.Id == userId, cancellationToken);
+            if (user.DefaultOrganizationId == organizationId) user.DefaultProjectId = null;
         }
 
         membership.Role = role;
-        organization.RowVersion = Guid.NewGuid().ToByteArray();
+        organization.OperationId = Guid.NewGuid();
         var result = await SaveMutationAsync(cancellationToken);
         if (result == OrganizationMutationResult.Success)
         {
@@ -350,27 +329,14 @@ public sealed class OrganizationRepository(ScrumPilotContext context) : IOrganiz
             return OrganizationMutationResult.LastOwner;
         }
 
-        var projectIds = context.Projects
-            .Where(x => x.OrganizationId == organizationId)
-            .Select(x => x.ProjectId);
-        await context.ProjectMemberships
-            .Where(x => x.UserId == userId && projectIds.Contains(x.ProjectId))
-            .ExecuteDeleteAsync(cancellationToken);
-        var user = await context.Users.SingleAsync(x => x.Id == userId, cancellationToken);
-        if (user.DefaultOrganizationId == organizationId)
         {
-            user.DefaultOrganizationId = null;
-        }
-        if (user.DefaultProjectId.HasValue
-            && await projectIds.AnyAsync(
-                projectId => projectId == user.DefaultProjectId.Value,
-                cancellationToken))
-        {
-            user.DefaultProjectId = null;
+            var centralUser = await context.Users.SingleAsync(x => x.Id == userId, cancellationToken);
+            if (centralUser.DefaultOrganizationId == organizationId)
+            { centralUser.DefaultOrganizationId = null; centralUser.DefaultProjectId = null; }
         }
 
         context.OrganizationMemberships.Remove(membership);
-        organization.RowVersion = Guid.NewGuid().ToByteArray();
+        organization.OperationId = Guid.NewGuid();
         var result = await SaveMutationAsync(cancellationToken);
         if (result == OrganizationMutationResult.Success)
         {
@@ -407,18 +373,9 @@ public sealed class OrganizationRepository(ScrumPilotContext context) : IOrganiz
     private static bool IsNormalizedNameUniqueViolation(DbUpdateException exception) =>
         exception.InnerException switch
         {
-            PostgresException postgresException =>
-                postgresException.SqlState == PostgresErrorCodes.UniqueViolation
-                && string.Equals(
-                    postgresException.ConstraintName,
-                    "IX_Organizations_NormalizedName",
-                    StringComparison.Ordinal),
-            SqliteException sqliteException =>
-                sqliteException.SqliteErrorCode == 19
-                && sqliteException.SqliteExtendedErrorCode == 2067
-                && sqliteException.Message.Contains(
-                    "Organizations.NormalizedName",
-                    StringComparison.OrdinalIgnoreCase),
+            SqlException sqlException =>
+                sqlException.Number is 2601 or 2627
+                && sqlException.Message.Contains("IX_Organizations_NormalizedName", StringComparison.Ordinal),
             _ => false
         };
 }

@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "installations": [
+    {
+      "kind": "mcp",
+      "name": "maui-devflow",
+      "scope": "project",
+      "path": ".vscode/mcp.json",
+      "entryKey": "maui-devflow",
+      "environments": [
+        "VsCode"
+      ],
+      "owner": "maui-cli",
+      "origin": null,
+      "contentHash": "ab2e78205c9fc272b45f3c7b2bafda359fb545a5167576e590bc074205792064"
+    },
+    {
+      "kind": "agent",
+      "name": "expert-reviewer",
+      "scope": "project",
+      "path": ".github/agents/expert-reviewer.agent.md",
+      "entryKey": null,
+      "environments": [
+        "VsCode"
+      ],
+      "owner": "repository",
+      "origin": {
+        "repo": "dotnet/maui-labs",
+        "branch": "main",
+        "path": ".github/agents/expert-reviewer.agent.md",
+        "resolvedCommit": "425472b75b4b473b0ac2337c60c66536207d5f85"
+      },
+      "contentHash": "c8ca3974f67b9b90760b6f48ac24cea3eefb41c6371e3f7acb21cdd77d7a1d18"
+    }
+  ]
+}

@@ -1,8 +1,7 @@
 @using ScrumPilot.FluentWeb.Components.Pbi
 @inject IJSRuntime JS
-@inject HttpClient Http
+@inherits PlanningComponentBase
 @inject ILogger<SprintDependencyView> Logger
-@implements IDisposable
 
 <section aria-label="Sprint dependencies">
     <p>Revision @Graph.Revision. Arrows run from prerequisite to dependent. Ready does not mean approved file scope.</p>
@@ -68,14 +67,18 @@
         </section>
     }
 </section>
-<PbiDetailsDialog Pbi="_selected" Open="@(_selected is not null)" ReadOnly="@(_selected is not null && Graph.Nodes.Any(node => node.Item.PbiId == _selected.PbiId && node.IsBoundary))"
+<PbiDetailsDialog @key="_selected" CapturedWork="Scope" Pbi="_selected" Open="@(_selected is not null)" ReadOnly="@(_selected is not null && Graph.Nodes.Any(node => node.Item.PbiId == _selected.PbiId && node.IsBoundary))"
                   ProjectId="Graph.ProjectId" OnSaved="SavedAsync" OnCancelled="@(() => _selected = null)" />
 
 @code {
     [Parameter, EditorRequired] public DependencyGraphDto Graph { get; set; } = default!;
     [Parameter] public EventCallback OnChanged { get; set; }
+    protected override object PlanningIdentity => (Graph.ProjectId, Graph.SprintId);
     private readonly string _id = "sprint-graph-" + Guid.NewGuid().ToString("N");
     private string? _lastDefinition;
+    private long? _renderToken;
+    private long _renderGeneration;
+    private long? _revision;
     private string _filter = "", _search = "", _error = "", _prerequisites = "";
     private DependencyGraphNodeDto? _editing;
     private long _editRevision;
@@ -86,8 +89,19 @@
         (_filter.Length == 0 || node.State == _filter) && (_search.Length == 0 ||
             $"{node.Item.PbiId} {node.Item.Title} {node.Item.ParentStoryId} {node.Item.ProblemStatementId}".Contains(_search, StringComparison.OrdinalIgnoreCase)));
 
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+        if (_revision == Graph.Revision) return;
+        _revision = Graph.Revision;
+        _renderToken = null;
+        _lastDefinition = null;
+        _renderGeneration++;
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (!Scope.IsCurrent) return;
         var ids = VisibleNodes.Select(node => node.Item.PbiId).ToHashSet();
         var pending = new Queue<int>(ids);
         while (pending.TryDequeue(out var id))
@@ -100,34 +114,47 @@
         var definition = DependencyGraphMermaid.Write(Graph.Nodes.Where(node => ids.Contains(node.Item.PbiId)).ToArray(), Graph.Edges, Graph.Revision);
         if (_lastDefinition == definition) return;
         _lastDefinition = definition;
+        var generation = ++_renderGeneration;
+        _renderToken = null;
         try
         {
-            await JS.InvokeVoidAsync("mermaidHelper.render", _id, definition);
+            var token = await JS.InvokeAsync<long?>("mermaidHelper.render", Scope.Cancellation, _id, definition);
+            if (!Scope.IsCurrent || generation != _renderGeneration || token is null) return;
+            _renderToken = token;
             _reference ??= DotNetObjectReference.Create(this);
-            await JS.InvokeVoidAsync("mermaidHelper.attachNodes", _id, _reference, ids.ToArray());
+            await JS.InvokeVoidAsync("mermaidHelper.attachNodes", Scope.Cancellation, _id, _reference, ids.ToArray(), token.Value);
+            if (!Scope.IsCurrent || generation != _renderGeneration) return;
             _error = "";
         }
         catch (JSException ex)
         {
+            if (!Scope.IsCurrent || generation != _renderGeneration) return;
+            _lastDefinition = null;
             Logger.LogWarning(ex, "Sprint graph rendering failed");
             _error = "Unable to render the chart. The dependency list remains available.";
             await InvokeAsync(StateHasChanged);
         }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
     }
 
     [JSInvokable]
-    public async Task OpenNodeAsync(int id)
+    public async Task OpenNodeAsync(int id, long renderToken)
     {
+        if (!Scope.IsCurrent || _renderToken != renderToken) return;
         _selected = Graph.Nodes.SingleOrDefault(node => node.Item.PbiId == id)?.Item;
         await InvokeAsync(StateHasChanged);
     }
 
-    public void Dispose() => _reference?.Dispose();
+    public override void Dispose() { base.Dispose(); _renderToken = null; _renderGeneration++; _reference?.Dispose(); }
 
-    private async Task ViewportAsync(string action) => await JS.InvokeVoidAsync("mermaidHelper.viewport", _id, action);
+    private async Task ViewportAsync(string action)
+    {
+        if (Scope.IsCurrent && _renderToken is long token) await JS.InvokeVoidAsync("mermaidHelper.viewport", _id, action, token);
+    }
     private async Task ExportAsync(string format)
     {
-        try { await JS.InvokeVoidAsync("mermaidHelper.download", _id, format); }
+        if (!Scope.IsCurrent || _renderToken is not long token) return;
+        try { await JS.InvokeVoidAsync("mermaidHelper.download", _id, format, token); }
         catch (JSException ex) { Logger.LogWarning(ex, "Graph export failed"); _error = "Render the graph before exporting."; }
     }
     private void Edit(DependencyGraphNodeDto node)
@@ -156,18 +183,21 @@
             await MutateAsync(() => Http.PostAsJsonAsync($"api/projects/{Graph.ProjectId}/dependencies/review",
                 new ReviewDependencyRequest(id, review.InvalidationRevision)));
         }
-        catch (HttpRequestException ex) { Logger.LogWarning(ex, "Review lookup failed"); _error = "Unable to load current acceptance review."; }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
+        catch (HttpRequestException ex) { if (!Scope.IsCurrent) return; Logger.LogWarning(ex, "Review lookup failed"); _error = "Unable to load current acceptance review."; }
     }
     private async Task MutateAsync(Func<Task<HttpResponseMessage>> send)
     {
+        if (!Scope.IsCurrent) return;
         try
         {
             using var response = await send();
-            if (!response.IsSuccessStatusCode) { _error = await response.Content.ReadAsStringAsync(); return; }
+            if (!response.IsSuccessStatusCode) { _error = await Http.ReadAsStringAsync(response.Content); return; }
             _editing = null; _error = "";
             await OnChanged.InvokeAsync();
         }
-        catch (HttpRequestException ex) { Logger.LogWarning(ex, "Dependency update failed"); _error = "Unable to update dependencies."; }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
+        catch (HttpRequestException ex) { if (!Scope.IsCurrent) return; Logger.LogWarning(ex, "Dependency update failed"); _error = "Unable to update dependencies."; }
     }
     private async Task SavedAsync(ProductBacklogItem item) { _selected = null; await OnChanged.InvokeAsync(); }
 }

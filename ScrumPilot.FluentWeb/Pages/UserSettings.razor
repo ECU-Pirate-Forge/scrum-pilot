@@ -47,9 +47,6 @@ else
                 <FluentTextInput Id="email" Label="Email Address" TextInputType="TextInputType.Email" Value="@_settings.Email" ReadOnly="true" />
                 <p class="sp-small sp-muted">Email changes require a confirmed-email workflow, which is not currently available.</p>
 
-                <FluentTextInput Id="discord" Label="Discord Username" @bind-Value="_settings.DiscordUsername" Disabled="@_savingSettings" />
-                <p class="sp-small sp-muted">Used for Discord integrations and notifications.</p>
-
                 <FluentSelect TOption="ThemeOption" TValue="UiPreference"
                               Label="UI Theme"
                               Items="@_themeOptions"
@@ -170,7 +167,7 @@ else
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
         {
             Logger.LogInformation(ex, "Settings load returned unauthorized; redirecting to login");
-            Navigation.NavigateTo("/login", forceLoad: false);
+            Navigation.NavigateTo("login", forceLoad: false);
             return;
         }
         catch (HttpRequestException ex)
@@ -319,12 +316,6 @@ else
                 _persistedPreference = attemptedPreference;
                 await Theme.ApplyAsync(attemptedPreference);
 
-                if (_settings.DefaultProjectId.HasValue)
-                {
-                    var defaultProject = _projects.FirstOrDefault(project => project.ProjectId == _settings.DefaultProjectId.Value);
-                    if (defaultProject is not null && ProjectState.SelectedProjectId != _settings.DefaultProjectId)
-                        ProjectState.SetProject(defaultProject);
-                }
             }
             else
             {
@@ -373,4 +364,3 @@ else
         _projectLoadCts = null;
     }
 }
-

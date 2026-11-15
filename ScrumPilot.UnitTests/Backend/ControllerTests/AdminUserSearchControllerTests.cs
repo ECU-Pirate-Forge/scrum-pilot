@@ -1,7 +1,7 @@
 using System.Reflection;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Data.Sqlite;
+using ScrumPilot.UnitTests.Backend.Tenancy;
 using Microsoft.EntityFrameworkCore;
 using NSubstitute;
 using ScrumPilot.API.Authorization;
@@ -39,10 +39,8 @@ public sealed class AdminUserSearchControllerTests
     [Fact]
     public async Task Service_search_is_case_insensitive_requires_two_characters_and_caps_results()
     {
-        await using var connection = new SqliteConnection("Data Source=:memory:");
-        await connection.OpenAsync();
-        await using var context = new ScrumPilotContext(
-            new DbContextOptionsBuilder<ScrumPilotContext>().UseSqlite(connection).Options);
+        using var database = new SqlTestDatabase();
+        var context = database.Control;
         await context.Database.EnsureCreatedAsync();
         context.Users.AddRange(Enumerable.Range(1, 25).Select(index => new ApplicationUser
         {

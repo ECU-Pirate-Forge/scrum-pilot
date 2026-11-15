@@ -5,18 +5,26 @@ using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.API.Services;
 
-public sealed class RepositoryContextService(ScrumPilotContext db, GitHubAppClient github)
+public sealed class RepositoryContextService(OrganizationContext db, GitHubAppClient github, GitHubRepositoryRegistry registry)
 {
     public async Task<RepositorySnapshot> SnapshotAsync(int projectId, string branch, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(branch)) throw new ArgumentException("Select a repository branch.");
-        var repository = await db.ProjectRepositories.SingleOrDefaultAsync(repository => repository.ProjectId == projectId, ct)
+        var repository = await db.ProjectRepositories.AsNoTracking().SingleOrDefaultAsync(repository => repository.ProjectId == projectId, ct)
             ?? throw new InvalidOperationException("An Owner must link a GitHub repository before creating an implementation-ready specification.");
+        await registry.RequireCurrentAsync(repository, ct);
         var tree = await github.GetTreeAsync(repository.InstallationId, repository.GitHubRepositoryId,
             repository.Owner, repository.Name, branch, ct);
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+        await db.AcquirePlanningPolicyLockAsync(projectId, ct);
+        await registry.RequireCurrentAsync(repository, ct);
         var existing = await db.RepositorySnapshots.SingleOrDefaultAsync(snapshot =>
             snapshot.ProjectRepositoryId == repository.ProjectRepositoryId && snapshot.CommitSha == tree.CommitSha && snapshot.Branch == branch, ct);
-        if (existing is not null) return existing;
+        if (existing is not null)
+        {
+            await transaction.CommitAsync(ct);
+            return existing;
+        }
         var snapshot = new RepositorySnapshot
         {
             ProjectId = projectId,
@@ -28,6 +36,7 @@ public sealed class RepositoryContextService(ScrumPilotContext db, GitHubAppClie
         };
         db.RepositorySnapshots.Add(snapshot);
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
         return snapshot;
     }
 
@@ -40,8 +49,9 @@ public sealed class RepositoryContextService(ScrumPilotContext db, GitHubAppClie
     {
         var snapshot = await db.RepositorySnapshots.SingleOrDefaultAsync(item =>
             item.ProjectId == projectId && item.RepositorySnapshotId == snapshotId, ct) ?? throw new KeyNotFoundException();
-        var repository = await db.ProjectRepositories.SingleAsync(item =>
+        var repository = await db.ProjectRepositories.AsNoTracking().SingleAsync(item =>
             item.ProjectId == projectId && item.ProjectRepositoryId == snapshot.ProjectRepositoryId, ct);
+        await registry.RequireCurrentAsync(repository, ct);
         var paths = selectedPaths.Distinct(StringComparer.Ordinal).ToArray();
         if (paths.Length > 12) throw new ArgumentException("Select at most 12 relevant source files for one generation request.");
         var tree = ReadTree(snapshot);
@@ -55,6 +65,7 @@ public sealed class RepositoryContextService(ScrumPilotContext db, GitHubAppClie
             result[path] = await github.GetTextAsync(repository.InstallationId, repository.GitHubRepositoryId,
                 repository.Owner, repository.Name, entry.Sha, ct);
         }
+        await registry.RequireCurrentAsync(repository, ct);
         return result;
     }
 }

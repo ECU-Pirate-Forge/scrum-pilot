@@ -10,8 +10,9 @@ using ScrumPilot.Shared.Models;
 namespace ScrumPilot.API.Services;
 
 /// <summary>Previews are immutable generation snapshots, not PBIs. Only accepted candidates create work.</summary>
-public sealed class ProjectStoryGenerationService(ScrumPilotContext db, LocalPlanningAi ai,
-    IPlanningMutationHandler planning, IConfiguration? configuration = null, PullRequestScopeService? scopes = null,
+public sealed class ProjectStoryGenerationService(OrganizationContext db, LocalPlanningAi ai,
+    IPlanningMutationHandler planning, PlanningInferenceSession inference,
+    ScrumPilot.API.Configuration.AiOptions options, PullRequestScopeService? scopes = null,
     ProjectWorkNotifier? notifier = null)
 {
     private static readonly JsonSerializerOptions SnapshotJsonOptions = new(JsonSerializerDefaults.Web);
@@ -78,7 +79,8 @@ public sealed class ProjectStoryGenerationService(ScrumPilotContext db, LocalPla
         foreach (var id in request.ProblemStatementIds)
         {
             ct.ThrowIfCancellationRequested();
-            var source = sources.Single(p => p.ProblemStatementId == id);
+            var source = await db.ProblemStatements.AsNoTracking().SingleAsync(p =>
+                p.ProjectId == projectId && p.ProblemStatementId == id, ct);
             var key = $"stories:{id}:" + Hash(request.IdempotencyKey);
             var existing = await db.GenerationRuns.AsNoTracking().SingleOrDefaultAsync(r =>
                 r.ProjectId == projectId && r.Kind == GenerationKind.Stories && r.IdempotencyKey == key, ct);
@@ -100,7 +102,7 @@ public sealed class ProjectStoryGenerationService(ScrumPilotContext db, LocalPla
                 ProjectId = projectId,
                 Kind = GenerationKind.Stories,
                 Provider = "local-ollama",
-                Model = configuration?["OllamaModel"],
+                Model = options.Model,
                 IdempotencyKey = key,
                 ActorId = actor,
                 State = GenerationState.Running
@@ -119,10 +121,14 @@ public sealed class ProjectStoryGenerationService(ScrumPilotContext db, LocalPla
                     throw new InvalidOperationException("This generation request was submitted concurrently. Retry with the same key.", ex);
                 }
             }
-            ProjectStoryAiOutput? output = null;
             try
             {
-                output = await ai.GenerateAsync<ProjectStoryAiOutput>(Instructions, snapshot, ct);
+                var output = await inference.RunAsync(projectId,
+                    () => ai.GenerateAsync<ProjectStoryAiOutput>(Instructions, snapshot, ct), ct);
+                db.Attach(run);
+                await using var resultTransaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+                await db.AcquirePlanningPolicyLockAsync(projectId, ct);
+                await RequireCurrentInputAsync(projectId, snapshot, ct);
                 if (output.Stories is null || output.Stories.Count is < 1 or > 100)
                     throw new JsonException("Story output must contain 1–100 stories.");
                 foreach (var story in output.Stories)
@@ -132,10 +138,17 @@ public sealed class ProjectStoryGenerationService(ScrumPilotContext db, LocalPla
                     if (!Enum.IsDefined(story.Priority) || !Enum.IsDefined(story.StoryPoints))
                         throw new JsonException("Story output contains invalid planning values.");
                 }
+                var candidates = output.Stories.Select((story, index) => new StoredStoryProposal(index + 1, $"story-{index + 1}", story)).ToArray();
+                db.GenerationInputs.Add(Input(run, snapshot, candidates));
+                run.State = GenerationState.Succeeded;
+                run.CompletedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync(ct);
+                await resultTransaction.CommitAsync(ct);
             }
-            catch (Exception ex) when (ex is HttpRequestException or JsonException or ArgumentException or
-                InvalidOperationException or OperationCanceledException)
+            catch (Exception ex) when (db.HasStorageLease && ex is (HttpRequestException or JsonException or ArgumentException or
+                InvalidOperationException or OperationCanceledException))
             {
+                if (db.Entry(run).State == EntityState.Detached) db.Attach(run);
                 run.State = ex is OperationCanceledException ? GenerationState.Cancelled : GenerationState.Failed;
                 run.ErrorCode = ex switch
                 {
@@ -151,14 +164,19 @@ public sealed class ProjectStoryGenerationService(ScrumPilotContext db, LocalPla
                 if (ct.IsCancellationRequested) break;
                 continue;
             }
-            var candidates = output.Stories.Select((story, index) => new StoredStoryProposal(index + 1, $"story-{index + 1}", story)).ToArray();
-            db.GenerationInputs.Add(Input(run, snapshot, candidates));
-            run.State = GenerationState.Succeeded;
-            run.CompletedAt = DateTime.UtcNow;
-            await db.SaveChangesAsync(ct);
             results.Add(await RunAsync(projectId, run.GenerationRunId, ct));
         }
         return new(results);
+    }
+
+    private async Task RequireCurrentInputAsync(int projectId, ProjectStoryInputSnapshot snapshot, CancellationToken ct)
+    {
+        var source = await db.ProblemStatements.AsNoTracking().SingleOrDefaultAsync(p =>
+            p.ProjectId == projectId && p.ProblemStatementId == snapshot.ProblemStatementId, ct);
+        var guidelines = await new ProjectGuidelinesService(db).CurrentAsync(projectId, ct);
+        if (source is null || source.IsArchived || source.Version != snapshot.ProblemVersion ||
+            guidelines?.ProjectGuidelinesRevisionId != snapshot.GuidelinesRevisionId)
+            throw new InvalidOperationException("The problem statement or project guidance changed during inference; regenerate.");
     }
 
     public async Task<List<ProjectStoryRunResult>> RunsAsync(int projectId, int? sourceId, CancellationToken ct)
@@ -226,6 +244,8 @@ public sealed class ProjectStoryGenerationService(ScrumPilotContext db, LocalPla
         var keys = request.Items.Select(i => candidates[i.ProposalId].CandidateKey).ToArray();
         var existing = await db.Stories.Where(p => p.GenerationRunId == run.GenerationRunId &&
             keys.Contains(p.GenerationCandidateKey!)).ToListAsync(ct);
+        if (existing.Count < keys.Length)
+            await RequireCurrentInputAsync(projectId, snapshot.Input, ct);
         foreach (var edit in request.Items)
         {
             ValidateStory(edit.Title, edit.Description);

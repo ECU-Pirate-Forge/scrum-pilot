@@ -1,10 +1,11 @@
 @page "/planning-poker"
+@page "/organizations/{OrganizationId:int}/planning-poker"
+@inherits WorkComponentBase
 @using Microsoft.AspNetCore.SignalR
 @using Microsoft.AspNetCore.SignalR.Client
 @using ScrumPilot.FluentWeb.Components.PlanningPoker
 @using ScrumPilot.FluentWeb.Services.PlanningPoker
 @using ScrumPilot.Shared.Models.PlanningPoker
-@inject HttpClient Http
 @inject IJSRuntime JS
 @inject AuthenticationStateProvider AuthStateProvider
 @inject ProjectStateService ProjectState
@@ -126,10 +127,15 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (!Scope.ProjectId.HasValue)
+        {
+            _connectionStatus = "Disconnected from planning poker — select a project.";
+            return;
+        }
         _hubFactory = ServiceProvider.GetService<IPlanningPokerHubConnectionFactory>()
             ?? new PlanningPokerHubConnectionFactory();
-        ProjectState.OnChange += HandleProjectStateChanged;
         await LoadUnassignedPbisAsync();
+        if (!Scope.IsCurrent) return;
         await InitHubAsync();
     }
 
@@ -156,11 +162,8 @@
         try
         {
             _loadError = null;
-            var url = "api/Pbi/getNonDraftPbis";
-            if (ProjectState.SelectedProjectId.HasValue)
-            {
-                url += $"?projectId={ProjectState.SelectedProjectId.Value}";
-            }
+            if (!Scope.ProjectId.HasValue) return;
+            var url = $"api/Pbi/getNonDraftPbis?projectId={Scope.ProjectId.Value}";
 
             var all = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(url);
             _unassignedPbis = all?.Where(p => p.SprintId is null).ToList() ?? [];
@@ -189,19 +192,24 @@
 
         try
         {
-            var token = await JS.InvokeAsync<string?>("localStorage.getItem", "authToken");
             var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            Scope.ThrowIfStale();
             _myDisplayName = authState.User.Identity?.Name
                 ?? authState.User.FindFirst("email")?.Value
                 ?? "Anonymous";
 
-            var apiBase = configuration["ApiBaseUrl"] ?? "http://localhost:5219/";
-            var hubUrl = new Uri(new Uri(apiBase), "hubs/planning-poker").ToString();
+            var apiBase = Http.BaseAddress ?? throw new InvalidOperationException("API base address is required.");
+            var hubUrl = new Uri(apiBase, OrganizationRoutes.PokerHub(Scope.OrganizationId)).ToString();
 
-            _hub = _hubFactory!.Create(hubUrl, () => Task.FromResult(token));
+            _hub = _hubFactory!.Create(hubUrl, async () =>
+            {
+                Scope.ThrowIfStale();
+                return await JS.InvokeAsync<string?>("localStorage.getItem", Scope.Cancellation, "authToken");
+            });
             RegisterHubHandlers(_hub);
 
-            await _hub.StartAsync();
+            await _hub.StartAsync(Scope.Cancellation);
+            Scope.ThrowIfStale();
             _myConnectionId = _hub.ConnectionId ?? string.Empty;
             _connectionStatus = "Joining planning poker...";
             await JoinCurrentSessionAsync();
@@ -222,12 +230,14 @@
     {
         hub.On<PokerSessionState>("ReceiveSessionState", state =>
         {
+            if (!AcceptHub(hub)) return Task.CompletedTask;
             ApplySessionState(state);
             return InvokeAsync(StateHasChanged);
         });
 
         hub.On<ParticipantState>("UserJoined", participant =>
         {
+            if (!AcceptHub(hub)) return Task.CompletedTask;
             if (_participants.All(p => p.ConnectionId != participant.ConnectionId))
             {
                 _participants.Add(participant);
@@ -238,12 +248,14 @@
 
         hub.On<string>("UserLeft", connectionId =>
         {
+            if (!AcceptHub(hub)) return Task.CompletedTask;
             _participants.RemoveAll(p => p.ConnectionId == connectionId);
             return InvokeAsync(StateHasChanged);
         });
 
         hub.On<string>("CardSelected", connectionId =>
         {
+            if (!AcceptHub(hub)) return Task.CompletedTask;
             var participant = _participants.FirstOrDefault(p => p.ConnectionId == connectionId);
             if (participant is not null)
             {
@@ -255,6 +267,7 @@
 
         hub.On<PokerSessionState>("CardsRevealed", state =>
         {
+            if (!AcceptHub(hub)) return Task.CompletedTask;
             ApplySessionState(state);
             ComputeSuggestedPoints();
             return InvokeAsync(StateHasChanged);
@@ -262,6 +275,7 @@
 
         hub.On<PokerSessionState>("PbiSelected", state =>
         {
+            if (!AcceptHub(hub)) return Task.CompletedTask;
             ApplySessionState(state);
             _suggestedPointIndex = -1;
             if (state.CurrentPbiId.HasValue)
@@ -274,6 +288,7 @@
 
         hub.On<PokerSessionState>("VotingReset", state =>
         {
+            if (!AcceptHub(hub)) return Task.CompletedTask;
             ApplySessionState(state);
             _myVote = null;
             _suggestedPointIndex = -1;
@@ -282,6 +297,7 @@
 
         hub.Reconnecting += exception =>
         {
+            if (!AcceptHub(hub)) return Task.CompletedTask;
             Logger.LogInformation(exception, "Planning poker hub reconnecting.");
             _connectionStatus = "Reconnecting to planning poker...";
             _isSessionJoined = false;
@@ -290,6 +306,7 @@
 
         hub.Reconnected += async _ =>
         {
+            if (!AcceptHub(hub)) return;
             _connectionStatus = "Joining planning poker...";
             _isSessionJoined = false;
             await JoinCurrentSessionAsync();
@@ -298,6 +315,7 @@
 
         hub.Closed += exception =>
         {
+            if (!AcceptHub(hub)) return Task.CompletedTask;
             if (exception is not null)
             {
                 Logger.LogWarning(exception, "Planning poker hub closed.");
@@ -309,14 +327,17 @@
         };
     }
 
+    private bool _disposed;
+    private bool AcceptHub(HubConnection hub) => !_disposed && Scope.IsCurrent && ReferenceEquals(_hub, hub);
+
     private async Task JoinCurrentSessionAsync()
     {
-        if (_hub is null)
+        if (_hub is null || !AcceptHub(_hub))
         {
             return;
         }
 
-        if (await InvokeHubOperationAsync(() => _hub.InvokeAsync("JoinSession", _myDisplayName, ProjectState.SelectedProjectId ?? 0)))
+        if (await InvokeHubOperationAsync(() => _hub.InvokeAsync("JoinSession", _myDisplayName, Scope.ProjectId ?? 0, Scope.Cancellation)))
         {
             _isSessionJoined = true;
             _connectionStatus = "Connected to planning poker";
@@ -412,11 +433,13 @@
 
     private async Task HandlePbiSaveAsync(ProductBacklogItem pbi)
     {
+        if (!Scope.IsCurrent || _disposed) return;
         var capturedPbiId = _currentPbiId;
-        var capturedProjectId = ProjectState.SelectedProjectId;
+        var capturedProjectId = Scope.ProjectId;
         var capturedHub = _hub;
 
         await LoadUnassignedPbisAsync();
+        if (!Scope.IsCurrent || _disposed) return;
 
         if (!PlanningPokerSaveGuard.ShouldClearSelection(
                 pbi.PbiId,
@@ -424,7 +447,7 @@
                 capturedProjectId,
                 capturedHub,
                 _currentPbiId,
-                ProjectState.SelectedProjectId,
+                Scope.ProjectId,
                 _hub,
                 _unassignedPbis?.Select(item => item.PbiId).ToArray() ?? []))
         {
@@ -442,10 +465,11 @@
 
     private async Task<bool> InvokeHubOperationAsync(Func<Task> operation)
     {
+        if (!Scope.IsCurrent || _disposed) return false;
         try
         {
             await operation();
-            return true;
+            return Scope.IsCurrent && !_disposed;
         }
         catch (HubException ex)
         {
@@ -577,6 +601,7 @@
 
     public async ValueTask DisposeAsync()
     {
+        _disposed = true;
         ProjectState.OnChange -= HandleProjectStateChanged;
         if (_hub is not null)
         {

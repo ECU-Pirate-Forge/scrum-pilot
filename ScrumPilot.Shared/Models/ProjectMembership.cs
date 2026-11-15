@@ -3,6 +3,7 @@ namespace ScrumPilot.Shared.Models;
 /// <summary>Explicitly grants a user access to a project.</summary>
 public class ProjectMembership
 {
+    public Guid MembershipInstanceId { get; set; }
     /// <summary>Identifier of the accessible project.</summary>
     public int ProjectId { get; set; }
 

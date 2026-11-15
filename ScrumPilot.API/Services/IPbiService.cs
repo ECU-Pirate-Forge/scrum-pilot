@@ -38,10 +38,10 @@ namespace ScrumPilot.API.Services
         Task<bool> DeletePbiAsync(int id, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Calls the configured AI provider (Groq or local Ollama) for each problem statement,
+        /// Calls host Ollama for each problem statement,
         /// flattens every returned PBI array, and returns the generated draft PBIs without persisting them.
         /// </summary>
-        Task<List<ProductBacklogItem>> GenerateAiPbis(List<string> problemStatements);
+        Task<List<ProductBacklogItem>> GenerateAiPbis(List<string> problemStatements, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Rewrites and improves an existing PBI using the configured AI provider's one-item array response.

@@ -6,7 +6,7 @@ using ScrumPilot.Shared.Models;
 namespace ScrumPilot.API.Controllers;
 
 [ApiController]
-[Route("api/projects/{projectId:int}/guidelines")]
+[Route("api/organizations/{organizationId:int}/projects/{projectId:int}/guidelines")]
 [ServiceFilter(typeof(PlanningErrorFilter))]
 public sealed class ProjectGuidelinesController(ProjectGuidelinesService service, ICurrentUser user,
     IOrganizationAccessService access) : ProjectPlanningControllerBase(user, access)

@@ -11,7 +11,8 @@ namespace ScrumPilot.API.Controllers;
 /// </summary>
 [ApiController]
 [Authorize]
-[Route("api")]
+[OrganizationWork]
+[Route("api/organizations/{organizationId:int}")]
 public sealed class ProjectController(
     IProjectService service,
     ICurrentUser currentUser) : ControllerBase
@@ -33,7 +34,7 @@ public sealed class ProjectController(
 #pragma warning restore CS0618
             value => Ok(value));
 
-    [HttpGet("organizations/{organizationId:int}/projects")]
+    [HttpGet("projects")]
     public Task<ActionResult<IReadOnlyList<Project>>> List(
         int organizationId,
         CancellationToken cancellationToken = default) =>
@@ -55,7 +56,7 @@ public sealed class ProjectController(
                 cancellationToken),
             value => Ok(value));
 
-    [HttpPost("organizations/{organizationId:int}/projects")]
+    [HttpPost("projects")]
     public Task<ActionResult<Project>> Create(
         int organizationId,
         [FromBody] CreateProjectRequest request,
@@ -66,7 +67,7 @@ public sealed class ProjectController(
                 organizationId,
                 request,
                 cancellationToken),
-            value => CreatedAtAction(nameof(Get), new { projectId = value.ProjectId }, value));
+            value => CreatedAtAction(nameof(Get), new { organizationId, projectId = value.ProjectId }, value));
 
     [HttpPut("projects/{projectId:int}")]
     public Task<ActionResult<Project>> Update(

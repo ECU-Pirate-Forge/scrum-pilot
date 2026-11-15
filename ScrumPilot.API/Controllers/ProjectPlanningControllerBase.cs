@@ -6,6 +6,7 @@ using ScrumPilot.API.Authorization;
 
 namespace ScrumPilot.API.Controllers;
 
+[OrganizationWork]
 public abstract class ProjectPlanningControllerBase(
     ICurrentUser currentUser, IOrganizationAccessService access) : ControllerBase
 {
@@ -31,10 +32,8 @@ public sealed class PlanningErrorFilter(ILogger<PlanningErrorFilter> logger) : I
             ArgumentException => (400, "Invalid planning input"),
             KeyNotFoundException => (404, "Planning resource not found"),
             DbUpdateConcurrencyException => (409, "Planning data changed; reload and retry"),
-            Microsoft.Data.Sqlite.SqliteException { SqliteErrorCode: 5 or 6 }
-                or DbUpdateException { InnerException: Microsoft.Data.Sqlite.SqliteException { SqliteErrorCode: 5 or 6 } }
-                or Npgsql.PostgresException { SqlState: "40001" or "40P01" }
-                or DbUpdateException { InnerException: Npgsql.PostgresException { SqlState: "40001" or "40P01" } }
+            Microsoft.Data.SqlClient.SqlException { Number: 1205 or 1222 or 2601 or 2627 or 3960 or 51001 }
+                or DbUpdateException { InnerException: Microsoft.Data.SqlClient.SqlException { Number: 1205 or 1222 or 2601 or 2627 or 3960 or 51001 } }
                 => (409, "Planning data is being updated; reload and retry"),
             InvalidOperationException => (409, "Planning operation cannot be completed"),
             JsonException => (502, "The AI provider returned an invalid planning contract"),

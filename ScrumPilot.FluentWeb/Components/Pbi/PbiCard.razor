@@ -54,11 +54,12 @@ else
         </dl>
         @if (PbiModel.ProjectId > 0 && (PbiModel.PbiId > 0 || Currency is not null))
         {
-            <StoryProvenancePanel Pbi="PbiModel" Currency="Currency" CanLink="@(!ReadOnly && PersistOnSave)" OnChanged="HandleSavedAsync" />
+            <StoryProvenancePanel @key="(Scope.OrganizationId, PbiModel.ProjectId, PbiModel.PbiId, PbiModel.Version, PbiModel.ProblemStatementId)"
+                                  CapturedWork="Scope" Pbi="PbiModel" Currency="Currency" CanReview="@(!ReadOnly && PersistOnSave)" CanLink="@(!ReadOnly && PersistOnSave)" OnChanged="HandleSavedAsync" />
         }
     </FluentCard>
 
-    <PbiDetailsDialog Pbi="PbiModel"
+    <PbiDetailsDialog @key="PbiModel" Pbi="PbiModel" CapturedWork="Scope"
                       Open="_detailsOpen"
                       ReadOnly="ReadOnly"
                       PersistOnSave="PersistOnSave"
@@ -69,6 +70,7 @@ else
                       OnNavigateToPbi="OnNavigateToPbi" />
 }
 
+@inherits WorkComponentBase
 @code {
     [Parameter] public ProductBacklogItem? PbiModel { get; set; }
     [Parameter] public PlanningArtifactCurrency? Currency { get; set; }
@@ -95,6 +97,7 @@ else
 
     public void OpenDetails()
     {
+        if (!Scope.IsCurrent) return;
         _detailsOpen = true;
         StateHasChanged();
     }
@@ -110,6 +113,7 @@ else
 
     private async Task HandleSavedAsync(ProductBacklogItem pbi)
     {
+        if (!Scope.IsCurrent) return;
         _detailsOpen = false;
         if (OnChanged.HasDelegate)
         {
@@ -123,6 +127,7 @@ else
 
     private async Task HandleDeletedAsync(int pbiId)
     {
+        if (!Scope.IsCurrent) return;
         _detailsOpen = false;
         if (OnDeleted.HasDelegate)
         {
@@ -149,4 +154,3 @@ else
         _ => BadgeColor.Subtle
     };
 }
-

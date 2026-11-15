@@ -1,8 +1,8 @@
 @page "/backlog"
-@inject HttpClient Http
+@page "/organizations/{OrganizationId:int}/backlog"
+@inherits WorkComponentBase
 @inject ISnackbar Snackbar
 @inject ScrumPilot.Web.Services.ProjectStateService ProjectState
-@inject ScrumPilot.Web.Services.MetricsDashboardService MetricsSvc
 @implements IDisposable
 
 <div class="bl-page">
@@ -390,7 +390,6 @@
     protected override async Task OnInitializedAsync()
     {
         _selectedProjectId = ProjectState.SelectedProjectId;
-        ProjectState.OnChange += HandleProjectStateChanged;
         await LoadDataAsync();
     }
 

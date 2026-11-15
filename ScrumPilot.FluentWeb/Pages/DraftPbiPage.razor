@@ -1,8 +1,9 @@
 @page "/draft-stories"
+@page "/organizations/{OrganizationId:int}/draft-stories"
+@inherits WorkComponentBase
 @using System.Net.Http.Json
 @using ScrumPilot.FluentWeb.Components.Pbi
 @implements IDisposable
-@inject HttpClient Http
 @inject ProjectStateService ProjectState
 @inject IAppNotificationService Notifications
 @inject ILogger<DraftPbiPage> Logger
@@ -21,7 +22,7 @@
         <FluentMessageBar Intent="MessageBarIntent.Error">@_errorMessage</FluentMessageBar>
     }
 
-    @if (!ProjectState.SelectedProjectId.HasValue)
+    @if (!Scope.ProjectId.HasValue)
     {
         <AppEmptyState Title="Select a project" Message="Select a project to view its draft PBIs." Icon="@(new Icons.Regular.Size24.Folder())" />
     }
@@ -67,9 +68,9 @@
 
     @if (_modifyingPbi is not null)
     {
-        <PbiDetailsDialog Pbi="_modifyingPbi"
+        <PbiDetailsDialog @key="_modifyingPbi" Pbi="_modifyingPbi" CapturedWork="Scope"
                           Open="true"
-                          ProjectId="ProjectState.SelectedProjectId"
+                          ProjectId="Scope.ProjectId"
                           OnSaved="HandleModifySaveAsync"
                           OnCancelled="CloseModifyAsync"
                           OnDeleted="HandleDeletedAsync" />
@@ -88,7 +89,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        ProjectState.OnChange += HandleProjectChanged;
         await LoadDraftPbisAsync();
     }
 
@@ -111,7 +111,7 @@
         _successMessage = string.Empty;
         _loadFailed = false;
 
-        if (!ProjectState.SelectedProjectId.HasValue)
+        if (!Scope.ProjectId.HasValue)
         {
             _loading = false;
             return;
@@ -120,7 +120,7 @@
         _loading = true;
         try
         {
-            var drafts = await Http.GetFromJsonAsync<List<ProductBacklogItem>>($"api/Pbi/getDraftPbis?projectId={ProjectState.SelectedProjectId.Value}") ?? [];
+            var drafts = await Http.GetFromJsonAsync<List<ProductBacklogItem>>($"api/Pbi/getDraftPbis?projectId={Scope.ProjectId.Value}") ?? [];
             _draftPbis.AddRange(drafts);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)

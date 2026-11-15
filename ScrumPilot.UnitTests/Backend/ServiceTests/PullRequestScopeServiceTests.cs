@@ -1,6 +1,6 @@
 using System.Text.Json;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using ScrumPilot.Data.Context;
 using ScrumPilot.API.Services;
 using ScrumPilot.Shared.Models;
 using Xunit;
@@ -9,12 +9,15 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests;
 
 public sealed class PullRequestScopeServiceTests
 {
+    private static PullRequestScopeService Service(TaskPlanningFixture fixture) =>
+        new(fixture.Db, fixture.GitHub, fixture.Specs, fixture.Control, fixture.Registry);
+
     [Fact]
     public async Task BindAndRevalidate_AllowedDiffPublishesSuccessAndAppendsChecksForSameBinding()
     {
         await using var f = await TaskPlanningFixture.CreateAsync();
         await f.ApproveAsync();
-        var service = new PullRequestScopeService(f.Db, f.GitHub, f.Specs);
+        var service = Service(f);
         var first = await service.BindAsync(f.ProjectId, f.TaskId, 7, "owner", default);
         var binding = await f.Db.TaskPullRequestBindings.SingleAsync();
         var second = await service.ValidateAsync(binding, default);
@@ -47,7 +50,7 @@ public sealed class PullRequestScopeServiceTests
         await using var f = await TaskPlanningFixture.CreateAsync();
         await f.ApproveAsync();
         f.Http.Files = [.. f.Http.Files.Where(x => x.Path != path), new(path, status, previous)];
-        var service = new PullRequestScopeService(f.Db, f.GitHub, f.Specs);
+        var service = Service(f);
 
         var check = await service.BindAsync(f.ProjectId, f.TaskId, 7, "owner", default);
 
@@ -65,7 +68,7 @@ public sealed class PullRequestScopeServiceTests
     {
         await using var f = await TaskPlanningFixture.CreateAsync();
         await f.ApproveAsync();
-        var service = new PullRequestScopeService(f.Db, f.GitHub, f.Specs);
+        var service = Service(f);
         Assert.Equal(ScopeCheckState.Passed, (await service.BindAsync(f.ProjectId, f.TaskId, 7, "owner", default)).State);
         f.Http.MergeBaseSha = TaskPlanningFixture.OtherSha;
 
@@ -84,7 +87,7 @@ public sealed class PullRequestScopeServiceTests
     {
         await using var f = await TaskPlanningFixture.CreateAsync();
         await f.ApproveAsync();
-        var service = new PullRequestScopeService(f.Db, f.GitHub, f.Specs);
+        var service = Service(f);
         await service.BindAsync(f.ProjectId, f.TaskId, 7, "owner", default);
         await f.ChangeInputAsync(changed);
 
@@ -100,7 +103,7 @@ public sealed class PullRequestScopeServiceTests
     {
         await using var f = await TaskPlanningFixture.CreateAsync();
         await f.SaveDraftAsync();
-        var service = new PullRequestScopeService(f.Db, f.GitHub, f.Specs);
+        var service = Service(f);
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             service.BindAsync(f.ProjectId, f.TaskId, 7, "owner", default));
         Assert.Empty(f.Http.Requests);
@@ -111,7 +114,7 @@ public sealed class PullRequestScopeServiceTests
     public async Task StrictWebhook_UnboundPrFailsUntilExplicitOwnerExceptionAndThenCannotBindTask()
     {
         await using var f = await TaskPlanningFixture.CreateAsync();
-        var service = new PullRequestScopeService(f.Db, f.GitHub, f.Specs);
+        var service = Service(f);
         await service.ProcessWebhookAsync(99, 42, 7, default);
         Assert.Equal(["failure", "failure"], f.Http.Checks.Select(x => x.GetProperty("conclusion").GetString()!).ToArray());
         Assert.Contains("Strict scope policy", f.Http.Checks[1].GetProperty("output").GetProperty("summary").GetString());
@@ -141,7 +144,7 @@ public sealed class PullRequestScopeServiceTests
     {
         await using var f = await TaskPlanningFixture.CreateAsync();
         await f.ApproveAsync();
-        var service = new PullRequestScopeService(f.Db, f.GitHub, f.Specs);
+        var service = Service(f);
         await service.BindAsync(f.ProjectId, f.TaskId, 7, "owner", default);
         Assert.Equal("success", f.Http.Checks.Last().GetProperty("conclusion").GetString());
         var requestOffset = f.Http.Requests.Count;
@@ -170,7 +173,7 @@ public sealed class PullRequestScopeServiceTests
     {
         await using var f = await TaskPlanningFixture.CreateAsync();
         await f.ApproveAsync();
-        var service = new PullRequestScopeService(f.Db, f.GitHub, f.Specs);
+        var service = Service(f);
         await service.BindAsync(f.ProjectId, f.TaskId, 7, "owner", default);
         var binding = await f.Db.TaskPullRequestBindings.SingleAsync();
         Assert.Equal("success", f.Http.Checks.Last().GetProperty("conclusion").GetString());
@@ -199,7 +202,7 @@ public sealed class PullRequestScopeServiceTests
     {
         await using var f = await TaskPlanningFixture.CreateAsync();
         await f.ApproveAsync();
-        var service = new PullRequestScopeService(f.Db, f.GitHub, f.Specs);
+        var service = Service(f);
         if (nonTask)
         {
             f.Db.NonTaskPullRequestExceptions.Add(new()
@@ -232,11 +235,13 @@ public sealed class PullRequestScopeServiceTests
         // A separate connection must observe durable recovery state even though the
         // transaction that would have recorded the green scope check was cancelled.
         await using var recovery = f.NewContext();
+        await using var recoveryControl = f.NewControl();
+        var recoveryRegistry = new GitHubRepositoryRegistry(recoveryControl, f.Selection);
         var binding = await recovery.TaskPullRequestBindings.SingleOrDefaultAsync();
         if (nonTask) Assert.Null(binding);
         else Assert.Equal(f.TaskId, Assert.IsType<TaskPullRequestBinding>(binding).PbiId);
         Assert.Empty(await recovery.PullRequestScopeChecks.ToArrayAsync());
-        var attempt = await recovery.PullRequestScopeAttempts.SingleAsync();
+        var attempt = await recoveryControl.PullRequestScopeAttempts.SingleAsync();
         Assert.Equal(f.ProjectId, attempt.ProjectId);
         Assert.Equal(f.Repository.ProjectRepositoryId, attempt.ProjectRepositoryId);
         Assert.Equal(7, attempt.PullRequestNumber);
@@ -244,8 +249,8 @@ public sealed class PullRequestScopeServiceTests
 
         f.Http.MetadataStatus = System.Net.HttpStatusCode.ServiceUnavailable;
         var requestOffset = f.Http.Requests.Count;
-        var recoverySpecs = new TaskSpecificationService(recovery, f.GitHub, f.Notifier);
-        var recoveryService = new PullRequestScopeService(recovery, f.GitHub, recoverySpecs);
+        var recoverySpecs = new TaskSpecificationService(recovery, f.GitHub, f.Notifier, recoveryRegistry);
+        var recoveryService = new PullRequestScopeService(recovery, f.GitHub, recoverySpecs, recoveryControl, recoveryRegistry);
 
         var error = await Assert.ThrowsAsync<HttpRequestException>(() =>
             nonTask ? recoveryService.ProcessWebhookAsync(99, 42, 7, default)
@@ -268,7 +273,7 @@ public sealed class PullRequestScopeServiceTests
     {
         await using var f = await TaskPlanningFixture.CreateAsync();
         await f.ApproveAsync();
-        var service = new PullRequestScopeService(f.Db, f.GitHub, f.Specs);
+        var service = Service(f);
         await service.BindAsync(f.ProjectId, f.TaskId, 7, "owner", default);
         f.Http.OpenPullRequestNumbers = [7, 8];
         var requestOffset = f.Http.Requests.Count;
@@ -289,15 +294,15 @@ public sealed class PullRequestScopeServiceTests
     {
         await using var f = await TaskPlanningFixture.CreateAsync();
         await f.ApproveAsync();
-        var service = new PullRequestScopeService(f.Db, f.GitHub, f.Specs);
+        var service = Service(f);
         await service.BindAsync(f.ProjectId, f.TaskId, 7, "owner", default);
         var binding = await f.Db.TaskPullRequestBindings.SingleAsync();
         await using var writer = f.NewContext();
         var story = await writer.Stories.SingleAsync(x => x.PbiId == f.Story.PbiId);
         story.Description = "New requirements from the concurrent writer.";
-        var writerSpecs = new TaskSpecificationService(writer, f.GitHub, f.Notifier);
-        var writerScope = new PullRequestScopeService(writer, f.GitHub, writerSpecs);
-        var writerService = new ProjectDependencyService(writer, f.Notifier, scope: writerScope);
+        var writerSpecs = new TaskSpecificationService(writer, f.GitHub, f.Notifier, f.Registry);
+        var writerScope = new PullRequestScopeService(writer, f.GitHub, writerSpecs, f.Control, f.Registry);
+        var writerService = new ProjectDependencyService(writer, f.Notifier, f.Registry, scope: writerScope);
         var reached = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         f.Http.BeforeCheckResponse = async (check, ct) =>
@@ -313,12 +318,8 @@ public sealed class PullRequestScopeServiceTests
         try
         {
             await reached.Task.WaitAsync(TimeSpan.FromSeconds(10));
-            // SQLite performs lock waits synchronously; use a separate thread, with a
-            // one-second connection timeout, while validation is held at the HTTP gate.
-            var error = await Record.ExceptionAsync(() => Task.Run(() => writerService.SaveAsync(default)));
-            Assert.NotNull(error);
-            var sqlite = Assert.IsType<SqliteException>(error is DbUpdateConcurrencyException ? error.InnerException : error);
-            Assert.Contains(sqlite.SqliteErrorCode, new[] { 5, 6 });
+            using var blockedWriter = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => writerService.SaveAsync(blockedWriter.Token));
             Assert.Equal("failure", f.Http.Checks.Last().GetProperty("conclusion").GetString());
             Assert.False(validation.IsCompleted);
         }

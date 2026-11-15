@@ -10,6 +10,8 @@ h1:focus { outline: none; }
 .sp-header {
   display: flex;
   align-items: center;
+  box-sizing: border-box;
+  flex-wrap: nowrap;
   gap: var(--sp-space-2);
   width: 100%;
   padding: 0 var(--sp-space-3);
@@ -28,6 +30,38 @@ h1:focus { outline: none; }
 }
 
 .sp-header .sp-brand-link img { height: 32px; width: auto; }
+
+.sp-header .sp-header-button--selection {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.sp-header .sp-selection-label {
+  display: inline-block;
+  max-width: clamp(4rem, 14vw, 12rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+@media (max-width: 600px) {
+  .sp-header {
+    gap: 4px;
+    padding: 0 8px;
+  }
+
+  .sp-header .sp-header-button--selection {
+    width: 44px;
+    min-width: 44px;
+    flex-shrink: 0;
+    padding-inline: 4px;
+  }
+
+  .sp-header .sp-selection-label {
+    display: none;
+  }
+}
 
 .sp-content {
   padding: var(--sp-space-4) var(--sp-space-5);

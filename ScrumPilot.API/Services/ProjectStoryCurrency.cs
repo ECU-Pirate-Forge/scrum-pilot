@@ -13,7 +13,7 @@ public static class ProjectStoryCurrency
     internal static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public static async Task<PlanningArtifactCurrency> ReadAsync(
-        ScrumPilotContext db, int projectId, int storyId, CancellationToken ct = default)
+        OrganizationContext db, int projectId, int storyId, CancellationToken ct = default)
     {
         var currencies = await ReadManyAsync(db, projectId, [storyId], ct);
         return currencies.TryGetValue(storyId, out var currency) ? currency : throw new KeyNotFoundException();
@@ -21,7 +21,7 @@ public static class ProjectStoryCurrency
 
     /// <summary>At most seven set-based reads, independent of item count. Missing or foreign-project IDs are omitted.</summary>
     public static async Task<IReadOnlyDictionary<int, PlanningArtifactCurrency>> ReadManyAsync(
-        ScrumPilotContext db, int projectId, IReadOnlyCollection<int> storyIds, CancellationToken ct = default)
+        OrganizationContext db, int projectId, IReadOnlyCollection<int> storyIds, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(storyIds);
         ct.ThrowIfCancellationRequested();
@@ -86,7 +86,7 @@ public static class ProjectStoryCurrency
     }
 
     internal static async Task<PlanningArtifactCurrency> FromInputAsync(
-        ScrumPilotContext db, int projectId, int? sourceId, GenerationInput? input, CancellationToken ct)
+        OrganizationContext db, int projectId, int? sourceId, GenerationInput? input, CancellationToken ct)
     {
         var source = sourceId.HasValue ? await db.ProblemStatements.AsNoTracking().Where(p =>
             p.ProjectId == projectId && p.ProblemStatementId == sourceId)

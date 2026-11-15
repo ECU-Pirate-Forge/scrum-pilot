@@ -1,23 +1,34 @@
-# Project Documentation
+# ScrumPilot Documentation
 
-Use **FluentWeb** for project → saved problem → stories → child tasks. Original Web provides compatibility workflows only.
+## Start here
 
-## Planning Guides
-
-1. [Project guidelines](project-guidelines.md) — save, preview, restore, and review guidance revisions.
-2. [Canonical 40-section template](templates/ai-agent-project-guidelines.md) — one copy/paste source, not a technology mandate.
-3. [Task specifications](task-specifications.md) — saved problems, generation, exact file scope, approval, and AI handoff.
-4. [Dependency graphs](dependency-graphs.md) — prerequisites, sprint boundaries, completion/review, and accessible navigation.
-5. [GitHub task-scope enforcement](github-task-scope-enforcement.md) — App installation, required checks, administrator protection setup, and limitations.
-
-## Developer References
-
-- [FluentWeb UI and launch](../ScrumPilot.FluentWeb/README.md)
-- [API contracts and errors](api.md) / [API operations](../ScrumPilot.API/README.md)
-- [Architecture and data flow](architecture.md)
-- [Data migrations and retention](../ScrumPilot.Data/README.md)
-- [Shared contracts](../ScrumPilot.Shared/README.md)
-- [Tests](../ScrumPilot.UnitTests/README.md) / [Contributing](../CONTRIBUTING.md)
+- [Project setup and supported clients](../README.md)
+- [Contribution and verification](../CONTRIBUTING.md)
+- [Architecture and isolation](architecture.md)
+- [API authorization and routes](api.md)
+- [SQL Server operations and recovery](multi-tenancy-operations.md)
 - [Troubleshooting](troubleshooting.md)
 
-Live GitHub/Ollama setup and branch protection require external verification. The graph fixture is not a browser benchmark; see each guide's caveats.
+## Guided planning and bounded AI handoffs
+
+- [Project guidelines, saved problems and story lineage](project-guidelines.md)
+- [Task generation, specifications and exact file scopes](task-specifications.md)
+- [Live sprint dependency graphs and the Mermaid decision](dependency-graphs.md)
+- [GitHub task-scope setup, authority and recovery](github-task-scope-enforcement.md)
+- [Copy/paste 40-section guidelines template](templates/ai-agent-project-guidelines.md)
+
+## Codebase reference
+
+- [Stack](codebase/STACK.md)
+- [Structure](codebase/STRUCTURE.md)
+- [Architecture](codebase/ARCHITECTURE.md)
+- [Integrations and configuration boundaries](codebase/INTEGRATIONS.md)
+- [Conventions](codebase/CONVENTIONS.md)
+- [Testing and acceptance](codebase/TESTING.md)
+- [Operational concerns](codebase/CONCERNS.md)
+- [Independent EF migration histories](../ScrumPilot.API/EF_SETUP.md)
+
+Plans under `superpowers/plans` are historical design records, not current
+installation instructions. The current release uses SQL Server 2025, Aspire-first
+configuration, a central control database and database per organization, and
+supports both Web and FluentWeb.

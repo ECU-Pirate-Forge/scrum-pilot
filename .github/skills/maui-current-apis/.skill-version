@@ -1,0 +1,10 @@
+{
+  "contentHash": "ad5ef0a09b1f680e85cb1b274f6fc3232c4cea55a3b39cb5143be38ad845c452",
+  "resolvedCommit": "425472b75b4b473b0ac2337c60c66536207d5f85",
+  "name": "maui-current-apis",
+  "commit": "a90865a2da0513b3f16c5317e455af7c12566d5c",
+  "branch": "main",
+  "updatedAt": "2026-11-12T04:11:09.7771667Z",
+  "source": "dotnet/maui-labs",
+  "pluginPath": "plugins/dotnet-maui/skills/maui-current-apis"
+}

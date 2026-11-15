@@ -27,6 +27,7 @@
 
     <!-- Microsoft Test SDK -->
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.3.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.13" />
 
     <!-- MudBlazor for component testing -->
     <PackageReference Include="MudBlazor" Version="8.15.0" />
@@ -44,6 +45,7 @@
     <ProjectReference Include="..\ScrumPilot.API\ScrumPilot.API.csproj" />
     <ProjectReference Include="..\ScrumPilot.Web\ScrumPilot.Web.csproj" />
     <ProjectReference Include="..\ScrumPilot.Shared\ScrumPilot.Shared.csproj" />
+    <ProjectReference Include="..\ScrumPilot.Client\ScrumPilot.Client.csproj" />
   </ItemGroup>
 
   <ItemGroup>

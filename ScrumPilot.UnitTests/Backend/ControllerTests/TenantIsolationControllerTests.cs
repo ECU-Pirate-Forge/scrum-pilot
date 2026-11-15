@@ -129,7 +129,7 @@ public class TenantIsolationControllerTests
         comments.AddAsync(Arg.Any<Comment>(), default).Returns(call => call.Arg<Comment>());
         var controller = new CommentController(comments, pbis, _currentUser, _access);
 
-        await controller.AddComment(new Comment
+        await controller.AddComment(1, new Comment
         {
             PbiId = 7,
             UserId = "user-b",

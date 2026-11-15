@@ -7,7 +7,8 @@ using ScrumPilot.Shared.Models;
 namespace ScrumPilot.API.Services;
 
 public sealed class ProjectDependencyService(
-    ScrumPilotContext db, ProjectWorkNotifier notifier, ScrumPilot.API.Authorization.ICurrentUser? currentUser = null,
+    OrganizationContext db, ProjectWorkNotifier notifier, GitHubRepositoryRegistry registry,
+    ScrumPilot.API.Authorization.ICurrentUser? currentUser = null,
     PullRequestScopeService? scope = null) : IPlanningMutationHandler
 {
     public async Task<DependencyGraphDto> ReadAsync(int projectId, int? sprintId, CancellationToken ct)
@@ -20,8 +21,15 @@ public sealed class ProjectDependencyService(
         var specs = await db.TaskSpecificationRevisions.AsNoTracking().Where(spec => spec.ProjectId == projectId).ToListAsync(ct);
         var sourceCurrency = await ProjectStoryCurrency.ReadManyAsync(db, projectId,
             items.Where(item => item.Type == PbiType.Story).Select(item => item.PbiId).ToArray(), ct);
+        var currentRepositoryIds = new HashSet<int>();
+        foreach (var repository in await db.ProjectRepositories.AsNoTracking().Where(x => x.ProjectId == projectId).ToListAsync(ct))
+            if (await registry.IsCurrentAsync(repository, ct)) currentRepositoryIds.Add(repository.ProjectRepositoryId);
+        var currentSnapshotIds = await db.RepositorySnapshots.AsNoTracking().Where(x =>
+            x.ProjectId == projectId && currentRepositoryIds.Contains(x.ProjectRepositoryId))
+            .Select(x => x.RepositorySnapshotId).ToListAsync(ct);
         var approved = specs.GroupBy(spec => spec.PbiId).Select(group => group.MaxBy(spec => spec.Revision)!)
             .Where(spec => spec.Approval == SpecificationApproval.Approved && spec.RepositorySnapshotId.HasValue
+                && currentSnapshotIds.Contains(spec.RepositorySnapshotId.Value)
                 && spec.ProjectGuidelinesRevisionId == project.CurrentGuidelinesRevisionId
                 && items.Any(task => task.PbiId == spec.PbiId && items.Any(source =>
                     source.PbiId == (task.ParentStoryId ?? task.PbiId)

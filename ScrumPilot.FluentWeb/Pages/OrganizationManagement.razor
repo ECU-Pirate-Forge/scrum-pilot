@@ -1,4 +1,5 @@
 @page "/organization-management"
+@page "/organizations/{OrganizationId:int}/organization-management"
 @implements IDisposable
 @using System.Security.Claims
 @using ScrumPilot.FluentWeb.Components.Organizations
@@ -13,6 +14,30 @@
 
 <div class="organization-management-page">
     <AppPageHeader Title="Organization Management" Subtitle="Manage organization details, members, project access and lifecycle." />
+    @if (OrganizationId == 0)
+    {
+        <h2>Organization directory</h2>
+        @foreach (var organization in _organizations)
+        {
+            <FluentCard>
+                <h3>@organization.Name</h3>
+                <FluentAnchorButton Href="@OrganizationRoutes.Page(organization.OrganizationId, "backlog")">Open work</FluentAnchorButton>
+                <FluentAnchorButton Href="@OrganizationRoutes.Page(organization.OrganizationId, "organization-management")">Manage organization</FluentAnchorButton>
+                @if (_operations.TryGetValue(organization.OrganizationId, out var operation))
+                {
+                    <p>Storage status: @operation.State</p>
+                    @if (operation.Error is not null)
+                    {
+                        <FluentMessageBar Intent="MessageBarIntent.Warning">Organization storage is unavailable. An administrator can retry provisioning.</FluentMessageBar>
+                    }
+                    @if (_isAdmin && operation.State is "Failed" or "Provisioning")
+                    {
+                        <FluentButton data-action="@($"retry-provisioning-{organization.OrganizationId}")" OnClick="@(() => RetryProvisioningAsync(organization.OrganizationId))">Retry provisioning</FluentButton>
+                    }
+                }
+            </FluentCard>
+        }
+    }
 
     @if (_isAdmin)
     {
@@ -52,14 +77,15 @@
     {
         <AppErrorState Title="Unable to load organization management" Message="@_error" OnRetry="ReloadAsync" />
     }
-    else if (_selected is null)
+    else if (_selected is null && OrganizationId != 0)
     {
-        <AppEmptyState Title="Select an organization" Message="Choose an organization from the header to manage it." Icon="@(new Icons.Regular.Size24.Organization())" />
+        <AppEmptyState Title="Organization unavailable" Message="This organization is unavailable or you no longer have membership." Icon="@(new Icons.Regular.Size24.Organization())" />
     }
-    else
+    else if (_selected is not null)
     {
         <OrganizationDetails Organization="_selected" OrganizationChanged="UpdateSelected" />
         <OrganizationMembers OrganizationId="_selected.OrganizationId" CanManage="@(_selected.Role == OrganizationRole.Owner)" />
+        <FluentMessageBar Intent="MessageBarIntent.Info">Members need explicit project grants. After backup recovery, member grants must be reviewed and reissued before work access is restored.</FluentMessageBar>
         @foreach (var project in _projects)
         {
             <FluentCard Class="project-access-card">
@@ -86,7 +112,10 @@
 </div>
 
 @code {
+    [Parameter] public int OrganizationId { get; set; }
     private OrganizationSummaryDto? _selected;
+    private List<OrganizationSummaryDto> _organizations = [];
+    private Dictionary<int, OperationStatus> _operations = [];
     private List<Project> _projects = [];
     private List<OrganizationSummaryDto> _deletedOrganizations = [];
     private bool _isAdmin;
@@ -106,7 +135,6 @@
         var user = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
         _isAdmin = user.IsInRole("Admin");
         _currentUserId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? user.FindFirst("sub")?.Value ?? string.Empty;
-        OrganizationState.OnChange += OnOrganizationChanged;
         await ReloadAsync();
     }
 
@@ -134,22 +162,31 @@
         {
             var organizations = await Http.GetFromJsonAsync<List<OrganizationSummaryDto>>("api/organizations", token) ?? [];
             if (_disposed || cancellation != _cancellation) return;
-            var selectedId = OrganizationState.SelectedOrganizationId;
-            _selected = organizations.FirstOrDefault(x => x.OrganizationId == selectedId) ?? organizations.FirstOrDefault();
-            var resolvedId = _selected?.OrganizationId;
-            if (OrganizationState.SelectedOrganizationId != resolvedId)
-            {
-                OrganizationState.OnChange -= OnOrganizationChanged;
-                if (_selected is null) OrganizationState.Clear(); else OrganizationState.SetOrganization(_selected);
-                OrganizationState.OnChange += OnOrganizationChanged;
-                ProjectState.Clear();
-            }
+            _organizations = organizations.Where(x => !x.IsDeleted).ToList();
+            _selected = organizations.FirstOrDefault(x => x.OrganizationId == OrganizationId && !x.IsDeleted);
             _projects = _selected is null ? [] : await Http.GetFromJsonAsync<List<Project>>($"api/organizations/{_selected.OrganizationId}/projects", token) ?? [];
             if (_disposed || cancellation != _cancellation) return;
+            if (_isAdmin && OrganizationId == 0)
+            {
+                var operations = new Dictionary<int, OperationStatus>();
+                foreach (var organization in _organizations)
+                {
+                    try
+                    {
+                        var status = await Http.GetFromJsonAsync<OperationStatus>($"api/organizations/{organization.OrganizationId}/operations", token);
+                        if (_disposed || cancellation != _cancellation) return;
+                        if (status is not null) operations[organization.OrganizationId] = status;
+                    }
+                    catch (HttpRequestException) { }
+                    catch (System.Text.Json.JsonException) { }
+                }
+                _operations = operations;
+            }
             _deletedOrganizations = await Http.GetFromJsonAsync<List<OrganizationSummaryDto>>("api/organizations/deleted", token) ?? [];
             if (_disposed || cancellation != _cancellation) return;
             _error = null;
         }
+
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
         catch (Exception ex) when (!_disposed && cancellation == _cancellation)
         {
@@ -158,6 +195,32 @@
             Notifications.ShowError(_error);
         }
     }
+
+    private async Task RetryProvisioningAsync(int organizationId)
+        {
+            if (!_isAdmin || _disposed || !_operations.TryGetValue(organizationId, out var operation)
+                || operation.State is not ("Failed" or "Provisioning")) return;
+            var cancellation = _cancellation;
+            if (cancellation is null) return;
+            try
+            {
+                using var response = await Http.PostAsync($"api/organizations/{organizationId}/operations/retry", null, cancellation.Token);
+                if (_disposed || cancellation != _cancellation) return;
+                if (!response.IsSuccessStatusCode)
+                {
+                    _error = "Unable to retry organization provisioning.";
+                    return;
+                }
+                await ReloadAsync();
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+            catch (HttpRequestException)
+            {
+                if (!_disposed && cancellation == _cancellation) _error = "Unable to retry organization provisioning.";
+            }
+        }
+
+    private sealed record OperationStatus(int OrganizationId, string State, string? OperationId, string? Error);
 
     private async Task CreateAsync()
     {

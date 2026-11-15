@@ -1,11 +1,10 @@
 @page "/task-planning"
-@implements IDisposable
+@page "/organizations/{OrganizationId:int}/task-planning"
+@inherits PlanningComponentBase
 @using System.Text.Json
 @using System.Text.Json.Serialization
 @using ScrumPilot.FluentWeb.Components.ProjectManagement
 @using ScrumPilot.FluentWeb.Components.Pbi
-@inject HttpClient Http
-@inject ProjectStateService ProjectState
 @inject OrganizationStateService OrganizationState
 @inject ILogger<TaskPlanning> Logger
 
@@ -17,7 +16,7 @@
 }
 else
 {
-    <ProjectRepositorySettings ProjectId="ProjectId.Value" IsOwner="IsOwner" />
+    <ProjectRepositorySettings @key="(Scope.OrganizationId, ProjectId.Value)" CapturedWork="Scope" ProjectId="ProjectId.Value" IsOwner="IsOwner" />
     @if (_error.Length > 0) { <p role="alert">@_error</p> }
     <FluentButton OnClick="LoadAsync">Refresh work and snapshots</FluentButton>
     <section aria-label="Generate tasks from stories">
@@ -65,15 +64,16 @@ else
             </select>
         </label>
         @if (_taskId > 0)
-        { <TaskSpecificationEditor @key="(ProjectId.Value, _taskId)" ProjectId="ProjectId.Value" TaskId="_taskId" IsOwner="IsOwner" Snapshots="_snapshots" /> }
+        { <TaskSpecificationEditor @key="(Scope.OrganizationId, ProjectId.Value, _taskId)" CapturedWork="Scope" ProjectId="ProjectId.Value" TaskId="_taskId" IsOwner="IsOwner" Snapshots="_snapshots" /> }
     </section>
 }
 
 @code {
     private static readonly JsonSerializerOptions EditorJson = new(JsonSerializerDefaults.Web)
         { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };
-    private int? ProjectId => ProjectState.SelectedProjectId;
-    private bool IsOwner => OrganizationState.SelectedOrganization?.Role == OrganizationRole.Owner;
+    private int? ProjectId => Scope.ProjectId;
+    private bool IsOwner => OrganizationState.SelectedOrganization?.OrganizationId == Scope.OrganizationId
+        && OrganizationState.SelectedOrganization.Role == OrganizationRole.Owner;
     private ProductBacklogItem[] _items = [];
     private RepositorySnapshot[] _snapshots = [];
     private readonly HashSet<int> _selectedStories = [];
@@ -82,41 +82,30 @@ else
     private string _branch = "main", _sourcePaths = "", _error = "";
     private int _snapshotId, _taskId;
     private bool _busy, _asDraft;
-    private bool _disposed;
-    protected override async Task OnInitializedAsync()
-    {
-        ProjectState.OnChange += ProjectChanged;
-        await LoadAsync();
-    }
-
-    private void ProjectChanged() => _ = InvokeAsync(async () =>
-    {
-        _items = []; _snapshots = []; _selectedStories.Clear(); _proposals.Clear(); _preview = null;
-        _snapshotId = 0; _taskId = 0; _error = "";
-        await LoadAsync();
-        if (!_disposed) StateHasChanged();
-    });
+    private long _loadGeneration;
+    protected override Task OnInitializedAsync() => LoadAsync();
 
     private async Task LoadAsync()
     {
-        if (!ProjectId.HasValue) return;
+        if (!Scope.IsCurrent || !ProjectId.HasValue) return;
+        var generation = ++_loadGeneration;
         var project = ProjectId;
         try
         {
             var items = await Http.GetFromJsonAsync<ProductBacklogItem[]>($"api/Pbi/getAllPbis?projectId={project}") ?? [];
             var snapshots = await Http.GetFromJsonAsync<RepositorySnapshot[]>($"api/projects/{project}/repository/snapshots") ?? [];
-            if (project == ProjectId && !_disposed) { _items = items; _snapshots = snapshots; }
+            if (Scope.IsCurrent && generation == _loadGeneration) { _items = items; _snapshots = snapshots; }
         }
-        catch (HttpRequestException ex) { Logger.LogWarning(ex, "Task planning load failed"); _error = "Unable to load project work or repository snapshots."; }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
+        catch (HttpRequestException ex) { if (!Scope.IsCurrent || generation != _loadGeneration) return; Logger.LogWarning(ex, "Task planning load failed"); _error = "Unable to load project work or repository snapshots."; }
     }
     private void Select(int id, bool selected) { if (selected) _selectedStories.Add(id); else _selectedStories.Remove(id); }
     private async Task CreateSnapshotAsync() => await ExecuteAsync(async () =>
     {
         var project = ProjectId;
         using var response = await Http.PostAsJsonAsync($"api/projects/{project}/repository/snapshots", new CreateRepositorySnapshotRequest(_branch));
-        if (project != ProjectId || _disposed) return;
-        if (!response.IsSuccessStatusCode) { _error = await response.Content.ReadAsStringAsync(); return; }
-        var snapshot = await response.Content.ReadFromJsonAsync<RepositorySnapshot>();
+        if (!response.IsSuccessStatusCode) { _error = await Http.ReadAsStringAsync(response.Content); return; }
+        var snapshot = await Http.ReadFromJsonAsync<RepositorySnapshot>(response.Content);
         await LoadAsync(); _snapshotId = snapshot?.RepositorySnapshotId ?? 0;
     });
     private async Task GenerateAsync() => await ExecuteAsync(async () =>
@@ -125,9 +114,8 @@ else
         using var response = await Http.PostAsJsonAsync($"api/projects/{project}/task-generation/preview",
             new GenerateTaskPreviewRequest(_selectedStories.Order().ToArray(), _snapshotId,
                 _sourcePaths.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), Guid.NewGuid().ToString("N")));
-        if (project != ProjectId || _disposed) return;
-        if (!response.IsSuccessStatusCode) { _error = await response.Content.ReadAsStringAsync(); return; }
-        _preview = await response.Content.ReadFromJsonAsync<TaskGenerationPreviewDto>();
+        if (!response.IsSuccessStatusCode) { _error = await Http.ReadAsStringAsync(response.Content); return; }
+        _preview = await Http.ReadFromJsonAsync<TaskGenerationPreviewDto>(response.Content);
         _proposals.Clear();
         foreach (var task in _preview?.Tasks ?? []) _proposals.Add(new(task.Key, JsonSerializer.Serialize(task, EditorJson)));
     });
@@ -139,20 +127,19 @@ else
             .Select(proposal => JsonSerializer.Deserialize<TaskProposalDto>(proposal.Json, EditorJson) ?? throw new JsonException()).ToArray();
         using var response = await Http.PostAsJsonAsync($"api/projects/{project}/task-generation/accept",
             new AcceptTaskProposalsRequest(_preview.GenerationRunId, tasks, _asDraft));
-        if (project != ProjectId || _disposed) return;
-        if (!response.IsSuccessStatusCode) { _error = await response.Content.ReadAsStringAsync(); return; }
+        if (!response.IsSuccessStatusCode) { _error = await Http.ReadAsStringAsync(response.Content); return; }
         _preview = null; _proposals.Clear(); await LoadAsync();
     });
     private async Task ExecuteAsync(Func<Task> action)
     {
-        if (_busy || !ProjectId.HasValue) return;
+        if (!Scope.IsCurrent || _busy || !ProjectId.HasValue) return;
         _busy = true; _error = "";
         try { await action(); }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
         catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException)
-        { Logger.LogWarning(ex, "Task planning operation failed"); _error = ex is JsonException ? "A proposal contains invalid JSON." : "Planning failed or timed out. Check configuration and retry."; }
+        { if (!Scope.IsCurrent) return; Logger.LogWarning(ex, "Task planning operation failed"); _error = ex is JsonException ? "A proposal contains invalid JSON." : "Planning failed or timed out. Check configuration and retry."; }
         finally { _busy = false; }
     }
     private sealed class ProposalEditor(string key, string json)
     { public string Key { get; } = key; public string Json { get; set; } = json; public bool Selected { get; set; } = true; }
-    public void Dispose() { _disposed = true; ProjectState.OnChange -= ProjectChanged; }
 }

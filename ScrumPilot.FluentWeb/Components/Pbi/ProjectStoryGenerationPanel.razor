@@ -1,6 +1,6 @@
 @using System.Net.Http.Json
 @using ScrumPilot.Shared.Models
-@inject HttpClient Http
+@inherits PlanningComponentBase
 
 <section aria-label="Project story generation">
     <h2>Saved problem statements</h2>
@@ -42,12 +42,13 @@
             }
         </div>
     }
-    <GeneratedPbiDialog PBIs="_previewPbis" Proposals="_previewProposals" ProjectId="ProjectId"
+    <GeneratedPbiDialog PBIs="_previewPbis" Proposals="_previewProposals" ProjectId="ProjectId" CapturedWork="Scope"
                         @bind-Open="_previewOpen" OnClosed="RefreshRunsSafelyAsync" />
 </section>
 
 @code {
     [Parameter] public int ProjectId { get; set; }
+    protected override object PlanningIdentity => ProjectId;
     private List<ProblemStatement> _sources = [];
     private List<ProjectStoryRunResult> _runs = [];
     private readonly HashSet<int> _selected = [];
@@ -78,7 +79,7 @@
         using var response = await Http.PostAsJsonAsync(Root + "/problem-statements",
             new SaveProblemStatementRequest(_title, _text, null, false));
         response.EnsureSuccessStatusCode();
-        var source = await response.Content.ReadFromJsonAsync<ProblemStatement>();
+        var source = await Http.ReadFromJsonAsync<ProblemStatement>(response.Content);
         if (source is not null)
         {
             _sources.Add(source);
@@ -91,7 +92,7 @@
         using var response = await Http.PutAsJsonAsync($"{Root}/problem-statements/{source.ProblemStatementId}",
             new SaveProblemStatementRequest(source.Title, source.Text, source.Version, archived));
         response.EnsureSuccessStatusCode();
-        var saved = await response.Content.ReadFromJsonAsync<ProblemStatement>();
+        var saved = await Http.ReadFromJsonAsync<ProblemStatement>(response.Content);
         if (saved is not null) _sources[_sources.IndexOf(source)] = saved;
         if (archived) _selected.Remove(source.ProblemStatementId);
         _generationKey = Guid.NewGuid().ToString("N");
@@ -104,7 +105,7 @@
         using var response = await Http.PostAsJsonAsync(Root + "/story-generation",
             new GenerateProjectStoriesRequest(_generationKey, _selected.Order().ToArray()), timeout.Token);
         response.EnsureSuccessStatusCode();
-        var batch = await response.Content.ReadFromJsonAsync<ProjectStoryBatchResult>(timeout.Token);
+        var batch = await Http.ReadFromJsonAsync<ProjectStoryBatchResult>(response.Content, timeout.Token);
         _generationKey = Guid.NewGuid().ToString("N");
         var proposals = batch?.Results.SelectMany(r => r.Proposals).ToList() ?? [];
         var failed = batch?.Results.Count(r => r.ErrorCode is not null) ?? 0;
@@ -129,12 +130,14 @@
     private Task RefreshRunsSafelyAsync() => WorkAsync(RefreshRunsAsync);
     private async Task WorkAsync(Func<Task> action)
     {
-        if (_busy) return;
+        if (!Scope.IsCurrent || _busy) return;
         _busy = true;
         _error = "";
         try { await action(); }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
         {
+            if (!Scope.IsCurrent) return;
             _error = "Project operation failed. Reload on a version conflict. If generation timed out, retry without editing to reuse its request identity. No external AI fallback is used.";
         }
         finally { _busy = false; }

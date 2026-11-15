@@ -80,13 +80,28 @@ public class PlanningPokerSessionServiceTests
         service.AddParticipant("connection-2", "revoked", "Alice mobile", SessionKey);
         service.AddParticipant("connection-3", "other", "Bob", SessionKey);
 
-        var removed = service.RemoveUserFromProject("revoked", SessionKey.ProjectId);
+        var removed = service.RemoveUserFromProject("revoked", SessionKey.OrganizationId, SessionKey.ProjectId);
 
         Assert.Equal(["connection-1", "connection-2"], removed.Select(x => x.ConnectionId).Order());
         Assert.All(removed, x => Assert.Equal(SessionKey, x.SessionKey));
         var remaining = service.GetStateForSession(SessionKey).Participants;
         Assert.Single(remaining);
         Assert.Equal("connection-3", remaining[0].ConnectionId);
+    }
+
+    [Fact]
+    public void Eviction_IsScopedByOrganization_WhenProjectIdsCollide()
+    {
+        var service = new PlanningPokerSessionService();
+        var a = new PlanningPokerSessionKey(1, 1);
+        var b = new PlanningPokerSessionKey(2, 1);
+        service.AddParticipant("a", "same-user", "A", a);
+        service.AddParticipant("b", "same-user", "B", b);
+        Assert.Single(service.RemoveUserFromProject("same-user", 1, 1));
+        Assert.Equal(b, service.GetSessionKey("b"));
+        service.AddParticipant("a-again", "same-user", "A", a);
+        Assert.Single(service.RemoveProject(1, 1));
+        Assert.Equal(b, service.GetSessionKey("b"));
         Assert.Null(service.GetSessionKey("connection-1"));
         Assert.Null(service.GetSessionKey("connection-2"));
     }

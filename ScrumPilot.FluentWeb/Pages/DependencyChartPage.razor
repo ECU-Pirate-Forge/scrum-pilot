@@ -1,6 +1,7 @@
 @page "/dependency-chart"
+@page "/organizations/{OrganizationId:int}/dependency-chart"
+@inherits PlanningComponentBase
 @using ScrumPilot.FluentWeb.Components.DependencyChart
-@inject HttpClient Http
 @inject NavigationManager Nav
 @inject ProjectStateService ProjectState
 @inject IAppNotificationService Notifications
@@ -13,7 +14,7 @@
 <div class="dependency-chart-page">
     <AppPageHeader Title="Dependency Chart" Subtitle="@HeaderSubtitle">
         <Actions>
-            <FluentButton Appearance="ButtonAppearance.Outline" IconStart="@(new Icons.Regular.Size20.ChevronLeft())" OnClick="@(() => Nav.NavigateTo("/scrum-board"))">Back to Board</FluentButton>
+            <FluentButton Appearance="ButtonAppearance.Outline" IconStart="@(new Icons.Regular.Size20.ChevronLeft())" OnClick="@(() => Nav.NavigateTo(OrganizationRoutes.Page(Scope.OrganizationId, "scrum-board", Scope.ProjectId)))">Back to Board</FluentButton>
         </Actions>
     </AppPageHeader>
 
@@ -30,7 +31,7 @@
         @if (_graph is not null)
         {
             <p role="status">@WorkClient.Status</p>
-            <SprintDependencyView Graph="_graph" OnChanged="RefreshAsync" />
+            <SprintDependencyView @key="(Scope.OrganizationId, _graph.ProjectId, _graph.SprintId)" CapturedWork="Scope" Graph="_graph" OnChanged="RefreshAsync" />
         }
     }
 </div>
@@ -44,6 +45,7 @@
     private bool _connectPending;
     private bool _disposed;
     private long _requestId;
+    private long _loadGeneration;
     protected override void OnInitialized() => ProjectState.OnChange += ProjectChanged;
     private void ProjectChanged()
     {
@@ -55,7 +57,7 @@
     private int? _loadedSprintId;
     private int? _loadedProjectId;
 
-    private int? EffectiveProjectId => ProjectId ?? ProjectState.SelectedProjectId;
+    private int? EffectiveProjectId => Scope.ProjectId;
 
     private string HeaderSubtitle => string.IsNullOrWhiteSpace(_sprintLabel)
         ? "Surface cross-team blockers and sequencing issues across the program."
@@ -73,6 +75,9 @@
 
     private async Task LoadAsync()
     {
+        if (_disposed || !Scope.IsCurrent) return;
+        var generation = ++_loadGeneration;
+        var sprintId = SprintId;
         _loading = true;
         _error = string.Empty;
         _graph = null;
@@ -93,11 +98,13 @@
                 return;
             }
             await FetchGraphAsync();
+            if (_disposed || !Scope.IsCurrent || generation != _loadGeneration) return;
             _connectPending = _liveProjectId != EffectiveProjectId;
 
             if (SprintId.HasValue)
             {
                 var sprints = await Http.GetFromJsonAsync<List<Sprint>>($"api/Sprint?projectId={EffectiveProjectId.Value}") ?? [];
+                if (_disposed || !Scope.IsCurrent || generation != _loadGeneration) return;
                 var sprint = sprints.FirstOrDefault(s => s.SprintId == SprintId.Value);
                 _sprintLabel = sprint is null ? $"Sprint {SprintId.Value}" : (sprint.SprintTitle ?? sprint.SprintGoal ?? $"Sprint {sprint.SprintId}");
             }
@@ -107,15 +114,17 @@
             }
 
         }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
         catch (Exception ex)
         {
+            if (_disposed || !Scope.IsCurrent || generation != _loadGeneration || sprintId != SprintId) return;
             Logger.LogError(ex, "Failed to load dependency chart for project {ProjectId} sprint {SprintId}", EffectiveProjectId, SprintId);
             _error = "Failed to load PBI data. Please go back and try again.";
             Notifications.ShowError(_error);
         }
         finally
         {
-            _loading = false;
+            if (generation == _loadGeneration) _loading = false;
         }
     }
 
@@ -125,7 +134,7 @@
         var project = EffectiveProjectId;
         var sprint = SprintId;
         var graph = await Http.GetFromJsonAsync<DependencyGraphDto>($"api/projects/{project}/sprints/{sprint}/dependency-graph");
-        if (!_disposed && requestId == _requestId && project == EffectiveProjectId && sprint == SprintId
+        if (Scope.IsCurrent && !_disposed && requestId == _requestId && project == EffectiveProjectId && sprint == SprintId
             && graph is not null && (_graph is null || graph.ProjectId != _graph.ProjectId
                 || graph.SprintId != _graph.SprintId || graph.Revision >= _graph.Revision))
             _graph = graph;
@@ -133,29 +142,35 @@
 
     private async Task RefreshAsync()
     {
-        if (_disposed || !EffectiveProjectId.HasValue || !SprintId.HasValue) return;
-        try { await FetchGraphAsync(); _error = ""; }
+        if (_disposed || !Scope.IsCurrent || !EffectiveProjectId.HasValue || !SprintId.HasValue) return;
+        var sprint = SprintId;
+        var generation = _loadGeneration;
+        var requestId = _requestId + 1;
+        try { await FetchGraphAsync(); if (Scope.IsCurrent && requestId == _requestId && generation == _loadGeneration && sprint == SprintId) _error = ""; }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
         catch (HttpRequestException ex)
         {
+            if (!Scope.IsCurrent || requestId != _requestId || generation != _loadGeneration || sprint != SprintId) return;
             Logger.LogWarning(ex, "Graph refresh failed");
             _error = "Unable to refresh dependencies. Check project access and retry.";
             _graph = null;
         }
-        if (!_disposed) await InvokeAsync(StateHasChanged);
+        if (!_disposed && Scope.IsCurrent) await InvokeAsync(StateHasChanged);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!_connectPending || !EffectiveProjectId.HasValue) return;
+        if (!Scope.IsCurrent || !_connectPending || !EffectiveProjectId.HasValue) return;
         _connectPending = false;
         _liveProjectId = EffectiveProjectId;
-        await WorkClient.StartAsync(_liveProjectId.Value, () => InvokeAsync(RefreshAsync));
+        await WorkClient.StartAsync(Scope, () => Scope.IsCurrent ? InvokeAsync(RefreshAsync) : Task.CompletedTask);
     }
 
     public async ValueTask DisposeAsync()
     {
         _disposed = true; _requestId++;
+        base.Dispose();
         ProjectState.OnChange -= ProjectChanged;
-        await WorkClient.DisposeAsync();
+        await WorkClient.StopAsync(Scope);
     }
 }

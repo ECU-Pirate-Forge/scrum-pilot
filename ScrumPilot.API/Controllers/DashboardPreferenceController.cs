@@ -9,7 +9,8 @@ namespace ScrumPilot.API.Controllers;
 /// Manages per-user dashboard layout preferences for a given project.
 /// </summary>
 [ApiController]
-[Route("api/dashboard-preferences")]
+[OrganizationWork]
+[Route("api/organizations/{organizationId:int}/dashboard-preferences")]
 public class DashboardPreferenceController(
     IDashboardPreferenceService svc,
     ICurrentUser currentUser,

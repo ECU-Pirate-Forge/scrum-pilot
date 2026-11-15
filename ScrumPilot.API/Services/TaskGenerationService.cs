@@ -5,9 +5,10 @@ using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.API.Services;
 
-public sealed class TaskGenerationService(ScrumPilotContext db, LocalPlanningAi ai,
+public sealed class TaskGenerationService(OrganizationContext db, LocalPlanningAi ai,
     RepositoryContextService repositories, ProjectDependencyService dependencies, TaskSpecificationService specs,
-    ProjectWorkNotifier notifier, IConfiguration configuration, ILogger<TaskGenerationService> logger)
+    ProjectWorkNotifier notifier, ScrumPilot.API.Configuration.AiOptions options, ILogger<TaskGenerationService> logger,
+    PlanningInferenceSession inference, GitHubRepositoryRegistry registry)
 {
     public async Task<TaskGenerationPreviewDto> PreviewAsync(int projectId, GenerateTaskPreviewRequest request, string actor, CancellationToken ct)
     {
@@ -45,7 +46,7 @@ public sealed class TaskGenerationService(ScrumPilotContext db, LocalPlanningAi 
             ProjectId = projectId,
             Kind = GenerationKind.Tasks,
             Provider = "Ollama",
-            Model = configuration["OllamaModel"],
+            Model = options.Model,
             IdempotencyKey = request.IdempotencyKey,
             ActorId = actor,
             State = GenerationState.Running
@@ -71,6 +72,10 @@ public sealed class TaskGenerationService(ScrumPilotContext db, LocalPlanningAi 
         var context = new
         {
             PromptVersion = 1,
+            GraphRevision = await db.ProjectGraphStates.AsNoTracking().Where(item => item.ProjectId == projectId)
+                .Select(item => item.Revision).SingleOrDefaultAsync(ct),
+            SourceCurrency = (await ProjectStoryCurrency.ReadManyAsync(db, projectId, request.StoryIds, ct))
+                .ToDictionary(item => item.Key, item => item.Value.CurrentFingerprint),
             Stories = stories.Select(story => new { story.PbiId, story.Title, story.Description }),
             Guidelines = guidance?.Content,
             snapshot.CommitSha,
@@ -83,7 +88,30 @@ public sealed class TaskGenerationService(ScrumPilotContext db, LocalPlanningAi 
         };
         try
         {
-            var output = await ai.GenerateAsync<TaskGenerationOutput>(instructions, context, ct);
+            var output = await inference.RunAsync(projectId,
+                () => ai.GenerateAsync<TaskGenerationOutput>(instructions, context, ct), ct);
+            db.Attach(run);
+            await using var resultTransaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+            await db.AcquirePlanningPolicyLockAsync(projectId, ct);
+            var currentProject = await db.Projects.AsNoTracking().SingleAsync(item => item.ProjectId == projectId, ct);
+            var currentStories = await db.Stories.AsNoTracking().Where(item => item.ProjectId == projectId
+                && request.StoryIds.Contains(item.PbiId)).ToListAsync(ct);
+            var repository = await db.ProjectRepositories.AsNoTracking().SingleAsync(item =>
+                item.ProjectId == projectId && item.ProjectRepositoryId == snapshot.ProjectRepositoryId, ct);
+            await registry.RequireCurrentAsync(repository, ct);
+            var currentCurrency = await ProjectStoryCurrency.ReadManyAsync(db, projectId, request.StoryIds, ct);
+            var currentGraphRevision = await db.ProjectGraphStates.AsNoTracking().Where(item => item.ProjectId == projectId)
+                .Select(item => item.Revision).SingleOrDefaultAsync(ct);
+            if (currentProject.CurrentGuidelinesRevisionId != guidance?.ProjectGuidelinesRevisionId
+                || currentGraphRevision != context.GraphRevision
+                || context.SourceCurrency.Any(item => !currentCurrency.TryGetValue(item.Key, out var currency)
+                    || currency.CurrentFingerprint != item.Value)
+                || currentStories.Count != stories.Count || currentStories.Any(current =>
+                    current.Version != stories.Single(story => story.PbiId == current.PbiId).Version
+                    || current.IsDraft || current.Type != PbiType.Story || current.Status == PbiStatus.Done)
+                || !await db.RepositorySnapshots.AsNoTracking().AnyAsync(item => item.ProjectId == projectId
+                    && item.RepositorySnapshotId == snapshot.RepositorySnapshotId && item.CommitSha == snapshot.CommitSha, ct))
+                throw new InvalidOperationException("The selected sources or guidance changed during inference; regenerate.");
             if (output.Tasks is null || output.Tasks.Length is 0 or > 50 || output.Tasks.Any(task => task is null)
                 || output.Tasks.Select(task => task.Key).Distinct().Count() != output.Tasks.Length)
                 throw new ArgumentException("The generated task set must contain 1-50 tasks with unique keys.");
@@ -130,10 +158,12 @@ public sealed class TaskGenerationService(ScrumPilotContext db, LocalPlanningAi 
             run.State = GenerationState.Succeeded;
             run.CompletedAt = DateTime.UtcNow;
             await db.SaveChangesAsync(ct);
+            await resultTransaction.CommitAsync(ct);
             return preview;
         }
-        catch (Exception ex) when (ex is HttpRequestException or JsonException or ArgumentException or InvalidOperationException or OperationCanceledException)
+        catch (Exception ex) when (db.HasStorageLease && ex is (HttpRequestException or JsonException or ArgumentException or InvalidOperationException or OperationCanceledException))
         {
+            if (db.Entry(run).State == EntityState.Detached) db.Attach(run);
             run.State = ex is OperationCanceledException ? GenerationState.Cancelled : GenerationState.Failed;
             run.ErrorCode = ex.GetType().Name;
             run.CompletedAt = DateTime.UtcNow;
@@ -164,11 +194,16 @@ public sealed class TaskGenerationService(ScrumPilotContext db, LocalPlanningAi 
             item.ProjectId == projectId && item.GenerationRunId == request.GenerationRunId, ct) ?? throw new KeyNotFoundException();
         var preview = JsonSerializer.Deserialize<TaskGenerationPreviewDto>(input.SnapshotJson)
             ?? throw new InvalidOperationException("The saved task preview is invalid.");
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+        await db.AcquirePlanningPolicyLockAsync(projectId, ct);
         var project = await db.Projects.SingleAsync(item => item.ProjectId == projectId, ct);
         if (preview.GuidelinesRevisionId != project.CurrentGuidelinesRevisionId)
             throw new InvalidOperationException("Guidelines changed. Regenerate or explicitly review a new task proposal.");
         var originals = preview.Tasks.ToDictionary(task => task.Key, StringComparer.Ordinal);
-        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+        using var savedInput = JsonDocument.Parse(input.SnapshotJson);
+        var savedCurrency = savedInput.RootElement.TryGetProperty("Context", out var savedContext)
+            && savedContext.TryGetProperty("SourceCurrency", out var currencyJson)
+            ? currencyJson.Deserialize<Dictionary<int, string>>() : null;
         var accepted = await db.Stories.Where(item => item.ProjectId == projectId && item.GenerationRunId == request.GenerationRunId).ToListAsync(ct);
         var map = accepted.Where(item => item.GenerationCandidateKey is not null).ToDictionary(item => item.GenerationCandidateKey!, StringComparer.Ordinal);
         var added = new List<(TaskProposalDto Proposal, ProductBacklogItem Item)>();
@@ -179,7 +214,11 @@ public sealed class TaskGenerationService(ScrumPilotContext db, LocalPlanningAi 
             if (map.ContainsKey(task.Key)) continue;
             var parent = await db.Stories.SingleOrDefaultAsync(item => item.ProjectId == projectId
                 && item.PbiId == task.ParentStoryId && item.Type == PbiType.Story && !item.IsDraft, ct) ?? throw new KeyNotFoundException();
-            if (TaskSpecificationService.SourceText(parent) != original.Content.SourceStorySnapshot)
+            var currency = await ProjectStoryCurrency.ReadAsync(db, projectId, parent.PbiId, ct);
+            if (TaskSpecificationService.SourceText(parent) != original.Content.SourceStorySnapshot
+                || parent.Version != original.Content.SourceStoryVersion
+                || savedCurrency is null || !savedCurrency.TryGetValue(parent.PbiId, out var fingerprint)
+                || currency.CurrentFingerprint != fingerprint)
                 throw new InvalidOperationException("The source story changed. Review/regenerate task proposals before acceptance.");
             if (string.IsNullOrWhiteSpace(task.Title) || task.Title.Length > 200) throw new ArgumentException("Task titles must be 1-200 characters.");
             TaskSpecificationService.ValidateContent(task.Content);

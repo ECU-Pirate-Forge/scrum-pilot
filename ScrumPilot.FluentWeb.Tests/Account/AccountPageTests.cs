@@ -56,12 +56,27 @@ public sealed class LoginTests : FluentFrontendTestBase
 public sealed class UserSettingsTests : FluentFrontendTestBase
 {
     [Fact]
+    public void Saving_account_defaults_does_not_change_this_tabs_work_selection()
+    {
+        var projects = Services.GetRequiredService<ScrumPilot.FluentWeb.Services.ProjectStateService>();
+        projects.SetProject(new Project { ProjectId = 3, OrganizationId = 1, ProjectName = "Current" });
+        Http.OnGetJson("api/user/settings", new UserSettingsDto { DefaultOrganizationId = 7, DefaultProjectId = 11 });
+        Http.OnGetJson("api/organizations", new List<OrganizationSummaryDto> { new(7, "Default", OrganizationRole.Owner, false) });
+        Http.OnGetJson("api/organizations/7/projects", new List<Project> { new() { OrganizationId = 7, ProjectId = 11, ProjectName = "Default project" } });
+        Http.OnStatus(HttpMethod.Put, "api/user/settings", HttpStatusCode.OK);
+        using var cut = Render<UserSettings>();
+        cut.WaitForAssertion(() => Assert.Contains("Default project", cut.Markup));
+        cut.FindAll("fluent-button").Single(button => button.TextContent.Contains("Save Preferences", StringComparison.OrdinalIgnoreCase)).Click();
+        cut.WaitForAssertion(() => Assert.Single(Http.RequestsTo(HttpMethod.Put, "api/user/settings")));
+        Assert.Equal(3, projects.SelectedProjectId);
+    }
+
+    [Fact]
     public void User_settings_loads_and_puts_settings()
     {
         Http.OnGetJson("api/user/settings", new UserSettingsDto
         {
             Email = "user@example.test",
-            DiscordUsername = "old-discord",
             UiPreference = UiPreference.System,
             DefaultOrganizationId = 7,
             DefaultProjectId = 11
@@ -78,13 +93,13 @@ public sealed class UserSettingsTests : FluentFrontendTestBase
 
         using var cut = Render<UserSettings>();
 
-        cut.WaitForAssertion(() => Assert.Contains("old-discord", cut.Markup));
+        cut.WaitForAssertion(() => Assert.Contains("user@example.test", cut.Markup));
         cut.FindAll("fluent-button").Single(button => button.TextContent.Contains("Save Preferences", StringComparison.OrdinalIgnoreCase)).Click();
 
         cut.WaitForAssertion(() =>
         {
             var request = Assert.Single(Http.RequestsTo(HttpMethod.Put, "api/user/settings"));
-            Assert.Contains("old-discord", request.Body);
+            Assert.Contains("user@example.test", request.Body);
             Assert.Contains("defaultProjectId", request.Body);
         });
     }
@@ -117,5 +132,3 @@ public sealed class AcceptInvitationTests : FluentFrontendTestBase
         });
     }
 }
-
-

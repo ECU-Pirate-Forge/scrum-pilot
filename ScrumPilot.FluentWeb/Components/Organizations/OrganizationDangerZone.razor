@@ -1,4 +1,5 @@
 @inject HttpClient Http
+@implements IDisposable
 @inject IAppDialogService Dialogs
 @inject ILogger<OrganizationDangerZone> Logger
 
@@ -35,10 +36,16 @@
     private bool _busy;
     private string? _error;
     private int? _sourceOrganizationId;
+    private (int Id, OrganizationRole Role, bool Deleted, bool CanPurge)? _parameterKey;
+    private long _generation;
+    private bool _disposed;
 
     protected override void OnParametersSet()
     {
-        if (_sourceOrganizationId == Organization.OrganizationId) return;
+        var key = (Organization.OrganizationId, Organization.Role, Organization.IsDeleted, CanPurge);
+        if (_parameterKey == key) return;
+        _parameterKey = key;
+        _generation++;
         _sourceOrganizationId = Organization.OrganizationId;
         _error = null;
         _busy = false;
@@ -46,13 +53,13 @@
 
     private async Task LeaveAsync()
     {
-        if (await ConfirmDialogAsync("Leave organization", $"Leave \"{Organization.Name}\"? You may lose access to its projects.", "Leave", "Cancel", true))
+        if (await ConfirmCurrentAsync("Leave organization", $"Leave \"{Organization.Name}\"? You may lose access to its projects.", "Leave", "Cancel", true))
             await MutateAsync(id => Http.PostAsync($"api/organizations/{id}/leave", null), "Unable to leave the organization.");
     }
 
     private async Task DeleteAsync()
     {
-        if (await ConfirmDialogAsync("Delete organization", $"Delete \"{Organization.Name}\"? This cannot be undone.", "Delete", "Cancel", true))
+        if (await ConfirmCurrentAsync("Delete organization", $"Delete \"{Organization.Name}\"? This cannot be undone.", "Delete", "Cancel", true))
             await MutateAsync(id => Http.DeleteAsync($"api/organizations/{id}"), "Unable to delete the organization.");
     }
 
@@ -60,7 +67,7 @@
 
     private async Task PurgeAsync()
     {
-        if (await ConfirmDialogAsync("Permanently purge organization", $"Permanently purge \"{Organization.Name}\"? This cannot be undone.", "Purge", "Cancel", true))
+        if (await ConfirmCurrentAsync("Permanently purge organization", $"Permanently purge \"{Organization.Name}\"? This cannot be undone.", "Purge", "Cancel", true))
             await MutateAsync(id => Http.DeleteAsync($"api/organizations/{id}/purge"), "Unable to permanently purge the organization.");
     }
 
@@ -68,9 +75,18 @@
         ConfirmAsync?.Invoke(title, message, confirmLabel, cancelLabel, destructive)
         ?? Dialogs.ConfirmAsync(title, message, confirmLabel, cancelLabel, destructive);
 
+    private async Task<bool> ConfirmCurrentAsync(string title, string message, string confirmLabel, string cancelLabel, bool destructive)
+    {
+        var organizationId = Organization.OrganizationId;
+        var generation = _generation;
+        return await ConfirmDialogAsync(title, message, confirmLabel, cancelLabel, destructive)
+            && IsCurrent(organizationId) && generation == _generation;
+    }
+
     private async Task MutateAsync(Func<int, Task<HttpResponseMessage>> action, string fallback)
     {
         var organizationId = Organization.OrganizationId;
+        if (!IsCurrent(organizationId)) return;
         _busy = true;
         _error = null;
         try
@@ -95,7 +111,8 @@
         }
     }
 
-    private bool IsCurrent(int organizationId) => _sourceOrganizationId == organizationId && Organization.OrganizationId == organizationId;
+    private bool IsCurrent(int organizationId) => !_disposed && _sourceOrganizationId == organizationId && Organization.OrganizationId == organizationId;
+    public void Dispose() { _disposed = true; _generation++; }
     private static async Task<string> ErrorAsync(HttpResponseMessage response, string fallback)
     {
         try { return (await response.Content.ReadFromJsonAsync<ProblemDetails>())?.Detail ?? fallback; }
@@ -103,4 +120,3 @@
     }
     private sealed class ProblemDetails { public string? Detail { get; set; } }
 }
-

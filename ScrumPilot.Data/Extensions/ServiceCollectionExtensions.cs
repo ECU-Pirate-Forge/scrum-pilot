@@ -5,7 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using ScrumPilot.Data.Context;
 using ScrumPilot.Data.Models;
 using ScrumPilot.Data.Repositories;
-using ScrumPilot.Data.Services;
+using ScrumPilot.Data.Tenancy;
 
 namespace ScrumPilot.Data.Extensions
 {
@@ -13,30 +13,25 @@ namespace ScrumPilot.Data.Extensions
     {
         public static IServiceCollection AddDataServices(this IServiceCollection services, IConfiguration configuration)
         {
-            // Add Entity Framework
-            // Render provides DATABASE_URL as a postgres:// URI — convert to Npgsql connection string
-            // For local dev, use SQLite via appsettings.json
-            var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
-            services.AddDbContext<ScrumPilotContext>(options =>
+            services.AddSingleton<TenantStorage>(p => new TenantStorage(configuration,
+                p.GetService<Microsoft.Extensions.Logging.ILoggerFactory>(), p.GetService<Microsoft.Extensions.Hosting.IHostEnvironment>()));
+            services.AddScoped<TenantSelection>();
+            services.AddScoped<TenantOperations>();
+            services.AddScoped<SqlServerAdministrationContext>();
+            services.AddDbContext<ControlPlaneContext>((provider, options) =>
+                options.UseSqlServer(provider.GetRequiredService<TenantStorage>().Options.ControlConnectionString,
+                    sql => sql.UseCompatibilityLevel(SqlServerOptions.CompatibilityLevel)));
+            services.AddScoped<OrganizationContext>(provider =>
             {
-                if (!string.IsNullOrEmpty(databaseUrl))
-                {
-                    var uri = new Uri(databaseUrl);
-                    var userInfo = uri.UserInfo.Split(':');
-                    var port = uri.Port > 0 ? uri.Port : 5432;
-                    var npgsqlConn = $"Host={uri.Host};Port={port};Database={uri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true";
-                    options.UseNpgsql(npgsqlConn);
-                }
-                else
-                {
-                    options.UseSqlite(configuration.GetConnectionString("DefaultConnection"));
-                }
-                // Suppress pending model changes warning — the value converter change is schema-identical
-                // to the previous OwnsMany.ToJson() approach (both use a TEXT column).
-                options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
+                var selection = provider.GetRequiredService<TenantSelection>();
+                var id = selection.OrganizationId ?? throw new TenantUnavailableException();
+                var organization = provider.GetRequiredService<ControlPlaneContext>().Organizations.AsNoTracking()
+                    .SingleOrDefault(x => x.OrganizationId == id) ?? throw new TenantUnavailableException();
+                return provider.GetRequiredService<TenantStorage>().Open(organization);
             });
 
-            // Add ASP.NET Core Identity backed by EF Core / SQLite
+            // Identity is central, never mapped into an organization catalog.
+            services.AddDataProtection();
             services.AddIdentityCore<ApplicationUser>(options =>
             {
                 // Relaxed for development seeding — tighten before production
@@ -47,22 +42,25 @@ namespace ScrumPilot.Data.Extensions
                 options.User.RequireUniqueEmail = true;
             })
             .AddRoles<IdentityRole>()
-            .AddEntityFrameworkStores<ScrumPilotContext>()
+            .AddEntityFrameworkStores<ControlPlaneContext>()
             .AddDefaultTokenProviders();
 
             // Add repositories
-            services.AddScoped<IProjectRepository, ProjectRepository>();
-            services.AddScoped<IProjectAccessRepository, ProjectAccessRepository>();
-            services.AddScoped<IPbiRepository, PbiRepository>();
-            services.AddScoped<ICommentRepository, CommentRepository>();
-            services.AddScoped<ISprintRepository, SprintRepository>();
-            services.AddScoped<IEpicRepository, EpicRepository>();
-            services.AddScoped<IPbiHistoryRepository, PbiHistoryRepository>();
-            services.AddScoped<IDashboardPreferenceRepository, DashboardPreferenceRepository>();
-            services.AddScoped<IOrganizationRepository, OrganizationRepository>();
-            services.AddScoped<IOrganizationInvitationRepository, OrganizationInvitationRepository>();
-            services.AddScoped<OrganizationBootstrapValidator>();
-            services.AddSingleton<PirateForgeBootstrapper>();
+            services.AddScoped<IProjectRepository>(p => new ProjectRepository(p.GetRequiredService<OrganizationContext>()));
+            services.AddScoped<IProjectAccessRepository, TenantProjectAccessRepository>();
+            services.AddScoped<IPbiRepository>(p => new PbiRepository(p.GetRequiredService<OrganizationContext>(),
+                p.GetService<IPlanningMutationHandler>())
+            { Directory = p.GetRequiredService<ControlPlaneContext>() });
+            services.AddScoped<ICommentRepository>(p => new CommentRepository(p.GetRequiredService<OrganizationContext>())
+            { Directory = p.GetRequiredService<ControlPlaneContext>() });
+            services.AddScoped<ISprintRepository>(p => new SprintRepository(p.GetRequiredService<OrganizationContext>()));
+            services.AddScoped<IEpicRepository>(p => new EpicRepository(p.GetRequiredService<OrganizationContext>()));
+            services.AddScoped<IPbiHistoryRepository>(p => new PbiHistoryRepository(p.GetRequiredService<OrganizationContext>()));
+            services.AddScoped<IDashboardPreferenceRepository>(p => new DashboardPreferenceRepository(p.GetRequiredService<OrganizationContext>()));
+            services.AddScoped<IOrganizationRepository>(p => new OrganizationRepository(p.GetRequiredService<ControlPlaneContext>(),
+                p.GetServices<ITenantLifecycleObserver>())
+            { Operations = p.GetRequiredService<TenantOperations>(), Storage = p.GetRequiredService<TenantStorage>() });
+            services.AddScoped<IOrganizationInvitationRepository>(p => new OrganizationInvitationRepository(p.GetRequiredService<ControlPlaneContext>()));
 
             return services;
         }

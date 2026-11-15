@@ -1,6 +1,6 @@
 @using System.Net.Http.Json
 @using ScrumPilot.Shared.Models
-@inject HttpClient Http
+@inherits PlanningComponentBase
 @inject OrganizationStateService OrganizationState
 
 @if (Pbi.ProblemStatementId.HasValue)
@@ -37,8 +37,9 @@
     {
         <p>Latest applicable or previous Owner review: @review.CreatedAt.ToUniversalTime().ToString("u") — @review.Reason</p>
     }
-    @if (Pbi.PbiId > 0 && _currency is { CurrentFingerprint.Length: > 0 } &&
-        OrganizationState.SelectedOrganization?.Role == OrganizationRole.Owner)
+    @if (CanReview && Pbi.PbiId > 0 && _currency is { CurrentFingerprint.Length: > 0 } &&
+        OrganizationState.SelectedOrganization?.OrganizationId == Scope.OrganizationId &&
+        OrganizationState.SelectedOrganization.Role == OrganizationRole.Owner)
     {
         <details>
             <summary>Review content applicability</summary>
@@ -75,8 +76,10 @@ else if (CanLink && Pbi.PbiId > 0 && Pbi.Type == PbiType.Story)
 
 @code {
     [Parameter, EditorRequired] public ProductBacklogItem Pbi { get; set; } = default!;
+    protected override object PlanningIdentity => (Pbi.ProjectId, Pbi.PbiId, Pbi.Version, Pbi.ProblemStatementId);
     [Parameter] public PlanningArtifactCurrency? Currency { get; set; }
     [Parameter] public bool CanLink { get; set; }
+    [Parameter] public bool CanReview { get; set; } = true;
     [Parameter] public EventCallback<ProductBacklogItem> OnChanged { get; set; }
     private PlanningArtifactCurrency? _currency;
     private List<ProblemStatement>? _sources;
@@ -111,7 +114,7 @@ else if (CanLink && Pbi.PbiId > 0 && Pbi.Type == PbiType.Story)
             return;
         }
         response.EnsureSuccessStatusCode();
-        _currency = await response.Content.ReadFromJsonAsync<PlanningArtifactCurrency>();
+        _currency = await Http.ReadFromJsonAsync<PlanningArtifactCurrency>(response.Content);
         _reviewReason = "";
     });
     private Task LinkAsync() => WorkAsync(async () =>
@@ -119,7 +122,7 @@ else if (CanLink && Pbi.PbiId > 0 && Pbi.Type == PbiType.Story)
         using var response = await Http.PostAsJsonAsync($"{Root}/story-generation/stories/{Pbi.PbiId}/link-source",
             new LinkLegacyStoryRequest(_sourceId, Pbi.Version));
         response.EnsureSuccessStatusCode();
-        var linked = await response.Content.ReadFromJsonAsync<ProductBacklogItem>();
+        var linked = await Http.ReadFromJsonAsync<ProductBacklogItem>(response.Content);
         if (linked is null) return;
         Pbi.ProblemStatementId = linked.ProblemStatementId;
         Pbi.Version = linked.Version;
@@ -129,12 +132,13 @@ else if (CanLink && Pbi.PbiId > 0 && Pbi.Type == PbiType.Story)
     });
     private async Task WorkAsync(Func<Task> action)
     {
-        if (_busy) return;
+        if (!Scope.IsCurrent || _busy) return;
         _busy = true;
         _error = "";
         try { await action(); }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
-        { _error = "Provenance could not be loaded or updated. Refresh provenance before retrying; unsaved review text was retained."; }
+        { if (Scope.IsCurrent) _error = "Provenance could not be loaded or updated. Refresh provenance before retrying; unsaved review text was retained."; }
         finally { _busy = false; }
     }
 }

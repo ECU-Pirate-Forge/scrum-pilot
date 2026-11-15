@@ -1,157 +1,64 @@
-# Entity Framework Setup Documentation
+# EF Core and SQL Server Setup
 
-## Overview
-This document outlines the Entity Framework Core setup for the ScrumPilot project using SQLite with a code-first approach and migrations. The data access layer is separated into the `ScrumPilot.Data` project following clean architecture principles.
+All application persistence uses EF Core with SQL Server 2025/17.x. Infrastructure
+and secret configuration originate in AppHost; direct API/operator startup uses
+the same named connection settings.
 
-## Project Structure
+## Independent models
 
-### ScrumPilot.Data Project
-```
-ScrumPilot.Data/
-├── Context/
-│   └── ScrumPilotContext.cs        # DbContext configuration
-├── Repositories/
-│   ├── IStoryRepository.cs         # Story repository interface
-│   ├── StoryRepository.cs          # Story repository implementation
-├── Migrations/                     # EF Core migration files
-├── Seeders/
-│   └── DatabaseSeeder.cs          # Database seeding logic
-└── Extensions/
-    └── ServiceCollectionExtensions.cs # DI configuration
-```
+| Context | Database ownership |
+|---|---|
+| `ControlPlaneContext` | Identity, organizations/memberships, invitations, settings, operations |
+| `OrganizationContext` | One organization's work, grants, histories/preferences, identity metadata |
 
-### ScrumPilot.API Project
-- References `ScrumPilot.Data` project
-- Contains controllers and business services
-- Database configuration in `appsettings.json`
+No navigation/foreign key spans databases. Central user/project defaults are
+validated references, not cross-database relationships or permission grants.
 
-## Database Configuration
+Migration histories and design-time factories are separate. Always specify
+the context. Model comparison and script generation must not require a live
+installation or initialize a database.
 
-### Connection String
-Located in `ScrumPilot.API/appsettings.json`:
-```json
-"ConnectionStrings": {
-  "DefaultConnection": "Data Source=scrumpilot.db"
-}
+Run `dotnet tool restore` from the repository root to use the pinned local EF tool.
+
+```powershell
+dotnet ef migrations has-pending-model-changes --context ControlPlaneContext --project .\ScrumPilot.Data\ScrumPilot.Data.csproj --startup-project .\ScrumPilot.API\ScrumPilot.API.csproj
+dotnet ef migrations has-pending-model-changes --context OrganizationContext --project .\ScrumPilot.Data\ScrumPilot.Data.csproj --startup-project .\ScrumPilot.API\ScrumPilot.API.csproj
+dotnet ef migrations add ControlChange --context ControlPlaneContext --output-dir Migrations\ControlPlane --project .\ScrumPilot.Data\ScrumPilot.Data.csproj --startup-project .\ScrumPilot.API\ScrumPilot.API.csproj
+dotnet ef migrations add WorkChange --context OrganizationContext --output-dir Migrations\Organization --project .\ScrumPilot.Data\ScrumPilot.Data.csproj --startup-project .\ScrumPilot.API\ScrumPilot.API.csproj
 ```
 
-### DbContext
-The main database context is `ScrumPilotContext` located in `ScrumPilot.Data/Context/ScrumPilotContext.cs`:
-- Configures entity relationships and constraints
-- Automatically updates timestamps for created/modified entities
-- Uses enum-to-string conversion for Status and Priority fields
+Generate and inspect SQL for the chosen context before a controlled upgrade.
+Use operator operations and the AppHost migration dependency for real changes,
+not an unqualified `database update` pointed at arbitrary tenant data.
 
-## Dependency Injection Setup
+## Review checklist
 
-The data services are registered using the extension method in `Program.cs`:
-```csharp
-builder.Services.AddDataServices(builder.Configuration);
-```
+Guided planning adds `AddPlanningIntegrationRegistry` to the control history and
+`AddGuidedTaskPlanning` to the organization history. Apply control changes first,
+then upgrade each organization through maintenance/backup/draining operations.
+The former SQLite/PostgreSQL root planning migrations are superseded, not copied
+into either SQL history. Existing SQL work is upgraded additively; there is no
+legacy-provider import.
 
-This configures:
-- Entity Framework DbContext with SQLite
-- Repository pattern implementations
-- All data access dependencies
+The organization migration must preserve valid legacy dependencies and reject
+invalid references for explicit repair, not silently lose backlog information.
+Protected history uses SQL Server set-based guards and scoped purge. Central
+candidate-head recovery is append-only and survives tenant restore/purge;
+unresolved external authority is retained as a reserved recovery tombstone.
+After writes/publication, prefer forward repair to destructive Down migrations.
 
-## Architecture Pattern
+- Context ownership, SQL types/precision/lengths and filtered indexes are correct.
+- Delete behaviors avoid SQL Server multiple-cascade-path issues.
+- Provider tests use SQL Server 2025 and exercise concurrency/collation behavior.
+- Membership-instance grants and database identity remain intact.
+- Runtime contexts do not share mutable tenant options or default connections.
+- Maintenance/backup/restore fences survive process interruption.
+- Ordinary user requests never create or migrate catalogs.
 
-**Current Implementation**: Controller → Service → Repository
-
-```
-StoryController → IStoryService → IStoryRepository → Database
-```
-
-- **Controllers**: Handle HTTP requests/responses
-- **Services**: Contain business logic and orchestration
-- **Repositories**: Handle data access and database operations
-
-## Entities
-
-### Story
-- Primary key: `Guid Id`
-- Required fields: `Title`, `Status`, `Priority`, `DateCreated`, `LastUpdated`
-- Optional fields: `Description`, `StoryPoints`
-- Boolean flags: `IsAiGenerated`, `IsDraft`
-
-## Repository Pattern
-Implements the repository pattern for data access:
-- `IStoryRepository` / `StoryRepository` - Handles all Story data operations
-
-## Migrations
-
-### Commands for Managing Migrations
-
-**Add a new migration:**
-```bash
-dotnet ef migrations add [MigrationName] --project ScrumPilot.Data --startup-project ScrumPilot.API
-```
-
-**Update database:**
-```bash
-dotnet ef database update --project ScrumPilot.Data --startup-project ScrumPilot.API
-```
-
-**Remove last migration (if not applied):**
-```bash
-dotnet ef migrations remove --project ScrumPilot.Data --startup-project ScrumPilot.API
-```
-
-**Generate SQL script:**
-```bash
-dotnet ef migrations script --project ScrumPilot.Data --startup-project ScrumPilot.API
-```
-
-### Automatic Migration
-The application automatically applies pending migrations at startup when running in Development environment.
-
-## Database Seeding
-Initial data is seeded through `DatabaseSeeder.SeedDatabase()` which runs at startup in Development environment. The seeder includes sample stories with one draft story for testing.
-
-## API Endpoints
-
-### Currently Implemented Stories Endpoints
-- `GET /api/story/getAllStories` - Get all stories
-- `GET /api/story/getDraftStories` - Get draft stories only
-- `POST /api/story/generateAiStories` - Generate AI story and save to database
-
-### Frontend Integration
-- **ScrumBoard**: Uses `getAllPbis` to populate ScrumBoard
-- **DraftPbiPage**: Uses `getDraftStories` to show draft PBI's for review
-- **PbiGeneration**: Uses `generateAiStories` to create new AI-generated PBI's
-
-## Development Workflow
-
-1. **Making Model Changes:**
-   - Update entity classes in `ScrumPilot.Shared/Models/`
-   - Update `ScrumPilotContext` configuration in `ScrumPilot.Data/Context/` if needed
-   - Create new migration: `dotnet ef migrations add [DescriptiveName] --project ScrumPilot.Data --startup-project ScrumPilot.API`
-   - Apply migration: `dotnet ef database update --project ScrumPilot.Data --startup-project ScrumPilot.API` or restart the application
-
-2. **Testing Database Changes:**
-   - Use Entity Framework tools or SQLite browser
-   - Database file: `scrumpilot.db` (created in API project root)
-
-## Architecture Benefits
-
-### Clean Separation of Concerns
-- **ScrumPilot.Data**: Contains all data access logic, Entity Framework configuration, and migrations
-- **ScrumPilot.API**: Contains controllers, business services, and API configuration
-- **ScrumPilot.Shared**: Contains domain models shared across projects
-
-### Maintainability
-- Data access changes are isolated to the Data project
-- Repository pattern provides abstraction over Entity Framework
-- Service layer provides business logic separation
-- Extension methods provide clean dependency injection setup
-
-### Testability
-- Repository interfaces can be easily mocked for unit testing
-- Service layer can be tested independently
-- Data layer can be tested in isolation from API controllers
-
-## Notes
-- SQLite database file (`scrumpilot.db`) is created in the API project directory
-- Enum values are stored as strings in the database for readability
-- Timestamps are automatically managed by the DbContext
-- GUIDs are used as primary keys for all entities
-- CRUD operations beyond the current endpoints are handled by other team members
+Former SQLite/PostgreSQL databases and accounts are not imported. Existing
+registered SQL Server databases receive the additive controlled upgrades above,
+not fresh initialization. Down/up validation is for disposable catalogs only;
+after planning writes or check publication, use forward repair and coordinated
+backup recovery instead.
+See [operations](../docs/multi-tenancy-operations.md) for permissions, backup,
+upgrade, and coordinated control-plane recovery.

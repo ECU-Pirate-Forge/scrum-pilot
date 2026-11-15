@@ -1,4 +1,6 @@
 window.mermaidHelper = {
+    _renders: new WeakMap(),
+    _sequence: 0,
     init: function () {
         if (window.mermaid) {
             mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'strict', flowchart: { htmlLabels: false }, maxEdges: 5000 });
@@ -6,14 +8,16 @@ window.mermaidHelper = {
     },
     render: async function (containerId, definition) {
         const container = document.getElementById(containerId);
-        if (!container) throw new Error('Chart container is unavailable.');
-        const requestId = crypto.randomUUID();
-        container.dataset.renderRequest = requestId;
+        if (!container || !container.isConnected) return null;
+        const owner = ++this._sequence;
+        this._renders.set(container, owner);
+        const isCurrent = () => container.isConnected
+            && document.getElementById(containerId) === container
+            && this._renders.get(container) === owner;
         try {
             if (!window.mermaid) throw new Error('Mermaid is unavailable. Use the dependency list.');
-            const uniqueId = 'mermaid-' + requestId;
-            const { svg } = await mermaid.render(uniqueId, definition);
-            if (container.dataset.renderRequest !== requestId) return;
+            const { svg } = await mermaid.render('mermaid-' + owner, definition);
+            if (!isCurrent()) return null;
             const parsed = new DOMParser().parseFromString(svg, 'image/svg+xml');
             if (parsed.querySelector('parsererror')) throw new Error('Invalid graph SVG.');
             parsed.querySelectorAll('script, foreignObject, iframe, image, use, a').forEach(node => node.remove());
@@ -30,14 +34,18 @@ window.mermaidHelper = {
             container.dataset.originalViewBox = graph.getAttribute('viewBox') || '';
             if (keepViewport) graph.setAttribute('viewBox', previousViewBox);
             container.dataset.definition = definition;
+            return owner;
         } catch (e) {
-            if (container.dataset.renderRequest !== requestId) return;
+            if (!isCurrent()) return null;
+            this._renders.delete(container);
+            delete container.dataset.definition;
             container.textContent = 'Failed to render chart. The accessible dependency list remains available.';
             throw e;
         }
     },
-    viewport: function (containerId, action) {
+    viewport: function (containerId, action, renderToken) {
         const container = document.getElementById(containerId);
+        if (!container?.isConnected || this._renders.get(container) !== renderToken) return;
         const graph = container?.querySelector('svg');
         if (!graph) return;
         const original = container.dataset.originalViewBox;
@@ -57,8 +65,11 @@ window.mermaidHelper = {
         }
         graph.setAttribute('viewBox', [x, y, width, height].join(' '));
     },
-    attachNodes: function (containerId, callback, ids) {
+    attachNodes: function (containerId, callback, ids, renderToken) {
         const container = document.getElementById(containerId);
+        const owner = this._renders.get(container);
+        if (!container?.isConnected || owner !== renderToken) return;
+        const graph = container.querySelector('svg');
         const allowed = new Set(ids);
         container?.querySelectorAll('g.node').forEach(node => {
             const match = /^flowchart-PBI(\d+)-/.exec(node.id);
@@ -66,7 +77,11 @@ window.mermaidHelper = {
             if (!allowed.has(id)) return;
             node.setAttribute('tabindex', '0');
             node.setAttribute('role', 'button');
-            const activate = () => callback.invokeMethodAsync('OpenNodeAsync', id).catch(error => console.warn('Graph details unavailable.', error));
+            const activate = () => {
+                if (!container.isConnected || document.getElementById(containerId) !== container
+                    || this._renders.get(container) !== owner || container.querySelector('svg') !== graph) return;
+                callback.invokeMethodAsync('OpenNodeAsync', id, renderToken).catch(error => console.warn('Graph details unavailable.', error));
+            };
             node.onclick = activate;
             node.onkeydown = event => {
                 if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); activate(); }
@@ -74,9 +89,12 @@ window.mermaidHelper = {
         });
     },
     focusObservers: new Map(),
-    observeFocus: function (id, callback) {
+    observeFocus: function (id, callback, generation) {
         window.mermaidHelper.unobserveFocus(id);
-        const handler = () => callback.invokeMethodAsync('ReconcileOnFocus').catch(error => console.warn('Graph focus reconciliation unavailable.', error));
+        const handler = () => {
+            if (window.mermaidHelper.focusObservers.get(id) !== handler) return;
+            callback.invokeMethodAsync('ReconcileOnFocus', generation).catch(error => console.warn('Graph focus reconciliation unavailable.', error));
+        };
         window.mermaidHelper.focusObservers.set(id, handler);
         window.addEventListener('focus', handler);
     },
@@ -91,8 +109,9 @@ window.mermaidHelper = {
         link.href = url; link.download = filename; link.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
     },
-    download: function (containerId, format) {
+    download: function (containerId, format, renderToken) {
         const container = document.getElementById(containerId);
+        if (!container?.isConnected || this._renders.get(container) !== renderToken) return;
         const graph = container?.querySelector('svg');
         if (!container || !graph) throw new Error('Render the chart before exporting.');
         const exported = graph.cloneNode(true);

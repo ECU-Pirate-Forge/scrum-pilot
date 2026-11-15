@@ -1,5 +1,6 @@
 @page "/scrum-board"
-@inject HttpClient Http
+@page "/organizations/{OrganizationId:int}/scrum-board"
+@inherits WorkComponentBase
 @inject ScrumPilot.Web.Services.ProjectStateService ProjectState
 @inject NavigationManager Nav
 @implements IDisposable
@@ -258,7 +259,6 @@
     protected override async Task OnInitializedAsync()
     {
         _selectedProjectId = ProjectState.SelectedProjectId;
-        ProjectState.OnChange += HandleProjectStateChanged;
         await LoadDropdownsAsync();
         ApplyDefaultSprintFilter();
         await LoadItemsAsync();
@@ -463,9 +463,9 @@
 
     private void OpenDependencyChart()
     {
-        var url = _selectedSprintId.HasValue
-            ? $"/dependency-chart?sprintId={_selectedSprintId.Value}"
-            : "/dependency-chart";
+        var url = OrganizationRoutes.Page(Scope.OrganizationId, "dependency-chart", Scope.ProjectId);
+        if (_selectedSprintId.HasValue)
+            url += (url.Contains('?') ? "&" : "?") + $"sprintId={_selectedSprintId.Value}";
         Nav.NavigateTo(url);
     }
 
@@ -583,8 +583,8 @@
     {
         if (string.IsNullOrEmpty(story.AssignedToUserId)) return "?";
         var user = _users.FirstOrDefault(u => u.Id == story.AssignedToUserId);
-        if (user is null) return "?";
-        var name = user.UserName.Trim();
+        var name = (user?.UserName ?? story.AssignedToUserName)?.Trim();
+        if (string.IsNullOrEmpty(name)) return "?";
         return name.Length >= 2 ? name[..2].ToUpper() : name.ToUpper();
     }
 

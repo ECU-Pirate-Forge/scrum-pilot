@@ -3,67 +3,97 @@ name: .NET CI
 on:
   push:
     branches:
+      - main
       - 'feature/**'
+      - 'agents/**'
   pull_request:
-    branches: [development]
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
     steps:
       - uses: actions/checkout@v4
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-
-      - name: Restore dependencies
-        run: dotnet restore ./ScrumPilot.slnx
-      - name: Restore dependencies (unit tests)
-        run: dotnet restore ./ScrumPilot.UnitTests/ScrumPilot.UnitTests.csproj
+      - name: Setup Node for dependency-free browser tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Restore dependencies and local tools
+        run: |
+          dotnet restore ./ScrumPilot.slnx
+          dotnet tool restore
+      - name: Install matching Aspire CLI
+        run: dotnet tool install --global Aspire.Cli --version 13.6.4
       - name: Build
         run: dotnet build ./ScrumPilot.slnx --no-restore --configuration Release
-
-      - name: Install or update EF Core tool
-        run: dotnet tool update --global dotnet-ef --version 10.0.5
-
-      - name: Verify EF model matches migrations
-        env:
-          DATABASE_URL: postgresql://unused:unused@localhost:5432/scrumpilot_design
-        run: dotnet ef migrations has-pending-model-changes --project ./ScrumPilot.Data/ScrumPilot.Data.csproj --startup-project ./ScrumPilot.API/ScrumPilot.API.csproj --no-build --configuration Release
-
-      - name: Format / Lint check
-        run: dotnet format ./ScrumPilot.slnx --verify-no-changes
-
-      - name: Test (Unit Tests)
-        run: dotnet test ./ScrumPilot.UnitTests/ScrumPilot.UnitTests.csproj --no-build --configuration Release --logger trx --results-directory ./TestResults
-      - name: Test (FluentWeb Tests)
-        run: dotnet test ./ScrumPilot.FluentWeb.Tests/ScrumPilot.FluentWeb.Tests.csproj --no-build --configuration Release --logger trx --results-directory ./TestResults
-
-      - name: Publish API
-        run: dotnet publish ./ScrumPilot.API/ScrumPilot.API.csproj --no-build --configuration Release --output ./publish/api
-
-      - name: Publish Web
-        run: dotnet publish ./ScrumPilot.Web/ScrumPilot.Web.csproj --configuration Release --output ./publish/web
-
+      - name: Verify both EF models match migrations
+        run: |
+          dotnet ef migrations has-pending-model-changes --context ControlPlaneContext --project ./ScrumPilot.Data/ScrumPilot.Data.csproj --startup-project ./ScrumPilot.API/ScrumPilot.API.csproj --no-build --configuration Release
+          dotnet ef migrations has-pending-model-changes --context OrganizationContext --project ./ScrumPilot.Data/ScrumPilot.Data.csproj --startup-project ./ScrumPilot.API/ScrumPilot.API.csproj --no-build --configuration Release
+      - name: Format and patch whitespace
+        run: |
+          dotnet format ./ScrumPilot.slnx --verify-no-changes --no-restore
+          git diff --check
+      - name: Test both browser configuration and stale JavaScript callbacks
+        run: node --test ./ScrumPilot.FluentWeb.Tests/JavaScript/dual-web-interop.test.cjs
+      - name: Ensure SQL backup ACL utility is available
+        run: |
+          if ! command -v setfacl >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install --no-install-recommends -y acl
+          fi
+      - name: Start isolated Aspire SQL Server 2025 fixture
+        shell: pwsh
+        run: |
+          & ./ScrumPilot.AppHost/scripts/Start-TestSql.ps1 `
+            -ArtifactsPath "$env:RUNNER_TEMP/scrumpilot-aspire-build" `
+            -StateDirectory "$env:RUNNER_TEMP/scrumpilot-sql-private" `
+            -GitHubEnvironment
+      - name: Test SQL Server, backend and MudBlazor
+        run: dotnet test ./ScrumPilot.UnitTests/ScrumPilot.UnitTests.csproj --no-build --configuration Release --logger trx --results-directory ./TestResults/backend
+      - name: Test FluentWeb
+        run: dotnet test ./ScrumPilot.FluentWeb.Tests/ScrumPilot.FluentWeb.Tests.csproj --no-build --configuration Release --logger trx --results-directory ./TestResults/fluentweb
+      - name: Test Aspire resources and configuration
+        run: dotnet test ./ScrumPilot.Aspire.Tests/ScrumPilot.Aspire.Tests.csproj --no-build --configuration Release --logger trx --results-directory ./TestResults/aspire
+      - name: Publish all supported applications
+        run: |
+          dotnet publish ./ScrumPilot.API/ScrumPilot.API.csproj --no-build --configuration Release --output ./publish/api
+          dotnet publish ./ScrumPilot.Web/ScrumPilot.Web.csproj --configuration Release --output ./publish/web
+          dotnet publish ./ScrumPilot.FluentWeb/ScrumPilot.FluentWeb.csproj --configuration Release --output ./publish/fluentweb
+      - name: Verify all application Dockerfiles
+        run: |
+          docker build -t scrumpilot-api:ci-check -f ScrumPilot.API/Dockerfile .
+          docker build -t scrumpilot-web:ci-check -f ScrumPilot.Web/Dockerfile .
+          docker build -t scrumpilot-fluentweb:ci-check -f ScrumPilot.FluentWeb/Dockerfile .
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: ./TestResults/*.trx
-
-      - name: Upload published artifacts
+          path: ./TestResults/**/*.trx
+          if-no-files-found: warn
+      - name: Stop exact Aspire test graph
+        if: always()
+        shell: pwsh
+        run: aspire stop --non-interactive --apphost ./ScrumPilot.AppHost/ScrumPilot.AppHost.csproj
+      - name: Upload published applications
         uses: actions/upload-artifact@v4
         with:
-          name: published-artifacts
+          name: published-applications
           path: ./publish/
-
-      - name: Docker build check (API)
-        run: docker build -t scrumpilot-api:ci-check -f ScrumPilot.API/Dockerfile .
-
-      - name: Docker build check (Web)
-        run: docker build -t scrumpilot-web:ci-check -f ScrumPilot.Web/Dockerfile .

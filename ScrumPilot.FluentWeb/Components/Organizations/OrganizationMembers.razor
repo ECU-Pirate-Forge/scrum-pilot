@@ -141,7 +141,10 @@
 
     private async Task RemoveAsync(OrganizationMemberDto member)
     {
-        if (await Dialogs.ConfirmAsync("Remove member", $"Remove {member.UserId} from this organization?", "Remove", "Cancel", destructive: true))
+        var key = (OrganizationId, CanManage);
+        var generation = _generation;
+        if (await Dialogs.ConfirmAsync("Remove member", $"Remove {member.UserId} from this organization?", "Remove", "Cancel", destructive: true)
+            && IsCurrent(key, generation))
             await MutateAsync(id => Http.DeleteAsync($"api/organizations/{id}/members/{Uri.EscapeDataString(member.UserId)}"), "Unable to remove the member.");
     }
 
@@ -150,7 +153,10 @@
 
     private async Task RevokeAsync(OrganizationInvitationDto invitation)
     {
-        if (await Dialogs.ConfirmAsync("Revoke invitation", $"Revoke the invitation for {invitation.Email}?", "Revoke", "Cancel", destructive: true))
+        var key = (OrganizationId, CanManage);
+        var generation = _generation;
+        if (await Dialogs.ConfirmAsync("Revoke invitation", $"Revoke the invitation for {invitation.Email}?", "Revoke", "Cancel", destructive: true)
+            && IsCurrent(key, generation))
             await MutateAsync(id => Http.DeleteAsync($"api/organizations/{id}/invitations/{invitation.OrganizationInvitationId}"), "Unable to revoke the invitation.");
     }
 

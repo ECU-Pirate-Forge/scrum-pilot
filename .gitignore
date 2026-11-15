@@ -485,7 +485,7 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 
-# SQLite database files
+# Local database artifacts
 *.db
 *.db-shm
 *.db-wal
@@ -495,12 +495,18 @@ Data/
 # Local dev overrides
 ScrumPilot.Web/wwwroot/appsettings.Development.json
 
-# Discord bot
-*.ogg
-*.mp3
-*.corrupted
-summaries/
-chat-state.json
-data/mood-scores.json
+# SQL Server data and operational backups
+*.bak
+*.mdf
+*.ndf
+*.ldf
+*.trn
+backups/
+artifacts/
+*.binlog
+ScrumPilot.FluentWeb/wwwroot/appsettings.Development.json
 # Playwright CLI output (may contain credentials)
 .playwright-cli/
+.playwright-mcp/
+# Generated Aspire publish helpers
+.aspire/scripts/

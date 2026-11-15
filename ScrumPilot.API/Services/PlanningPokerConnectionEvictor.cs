@@ -7,13 +7,14 @@ public interface IPlanningPokerConnectionEvictor
 {
     Task EvictUserFromProjectAsync(
         string userId,
+        int organizationId,
         int projectId,
         CancellationToken cancellationToken = default);
     Task EvictUserFromOrganizationAsync(
         string userId,
         int organizationId,
         CancellationToken cancellationToken = default);
-    Task EvictProjectAsync(int projectId, CancellationToken cancellationToken = default);
+    Task EvictProjectAsync(int organizationId, int projectId, CancellationToken cancellationToken = default);
     Task EvictOrganizationAsync(
         int organizationId,
         CancellationToken cancellationToken = default);
@@ -25,9 +26,10 @@ public sealed class PlanningPokerConnectionEvictor(
 {
     public Task EvictUserFromProjectAsync(
         string userId,
+        int organizationId,
         int projectId,
         CancellationToken cancellationToken = default) =>
-        EvictAsync(sessions.RemoveUserFromProject(userId, projectId), cancellationToken);
+        EvictAsync(sessions.RemoveUserFromProject(userId, organizationId, projectId), cancellationToken);
 
     public Task EvictUserFromOrganizationAsync(
         string userId,
@@ -38,9 +40,10 @@ public sealed class PlanningPokerConnectionEvictor(
             cancellationToken);
 
     public Task EvictProjectAsync(
+        int organizationId,
         int projectId,
         CancellationToken cancellationToken = default) =>
-        EvictAsync(sessions.RemoveProject(projectId), cancellationToken);
+        EvictAsync(sessions.RemoveProject(organizationId, projectId), cancellationToken);
 
     public Task EvictOrganizationAsync(
         int organizationId,

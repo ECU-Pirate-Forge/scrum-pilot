@@ -14,6 +14,49 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests;
 public sealed class TaskGenerationServiceTests
 {
     [Theory]
+    [InlineData("story")]
+    [InlineData("guidance")]
+    [InlineData("specification")]
+    [InlineData("registration")]
+    public async Task PreviewRejectsCurrencyChangesDuringReleasedLeaseInference(string changed)
+    {
+        await using var f = await TaskPlanningFixture.CreateAsync();
+        var handler = new PlanningAiHandler { Output = SerializeOutput(Proposal(f)) };
+        handler.DuringInference = async () =>
+        {
+            Assert.False(f.Db.HasStorageLease);
+            Assert.Equal(System.Data.ConnectionState.Closed, f.Db.Database.GetDbConnection().State);
+            if (changed == "registration")
+            {
+                var registration = await f.Control.GitHubRepositoryRegistrations.SingleAsync();
+                registration.State = ScrumPilot.Data.Models.RepositoryRegistrationState.Suspended;
+                await f.Control.SaveChangesAsync();
+                return;
+            }
+            await using var writer = f.NewContext();
+            if (changed == "story")
+            {
+                var story = await writer.Stories.SingleAsync(item => item.PbiId == f.Story.PbiId);
+                story.Description = "Changed requirements";
+                await writer.SaveChangesAsync();
+            }
+            else if (changed == "guidance")
+                await new ProjectGuidelinesService(writer).SaveAsync(f.ProjectId,
+                    new("Changed guidance", f.Project.CurrentGuidelinesRevisionId), "owner", default);
+            else
+                await new TaskSpecificationService(writer, f.GitHub, f.Notifier, f.Registry).SaveAsync(f.ProjectId,
+                    f.TaskId, new(TaskPlanningFixture.Content(), f.Manifest, f.Snapshot.RepositorySnapshotId, 0), "owner", default);
+        };
+        using var http = new HttpClient(handler);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Service(f, http).PreviewAsync(f.ProjectId,
+            new([f.Story.PbiId], f.Snapshot.RepositorySnapshotId, ["src/Worker.cs"], "changed-context"), "owner", default));
+        Assert.Equal(GenerationState.Failed, (await f.Db.GenerationRuns.SingleAsync()).State);
+        Assert.False(await f.Db.Stories.AnyAsync(item => item.GenerationRunId != null));
+        using var saved = JsonDocument.Parse((await f.Db.GenerationInputs.SingleAsync()).SnapshotJson);
+        Assert.False(saved.RootElement.TryGetProperty("Tasks", out _));
+    }
+
+    [Theory]
     [InlineData("malformed")]
     [InlineData("dangling")]
     public async Task Preview_InvalidAiOutputMarksRunFailedAndPersistsNoPreviewOrTasks(string invalid)
@@ -208,30 +251,29 @@ public sealed class TaskGenerationServiceTests
 
     private static TaskGenerationService Service(TaskPlanningFixture f, HttpClient http)
     {
-        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            ["OllamaBaseUrl"] = "http://127.0.0.1:11434",
-            ["OllamaModel"] = "fake-planning-model"
-        }).Build();
-        return new(f.Db, new LocalPlanningAi(http, configuration), new RepositoryContextService(f.Db, f.GitHub),
-            new ProjectDependencyService(f.Db, f.Notifier), f.Specs, f.Notifier, configuration,
-            NullLogger<TaskGenerationService>.Instance);
+        var options = new ScrumPilot.API.Configuration.AiOptions { Model = "fake-planning-model" };
+        return new(f.Db, new LocalPlanningAi(new PlanningTestChatClient(http), options),
+            new RepositoryContextService(f.Db, f.GitHub, f.Registry),
+            new ProjectDependencyService(f.Db, f.Notifier, f.Registry), f.Specs, f.Notifier, options,
+            NullLogger<TaskGenerationService>.Instance, f.Inference, f.Registry);
     }
 
     private sealed class PlanningAiHandler : HttpMessageHandler
     {
         public string Output { get; set; } = "";
         public int Calls { get; private set; }
+        public Func<Task>? DuringInference { get; set; }
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Assert.Equal("http://127.0.0.1:11434/api/generate", request.RequestUri!.AbsoluteUri);
             Assert.Equal(HttpMethod.Post, request.Method);
             Calls++;
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            if (DuringInference is not null) await DuringInference();
+            return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = JsonContent.Create(new { response = Output })
-            });
+            };
         }
     }
 }

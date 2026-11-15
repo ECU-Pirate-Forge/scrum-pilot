@@ -15,7 +15,9 @@ public sealed class OrganizationService(
 
     public Task<IReadOnlyList<OrganizationSummaryDto>> ListAsync(
         CancellationToken cancellationToken = default) =>
-        repository.ListForUserAsync(currentUser.UserId, cancellationToken);
+        currentUser.IsInRole("Admin")
+            ? repository.ListForAdminAsync(currentUser.UserId, cancellationToken)
+            : repository.ListForUserAsync(currentUser.UserId, cancellationToken);
 
     public Task<IReadOnlyList<OrganizationSummaryDto>> ListDeletedAsync(
         CancellationToken cancellationToken = default) =>
@@ -117,7 +119,7 @@ public sealed class OrganizationService(
             throw new OrganizationNotFoundException();
         }
 
-        if (UtcNow - organization.DeletedAt.Value > TimeSpan.FromDays(30))
+        if (UtcNow - organization.DeletedAt.Value >= TimeSpan.FromDays(30))
         {
             throw new OrganizationConflictException(
                 "The 30-day organization restore window has expired.");

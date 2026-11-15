@@ -30,8 +30,8 @@ API configuration uses:
 | `GitHubApp__AppId` | App identity |
 | `GitHubApp__PrivateKeyPem` | RSA private key PEM from the secret store |
 | `GitHubApp__WebhookSecret` | HMAC webhook verification secret |
-| `OllamaBaseUrl` | Loopback local processing endpoint for private planning context |
-| `OllamaModel` | Installed local planning model |
+| `ConnectionStrings__ollama` | Existing Aspire Ollama connection; direct startup accepts a local endpoint URI |
+| `AI__Model` | Installed local planning model; shared with existing inference |
 
 Restart the API after changing configuration. Tokens/private keys must never
 appear in browser storage, shared project DTOs, error responses, or logs.
@@ -89,7 +89,7 @@ the gate. ScrumPilot reports protection as **Unverified**; it does not establish
 an administrative enforcement guarantee.
 
 For intentional non-task PRs, an Owner can use
-`POST /api/projects/{projectId}/repository/non-task-exceptions` with
+`POST /api/organizations/{organizationId}/projects/{projectId}/repository/non-task-exceptions` with
 `pullRequestNumber` and a reason of 1–2,000 characters. This is currently an API
 workflow, not a dedicated FluentWeb form. It records actor/reason; task-bound PRs
 cannot use an exception to bypass an approved scope. See [API routes](api.md).
@@ -103,7 +103,7 @@ It does not turn GitHub API calls, database transactions, and merges into one
 distributed transaction.
 
 Validation uses a durable repository/PR/head recovery journal,
-`PullRequestScopeAttempts`, in two phases:
+`PullRequestScopeAttempts`, in the **control database**, in two phases:
 
 1. **Register the head under the project lock.** Publish failure for **all known
    journaled heads and legacy check heads** before looking up current PR metadata.
@@ -119,6 +119,27 @@ back, the separately committed journal still identifies that head. Later retries
 and planning-input mutations invalidate all known journal/check heads even when
 current PR metadata is unavailable. The journal recovers uncertainty about an
 external effect; it is **not atomic GitHub merge isolation**.
+
+The control database also owns the global stable repository registration.
+Configuration reserves it as Pending, saves the tenant configuration under its
+project lock, and activates only the matching registration/configuration version.
+A partial failure remains fenced, not silently active. Signed webhooks resolve
+this central authority before opening a fresh explicit organization scope.
+Wrong installations, inactive organizations and suspended/retired registrations
+cannot route tenant work. Installation deletion/suspension or repository-access
+removal suspends affected registrations and invalidates their known heads.
+
+Local repository configuration, bindings, specifications and detailed checks
+remain in the organization database. There are no cross-database foreign keys.
+An older tenant backup cannot erase a later central candidate head. Maintenance,
+restore, soft deletion and retirement fence authority after existing work drains;
+restore/upgrade require Owner reconciliation before checks become authoritative
+again. A restored Passed row never overrides suspended central authority or a
+different repository configuration version.
+Every successful reconciliation advances that configuration version even if
+the submitted settings are identical. A verified replacement installation is
+used to revoke known heads when an App was reinstalled; a dead prior installation
+does not have to work before recovery can proceed.
 
 If the Checks API itself is unavailable, ScrumPilot cannot automatically repair a
 previously published success: it surfaces an integration failure. Restore API
@@ -167,6 +188,14 @@ remain essential.
   Do not delete journal entries or assume a missing result row means GitHub saw no check.
 - **Check published, protection unknown:** have a repository administrator verify
   the required-check rule. Publication alone does not prove merge protection.
+- **Suspended / maintenance / restore:** freeze merges, restore App access,
+  confirm invalidation of every central journal head, and have an Owner save the
+  reviewed repository configuration again. Refresh snapshots/specification
+  approvals as necessary and revalidate each PR; an old Passed row is insufficient.
+- **Retired project/organization:** retain the central registration tombstone and
+  journal after local deletion. Do not delete/reassign authority to make a
+  conflict disappear. Unconfirmed GitHub invalidation requires a continued merge
+  freeze and operator reconciliation.
 
 For a renamed/transferred repository, verify its stable ID and Owner-approved
 project configuration. For stale source snapshots, resolve/review a new SHA

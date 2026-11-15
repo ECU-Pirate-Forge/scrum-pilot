@@ -2,7 +2,7 @@
 @using System.Net.Http.Json
 @using System.Text
 @using ScrumPilot.Shared.Models
-@inject HttpClient Http
+@inherits PlanningComponentBase
 
 <section aria-label="Project guidelines">
     <h3>Project guidelines</h3>
@@ -46,6 +46,7 @@
 
 @code {
     [Parameter] public int ProjectId { get; set; }
+    protected override object PlanningIdentity => ProjectId;
     [Parameter] public bool IsOwner { get; set; }
     private readonly string _editorId = "guidelines-" + Guid.NewGuid().ToString("N");
     private ProjectGuidelinesRevision? _current;
@@ -74,15 +75,16 @@
             using var response = await Http.GetAsync(Endpoint);
             response.EnsureSuccessStatusCode();
             _current = response.StatusCode == HttpStatusCode.NoContent ? null :
-                await response.Content.ReadFromJsonAsync<ProjectGuidelinesRevision>();
+                await Http.ReadFromJsonAsync<ProjectGuidelinesRevision>(response.Content);
             _content = _current?.Content ?? "";
             _history = await Http.GetFromJsonAsync<List<ProjectGuidelinesRevision>>(Endpoint + "/history") ?? [];
             _loaded = true;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
         {
-            _error = "Could not load guidelines. Retry when the project is available.";
+            if (Scope.IsCurrent) _error = "Could not load guidelines. Retry when the project is available.";
         }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
         finally { _busy = false; }
     }
 
@@ -95,7 +97,8 @@
             _content = template?.Content ?? "";
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
-        { _error = "Could not load the canonical template."; }
+        { if (Scope.IsCurrent) _error = "Could not load the canonical template."; }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
         finally { _busy = false; }
     }
 
@@ -128,12 +131,13 @@
                     : "Guidelines could not be saved. Check your owner access and content.";
                 return;
             }
-            _current = await response.Content.ReadFromJsonAsync<ProjectGuidelinesRevision>();
+            _current = await Http.ReadFromJsonAsync<ProjectGuidelinesRevision>(response.Content);
             _content = _current?.Content ?? _content;
             _history = await Http.GetFromJsonAsync<List<ProjectGuidelinesRevision>>(Endpoint + "/history") ?? [];
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
-        { _error = "Could not confirm the save. Copy your edits, then reload before retrying."; }
+        { if (Scope.IsCurrent) _error = "Could not confirm the save. Copy your edits, then reload before retrying."; }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
         finally { _busy = false; }
     }
     private sealed record TemplateContent(string Content);

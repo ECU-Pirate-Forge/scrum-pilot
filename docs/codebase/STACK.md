@@ -2,29 +2,20 @@
 
 | Area | Technology |
 |---|---|
-| SDK/runtime | .NET SDK 10.0.401, `net10.0`, C# 14 |
-| API | ASP.NET Core controllers, Identity/JWT, SignalR, OpenAPI |
-| Web | Blazor WebAssembly 10, MudBlazor 8.15.0, ApexCharts |
-| Persistence | EF Core/SQLite 10.0.5, Npgsql provider 10.0.1 |
-| Email | SendGrid 9.29.3 |
-| Tests | xUnit v3, NSubstitute 5.3.0, bUnit 2.7.2, Jest |
-| Orchestration | .NET Aspire |
-| Bot | Node.js/CommonJS, discord.js 14.25.1 |
+| Runtime | .NET 10 and SDK selected by `global.json` |
+| API | ASP.NET Core, EF-backed Identity/JWT, SignalR, OpenAPI |
+| Persistence | EF Core SQL Server provider; SQL Server 2025/17.x |
+| Tenancy | Central control database plus one organization database per tenant |
+| Web | Blazor WebAssembly, MudBlazor, ApexCharts/GridStack/Mermaid |
+| FluentWeb | Blazor WebAssembly, Fluent UI Blazor 5, charts and design tokens |
+| Client primitives | UI-neutral organization routes and cancellable work scopes |
+| AI | Host Ollama through OllamaSharp and `Microsoft.Extensions.AI.IChatClient` |
+| Email | SendGrid invitation delivery |
+| Tests | xUnit, NSubstitute, bUnit, real SQL Server and Aspire hosting tests |
+| Orchestration | Aspire AppHost, SQL Server/EF integrations, gateways, ServiceDefaults |
 
-Node is not pinned. The validation environment uses Node 25.2.0, which can be incompatible with native `@discordjs/opus` installation when Python/native build prerequisites are absent.
+Use project manifests for exact package versions, not a copied version list.
+Local inference models are installed explicitly by an operator.
 
-## Key commands
-
-```powershell
-dotnet restore .\ScrumPilot.slnx
-dotnet format .\ScrumPilot.slnx --verify-no-changes
-dotnet test .\ScrumPilot.UnitTests\ScrumPilot.UnitTests.csproj --configuration Release
-dotnet build .\ScrumPilot.slnx --configuration Release
-dotnet publish .\ScrumPilot.API\ScrumPilot.API.csproj --no-build --configuration Release --output .\artifacts\api
-dotnet publish .\ScrumPilot.Web\ScrumPilot.Web.csproj --configuration Release --output .\artifacts\web
-$env:DATABASE_URL = 'postgresql://unused:unused@localhost:5432/scrumpilot_design'
-dotnet ef migrations has-pending-model-changes --project .\ScrumPilot.Data\ScrumPilot.Data.csproj --startup-project .\ScrumPilot.API\ScrumPilot.API.csproj
-npm test --prefix .\discord-bot
-```
-
-CI installs global `dotnet-ef` 10.0.5 because no tool manifest is present. The non-secret design-time URI selects Npgsql for model/script generation; those operations do not connect.
+See [testing](TESTING.md), [architecture](../architecture.md), and the
+[operations runbook](../multi-tenancy-operations.md) for commands and configuration.

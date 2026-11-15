@@ -21,6 +21,8 @@ public sealed class OrganizationRepositoryConflictException : Exception
 
 public interface IOrganizationRepository
 {
+    Task<IReadOnlyList<OrganizationSummaryDto>> ListForAdminAsync(
+        string userId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<OrganizationSummaryDto>> ListForUserAsync(
         string userId,
         CancellationToken cancellationToken = default);

@@ -10,10 +10,10 @@ namespace ScrumPilot.API.Controllers;
 public sealed record NonTaskExceptionRequest(int PullRequestNumber, string Reason);
 
 [ApiController]
-[Route("api/projects/{projectId:int}")]
+[Route("api/organizations/{organizationId:int}/projects/{projectId:int}")]
 [ServiceFilter(typeof(PlanningErrorFilter))]
 public sealed class TaskPullRequestsController(ICurrentUser user, IOrganizationAccessService access,
-    ScrumPilotContext db, PullRequestScopeService scope) : ProjectPlanningControllerBase(user, access)
+    OrganizationContext db, PullRequestScopeService scope, GitHubRepositoryRegistry registry) : ProjectPlanningControllerBase(user, access)
 {
     [HttpPost("tasks/{taskId:int}/pull-requests")]
     public async Task<IActionResult> Bind(int projectId, int taskId, BindTaskPullRequestRequest request, CancellationToken ct)
@@ -40,7 +40,10 @@ public sealed class TaskPullRequestsController(ICurrentUser user, IOrganizationA
         if (!await CanManage(projectId, ct)) return Forbid();
         if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Length > 2000 || request.PullRequestNumber <= 0)
             throw new ArgumentException("Provide a PR number and a clear reason of at most 2,000 characters.");
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+        await db.AcquirePlanningPolicyLockAsync(projectId, ct);
         var repository = await db.ProjectRepositories.SingleAsync(item => item.ProjectId == projectId, ct);
+        await registry.RequireCurrentAsync(repository, ct);
         if (await db.TaskPullRequestBindings.AnyAsync(item => item.ProjectRepositoryId == repository.ProjectRepositoryId
             && item.PullRequestNumber == request.PullRequestNumber, ct)) throw new InvalidOperationException("Task-bound PRs cannot bypass scope through non-task exceptions.");
         db.NonTaskPullRequestExceptions.Add(new()
@@ -52,6 +55,7 @@ public sealed class TaskPullRequestsController(ICurrentUser user, IOrganizationA
             ActorId = Actor
         });
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
         await scope.ProcessWebhookAsync(repository.GitHubRepositoryId, repository.InstallationId, request.PullRequestNumber, ct);
         return NoContent();
     }

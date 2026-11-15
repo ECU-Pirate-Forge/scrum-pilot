@@ -1,4 +1,4 @@
-using Microsoft.Data.Sqlite;
+using ScrumPilot.UnitTests.Backend.Tenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,12 +16,8 @@ public sealed class OrganizationRepositoryTests
     public void AddDataServices_RegistersOrganizationRepository()
     {
         var services = new ServiceCollection();
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["ConnectionStrings:DefaultConnection"] = "Data Source=:memory:"
-            })
-            .Build();
+        using var database = new SqlTestDatabase();
+        var configuration = database.Configuration;
 
         services.AddDataServices(configuration);
 
@@ -33,11 +29,8 @@ public sealed class OrganizationRepositoryTests
     [Fact]
     public async Task RemoveMemberAsync_SequentialLastOwnerAttemptPreservesOwner()
     {
-        await using var connection = new SqliteConnection("Data Source=:memory:");
-        await connection.OpenAsync();
-        var options = new DbContextOptionsBuilder<ScrumPilotContext>().UseSqlite(connection).Options;
-        await using var context = new ScrumPilotContext(options);
-        await context.Database.EnsureCreatedAsync();
+        using var database = new SqlTestDatabase();
+        var context = database.Control;
         context.Users.AddRange(User("one"), User("two"));
         var organization = new Organization
         {
@@ -68,11 +61,8 @@ public sealed class OrganizationRepositoryTests
     [Fact]
     public async Task CreateAsync_DuplicateNormalizedName_TranslatesNameConflict()
     {
-        await using var connection = new SqliteConnection("Data Source=:memory:");
-        await connection.OpenAsync();
-        var options = new DbContextOptionsBuilder<ScrumPilotContext>().UseSqlite(connection).Options;
-        await using var context = new ScrumPilotContext(options);
-        await context.Database.EnsureCreatedAsync();
+        using var database = new SqlTestDatabase();
+        var context = database.Control;
         context.Users.Add(User("owner"));
         context.Organizations.Add(new Organization
         {
@@ -94,11 +84,8 @@ public sealed class OrganizationRepositoryTests
     [Fact]
     public async Task CreateAsync_UnrelatedForeignKeyFailure_PropagatesDbUpdateException()
     {
-        await using var connection = new SqliteConnection("Data Source=:memory:");
-        await connection.OpenAsync();
-        var options = new DbContextOptionsBuilder<ScrumPilotContext>().UseSqlite(connection).Options;
-        await using var context = new ScrumPilotContext(options);
-        await context.Database.EnsureCreatedAsync();
+        using var database = new SqlTestDatabase();
+        var context = database.Control;
         var repository = new OrganizationRepository(context);
 
         var exception = await Assert.ThrowsAsync<DbUpdateException>(() =>
@@ -114,11 +101,8 @@ public sealed class OrganizationRepositoryTests
     [Fact]
     public async Task UpdateMemberRoleAsync_UnrelatedUniqueFailure_PropagatesDbUpdateException()
     {
-        await using var connection = new SqliteConnection("Data Source=:memory:");
-        await connection.OpenAsync();
-        var options = new DbContextOptionsBuilder<ScrumPilotContext>().UseSqlite(connection).Options;
-        await using var context = new ScrumPilotContext(options);
-        await context.Database.EnsureCreatedAsync();
+        using var database = new SqlTestDatabase();
+        var context = database.Control;
         var owner = User("owner");
         var member = User("member");
         context.Users.AddRange(owner, member);
@@ -149,15 +133,11 @@ public sealed class OrganizationRepositoryTests
     [InlineData(true)]
     public async Task LifecycleMutation_WithStaleRowVersionReturnsConcurrencyConflict(bool delete)
     {
-        var connectionString =
-            $"Data Source=org-concurrency-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
-        await using var keeper = new SqliteConnection(connectionString);
-        await keeper.OpenAsync();
-        var options = new DbContextOptionsBuilder<ScrumPilotContext>()
-            .UseSqlite(connectionString)
+        using var database = new SqlTestDatabase();
+        var options = new DbContextOptionsBuilder<ControlPlaneContext>()
+            .UseSqlServer(database.Storage.Options.ControlConnectionString)
             .Options;
-        await using var first = new ScrumPilotContext(options);
-        await first.Database.EnsureCreatedAsync();
+        await using var first = new ControlPlaneContext(options);
         first.Organizations.Add(new Organization
         {
             Name = "Original",
@@ -167,7 +147,7 @@ public sealed class OrganizationRepositoryTests
         await first.SaveChangesAsync();
         var organizationId = await first.Organizations.Select(x => x.OrganizationId).SingleAsync();
 
-        await using var second = new ScrumPilotContext(options);
+        await using var second = new ControlPlaneContext(options);
         await first.Organizations.SingleAsync(x => x.OrganizationId == organizationId);
         await second.Organizations.SingleAsync(x => x.OrganizationId == organizationId);
         var firstRepository = new OrganizationRepository(first);

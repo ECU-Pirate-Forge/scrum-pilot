@@ -25,7 +25,9 @@ revision's content as a new revision. Guidance is optional until the first save,
 but saving empty/whitespace-only content is rejected; there is no clear/delete
 workflow. The document limit is 128 KiB UTF-8; oversize documents are rejected,
 not truncated. Sections are guidance, not required form fields. Template examples
-(including SQL Server) do not require changes to ScrumPilot's SQLite/PostgreSQL architecture.
+(including alternative technologies) do not change ScrumPilot's own SQL Server
+database-per-organization architecture. Guidance and revision history belong only
+to the selected organization's catalog.
 
 Project-aware story and task generation record the guidance revision they used.
 Changing guidance does not rewrite stories or task specifications. Older generated
@@ -53,8 +55,13 @@ precedence over project guidance. A statement inside a Markdown document cannot
 grant access to another project or authorize unrelated file changes.
 
 Saved project guidance and private source context are processed with local Ollama,
-not silently forwarded to an external provider. Configure a loopback
-`OllamaBaseUrl` and `OllamaModel` on the API. Reduce the selected context if a
+not silently forwarded to an external provider. Use the existing AppHost Ollama
+resource or the API's `ConnectionStrings__ollama` and `AI__Model` settings; see
+[operations](multi-tenancy-operations.md#configuration-ownership). Generation
+releases the tenant storage lease while waiting for inference, then rechecks the
+same membership instance, storage identity and inputs before saving. Changing
+organizations cannot redirect a pending result into another catalog.
+Reduce the selected context if a
 generation request exceeds the **192 KiB UTF-8 assembled prompt** limit; required
 content is not silently omitted. That limit includes instructions and serialized
 context, so a valid saved document can still be too large for a particular request.
@@ -68,7 +75,7 @@ size limit does not raise that existing column limit.
 |---|---|
 | Revision conflict (`409`) | Copy your edits, reload the current revision, reconcile changes, and save again. Do not retry with a guessed revision ID. |
 | Empty/oversize input (`400`) | Supply nonempty guidance within 128 KiB UTF-8. |
-| Local provider unavailable/not ready | Configure loopback `OllamaBaseUrl`, install the selected `OllamaModel`, start Ollama, then explicitly retry. No cloud fallback occurs. |
+| Local provider unavailable/not ready | Check AppHost's Ollama connection and installed `AI__Model`, start the local model, then explicitly retry. No cloud fallback occurs. |
 | Changed-guidance review warning | Compare the recorded revision with current guidance; review/regenerate work or save and approve a new task specification. Historical content is not rewritten. |
 
 ## Safe Content

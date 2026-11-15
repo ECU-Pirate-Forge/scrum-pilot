@@ -1,4 +1,5 @@
 @inject HttpClient Http
+@implements IDisposable
 
 <MudPaper Class="pa-4 mb-4">
     <MudText Typo="Typo.h5">@Organization.Name</MudText>
@@ -28,6 +29,7 @@
     private int? _sourceOrganizationId;
     private string? _sourceName;
     private long _organizationGeneration;
+    private bool _disposed;
 
     protected override void OnParametersSet()
     {
@@ -96,7 +98,7 @@
     }
 
     private bool IsCurrent(long generation, int organizationId) =>
-        generation == _organizationGeneration
+        !_disposed && generation == _organizationGeneration
         && _sourceOrganizationId == organizationId
         && Organization.OrganizationId == organizationId;
 
@@ -107,4 +109,6 @@
     }
 
     private sealed class ProblemDetails { public string? Detail { get; set; } }
+
+    public void Dispose() => _disposed = true;
 }

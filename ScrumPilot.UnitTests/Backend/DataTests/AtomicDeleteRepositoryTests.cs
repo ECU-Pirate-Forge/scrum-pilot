@@ -1,5 +1,5 @@
 using System.Data.Common;
-using Microsoft.Data.Sqlite;
+using ScrumPilot.UnitTests.Backend.Tenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using ScrumPilot.Data.Context;
@@ -16,24 +16,15 @@ public class AtomicDeleteRepositoryTests
     [InlineData(false)]
     public async Task Delete_RollsBackPbiUnassignment_WhenEntityDeleteFails(bool deleteSprint)
     {
-        await using var connection = new SqliteConnection("Data Source=:memory:");
-        await connection.OpenAsync();
+        using var database = new TenantStorageTests();
+        var organization = await database.Create("Test");
         var interceptor = new DeleteFailureInterceptor();
-        var options = new DbContextOptionsBuilder<ScrumPilotContext>()
-            .UseSqlite(connection)
+        var options = new DbContextOptionsBuilder<OrganizationContext>()
+            .UseSqlServer(database.Storage.OrganizationConnectionString(organization.StorageKey))
             .AddInterceptors(interceptor)
             .Options;
-        await using var context = new ScrumPilotContext(options);
-        await context.Database.EnsureCreatedAsync();
-
-        var organization = new Organization
-        {
-            Name = "Test",
-            NormalizedName = "TEST",
-            CreatedAt = DateTime.UtcNow,
-            RowVersion = [1]
-        };
-        var project = new Project { ProjectName = "Project", Organization = organization };
+        await using var context = new OrganizationContext(options);
+        var project = new Project { ProjectName = "Project", OrganizationId = organization.OrganizationId };
         var sprint = new Sprint { ProjectId = project.ProjectId, SprintTitle = "Sprint" };
         var epic = new Epic { ProjectId = project.ProjectId, Name = "Epic", DateCreated = DateTime.UtcNow };
         project.Sprints = [sprint];
@@ -84,10 +75,7 @@ public class AtomicDeleteRepositoryTests
             InterceptionResult<int> result,
             CancellationToken cancellationToken = default)
         {
-            if (TableToFail is not null
-                && command.CommandText.Contains($"DELETE FROM \"{TableToFail}\"", StringComparison.Ordinal))
-                throw new InvalidOperationException("Controlled delete failure.");
-
+            ThrowForConfiguredDelete(command);
             return ValueTask.FromResult(result);
         }
 
@@ -104,7 +92,7 @@ public class AtomicDeleteRepositoryTests
         private void ThrowForConfiguredDelete(DbCommand command)
         {
             if (TableToFail is not null
-                && command.CommandText.Contains($"DELETE FROM \"{TableToFail}\"", StringComparison.Ordinal))
+                && command.CommandText.Contains($"DELETE FROM [{TableToFail}]", StringComparison.Ordinal))
                 throw new InvalidOperationException("Controlled delete failure.");
         }
     }

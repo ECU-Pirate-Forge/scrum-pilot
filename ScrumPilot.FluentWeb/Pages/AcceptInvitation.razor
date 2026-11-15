@@ -38,7 +38,7 @@
         {
             _redirecting = true;
             var relative = Navigation.ToBaseRelativePath(Navigation.Uri);
-            Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/" + relative)}", replace: true);
+            Navigation.NavigateTo($"login?returnUrl={Uri.EscapeDataString(new Uri(Navigation.Uri).PathAndQuery)}", replace: true);
             return;
         }
 
@@ -82,7 +82,7 @@
     private async Task HandleAcceptedInvitationAsync(HttpResponseMessage response)
     {
         _redirecting = true;
-        Navigation.NavigateTo("/accept-invitation", replace: true);
+        Navigation.NavigateTo("accept-invitation", replace: true);
 
         AcceptedOrganizationDto? accepted;
         try
@@ -109,7 +109,7 @@
             if (organization is not null)
             {
                 OrganizationState.SetOrganization(organization);
-                Navigation.NavigateTo("/organization-management", replace: true);
+                Navigation.NavigateTo(OrganizationRoutes.Page(accepted.OrganizationId, "organization-management"), replace: true);
                 return;
             }
         }
@@ -118,6 +118,6 @@
             Logger.LogWarning(ex, "Accepted invitation organization refresh failed");
         }
 
-        Navigation.NavigateTo("/organization-management", forceLoad: true, replace: true);
+        Navigation.NavigateTo(OrganizationRoutes.Page(accepted.OrganizationId, "organization-management"), forceLoad: true, replace: true);
     }
 }

@@ -8,10 +8,10 @@ using ScrumPilot.Shared.Models;
 namespace ScrumPilot.API.Controllers;
 
 [ApiController]
-[Route("api/projects/{projectId:int}/tasks/{taskId:int}/specifications")]
+[Route("api/organizations/{organizationId:int}/projects/{projectId:int}/tasks/{taskId:int}/specifications")]
 [ServiceFilter(typeof(PlanningErrorFilter))]
 public sealed class TaskSpecificationsController(ICurrentUser user, IOrganizationAccessService access,
-    ScrumPilotContext db, TaskSpecificationService specs, PullRequestScopeService scope,
+    OrganizationContext db, TaskSpecificationService specs, PullRequestScopeService scope,
     ProjectWorkNotifier notifier) : ProjectPlanningControllerBase(user, access)
 {
     [HttpGet]

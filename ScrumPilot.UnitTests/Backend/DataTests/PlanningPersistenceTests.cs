@@ -1,9 +1,12 @@
-using Microsoft.Data.Sqlite;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using ScrumPilot.Data.Context;
+using ScrumPilot.Data.Migrations.Organization;
+using ScrumPilot.Data.Tenancy;
+using ScrumPilot.UnitTests.Backend.Tenancy;
 using ScrumPilot.Shared.Models;
 using Xunit;
 
@@ -11,7 +14,31 @@ namespace ScrumPilot.UnitTests.Backend.DataTests;
 
 public sealed class PlanningPersistenceTests
 {
-    private const string PreviousMigration = "20261003024314_AddOrganizationTenancy";
+    private const string PreviousMigration = "20261110141300_InitialSqlOrganization";
+
+    [Fact]
+    public async Task Migration_FreshSqlCatalogSupportsUpDownUpWithoutCentralModelsOrSeedData()
+    {
+        await using var db = await TestDatabase.CreateAsync(migrate: false);
+        await using var context = db.Context();
+        var migrator = context.GetService<IMigrator>();
+        await migrator.MigrateAsync();
+        Assert.False(context.Database.HasPendingModelChanges());
+        Assert.Equal(2, (await context.Database.GetAppliedMigrationsAsync()).Count());
+        Assert.Empty(await context.Projects.ToListAsync());
+        Assert.Empty(await context.Stories.ToListAsync());
+        Assert.Empty(await context.ProjectGraphStates.ToListAsync());
+        Assert.Equal(0, await context.Database.SqlQueryRaw<int>(
+            "SELECT COUNT(*) AS [Value] FROM sys.tables WHERE [name] IN ('AspNetUsers', 'Organizations', 'PullRequestScopeAttempts', 'GitHubWebhookDeliveries')")
+            .SingleAsync());
+        await migrator.MigrateAsync(PreviousMigration);
+        Assert.Equal(0, await context.Database.SqlQueryRaw<int>(
+            "SELECT COUNT(*) AS [Value] FROM sys.tables WHERE [name] = 'TaskSpecificationRevisions'").SingleAsync());
+        await migrator.MigrateAsync();
+        Assert.Equal(2, (await context.Database.GetAppliedMigrationsAsync()).Count());
+        Assert.Empty(await context.TaskSpecificationRevisions.ToListAsync());
+        await AssertConstraintsValidAsync(context);
+    }
 
     [Fact]
     public async Task Migration_BackfillsValidEdgesAndRetainsInvalidLegacyIntent()
@@ -21,16 +48,24 @@ public sealed class PlanningPersistenceTests
         var migrator = context.GetService<IMigrator>();
         await migrator.MigrateAsync(PreviousMigration);
         await context.Database.ExecuteSqlRawAsync("""
+            SET IDENTITY_INSERT [Project] ON;
             INSERT INTO "Project" ("ProjectId", "OrganizationId", "ProjectName") VALUES
                 (11, 1, 'First'), (12, 1, 'Second');
+            SET IDENTITY_INSERT [Project] OFF;
+            SET IDENTITY_INSERT [Stories] ON;
             INSERT INTO "Stories" ("PbiId", "ProjectId", "Type", "Title", "Description", "Status",
                 "Priority", "StoryPoints", "Origin", "IsDraft", "IsFlagged", "DateCreated", "LastUpdated", "DependsOnPbiId")
             VALUES
-                (101, 11, 'Task', 'Valid', '', 'New', 'Medium', 0, 'Manual', 0, 0, '2026-01-01', '2026-01-01', 102),
-                (102, 11, 'Task', 'Missing', '', 'New', 'Medium', 0, 'Manual', 0, 0, '2026-01-01', '2026-01-01', 999),
-                (103, 11, 'Task', 'Cross', '', 'New', 'Medium', 0, 'Manual', 0, 0, '2026-01-01', '2026-01-01', 105),
-                (104, 11, 'Task', 'Self', '', 'New', 'Medium', 0, 'Manual', 0, 0, '2026-01-01', '2026-01-01', 104),
-                (105, 12, 'Task', 'Other', '', 'New', 'Medium', 0, 'Manual', 0, 0, '2026-01-01', '2026-01-01', NULL);
+                (101, 11, 'Task', 'Valid', '', 'ToDo', 'Medium', 0, 'WebUserCreated', 0, 0, '2026-01-01', '2026-01-01', 102),
+                (102, 11, 'Task', 'Missing', '', 'ToDo', 'Medium', 0, 'WebUserCreated', 0, 0, '2026-01-01', '2026-01-01', 999),
+                (103, 11, 'Task', 'Cross', '', 'ToDo', 'Medium', 0, 'WebUserCreated', 0, 0, '2026-01-01', '2026-01-01', 105),
+                (104, 11, 'Task', 'Self', '', 'ToDo', 'Medium', 0, 'WebUserCreated', 0, 0, '2026-01-01', '2026-01-01', 104),
+                (105, 12, 'Task', 'Other', '', 'ToDo', 'Medium', 0, 'WebUserCreated', 0, 0, '2026-01-01', '2026-01-01', NULL);
+            SET IDENTITY_INSERT [Stories] OFF;
+            INSERT INTO [Comment] ([PbiId], [UserId], [Comment], [CreatedDate])
+                VALUES (101, 'legacy-owner', 'Retain existing discussion', '2026-01-01');
+            INSERT INTO [PbiStatusHistory] ([PbiId], [FromStatus], [ToStatus], [ChangedAt])
+                VALUES (101, 'ToDo', 'InProgress', '2026-01-01');
             """);
         await migrator.MigrateAsync();
         var edge = Assert.Single(await context.PbiDependencies.ToListAsync());
@@ -39,11 +74,15 @@ public sealed class PlanningPersistenceTests
         Assert.Equal(999, await context.Stories.Where(x => x.PbiId == 102).Select(x => x.DependsOnPbiId).SingleAsync());
         Assert.Equal(2, await context.ProjectGraphStates.CountAsync());
         Assert.All(await context.ProjectGraphStates.ToListAsync(), x => Assert.Equal(0, x.Revision));
-        Assert.Equal(0L, await context.Database.SqlQueryRaw<long>(
-            """SELECT COUNT(*) AS "Value" FROM pragma_foreign_key_check""").SingleAsync());
+        Assert.All(await context.Stories.ToListAsync(), x => Assert.Equal(1, x.Version));
+        await AssertConstraintsValidAsync(context);
         await migrator.MigrateAsync(PreviousMigration);
         await migrator.MigrateAsync();
         Assert.Single(await context.PbiDependencies.ToListAsync());
+        Assert.Equal(5, await context.Stories.CountAsync());
+        Assert.Equal("Retain existing discussion", (await context.Comments.SingleAsync()).Body);
+        Assert.Equal(101, (await context.PbiStatusHistories.SingleAsync()).PbiId);
+        await AssertConstraintsValidAsync(context);
     }
 
     [Fact]
@@ -57,34 +96,30 @@ public sealed class PlanningPersistenceTests
         context.Add(repository);
         await context.SaveChangesAsync();
         context.AddRange(revision, Spec(project, a),
-            new PullRequestScopeAttempt { ProjectId = project, ProjectRepositoryId = repository.ProjectRepositoryId, PullRequestNumber = 7, HeadSha = new string('a', 40) },
             new PlanningArtifactReview { ProjectId = project, PbiId = a, ActorId = "owner", Reason = "Reviewed", Fingerprint = new string('a', 64) },
             new PlanningArtifactReview { ProjectId = other, PbiId = foreign, ActorId = "owner", Reason = "Retain", Fingerprint = new string('b', 64) },
             new ProjectGuidelinesRevision { ProjectId = other, Revision = 1, Content = "Retain", ActorId = "owner" });
         await context.SaveChangesAsync();
         (await context.Projects.FindAsync(project))!.CurrentGuidelinesRevisionId = revision.ProjectGuidelinesRevisionId;
         await context.SaveChangesAsync();
-        await Assert.ThrowsAsync<SqliteException>(() => context.Database.ExecuteSqlInterpolatedAsync(
+        await Assert.ThrowsAsync<SqlException>(() => context.Database.ExecuteSqlInterpolatedAsync(
             $"""DELETE FROM "ProjectGuidelinesRevisions" WHERE "ProjectId" = {project}"""));
-        await Assert.ThrowsAsync<SqliteException>(() => context.Database.ExecuteSqlInterpolatedAsync(
+        await Assert.ThrowsAsync<SqlException>(() => context.Database.ExecuteSqlInterpolatedAsync(
             $"""UPDATE "PlanningArtifactReviews" SET "Reason" = 'changed' WHERE "ProjectId" = {project}"""));
-        await Assert.ThrowsAsync<SqliteException>(() => context.Database.ExecuteSqlInterpolatedAsync(
+        await Assert.ThrowsAsync<SqlException>(() => context.Database.ExecuteSqlInterpolatedAsync(
             $"""DELETE FROM "PlanningArtifactReviews" WHERE "ProjectId" = {project}"""));
-        await Assert.ThrowsAsync<SqliteException>(() => context.Database.ExecuteSqlInterpolatedAsync(
-            $"""UPDATE "PullRequestScopeAttempts" SET "HeadSha" = 'changed' WHERE "ProjectId" = {project}"""));
-        await Assert.ThrowsAsync<SqliteException>(() => context.Database.ExecuteSqlInterpolatedAsync(
-            $"""DELETE FROM "PullRequestScopeAttempts" WHERE "ProjectId" = {project}"""));
         await Assert.ThrowsAsync<InvalidOperationException>(() => context.PurgeProjectPlanningAsync(project, default));
         await using var transaction = await context.Database.BeginTransactionAsync();
         await context.PurgeProjectPlanningAsync(project, default);
+        // Main SQL deliberately uses NO ACTION rather than cascading work deletion.
+        await context.Stories.Where(item => item.ProjectId == project).ExecuteDeleteAsync();
         await context.Projects.Where(item => item.ProjectId == project).ExecuteDeleteAsync();
         await transaction.CommitAsync();
         Assert.False(await context.TaskSpecificationRevisions.AnyAsync(item => item.ProjectId == project));
-        Assert.False(await context.PullRequestScopeAttempts.AnyAsync());
         Assert.Equal("Retain", (await context.ProjectGuidelinesRevisions.SingleAsync()).Content);
         Assert.Equal("Retain", (await context.PlanningArtifactReviews.SingleAsync()).Reason);
         Assert.Equal(0, await context.Database.SqlQueryRaw<long>(
-            """SELECT COUNT(*) AS "Value" FROM "PlanningPurgeScopes" """).SingleAsync());
+            """SELECT COUNT_BIG(*) AS "Value" FROM "PlanningPurgeScopes" """).SingleAsync());
     }
 
     [Fact]
@@ -190,9 +225,9 @@ public sealed class PlanningPersistenceTests
         }
         await using (var context = db.Context())
         {
-            await Assert.ThrowsAsync<SqliteException>(() => context.Database.ExecuteSqlRawAsync(
+            await Assert.ThrowsAsync<SqlException>(() => context.Database.ExecuteSqlRawAsync(
                 """UPDATE "TaskSpecificationRevisions" SET "ContentHash" = 'changed';"""));
-            await Assert.ThrowsAsync<SqliteException>(() => context.Database.ExecuteSqlRawAsync(
+            await Assert.ThrowsAsync<SqlException>(() => context.Database.ExecuteSqlRawAsync(
                 """DELETE FROM "ProjectGuidelinesRevisions";"""));
             context.TaskAllowedFiles.Add(new()
             {
@@ -256,6 +291,159 @@ public sealed class PlanningPersistenceTests
     }
 
     [Fact]
+    public async Task AllowedFiles_PreserveOrdinalDistinctPathsAndFullLength()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var (project, _, a, _, _, _) = await SeedAsync(db);
+        await using var context = db.Context();
+        var spec = Spec(project, a);
+        var paths = new[] { "src/File.cs", "src/file.cs", "src/file.cs ", "src/" + new string('a', 1020) };
+        spec.AllowedFiles = paths.Select(path => new TaskAllowedFile
+        {
+            ProjectId = project,
+            Path = path,
+            Rationale = "Exact scope"
+        }).ToList();
+        context.Add(spec);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        Assert.Equal(paths.Order(StringComparer.Ordinal),
+            (await context.TaskAllowedFiles.Select(x => x.Path).ToArrayAsync()).Order(StringComparer.Ordinal));
+
+        var duplicate = Spec(project, a);
+        duplicate.Revision = 2;
+        duplicate.AllowedFiles.Add(new() { ProjectId = project, Path = "src/file.cs", Rationale = "Duplicate" });
+        context.Add(duplicate);
+        await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
+    }
+
+    [Fact]
+    public async Task NullableCandidateKeys_AllowManualRowsButRejectDuplicateGeneratedIdentity()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var (project, _, _, _, _, _) = await SeedAsync(db);
+        await using var context = db.Context();
+        var run = Run(project);
+        context.Add(run);
+        await context.SaveChangesAsync();
+        context.Stories.AddRange(
+            new() { ProjectId = project, Title = "Manual one" },
+            new() { ProjectId = project, Title = "Manual two" },
+            new() { ProjectId = project, Title = "Generated one", GenerationRunId = run.GenerationRunId, GenerationCandidateKey = "candidate" },
+            new() { ProjectId = project, Title = "Generated ordinal", GenerationRunId = run.GenerationRunId, GenerationCandidateKey = "Candidate" });
+        await context.SaveChangesAsync();
+        context.Stories.Add(new() { ProjectId = project, Title = "Duplicate", GenerationRunId = run.GenerationRunId, GenerationCandidateKey = "candidate" });
+        await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
+    }
+
+    [Fact]
+    public async Task PolicyLock_UsesPersistedTenantIdentityAndTransactionOwnership()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var (project, other, _, _, _, _) = await SeedAsync(db);
+        await using var first = db.Context();
+        var metadata = await first.TenantMetadata.SingleAsync();
+        var storageKey = metadata.StorageKey;
+        // A forged tracked identity must never choose the resource name.
+        metadata.StorageKey = new string('f', 32);
+        await using (var transaction = await first.Database.BeginTransactionAsync())
+        {
+            await first.AcquirePlanningPolicyLockAsync(project, default);
+            Assert.Equal("Exclusive", await first.Database.SqlQueryRaw<string>(
+                "SELECT APPLOCK_MODE('public', {0}, 'Transaction') AS [Value]",
+                $"planning:{storageKey}:{project}").SingleAsync());
+            Assert.Equal("NoLock", await first.Database.SqlQueryRaw<string>(
+                "SELECT APPLOCK_MODE('public', {0}, 'Transaction') AS [Value]",
+                $"planning:{metadata.StorageKey}:{project}").SingleAsync());
+            await using var independent = db.Context();
+            await using var independentTransaction = await independent.Database.BeginTransactionAsync();
+            await independent.AcquirePlanningPolicyLockAsync(other, default).WaitAsync(TimeSpan.FromSeconds(10));
+            await independentTransaction.RollbackAsync();
+            await transaction.RollbackAsync();
+        }
+        await using var second = db.Context();
+        await using var nextTransaction = await second.Database.BeginTransactionAsync();
+        await second.AcquirePlanningPolicyLockAsync(project, default).WaitAsync(TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
+    public async Task PolicyLock_CanceledSqlWaitPreservesCancellationContract()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var (project, _, _, _, _, _) = await SeedAsync(db);
+        await using var holder = db.Context();
+        await using var heldTransaction = await holder.Database.BeginTransactionAsync();
+        await holder.AcquirePlanningPolicyLockAsync(project, default);
+        await using var waiter = db.Context();
+        await using var waitingTransaction = await waiter.Database.BeginTransactionAsync();
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+        var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            waiter.AcquirePlanningPolicyLockAsync(project, cancellation.Token));
+        Assert.Equal(cancellation.Token, error.CancellationToken);
+        if (error.InnerException is not null)
+            Assert.IsType<SqlException>(error.InnerException);
+    }
+
+    [Fact]
+    public async Task PurgeRollback_RetainsHistoryAndDoesNotLeakAuthorization()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var (project, _, a, _, _, _) = await SeedAsync(db);
+        await using var context = db.Context();
+        context.AddRange(Spec(project, a),
+            new ProjectGuidelinesRevision { ProjectId = project, Revision = 1, Content = "History", ActorId = "owner" });
+        await context.SaveChangesAsync();
+        await using (var transaction = await context.Database.BeginTransactionAsync())
+        {
+            await context.PurgeProjectPlanningAsync(project, default);
+            await transaction.RollbackAsync();
+        }
+        Assert.Single(await context.ProjectGuidelinesRevisions.ToListAsync());
+        Assert.Single(await context.TaskSpecificationRevisions.ToListAsync());
+        Assert.Equal(0, await context.Database.SqlQueryRaw<long>(
+            "SELECT COUNT_BIG(*) AS [Value] FROM [PlanningPurgeScopes]").SingleAsync());
+        await Assert.ThrowsAsync<SqlException>(() => context.ProjectGuidelinesRevisions.ExecuteDeleteAsync());
+    }
+
+    [Fact]
+    public async Task HistoryTriggers_RejectForgedScopeAndMixedProjectMutation()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var (project, other, _, _, _, _) = await SeedAsync(db);
+        await using (var context = db.Context())
+        {
+            context.ProjectGuidelinesRevisions.AddRange(
+                new() { ProjectId = project, Revision = 1, Content = "First", ActorId = "owner" },
+                new() { ProjectId = other, Revision = 1, Content = "Second", ActorId = "owner" });
+            await context.SaveChangesAsync();
+        }
+        await using (var forged = db.Context())
+        {
+            await using var transaction = await forged.Database.BeginTransactionAsync();
+            await forged.Database.ExecuteSqlInterpolatedAsync(
+                $"INSERT INTO [PlanningPurgeScopes] ([ProjectId], [TransactionId]) VALUES ({project}, CURRENT_TRANSACTION_ID())");
+            await Assert.ThrowsAsync<SqlException>(() => forged.ProjectGuidelinesRevisions
+                .Where(x => x.ProjectId == project).ExecuteDeleteAsync());
+            await transaction.RollbackAsync();
+        }
+        await using (var mixed = db.Context())
+        {
+            var key = await mixed.TenantMetadata.Select(x => x.StorageKey).SingleAsync();
+            await using var transaction = await mixed.Database.BeginTransactionAsync();
+            await mixed.Database.ExecuteSqlInterpolatedAsync($"""
+                DECLARE @result int;
+                EXEC @result = sys.sp_getapplock @Resource = {$"planning-purge:{key}:{project}"},
+                    @LockMode = 'Exclusive', @LockOwner = 'Transaction';
+                INSERT INTO [PlanningPurgeScopes] ([ProjectId], [TransactionId]) VALUES ({project}, CURRENT_TRANSACTION_ID());
+                """);
+            await Assert.ThrowsAsync<SqlException>(() => mixed.ProjectGuidelinesRevisions.ExecuteDeleteAsync());
+            await transaction.RollbackAsync();
+        }
+        await using var verify = db.Context();
+        Assert.Equal(2, await verify.ProjectGuidelinesRevisions.CountAsync());
+    }
+
+    [Fact]
     public async Task RepositorySnapshotsInputsBindingsAndScopeChecks_PersistWithRestrictedSources()
     {
         await using var db = await TestDatabase.CreateAsync();
@@ -316,9 +504,8 @@ public sealed class PlanningPersistenceTests
         await context.SaveChangesAsync();
         Assert.Equal(64, input.ContentHash.Length);
         Assert.Equal(ScopeCheckState.Passed, (await context.PullRequestScopeChecks.SingleAsync()).State);
-        Assert.Equal(0L, await context.Database.SqlQueryRaw<long>(
-            """SELECT COUNT(*) AS "Value" FROM pragma_foreign_key_check""").SingleAsync());
-        await Assert.ThrowsAsync<SqliteException>(() => context.Database.ExecuteSqlInterpolatedAsync(
+        await AssertConstraintsValidAsync(context);
+        await Assert.ThrowsAsync<SqlException>(() => context.Database.ExecuteSqlInterpolatedAsync(
             $"""DELETE FROM "ProjectRepositories" WHERE "ProjectRepositoryId" = {repository.ProjectRepositoryId}"""));
     }
 
@@ -347,16 +534,17 @@ public sealed class PlanningPersistenceTests
     }
 
     [Fact]
-    public void PostgreSqlMigration_GeneratesIdentityCompositeConstraintsBackfillAndTriggers()
+    public void SqlServerMigration_GeneratesIdentityCompositeConstraintsBackfillAndTriggers()
     {
-        using var context = new ScrumPilotContext(new DbContextOptionsBuilder<ScrumPilotContext>()
-            .UseNpgsql("Host=localhost;Database=unused;Username=unused;Password=unused").Options);
+        using var context = new OrganizationContextFactory().CreateDbContext([]);
         var sql = context.GetService<IMigrator>().GenerateScript(PreviousMigration);
-        Assert.Contains("GENERATED BY DEFAULT AS IDENTITY", sql);
-        Assert.Contains("INSERT INTO \"PbiDependencies\"", sql);
-        Assert.Contains("planning_reject_mutation", sql);
-        Assert.Contains("FOREIGN KEY (\"ProjectId\", \"PrerequisitePbiId\")", sql);
-        Assert.Contains("ON DELETE RESTRICT", sql);
+        Assert.Contains("IDENTITY", sql);
+        Assert.Contains("INSERT INTO [PbiDependencies]", sql);
+        Assert.Contains("APPLOCK_MODE", sql);
+        Assert.Contains("FOREIGN KEY ([ProjectId], [PrerequisitePbiId])", sql);
+        Assert.Contains("ON DELETE NO ACTION", sql);
+        Assert.DoesNotContain("PullRequestScopeAttempts", sql);
+        Assert.DoesNotContain("GitHubWebhookDeliveries", sql);
     }
 
     private static GenerationRun Run(int project, GenerationKind kind = GenerationKind.Stories) => new()
@@ -397,26 +585,48 @@ public sealed class PlanningPersistenceTests
         return (project.ProjectId, other.ProjectId, items[0].PbiId, items[1].PbiId, items[2].PbiId, items[3].PbiId);
     }
 
-    private sealed class TestDatabase(SqliteConnection connection) : IAsyncDisposable
+    private static async Task AssertConstraintsValidAsync(OrganizationContext context)
     {
-        public ScrumPilotContext Context() => new(new DbContextOptionsBuilder<ScrumPilotContext>()
-            .UseSqlite(connection)
-            .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning))
+        var close = context.Database.GetDbConnection().State != System.Data.ConnectionState.Open;
+        await context.Database.OpenConnectionAsync();
+        try
+        {
+            await using var command = context.Database.GetDbConnection().CreateCommand();
+            command.CommandText = "DBCC CHECKCONSTRAINTS WITH ALL_CONSTRAINTS";
+            await using var reader = await command.ExecuteReaderAsync();
+            do { Assert.False(await reader.ReadAsync(), "SQL constraint violation found."); }
+            while (await reader.NextResultAsync());
+        }
+        finally { if (close) await context.Database.CloseConnectionAsync(); }
+    }
+
+    private sealed class TestDatabase : IAsyncDisposable
+    {
+        private readonly SqlTestDatabase database = new(initialize: false);
+        public OrganizationContext Context() => new(new DbContextOptionsBuilder<OrganizationContext>()
+            .UseSqlServer(database.Configuration["ConnectionStrings:control"], sql => sql.UseCompatibilityLevel(170))
             .Options);
 
         public static async Task<TestDatabase> CreateAsync(bool migrate = true)
         {
-            var connection = new SqliteConnection("Data Source=:memory:;Foreign Keys=True");
-            await connection.OpenAsync();
-            var database = new TestDatabase(connection);
+            var fixture = new TestDatabase();
+            using var admin = new SqlServerAdministrationContext(fixture.database.Storage);
+            await admin.CreateAsync(fixture.database.Catalog, requireAbsent: true);
             if (migrate)
             {
-                await using var context = database.Context();
+                await using var context = fixture.Context();
                 await context.Database.MigrateAsync();
+                context.TenantMetadata.Add(new() { OrganizationId = 1, StorageKey = Guid.NewGuid().ToString("N") });
+                await context.SaveChangesAsync();
             }
-            return database;
+            return fixture;
         }
 
-        public ValueTask DisposeAsync() => connection.DisposeAsync();
+        public async ValueTask DisposeAsync()
+        {
+            using var admin = new SqlServerAdministrationContext(database.Storage);
+            await admin.DropAsync(database.Catalog, default);
+            database.Control.Dispose();
+        }
     }
 }

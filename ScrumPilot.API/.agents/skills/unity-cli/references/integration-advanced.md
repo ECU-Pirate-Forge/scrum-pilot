@@ -153,7 +153,7 @@ unity skill install claude-code --yes
 unity skill install codex --dry-run
 ```
 
-Supported clients: `claude-code`, `claude-desktop`, `grok`, `cursor`, `windsurf`, `vscode`, `cline`, `codex`. Each is written in the format that client expects, at its platform-correct location. Not every client supports both scopes — some are user-global only, others project-local only — and `--list` reports which, so check there rather than guessing.
+Examples of supported clients: `claude-code`, `claude-desktop`, `cursor`, `windsurf`, `vscode`, `cline`, `codex`. Each is written in the format that client expects, at its platform-correct location. Not every client supports both scopes — some are user-global only, others project-local only — and `--list` reports which, so check there rather than guessing.
 
 A `--local` install also picks up the skill the project's `com.unity.pipeline` package ships (`.claude/skills/unity-pipeline/` inside the package) and mirrors it beside `unity-cli` — e.g. into `.claude/skills/unity-pipeline/` for `claude-code`. A resolved package lives under `Library/PackageCache`, which no client's skill discovery reads, so this mirror is what makes the package's own skill loadable; a project without the package installs `unity-cli` alone. `unity skill refresh` re-reads the mirrored copy from the project's package, and reports rather than deletes when the package is gone. The package skill never installs user-globally — it versions with the project's own package.
 

@@ -8,6 +8,10 @@
 - Resolve authorization from `ICurrentUser` and persisted relationships, never from client state or organization claims cached in JWTs.
 - Derive project/organization scope through the resource hierarchy.
 - Never log or commit raw invitation tokens, JWTs, passwords, API keys, or connection credentials.
+- Use EF Core SQL Server for CRUD; isolate database administration from request repositories.
+- Treat explicit organization routes as authoritative. Capture cancellable work scope rather than mutating global HTTP state.
+- Keep shared transport UI-neutral and preserve both clients' supported workflows.
+- Define orchestration configuration in AppHost first, with matching project direct-start fallbacks.
 
 ## Errors
 
@@ -23,4 +27,4 @@ If it fails, run `dotnet format .\ScrumPilot.slnx`, inspect relevant changes, an
 
 ## Tests
 
-Use NSubstitute for isolated dependencies, bUnit for UI, and real relational repositories for tenancy/migration guarantees. Access changes require authorized and inaccessible cases.
+Use NSubstitute for isolated dependencies, bUnit for UI, and real SQL Server 2025 for tenancy/migration guarantees. Access changes require authorized and inaccessible cases. Verify both web suites and the Aspire graph, not only the backend.

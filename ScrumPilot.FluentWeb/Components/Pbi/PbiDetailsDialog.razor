@@ -2,7 +2,7 @@
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
 @using ScrumPilot.Shared.Models
-@inject HttpClient Http
+@inherits PlanningComponentBase
 @inject AuthenticationStateProvider AuthState
 @inject IAppNotificationService Notifications
 @inject ILogger<PbiDetailsDialog> Logger
@@ -55,10 +55,13 @@
                         <FluentDivider />
                         <PbiDependencyFields Draft="_draft" ProjectPbis="_projectPbis" OnNavigateToPbi="OnNavigateToPbi" />
 
+                        <StoryProvenancePanel @key="(Scope.OrganizationId, _draft.ProjectId, _draft.PbiId, _draft.Version, _draft.ProblemStatementId)"
+                                              CapturedWork="Scope" Pbi="_draft" CanReview="@(!ReadOnly && CanUsePersistentActions)" CanLink="@(!ReadOnly && CanUsePersistentActions)" />
+
                         @if (Pbi.PbiId > 0)
                         {
                             <FluentDivider />
-                            <CommentThread PbiId="Pbi.PbiId" />
+                            <CommentThread @key="Pbi" PbiId="Pbi.PbiId" CapturedWork="Scope" />
                         }
                     </div>
 
@@ -115,6 +118,7 @@
     [Parameter] public EventCallback OnCancelled { get; set; }
     [Parameter] public EventCallback<int> OnDeleted { get; set; }
     [Parameter] public EventCallback<int> OnNavigateToPbi { get; set; }
+    protected override object PlanningIdentity => (ProjectId, Pbi);
 
     private ProductBacklogItem? _draft;
     private ProductBacklogItem? _loadedPbi;
@@ -143,6 +147,7 @@
         {
             return;
         }
+        if (!Scope.IsCurrent) return;
 
         if (!ReferenceEquals(_loadedPbi, Pbi))
         {
@@ -158,6 +163,7 @@
         if (_currentUserId is null)
         {
             var state = await AuthState.GetAuthenticationStateAsync();
+            if (!Scope.IsCurrent) return;
             _currentUserId = state.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
                 ?? state.User.FindFirst("sub")?.Value
                 ?? state.User.Identity?.Name;
@@ -185,6 +191,7 @@
             var usersTask = Http.GetFromJsonAsync<List<UserSummaryDto>>($"api/user/all?projectId={ProjectId.Value}");
             var pbisTask = Http.GetFromJsonAsync<List<ProductBacklogItem>>($"api/Pbi/getNonDraftPbis?projectId={ProjectId.Value}");
             await Task.WhenAll(epicsTask, sprintsTask, usersTask, pbisTask);
+            Scope.ThrowIfStale();
             _epics = epicsTask.Result ?? [];
             _sprints = sprintsTask.Result ?? [];
             _users = usersTask.Result ?? [];
@@ -192,6 +199,7 @@
         }
         catch (Exception ex)
         {
+            if (!Scope.IsCurrent) return;
             Logger.LogWarning(ex, "Failed to load PBI editor lookups for project {ProjectId}", ProjectId);
             _epics = [];
             _sprints = [];
@@ -206,6 +214,7 @@
 
     private async Task SaveAsync()
     {
+        if (!Scope.IsCurrent) return;
         if (_draft is null || Pbi is null || _saving)
         {
             return;
@@ -257,15 +266,19 @@
                 return;
             }
 
-            var saved = await response.Content.ReadFromJsonAsync<ProductBacklogItem>() ?? _draft;
+            using var ownedResponse = response;
+            var saved = await Http.ReadFromJsonAsync<ProductBacklogItem>(response.Content) ?? _draft;
+            Scope.ThrowIfStale();
             Copy(saved, Pbi);
             _draft = Clone(Pbi);
             _aiSuggestion = false;
             Notifications.ShowSuccess("PBI saved.");
             await OnSaved.InvokeAsync(Pbi);
         }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
+            if (!Scope.IsCurrent) return;
             Logger.LogWarning(ex, "Failed to save PBI {PbiId}", _draft.PbiId);
             _errorMessage = "Save failed. Unable to connect to the server.";
             Notifications.ShowError(_errorMessage);
@@ -293,6 +306,7 @@
 
         _improving = true;
         _errorMessage = string.Empty;
+        var capturedPbi = Pbi;
         try
         {
             var response = await Http.PostAsJsonAsync("api/Pbi/ImprovePbi", Pbi);
@@ -302,7 +316,10 @@
                 return;
             }
 
-            var improved = await response.Content.ReadFromJsonAsync<ProductBacklogItem>();
+            using var ownedResponse = response;
+            var improved = await Http.ReadFromJsonAsync<ProductBacklogItem>(response.Content);
+            Scope.ThrowIfStale();
+            if (!ReferenceEquals(Pbi, capturedPbi)) return;
             if (improved is not null)
             {
                 _draft = Clone(Pbi);
@@ -316,6 +333,7 @@
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
+            if (!Scope.IsCurrent) return;
             Logger.LogWarning(ex, "Failed to improve PBI {PbiId}", Pbi.PbiId);
             _errorMessage = "Failed to connect to server.";
         }
@@ -365,10 +383,12 @@
             }
 
             _draft = Clone(Pbi);
+            Scope.ThrowIfStale();
             await OnSaved.InvokeAsync(Pbi);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
+            if (!Scope.IsCurrent) return;
             Logger.LogWarning(ex, "Failed to flag PBI {PbiId}", Pbi.PbiId);
             Pbi.IsFlagged = wasFlagged;
             _errorMessage = "Unable to update the flag.";
@@ -397,6 +417,7 @@
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
+            if (!Scope.IsCurrent) return;
             Logger.LogWarning(ex, "Failed to delete PBI {PbiId}", Pbi.PbiId);
             _errorMessage = "Failed to connect to server.";
         }
@@ -423,8 +444,14 @@
         IsDraft = source.IsDraft,
         IsFlagged = source.IsFlagged,
         AssignedToUserId = source.AssignedToUserId,
+        AssignedToUserName = source.AssignedToUserName,
         IssueLink = source.IssueLink,
         DependsOnPbiId = source.DependsOnPbiId,
+        ParentStoryId = source.ParentStoryId,
+        ProblemStatementId = source.ProblemStatementId,
+        GenerationRunId = source.GenerationRunId,
+        GenerationCandidateKey = source.GenerationCandidateKey,
+        Version = source.Version,
         DateCreated = source.DateCreated,
         LastUpdated = source.LastUpdated,
         Comments = source.Comments
@@ -446,11 +473,16 @@
         target.IsDraft = source.IsDraft;
         target.IsFlagged = source.IsFlagged;
         target.AssignedToUserId = source.AssignedToUserId;
+        target.AssignedToUserName = source.AssignedToUserName;
         target.IssueLink = source.IssueLink;
         target.DependsOnPbiId = source.DependsOnPbiId;
+        target.ParentStoryId = source.ParentStoryId;
+        target.ProblemStatementId = source.ProblemStatementId;
+        target.GenerationRunId = source.GenerationRunId;
+        target.GenerationCandidateKey = source.GenerationCandidateKey;
+        target.Version = source.Version;
         target.DateCreated = source.DateCreated;
         target.LastUpdated = source.LastUpdated;
         target.Comments = source.Comments;
     }
 }
-

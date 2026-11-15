@@ -56,7 +56,8 @@
 
 @code {
     [Parameter] public int? SprintId { get; set; }
-    [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
+    [CascadingParameter] public WorkScope Work { get; set; } = default!;
+    private MetricsDashboardService MetricsSvc => new(Work.Http);
 
     private SprintProgressDto? _data;
     private double _completedPct;

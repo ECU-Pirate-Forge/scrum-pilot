@@ -6,7 +6,7 @@ using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.API.Services;
 
-public sealed class ProjectGuidelinesService(ScrumPilotContext db, PullRequestScopeService? scopes = null,
+public sealed class ProjectGuidelinesService(OrganizationContext db, PullRequestScopeService? scopes = null,
     ProjectWorkNotifier? notifier = null)
 {
     public const int MaximumContentBytes = 128 * 1024;

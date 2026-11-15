@@ -3,6 +3,12 @@ namespace ScrumPilot.Shared.Models;
 /// <summary>Tenant that groups users and Scrum projects.</summary>
 public class Organization
 {
+    public string StorageKey { get; set; } = Guid.NewGuid().ToString("N");
+    public string StorageState { get; set; } = "Provisioning";
+    public Guid OperationId { get; set; } = Guid.NewGuid();
+    public string? OperationError { get; set; }
+    /// <summary>Durable restore fence: every activation must clear restored explicit grants first.</summary>
+    public bool RestorePending { get; set; }
     /// <summary>Unique identifier for this organization.</summary>
     public int OrganizationId { get; set; }
 

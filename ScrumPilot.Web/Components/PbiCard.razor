@@ -1,6 +1,6 @@
 @using System.Net.Http.Json
 @using System.Security.Claims
-@inject HttpClient Http
+@inherits WorkComponentBase
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject AuthenticationStateProvider AuthState
@@ -593,7 +593,6 @@ else
     private string flagReason = "";
     private bool flagReasonError = false;
     private bool _isUnflagging = false;
-    private string? _currentUserName;
 
     // Edit field values
     private string editTitle = "";
@@ -619,10 +618,9 @@ else
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthState.GetAuthenticationStateAsync();
-        _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        _currentUserName = authState.User.FindFirst(ClaimTypes.Name)?.Value
-                        ?? authState.User.FindFirst("unique_name")?.Value
-                        ?? _currentUserId;
+        _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? authState.User.FindFirst("sub")?.Value
+            ?? authState.User.FindFirst("nameid")?.Value;
         await Task.WhenAll(LoadEpics(), LoadSprints(), LoadUsers(), LoadProjectPbis());
         if (StartInEditMode && PbiModel != null)
             StartEdit();
@@ -690,7 +688,9 @@ else
     private string GetUserDisplayName(string? userId)
     {
         if (string.IsNullOrEmpty(userId)) return "— Unassigned —";
-        return users.FirstOrDefault(u => u.Id == userId)?.UserName ?? "Unknown";
+        return users.FirstOrDefault(u => u.Id == userId)?.UserName
+            ?? (PbiModel?.AssignedToUserId == userId ? PbiModel.AssignedToUserName : null)
+            ?? "Unknown";
     }
 
     private string GetDependencyDisplayName(int? pbiId)
@@ -775,7 +775,7 @@ else
             var comment = new Comment
             {
                 PbiId = PbiModel.PbiId,
-                UserId = _currentUserName ?? _currentUserId ?? "unknown",
+                UserId = _currentUserId ?? "",
                 Body = $"{emoji}: {flagReason.Trim()}",
                 CreatedDate = DateTime.UtcNow
             };
@@ -783,6 +783,7 @@ else
         }
         catch { }
 
+        if (!Scope.IsCurrent) return;
         _isUnflagging = false;
         flagReason = "";
         if (OnSave.HasDelegate)
@@ -886,7 +887,8 @@ else
                 return;
             }
 
-            var saved = await response.Content.ReadFromJsonAsync<ProductBacklogItem>() ?? request;
+            var saved = await response.Content.ReadFromJsonAsync<ProductBacklogItem>(Scope.Cancellation) ?? request;
+            Scope.ThrowIfStale();
             CopyPbi(saved, PbiModel!);
             isEditMode = false;
             isAiSuggestion = false;
@@ -939,6 +941,7 @@ else
         target.IsDraft = source.IsDraft;
         target.IsFlagged = source.IsFlagged;
         target.AssignedToUserId = source.AssignedToUserId;
+        target.AssignedToUserName = source.AssignedToUserName;
         target.IssueLink = source.IssueLink;
         target.DependsOnPbiId = source.DependsOnPbiId;
         target.DateCreated = source.DateCreated;
@@ -970,7 +973,8 @@ else
             var response = await Http.PostAsJsonAsync("api/Pbi/ImprovePbi", PbiModel);
             if (response.IsSuccessStatusCode)
             {
-                var improved = await response.Content.ReadFromJsonAsync<ProductBacklogItem>();
+                var improved = await response.Content.ReadFromJsonAsync<ProductBacklogItem>(Scope.Cancellation);
+                Scope.ThrowIfStale();
                 if (improved != null)
                 {
                     editTitle = improved.Title;
@@ -1028,7 +1032,6 @@ else
     private string GetOriginLabel(ScrumPilot.Shared.Models.PbiOrigin origin) => origin switch
     {
         ScrumPilot.Shared.Models.PbiOrigin.AiGenerated => "AI Generated",
-        ScrumPilot.Shared.Models.PbiOrigin.BotGenerated => "Bot Generated",
         ScrumPilot.Shared.Models.PbiOrigin.WebUserCreated => "Web User",
         _ => origin.ToString()
     };

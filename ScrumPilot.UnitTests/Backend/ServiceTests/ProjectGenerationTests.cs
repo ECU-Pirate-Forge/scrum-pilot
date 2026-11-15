@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Data.Common;
 using System.Text.Json;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
@@ -53,9 +52,39 @@ public sealed class ProjectGenerationTests
         void AssertLockFirst()
         {
             Assert.NotEmpty(observer.Commands);
-            Assert.Contains("INSERT INTO \"ProjectGraphStates\"", observer.Commands[0].Sql);
-            Assert.True(observer.Commands[0].InTransaction);
+            var lockIndex = observer.Commands.FindIndex(command => command.Sql.Contains("sp_getapplock", StringComparison.Ordinal));
+            Assert.True(lockIndex >= 0);
+            Assert.All(observer.Commands.Take(lockIndex), command => Assert.Contains("TenantMetadata", command.Sql));
+            Assert.True(observer.Commands[lockIndex].InTransaction);
         }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GenerationRejectsSourceOrGuidanceChangedWhileInferenceHasNoLease(bool changeGuidance)
+    {
+        await using var fixture = await Fixture.Create();
+        var source = await fixture.Service.SaveProblemAsync(fixture.ProjectId, null, new("Source", "Content", null, false), default);
+        fixture.Handler.DuringInference = async () =>
+        {
+            Assert.False(fixture.Db.HasStorageLease);
+            Assert.Equal(System.Data.ConnectionState.Closed, fixture.Db.Database.GetDbConnection().State);
+            await using var writer = fixture.Sql.NewContext();
+            if (changeGuidance)
+                await new ProjectGuidelinesService(writer).SaveAsync(fixture.ProjectId, new("Changed guidance", null), "owner", default);
+            else
+            {
+                var current = await writer.ProblemStatements.SingleAsync();
+                current.Text = "Changed source";
+                await writer.SaveChangesAsync();
+            }
+        };
+        var batch = await fixture.Service.GenerateAsync(fixture.ProjectId,
+            new("changed-during-inference", [source.ProblemStatementId]), "owner", default);
+        Assert.Equal(GenerationState.Failed, Assert.Single(batch.Results).State);
+        Assert.Empty(batch.Results[0].Proposals);
+        Assert.Empty(await fixture.Db.Stories.ToArrayAsync());
     }
 
     [Fact]
@@ -190,8 +219,7 @@ public sealed class ProjectGenerationTests
         await fixture.Db.SaveChangesAsync();
 
         var counter = new CurrencyQueryCounter();
-        await using var reading = new ScrumPilotContext(new DbContextOptionsBuilder<ScrumPilotContext>()
-            .UseSqlite(fixture.Db.Database.GetDbConnection()).AddInterceptors(counter).Options);
+        await using var reading = fixture.Sql.NewContext(counter);
         var ids = accepted.Select(p => p.PbiId).Concat([foreign.PbiId, int.MaxValue, accepted[0].PbiId]).ToArray();
         var currencies = await ProjectStoryCurrency.ReadManyAsync(reading, fixture.ProjectId, ids);
         Assert.Equal(200, currencies.Count);
@@ -265,16 +293,17 @@ public sealed class ProjectGenerationTests
         await fixture.Db.SaveChangesAsync();
         var github = new GitHubAppClient(new HttpClient(fixture.Handler), Options.Create(new GitHubAppOptions()));
         var notifier = new ProjectWorkNotifier(Substitute.For<IHubContext<ProjectWorkHub>>(), new(),
-            Substitute.For<IOrganizationAccessService>(), NullLogger<ProjectWorkNotifier>.Instance);
-        var scopes = new PullRequestScopeService(fixture.Db, github, new TaskSpecificationService(fixture.Db, github, notifier));
+            Substitute.For<IOrganizationAccessService>(), NullLogger<ProjectWorkNotifier>.Instance, fixture.Sql.Selection);
+        await fixture.Sql.RegisterAsync(repository);
+        var scopes = new PullRequestScopeService(fixture.Db, github,
+            new TaskSpecificationService(fixture.Db, github, notifier, fixture.Sql.Registry), fixture.Sql.Control, fixture.Sql.Registry);
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             new ProjectGuidelinesService(fixture.Db, scopes).SaveAsync(fixture.ProjectId, new("Changed", null), "owner", default));
         Assert.Contains("GitHub App is not configured", error.Message);
         Assert.Empty(await fixture.Db.ProjectGuidelinesRevisions.ToListAsync());
         Assert.Null(await fixture.Db.Projects.Select(p => p.CurrentGuidelinesRevisionId).SingleAsync());
-        var config = new ConfigurationBuilder().Build();
-        var service = new ProjectStoryGenerationService(fixture.Db, new(new HttpClient(fixture.Handler), config),
-            fixture.Planning, scopes: scopes);
+        var service = new ProjectStoryGenerationService(fixture.Db, fixture.Ai,
+            fixture.Planning, fixture.Sql.Inference, fixture.Options, scopes: scopes);
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.SaveProblemAsync(fixture.ProjectId,
             source.ProblemStatementId, new("Changed", "Changed source", source.Version, false), default));
         Assert.Equal("Original source", (await fixture.Db.ProblemStatements.AsNoTracking().SingleAsync()).Text);
@@ -418,20 +447,14 @@ public sealed class ProjectGenerationTests
     }
 
     [Fact]
-    public async Task Generation_RefusesExternalConfigurationWithoutFallback()
+    public async Task Generation_RefusesRevokedMembershipBeforeInference()
     {
         await using var fixture = await Fixture.Create();
         var source = await fixture.Service.SaveProblemAsync(fixture.ProjectId, null, new("Source", "Private content", null, false), default);
-        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            ["OllamaBaseUrl"] = "https://example.com",
-            ["OllamaModel"] = "test",
-            ["GroqApiKey"] = "unused-test-placeholder"
-        }).Build();
-        var service = new ProjectStoryGenerationService(fixture.Db,
-            new(new HttpClient(fixture.Handler), config), fixture.Planning);
-        var batch = await service.GenerateAsync(fixture.ProjectId, new("no-external", [source.ProblemStatementId]), "actor", default);
-        Assert.Equal("local_provider_not_ready", batch.Results[0].ErrorCode);
+        fixture.Sql.Control.OrganizationMemberships.RemoveRange(await fixture.Sql.Control.OrganizationMemberships.ToListAsync());
+        await fixture.Sql.Control.SaveChangesAsync();
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => fixture.Service.GenerateAsync(fixture.ProjectId,
+            new("no-external", [source.ProblemStatementId]), "actor", default));
         Assert.Equal(0, fixture.Handler.Calls);
         Assert.Empty(await fixture.Db.Stories.ToListAsync());
     }
@@ -492,15 +515,9 @@ public sealed class ProjectGenerationTests
         var pbi = new ProductBacklogItem { ProjectId = fixture.ProjectId, Title = "Original", Type = PbiType.Story };
         fixture.Db.Stories.Add(pbi);
         await fixture.Db.SaveChangesAsync();
-        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            ["GroqApiKey"] = "unused-test-placeholder",
-            ["OllamaBaseUrl"] = "http://localhost:11434",
-            ["OllamaModel"] = "test"
-        }).Build();
         fixture.Handler.Improvement = true;
-        var http = new HttpClient(fixture.Handler);
-        var service = new PbiService(http, config, Substitute.For<IPbiRepository>(), fixture.Db, new(http, config));
+        var service = new PbiService(Substitute.For<ScrumPilot.API.Services.AI.IStoryGenerationService>(),
+            Substitute.For<IPbiRepository>(), fixture.Db, fixture.Sql.Inference, fixture.Ai);
         var id = pbi.PbiId;
         var result = await service.ImprovePbiAsync(pbi);
         Assert.Equal(id, result.PbiId);
@@ -517,12 +534,14 @@ public sealed class ProjectGenerationTests
         public string? RawOutput { get; set; }
         public List<Uri> Uris { get; } = [];
         public string LastInput { get; private set; } = "";
+        public Func<Task>? DuringInference { get; set; }
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             Calls++;
             Uris.Add(request.RequestUri!);
             var input = await request.Content!.ReadAsStringAsync(ct);
             LastInput = input;
+            if (DuringInference is not null) await DuringInference();
             if (input.Contains("fail-source"))
                 return new(HttpStatusCode.ServiceUnavailable);
             return new(HttpStatusCode.OK)
@@ -549,39 +568,32 @@ public sealed class ProjectGenerationTests
         return (source, saved[0]);
     }
 
-    private sealed class Fixture(SqliteConnection connection, ScrumPilotContext db, int projectId) : IAsyncDisposable
+    private sealed class Fixture(PlanningSqlFixture sql, int projectId) : IAsyncDisposable
     {
-        public ScrumPilotContext Db { get; } = db;
+        public PlanningSqlFixture Sql => sql;
+        public OrganizationContext Db => sql.Db;
         public int ProjectId { get; } = projectId;
         public AiHandler Handler { get; } = new();
-        public IPlanningMutationHandler Planning { get; } = new DirectSave(db);
-        public ProjectStoryGenerationService Service => new(Db, new LocalPlanningAi(new HttpClient(Handler),
-            new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-            { ["OllamaBaseUrl"] = "http://localhost:11434", ["OllamaModel"] = "test" }).Build()), Planning);
+        public IPlanningMutationHandler Planning { get; } = new DirectSave(sql.Db);
+        public AiOptions Options { get; } = new() { Model = "test" };
+        public LocalPlanningAi Ai => new(new PlanningTestChatClient(new HttpClient(Handler)), Options);
+        public ProjectStoryGenerationService Service => new(Db, Ai, Planning, sql.Inference, Options);
         public static async Task<Fixture> Create(params IInterceptor[] interceptors)
         {
-            var connection = new SqliteConnection("Data Source=:memory:;Foreign Keys=True");
-            await connection.OpenAsync();
-            var db = new ScrumPilotContext(new DbContextOptionsBuilder<ScrumPilotContext>().UseSqlite(connection)
-                .AddInterceptors(interceptors)
-                .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning)).Options);
-            // Service tests exercise the current relational model; migration/trigger coverage belongs to PlanningPersistenceTests.
-            await db.Database.EnsureCreatedAsync();
-            db.Organizations.Add(new() { OrganizationId = 1, Name = "Test", NormalizedName = "TEST" });
-            await db.SaveChangesAsync();
-            var project = new Project { OrganizationId = 1, ProjectName = "Test" };
+            var sql = await PlanningSqlFixture.CreateAsync(interceptors);
+            var db = sql.Db;
+            var project = new Project { OrganizationId = sql.Organization.OrganizationId, ProjectName = "Test" };
             db.Projects.Add(project);
             await db.SaveChangesAsync();
-            return new(connection, db, project.ProjectId);
+            return new(sql, project.ProjectId);
         }
         public async ValueTask DisposeAsync()
         {
-            await Db.DisposeAsync();
-            await connection.DisposeAsync();
+            await sql.DisposeAsync();
         }
     }
 
-    private sealed class DirectSave(ScrumPilotContext db) : IPlanningMutationHandler
+    private sealed class DirectSave(OrganizationContext db) : IPlanningMutationHandler
     {
         public int Calls { get; private set; }
         public bool FailAfterSave { get; set; }

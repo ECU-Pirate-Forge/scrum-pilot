@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
@@ -15,8 +14,8 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests;
 
 public sealed class ProjectDependencyServiceTests : IAsyncLifetime
 {
-    private readonly SqliteConnection _connection = new("Data Source=:memory:");
-    private ScrumPilotContext _db = default!;
+    private PlanningSqlFixture _sql = default!;
+    private OrganizationContext _db = default!;
     private ProjectDependencyService _service = default!;
     private PbiRepository _repository = default!;
     private int _projectId;
@@ -24,12 +23,9 @@ public sealed class ProjectDependencyServiceTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        await _connection.OpenAsync();
-        _db = new(new DbContextOptionsBuilder<ScrumPilotContext>().UseSqlite(_connection).Options);
-        await _db.Database.EnsureCreatedAsync();
-        var organization = new Organization { Name = "Org", NormalizedName = "ORG" };
-        _db.Organizations.Add(organization);
-        await _db.SaveChangesAsync();
+        _sql = await PlanningSqlFixture.CreateAsync();
+        _db = _sql.Db;
+        var organization = _sql.Organization;
         var project = new Project { ProjectName = "Project", OrganizationId = organization.OrganizationId };
         _db.Projects.Add(project);
         await _db.SaveChangesAsync();
@@ -40,15 +36,15 @@ public sealed class ProjectDependencyServiceTests : IAsyncLifetime
         client.SendCoreAsync(Arg.Any<string>(), Arg.Any<object?[]>(), Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask).AndDoes(call => _notifications.Add((long)call.ArgAt<object?[]>(1)[1]!));
         var subscriptions = new ProjectWorkSubscriptions();
-        subscriptions.Connections["connection"] = new("member", _projectId);
+        subscriptions.Connections["connection"] = new("member", _projectId, organization.OrganizationId);
         var access = Substitute.For<IOrganizationAccessService>();
         access.CanAccessProjectAsync("member", _projectId, Arg.Any<CancellationToken>()).Returns(true);
-        var notifier = new ProjectWorkNotifier(hub, subscriptions, access, NullLogger<ProjectWorkNotifier>.Instance);
-        _service = new(_db, notifier);
+        var notifier = new ProjectWorkNotifier(hub, subscriptions, access, NullLogger<ProjectWorkNotifier>.Instance, _sql.Selection);
+        _service = new(_db, notifier, _sql.Registry);
         _repository = new(_db, _service);
     }
 
-    public async ValueTask DisposeAsync() { await _db.DisposeAsync(); await _connection.DisposeAsync(); }
+    public async ValueTask DisposeAsync() { await _sql.DisposeAsync(); }
 
     [Fact]
     public async Task LegacyWritesPreserveMultipleDependencies_AndRejectAmbiguousReplacement()

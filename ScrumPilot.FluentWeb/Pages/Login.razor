@@ -76,7 +76,8 @@
 
             if (success)
             {
-                Navigation.NavigateTo(GetSafeReturnUrl(ReturnUrl));
+                var target = GetSafeReturnUrl(ReturnUrl);
+                Navigation.NavigateTo(target == "/" ? Navigation.BaseUri : target);
                 return;
             }
 

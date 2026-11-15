@@ -27,7 +27,7 @@ public sealed class UserSettingsTests : BunitContext
     }
 
     [Fact]
-    public void LoadsOrganizationsThenProjectsForDefaultOrganizationAndShowsReadOnlyEmail()
+    public void LoadsDirectoryButRequiresExplicitOrganizationSelectionToLoadProjects()
     {
         _handler.Respond("api/user/settings", new UserSettingsDto
         {
@@ -48,13 +48,35 @@ public sealed class UserSettingsTests : BunitContext
         var cut = Render<UserSettings>();
 
         Assert.Contains("api/organizations", _handler.Requests);
-        Assert.Contains("api/organizations/2/projects", _handler.Requests);
+        Assert.DoesNotContain("api/organizations/2/projects", _handler.Requests);
         Assert.DoesNotContain("api/Project", _handler.Requests);
         Assert.Contains("Default Organization", cut.Markup);
-        Assert.Contains("Default Project", cut.Markup);
+        Assert.DoesNotContain("Default Project", _handler.Requests);
         var email = cut.Find("input[type=email]");
         Assert.True(email.HasAttribute("readonly"));
         Assert.Contains("confirmed-email", cut.Markup, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task DeliberateDefaultEditsPersistButDoNotChangeTheCurrentTabSelectionOrUrl()
+    {
+        var projectState = Services.GetRequiredService<ProjectStateService>();
+        projectState.SetProject(Project(11, 1, "Current tab"));
+        var navigation = Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();
+        navigation.NavigateTo("/user-settings");
+        _handler.Respond("api/user/settings", new UserSettingsDto { DefaultOrganizationId = 2 });
+        _handler.Respond("api/organizations", new[] { Organization(1, "First"), Organization(2, "Second") });
+        _handler.Respond("api/organizations/2/projects", new[] { Project(11, 2, "Different tenant local 11") });
+        _handler.RespondStatus("api/user/settings", HttpMethod.Put, HttpStatusCode.NoContent);
+        var cut = Render<UserSettings>();
+        cut.FindAll("button").Single(button => button.TextContent.Contains("Load projects")).Click();
+        var projectSelect = cut.FindComponents<MudSelect<int?>>().Single(select => select.Instance.Label == "Default Project");
+        await cut.InvokeAsync(() => projectSelect.Instance.ValueChanged.InvokeAsync(11));
+        cut.FindAll("button").Single(button => button.TextContent.Contains("Save Preferences")).Click();
+        Assert.Equal(2, Assert.Single(_handler.JsonBodies).DefaultOrganizationId);
+        Assert.Equal(11, _handler.JsonBodies[0].DefaultProjectId);
+        Assert.Equal(1, projectState.SelectedProject!.OrganizationId);
+        Assert.EndsWith("/user-settings", navigation.Uri);
     }
 
     [Fact]
@@ -63,7 +85,6 @@ public sealed class UserSettingsTests : BunitContext
         _handler.Respond("api/user/settings", new UserSettingsDto
         {
             Email = "confirmed@example.com",
-            DiscordUsername = "discord",
             UiPreference = UiPreference.Dark,
             DefaultOrganizationId = 1,
             DefaultProjectId = 11
@@ -101,7 +122,6 @@ public sealed class UserSettingsTests : BunitContext
         var body = Assert.Single(_handler.JsonBodies);
         Assert.Equal(2, body.DefaultOrganizationId);
         Assert.Null(body.DefaultProjectId);
-        Assert.Equal("discord", body.DiscordUsername);
         Assert.Equal(UiPreference.Dark, body.UiPreference);
         Assert.Contains("Settings saved successfully.", cut.Markup);
     }

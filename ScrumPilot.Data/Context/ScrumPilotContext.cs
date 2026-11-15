@@ -6,19 +6,15 @@ using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.Data.Context
 {
-    public partial class ScrumPilotContext : IdentityDbContext<ApplicationUser>
+    public abstract class ScrumPilotContext : IdentityDbContext<ApplicationUser>
     {
-        public ScrumPilotContext(DbContextOptions<ScrumPilotContext> options) : base(options)
-        {
-        }
+        protected ScrumPilotContext(DbContextOptions options) : base(options) { }
 
         public DbSet<Project> Projects { get; set; }
         public DbSet<ProductBacklogItem> Stories { get; set; }
         public DbSet<Epic> Epics { get; set; }
         public DbSet<Sprint> Sprints { get; set; }
         public DbSet<Comment> Comments { get; set; }
-        public DbSet<AudioTranscript> AudioTranscripts { get; set; }
-        public DbSet<MessageTranscript> MessageTranscripts { get; set; }
         public DbSet<PbiStatusHistory> PbiStatusHistories { get; set; }
         public DbSet<UserDashboardPreference> UserDashboardPreferences { get; set; }
         public DbSet<Organization> Organizations { get; set; }
@@ -29,9 +25,6 @@ namespace ScrumPilot.Data.Context
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
-            ConfigurePlanning(modelBuilder);
-            ConfigurePlanningArtifactReviews(modelBuilder);
-            ConfigureScopeAttempts(modelBuilder);
 
             // Configure ApplicationUser entity
             modelBuilder.Entity<ApplicationUser>(entity =>
@@ -42,7 +35,7 @@ namespace ScrumPilot.Data.Context
                 entity.HasOne<Organization>()
                     .WithMany()
                     .HasForeignKey(e => e.DefaultOrganizationId)
-                    .OnDelete(DeleteBehavior.SetNull);
+                    .OnDelete(DeleteBehavior.NoAction);
                 entity.HasOne<Project>()
                     .WithMany()
                     .HasForeignKey(e => e.DefaultProjectId)
@@ -58,7 +51,7 @@ namespace ScrumPilot.Data.Context
                 entity.Property(e => e.NormalizedName).IsRequired().HasMaxLength(200);
                 entity.Property(e => e.CreatedAt).IsRequired();
                 entity.Property(e => e.DeletedAt).IsRequired(false);
-                entity.Property(e => e.RowVersion).IsRequired().IsConcurrencyToken();
+                entity.Property(e => e.RowVersion).IsRowVersion();
                 entity.HasIndex(e => e.NormalizedName).IsUnique();
             });
 
@@ -161,9 +154,9 @@ namespace ScrumPilot.Data.Context
                 entity.Property(e => e.DateCreated).IsRequired();
                 entity.Property(e => e.LastUpdated).IsRequired();
                 entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(e => e.AssignedToUserId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
-                entity.HasOne<Project>().WithMany(p => p.ProductBacklogItems).HasForeignKey(e => e.ProjectId).IsRequired();
-                entity.HasOne<Epic>().WithMany(e => e.ProductBacklogItems).HasForeignKey(e => e.EpicId).IsRequired(false);
-                entity.HasOne<Sprint>().WithMany(e => e.ProductBacklogItems).HasForeignKey(e => e.SprintId).IsRequired(false);
+                entity.HasOne<Project>().WithMany(p => p.ProductBacklogItems).HasForeignKey(e => e.ProjectId).IsRequired().OnDelete(DeleteBehavior.NoAction);
+                entity.HasOne<Epic>().WithMany(e => e.ProductBacklogItems).HasForeignKey(e => e.EpicId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+                entity.HasOne<Sprint>().WithMany(e => e.ProductBacklogItems).HasForeignKey(e => e.SprintId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             });
 
             modelBuilder.Entity<Epic>(entity =>
@@ -220,7 +213,7 @@ namespace ScrumPilot.Data.Context
             {
                 entity.ToTable("UserDashboardPreferences");
                 entity.HasKey(e => new { e.UserId, e.ProjectId });
-                entity.Property(e => e.PreferencesJson).HasColumnType("TEXT");
+                entity.Property(e => e.PreferencesJson).HasColumnType("nvarchar(max)");
                 entity.HasOne<ApplicationUser>()
                     .WithMany()
                     .HasForeignKey(e => e.UserId)
@@ -231,46 +224,6 @@ namespace ScrumPilot.Data.Context
                     .OnDelete(DeleteBehavior.Cascade);
             });
 
-            modelBuilder.Entity<AudioTranscript>(entity =>
-            {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Id).ValueGeneratedOnAdd();
-                entity.Property(e => e.Transcript).IsRequired();
-                entity.Property(e => e.RecordedAt).IsRequired();
-            });
-
-            // Prevent EF Core 10's complex-type convention from auto-mapping these as
-            // owned JSON entities — the value converter below handles serialization instead.
-            modelBuilder.Ignore<DiscordMessage>();
-            modelBuilder.Ignore<DiscordAuthor>();
-
-            modelBuilder.Entity<MessageTranscript>(entity =>
-            {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Id).ValueGeneratedOnAdd();
-                // Use a value converter so Messages serializes as a plain JSON string.
-                var messagesProperty = entity.Property(e => e.Messages)
-                    .HasConversion(
-                        v => System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions?)null),
-                        v => System.Text.Json.JsonSerializer.Deserialize<List<DiscordMessage>>(v, (System.Text.Json.JsonSerializerOptions?)null) ?? new List<DiscordMessage>()
-                    );
-
-                // Use jsonb for PostgreSQL, TEXT for SQLite
-                if (Database.IsNpgsql())
-                {
-                    messagesProperty.HasColumnType("jsonb");
-                }
-                else
-                {
-                    messagesProperty.HasColumnType("TEXT");
-                }
-
-                messagesProperty.Metadata.SetValueComparer(new Microsoft.EntityFrameworkCore.ChangeTracking.ValueComparer<List<DiscordMessage>>(
-                    (c1, c2) => System.Text.Json.JsonSerializer.Serialize(c1, (System.Text.Json.JsonSerializerOptions?)null) == System.Text.Json.JsonSerializer.Serialize(c2, (System.Text.Json.JsonSerializerOptions?)null),
-                    c => c == null ? 0 : System.Text.Json.JsonSerializer.Serialize(c, (System.Text.Json.JsonSerializerOptions?)null).GetHashCode(),
-                    c => System.Text.Json.JsonSerializer.Deserialize<List<DiscordMessage>>(System.Text.Json.JsonSerializer.Serialize(c, (System.Text.Json.JsonSerializerOptions?)null), (System.Text.Json.JsonSerializerOptions?)null) ?? new List<DiscordMessage>()
-                ));
-            });
         }
 
         public override int SaveChanges()
@@ -295,17 +248,9 @@ namespace ScrumPilot.Data.Context
 
         private void PrepareChangesForSave()
         {
-            PreparePlanningArtifactReviews();
-            PrepareScopeAttempts();
-            PreparePlanningChanges();
             TrackStatusChanges();
             UpdateTimestamps();
 
-            foreach (var entry in ChangeTracker.Entries<Organization>()
-                         .Where(e => e.State is EntityState.Added or EntityState.Modified))
-            {
-                entry.Property(e => e.RowVersion).CurrentValue = Guid.NewGuid().ToByteArray();
-            }
         }
 
         private void TrackStatusChanges()

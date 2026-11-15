@@ -6,7 +6,8 @@ using ScrumPilot.Shared.Models;
 namespace ScrumPilot.API.Controllers;
 
 [ApiController]
-[Route("api/comments")]
+[OrganizationWork]
+[Route("api/organizations/{organizationId:int}/comments")]
 [Produces("application/json")]
 public class CommentController(
     ICommentRepository commentRepository,
@@ -23,8 +24,20 @@ public class CommentController(
         return Ok(await commentRepository.GetByPbiIdAsync(pbiId, cancellationToken));
     }
 
+    [HttpGet("{commentId:int}")]
+    public async Task<ActionResult<Comment>> GetComment(
+        int commentId,
+        CancellationToken cancellationToken = default)
+    {
+        var comment = await commentRepository.GetByIdAsync(commentId, cancellationToken);
+        if (comment is null || await AuthorizedPbi(comment.PbiId, cancellationToken) is null)
+            return NotFound();
+        return Ok(comment);
+    }
+
     [HttpPost]
     public async Task<ActionResult<Comment>> AddComment(
+        int organizationId,
         [FromBody] Comment request,
         CancellationToken cancellationToken = default)
     {
@@ -37,7 +50,8 @@ public class CommentController(
             CreatedDate = DateTime.UtcNow
         };
         var created = await commentRepository.AddAsync(comment, cancellationToken);
-        return CreatedAtAction(nameof(GetCommentsByPbiId), new { pbiId = created.PbiId }, created);
+        return CreatedAtAction(nameof(GetComment),
+            new { organizationId, commentId = created.CommentId }, created);
     }
 
     [HttpPut("{commentId:int}")]

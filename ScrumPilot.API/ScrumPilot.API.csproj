@@ -23,6 +23,8 @@
 
   <ItemGroup>
     <PackageReference Include="AutoFixture" Version="4.18.1" />
+    <PackageReference Include="Aspire.Microsoft.EntityFrameworkCore.SqlServer" Version="13.6.5" />
+    <PackageReference Include="CommunityToolkit.Aspire.OllamaSharp" Version="13.6.1" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.5" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.13" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.5">
@@ -38,7 +40,6 @@
     <EmbeddedResource Include="..\docs\templates\ai-agent-project-guidelines.md" LogicalName="ScrumPilot.ProjectGuidelinesTemplate.md" />
     <ProjectReference Include="..\ScrumPilot.Data\ScrumPilot.Data.csproj" />
     <ProjectReference Include="..\ScrumPilot.Shared\ScrumPilot.Shared.csproj" />
-    <ProjectReference Include="..\ScrumPilot.Web\ScrumPilot.Web.csproj" />
     <ProjectReference Include="..\ScrumPilot.ServiceDefaults\ScrumPilot.ServiceDefaults.csproj" />
   </ItemGroup>
 

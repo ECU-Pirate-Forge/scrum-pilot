@@ -1,4 +1,6 @@
 @page "/metrics"
+@page "/organizations/{OrganizationId:int}/metrics"
+@inherits WorkComponentBase
 @implements IAsyncDisposable
 @using ScrumPilot.Web.Services
 @using ScrumPilot.Web.Components.MetricsDashboard
@@ -237,10 +239,10 @@
 
 @code {
     [CascadingParameter(Name = "IsDarkMode")] private bool IsDarkMode { get; set; }
-    [Inject] private MetricsDashboardService MetricsSvc { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
 
-    private int? _selectedProjectId => ProjectState.SelectedProjectId;
+    private int? _selectedProjectId => Scope.ProjectId;
+    private readonly string _gridOwner = Guid.NewGuid().ToString("N");
     private List<Sprint> _sprints = [];
     private IReadOnlyList<ProductBacklogItem> _pbis = [];
     private int? _selectedSprintId;
@@ -291,7 +293,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        ProjectState.OnChange += HandleProjectStateChanged;
         await LoadForCurrentProjectAsync();
         _loading = false;
     }
@@ -315,7 +316,7 @@
 
     private async Task LoadForCurrentProjectAsync()
     {
-        var projectId = ProjectState.SelectedProjectId;
+        var projectId = Scope.ProjectId;
         if (!projectId.HasValue) return;
         try
         {
@@ -385,7 +386,8 @@
         // Capture current layout positions before re-render removes DOM nodes
         try
         {
-            var currentLayout = await JS.InvokeAsync<List<DashboardWidgetConfig>>("metricsGridstack.getLayout");
+            var currentLayout = await JS.InvokeAsync<List<DashboardWidgetConfig>>("metricsGridstack.getLayout", _gridOwner);
+            if (!Scope.IsCurrent) return;
             foreach (var item in currentLayout)
             {
                 var pref = _widgetPrefs.FirstOrDefault(w => w.Id == item.Id);
@@ -418,6 +420,7 @@
     [JSInvokable]
     public async Task OnLayoutChanged(List<DashboardWidgetConfig> layout)
     {
+        if (!Scope.IsCurrent) return;
         foreach (var item in layout)
         {
             var pref = _widgetPrefs.FirstOrDefault(w => w.Id == item.Id);
@@ -432,7 +435,7 @@
 
     private async Task SavePreferencesAsync()
     {
-        if (!_selectedProjectId.HasValue) return;
+        if (!Scope.IsCurrent || !_selectedProjectId.HasValue) return;
         await MetricsSvc.SaveDashboardPreferencesAsync(new DashboardPreferenceDto
         {
             Widgets = _widgetPrefs
@@ -441,7 +444,7 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!_loading && (!_gridInitialized || _gridNeedsReinit))
+        if (Scope.IsCurrent && !_loading && (!_gridInitialized || _gridNeedsReinit))
         {
             _gridInitialized = true;
             _gridNeedsReinit = false;
@@ -454,14 +457,14 @@
                 .Select(w => new { id = w.Id, x = w.X, y = w.Y, w = w.W, h = w.H })
                 .ToList();
 
-            try { await JS.InvokeVoidAsync("metricsGridstack.init", _dotnetRef, visibleLayout); } catch { }
+            try { await JS.InvokeVoidAsync("metricsGridstack.init", _dotnetRef, visibleLayout, _gridOwner); } catch { }
         }
     }
 
     public async ValueTask DisposeAsync()
     {
         ProjectState.OnChange -= HandleProjectStateChanged;
-        try { await JS.InvokeVoidAsync("metricsGridstack.destroy"); } catch { }
+        try { await JS.InvokeVoidAsync("metricsGridstack.destroy", _gridOwner); } catch { }
         _dotnetRef?.Dispose();
     }
 }

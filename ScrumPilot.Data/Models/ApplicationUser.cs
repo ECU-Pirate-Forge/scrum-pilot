@@ -8,9 +8,6 @@ namespace ScrumPilot.Data.Models
     /// </summary>
     public class ApplicationUser : IdentityUser
     {
-        /// <summary>The user's Discord username used by the bot integration.</summary>
-        public string? DiscordUsername { get; set; }
-
         /// <summary>The user's preferred UI colour scheme; defaults to Light.</summary>
         public UiPreference UiPreference { get; set; } = UiPreference.Light;
 

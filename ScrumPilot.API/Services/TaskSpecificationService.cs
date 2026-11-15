@@ -6,7 +6,8 @@ using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.API.Services;
 
-public sealed class TaskSpecificationService(ScrumPilotContext db, GitHubAppClient github, ProjectWorkNotifier notifier)
+public sealed class TaskSpecificationService(OrganizationContext db, GitHubAppClient github, ProjectWorkNotifier notifier,
+    GitHubRepositoryRegistry registry)
 {
     public async Task<TaskSpecificationStatusDto> StatusAsync(int projectId, int taskId, CancellationToken ct)
     {
@@ -30,6 +31,13 @@ public sealed class TaskSpecificationService(ScrumPilotContext db, GitHubAppClie
         var snapshot = await db.RepositorySnapshots.SingleOrDefaultAsync(item => item.ProjectId == projectId
             && item.RepositorySnapshotId == specification.RepositorySnapshotId, ct);
         if (snapshot is null) reasons.Add("Repository paths have not been verified.");
+        else
+        {
+            var repository = await db.ProjectRepositories.AsNoTracking().SingleOrDefaultAsync(item =>
+                item.ProjectId == projectId && item.ProjectRepositoryId == snapshot.ProjectRepositoryId, ct);
+            if (repository is null || !await registry.IsCurrentAsync(repository, ct))
+                reasons.Add("Repository registration is suspended or changed; Owner review is required.");
+        }
         if (specification.Approval != SpecificationApproval.Approved) reasons.Add("Owner file-scope approval is required.");
         return new(specification, reasons.Count == 0, reasons.ToArray());
     }
@@ -49,6 +57,9 @@ public sealed class TaskSpecificationService(ScrumPilotContext db, GitHubAppClie
         var snapshot = await db.RepositorySnapshots.SingleOrDefaultAsync(item => item.ProjectId == projectId
             && item.RepositorySnapshotId == request.RepositorySnapshotId, ct) ?? throw new KeyNotFoundException();
         var files = VerifyFiles(request.Files, snapshot);
+        var repository = await db.ProjectRepositories.AsNoTracking().SingleAsync(item =>
+            item.ProjectId == projectId && item.ProjectRepositoryId == snapshot.ProjectRepositoryId, ct);
+        await registry.RequireCurrentAsync(repository, ct);
         var source = await SourceAsync(task, ct);
         var project = await db.Projects.AsNoTracking().SingleAsync(item => item.ProjectId == projectId, ct);
         var spec = new TaskSpecificationRevision

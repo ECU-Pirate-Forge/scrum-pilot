@@ -8,10 +8,10 @@ using ScrumPilot.Shared.Models;
 namespace ScrumPilot.API.Controllers;
 
 [ApiController]
-[Route("api/projects/{projectId:int}")]
+[Route("api/organizations/{organizationId:int}/projects/{projectId:int}")]
 [ServiceFilter(typeof(PlanningErrorFilter))]
 public sealed class DependenciesController(ICurrentUser user, IOrganizationAccessService access,
-    ProjectDependencyService dependencies, ScrumPilotContext db) : ProjectPlanningControllerBase(user, access)
+    ProjectDependencyService dependencies, OrganizationContext db) : ProjectPlanningControllerBase(user, access)
 {
     [HttpGet("dependency-graph")]
     [HttpGet("sprints/{sprintId:int}/dependency-graph")]

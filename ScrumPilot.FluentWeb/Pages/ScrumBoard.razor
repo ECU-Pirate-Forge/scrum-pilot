@@ -1,7 +1,8 @@
 @page "/scrum-board"
+@page "/organizations/{OrganizationId:int}/scrum-board"
+@inherits WorkComponentBase
 @using ScrumPilot.FluentWeb.Components.Pbi
 @using ScrumPilot.FluentWeb.Components.ScrumBoard
-@inject HttpClient Http
 @inject ProjectStateService ProjectState
 @inject NavigationManager Nav
 @inject IAppNotificationService Notifications
@@ -86,7 +87,7 @@
                         <AppIcon Value="@(new Icons.Regular.Size20.Dismiss())" Label="Close" />
                     </FluentButton>
                 </header>
-                <PbiCard PbiModel="_newPbi"
+                <PbiCard PbiModel="_newPbi" CapturedWork="Scope"
                          StartInEditMode="true"
                          ProjectId="_selectedProjectId"
                          OnSave="HandleNewPbiSaved"
@@ -97,7 +98,7 @@
 
     @if (SelectedPbi is not null)
     {
-        <PbiDetailsDialog Pbi="SelectedPbi"
+        <PbiDetailsDialog @key="SelectedPbi" Pbi="SelectedPbi" CapturedWork="Scope"
                           Open="true"
                           ProjectId="_selectedProjectId"
                           OnSaved="HandlePbiSaved"
@@ -144,8 +145,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _selectedProjectId = ProjectState.SelectedProjectId;
-        ProjectState.OnChange += HandleProjectStateChanged;
+        _selectedProjectId = Scope.ProjectId;
         await LoadDropdownsAsync();
         ApplyDefaultSprintFilter();
         await LoadItemsAsync();
@@ -163,6 +163,7 @@
 
     private async Task LoadDropdownsAsync()
     {
+        if (!Scope.IsCurrent) return;
         if (!_selectedProjectId.HasValue)
         {
             _sprints = [];
@@ -177,8 +178,10 @@
             _epics = await Http.GetFromJsonAsync<List<Epic>>($"api/Epic?projectId={_selectedProjectId.Value}") ?? [];
             _users = await Http.GetFromJsonAsync<List<UserSummaryDto>>($"api/user/all?projectId={_selectedProjectId.Value}") ?? [];
         }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
         catch (Exception ex)
         {
+            if (!Scope.IsCurrent) return;
             Logger.LogWarning(ex, "Failed to load scrum board dropdown data for project {ProjectId}", _selectedProjectId);
             Notifications.ShowWarning("Some board filter options could not be loaded.");
             _sprints = [];
@@ -212,6 +215,11 @@
 
     private async Task LoadItemsAsync(bool showLoading = true)
     {
+        if (!Scope.IsCurrent)
+        {
+            _loading = false;
+            return;
+        }
         if (!_selectedProjectId.HasValue)
         {
             _items = [];
@@ -231,8 +239,10 @@
             var items = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(BuildItemUrl());
             _items = (items ?? []).OrderBy(i => i.PbiId).ToList();
         }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
         catch (Exception ex)
         {
+            if (!Scope.IsCurrent) return;
             Logger.LogError(ex, "Failed to load scrum board PBIs for project {ProjectId}", _selectedProjectId);
             _errorMessage = "Unable to load PBIs from the server.";
             Notifications.ShowError(_errorMessage);
@@ -395,7 +405,8 @@
             query.Add($"projectId={_selectedProjectId.Value}");
         }
 
-        Nav.NavigateTo(query.Count == 0 ? "/dependency-chart" : $"/dependency-chart?{string.Join("&", query)}");
+        var path = OrganizationRoutes.Page(Scope.OrganizationId, "dependency-chart", Scope.ProjectId);
+        Nav.NavigateTo(_selectedSprintId.HasValue ? $"{path}{(path.Contains('?') ? "&" : "?")}sprintId={_selectedSprintId}" : path);
     }
 
     private static string SprintLabel(Sprint sprint) => sprint.SprintTitle ?? sprint.SprintGoal ?? $"Sprint {sprint.SprintId}";

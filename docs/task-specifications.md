@@ -120,7 +120,7 @@ Choose **Save new draft revision**, then have an Owner choose **Approve this sav
 Choose **Export Markdown handoff** for an external coding agent. Markdown includes
 the persisted task prerequisites and inherited parent-story prerequisites; check
 their current completion/review state rather than treating an export as live
-readiness. For automation, `GET /api/projects/{projectId}/tasks/{taskId}/specifications/manifest`
+readiness. For automation, `GET /api/organizations/{organizationId}/projects/{projectId}/tasks/{taskId}/specifications/manifest`
 returns JSON with revision/hash, approval/currentness/review reasons, branch/SHA,
 and exact file operations. Both exports are available for draft specifications,
 so inspect approval/currentness before authorizing implementation. Export does
@@ -145,6 +145,11 @@ reacquires the project lock to recheck the same head/current policy before succe
 Retries/input mutations invalidate all journaled and legacy-check heads even
 after a post-publication result-save rollback or during a PR metadata outage.
 This is net file-scope validation, not a sandbox or instantaneous merge isolation.
+
+All planning requests capture the selected organization and project. A change of
+selection cancels pending work and rejects stale completions, including a late
+response from a handler that ignores cancellation. URLs never infer an
+organization from a project ID or a user's default project.
 
 The original Web client's generic generation remains an unlinked compatibility
 preview; it cannot apply project settings without a project-aware contract.

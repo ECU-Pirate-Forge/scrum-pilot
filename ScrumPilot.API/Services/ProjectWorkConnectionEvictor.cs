@@ -9,6 +9,8 @@ public sealed class ProjectWorkConnectionEvictor(IHubContext<ProjectWorkHub> hub
     public async Task EvictAsync(int? projectId = null, int? organizationId = null, string? userId = null,
         CancellationToken ct = default)
     {
+        if (organizationId is null)
+            throw new ArgumentException("An explicit organization is required when evicting project work subscriptions.", nameof(organizationId));
         foreach (var connection in subscriptions.Connections.Where(pair =>
                      (!projectId.HasValue || pair.Value.ProjectId == projectId)
                      && (!organizationId.HasValue || pair.Value.OrganizationId == organizationId)
