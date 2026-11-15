@@ -35,6 +35,7 @@ public partial class MainLayout
     private bool _routeLoading = true;
     private bool _needsOrganization;
     private string? _routeError;
+    private string? _resolvedUri;
     private WorkScope? _work;
 
     private Icon ThemeIcon => Theme.Preference switch
@@ -192,7 +193,13 @@ public partial class MainLayout
         }
         finally
         {
-            if (IsCurrent(generation) && !redirecting) { _routeLoading = false; StateHasChanged(); }
+            if (IsCurrent(generation) && !redirecting)
+            {
+                // The router can replace Body before our LocationChanged handler runs.
+                _resolvedUri = uri.AbsoluteUri;
+                _routeLoading = false;
+                StateHasChanged();
+            }
         }
     }
 
@@ -232,6 +239,7 @@ public partial class MainLayout
         _routeLoading = false;
         _needsOrganization = false;
         _routeError = null;
+        _resolvedUri = Navigation.Uri;
         _applyingRoute = true;
         OrganizationState.Clear();
         ProjectState.Clear();

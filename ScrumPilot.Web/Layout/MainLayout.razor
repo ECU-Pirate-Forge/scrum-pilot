@@ -110,7 +110,7 @@
                 <CascadingValue @key="_work" Value="_work">
                     <div @key="_work">
                         <MudDialogProvider />
-                        @if (_routeLoading)
+                        @if (_routeLoading || _resolvedUri != Navigation.Uri)
                         {
                             <MudProgressCircular Indeterminate="true" />
                         }
@@ -153,6 +153,7 @@
     private bool _routeLoading = true;
     private bool _authenticated;
     private string? _routeError;
+    private string? _resolvedUri;
     private bool _needsOrganization;
     private WorkScope? _work;
     private bool _applyingRoute;
@@ -354,6 +355,8 @@
         {
             if (IsCurrent(generation))
             {
+                // The router can replace Body before our LocationChanged handler runs.
+                _resolvedUri = uri.AbsoluteUri;
                 _routeLoading = false;
                 StateHasChanged();
             }
@@ -390,6 +393,7 @@
         _routeLoading = false;
         _routeError = null;
         _needsOrganization = false;
+        _resolvedUri = Navigation.Uri;
         _isDarkMode = false;
         _userPreferenceLoaded = false;
         _work?.Dispose();

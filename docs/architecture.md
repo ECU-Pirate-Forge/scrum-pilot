@@ -58,6 +58,8 @@ create missing databases or fall back to another catalog.
 
 Each browser tab treats its URL as authoritative. Shared client request scopes
 capture organization/project, cancel on navigation, and reject late results.
+Layouts mount routed pages only after resolving that exact URL; router updates
+and default redirects must not mount work under a missing or previous scope.
 Only deliberate settings changes persist account-wide default selections.
 Poker uses organization/project composite keys and invocation-scoped contexts.
 The project-work hub follows the same organization-qualified invocation boundary.

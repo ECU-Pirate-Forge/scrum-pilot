@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using Bunit;
+using Bunit.TestDoubles;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,6 +19,114 @@ namespace ScrumPilot.FluentWeb.Tests.Account;
 
 public sealed class MountedShellTests : BunitContext
 {
+    [Theory]
+    [InlineData("backlog")]
+    [InlineData("project-management")]
+    [InlineData("scrum-board")]
+    [InlineData("draft-stories")]
+    [InlineData("pbigeneration")]
+    [InlineData("metrics")]
+    [InlineData("dependency-chart")]
+    [InlineData("planning-poker")]
+    [InlineData("task-planning")]
+    public async Task Router_navigation_from_central_page_mounts_work_only_inside_its_boundary(string page)
+    {
+        var navigation = new MountedNavigation("");
+        var handler = new SessionHandler(hasOrganization: true);
+        RegisterRouterSession(navigation, handler);
+        using var cut = Render<CascadingAuthenticationState>(p => p.AddChildContent<ScrumPilot.FluentWeb.App>());
+        cut.WaitForAssertion(() => Assert.Contains("ScrumPilot dashboard", cut.Markup));
+
+        await cut.InvokeAsync(() => navigation.NavigateTo($"organizations/3/{page}"));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.DoesNotContain("Something went wrong", cut.Markup);
+            var work = page is "task-planning" or "dependency-chart"
+                ? Assert.Single(cut.FindComponents<PlanningComponentBase>()).Instance.Work
+                : Assert.Single(cut.FindComponents<WorkComponentBase>()).Instance.Work;
+            Assert.NotNull(work);
+            Assert.True(work.IsCurrent);
+            Assert.Equal(3, work.OrganizationId);
+            Assert.Null(work.ProjectId);
+        });
+    }
+
+    [Fact]
+    public async Task Newly_created_organization_and_first_project_open_through_the_real_router()
+    {
+        var navigation = new MountedNavigation("organization-management");
+        var handler = new SessionHandler();
+        RegisterRouterSession(navigation, handler);
+        using var cut = Render<CascadingAuthenticationState>(p => p.AddChildContent<ScrumPilot.FluentWeb.App>());
+        cut.Find("fluent-text-input").Change("New organization");
+        cut.FindAll("fluent-button").Single(button => button.TextContent.Trim() == "Create organization").Click();
+        cut.WaitForAssertion(() => Assert.Contains("New organization", cut.Markup));
+        var openWork = cut.FindComponents<FluentAnchorButton>().Single(button => button.Instance.ChildContent is not null
+            && button.Markup.Contains("Open work", StringComparison.Ordinal));
+        await cut.InvokeAsync(() => navigation.NavigateTo(openWork.Instance.Href!));
+        cut.WaitForAssertion(() => Assert.Contains("Choose a project from the shell", cut.Markup));
+        Assert.Equal(4, cut.FindComponent<ScrumPilot.FluentWeb.Pages.Backlog>().Instance.Work!.OrganizationId);
+        await cut.InvokeAsync(() => navigation.NavigateTo("organizations/4/project-management"));
+        cut.WaitForAssertion(() => Assert.Contains("No projects yet", cut.Markup));
+        cut.FindAll("fluent-button").Single(button => button.TextContent.Trim() == "Add").Click();
+        cut.Find("fluent-text-input").Change("First project");
+        cut.FindAll("fluent-button").Single(button => button.TextContent.Trim() == "Save").Click();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.EndsWith("/organizations/4/project-management?projectId=1", navigation.Uri);
+            Assert.Contains("First project", cut.Markup);
+            Assert.DoesNotContain("Something went wrong", cut.Markup);
+            Assert.Equal(1, cut.FindComponent<ProjectManagement>().Instance.Work!.ProjectId);
+        });
+        await cut.InvokeAsync(() => navigation.NavigateTo("organizations/4/backlog?projectId=1"));
+        cut.WaitForAssertion(() => Assert.Contains("No stories match the filters", cut.Markup));
+        Assert.DoesNotContain(handler.Requests, path => path.Contains("/3/", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Router_switching_organizations_with_equal_project_ids_retires_the_old_scope()
+    {
+        var navigation = new MountedNavigation("organizations/3/backlog?projectId=1");
+        var handler = new SessionHandler(hasProject: true);
+        RegisterRouterSession(navigation, handler);
+        using var cut = Render<CascadingAuthenticationState>(p => p.AddChildContent<ScrumPilot.FluentWeb.App>());
+        var previous = cut.FindComponent<ScrumPilot.FluentWeb.Pages.Backlog>().Instance.Work!;
+
+        await cut.InvokeAsync(() => navigation.NavigateTo("organizations/2/backlog?projectId=1"));
+
+        cut.WaitForAssertion(() =>
+        {
+            var current = cut.FindComponent<ScrumPilot.FluentWeb.Pages.Backlog>().Instance.Work!;
+            Assert.Equal(2, current.OrganizationId);
+            Assert.Equal(1, current.ProjectId);
+            Assert.True(current.IsCurrent);
+            Assert.False(previous.IsCurrent);
+            Assert.DoesNotContain("Something went wrong", cut.Markup);
+        });
+    }
+
+    private void RegisterRouterSession(MountedNavigation navigation, SessionHandler handler)
+    {
+        Services.AddFluentUIComponents();
+        var authorization = this.AddAuthorization();
+        authorization.SetAuthorized("Test");
+        authorization.SetRoles("Admin");
+        authorization.SetClaims(new Claim(ClaimTypes.NameIdentifier, "test-owner"));
+        Services.AddSingleton<NavigationManager>(navigation);
+        Services.AddSingleton(new HttpClient(handler) { BaseAddress = new Uri("https://gateway.test/fluentweb/_api/webapi/") });
+        Services.AddScoped<OrganizationStateService>();
+        Services.AddScoped<ProjectStateService>();
+        Services.AddScoped<AppThemeService>();
+        Services.AddScoped<IAppNotificationService, AppNotificationService>();
+        Services.AddScoped<IAppDialogService, AppDialogService>();
+        Services.AddSingleton(Substitute.For<IAuthService>());
+        Services.AddSingleton(Substitute.For<IProjectWorkClient>());
+        Services.AddLogging();
+        Renderer.SetRendererInfo(new RendererInfo("WebAssembly", true));
+        JSInterop.Mode = JSRuntimeMode.Loose;
+    }
+
     [Fact]
     public async Task Default_project_redirect_waits_for_a_work_scope_before_mounting_the_backlog()
     {
@@ -198,20 +307,46 @@ public sealed class MountedShellTests : BunitContext
         [CascadingParameter] public WorkScope Work { get; set; } = default!;
     }
 
-    private sealed class SessionHandler(bool hasProject = false, bool useDefaultProject = false) : HttpMessageHandler
+    private sealed class SessionHandler(bool hasProject = false, bool useDefaultProject = false, bool hasOrganization = false) : HttpMessageHandler
     {
+        private bool _createdOrganization;
+        private bool _createdProject;
         public List<string> Requests { get; } = [];
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var path = request.RequestUri!.AbsolutePath;
             Requests.Add(path);
+            if (request.Method == HttpMethod.Post && path.EndsWith("/organizations", StringComparison.Ordinal))
+            {
+                _createdOrganization = true;
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Created)
+                {
+                    Content = JsonContent.Create(new OrganizationSummaryDto(4, "New organization", OrganizationRole.Owner, false))
+                });
+            }
+            if (request.Method == HttpMethod.Post && path.EndsWith("/4/projects", StringComparison.Ordinal))
+            {
+                _createdProject = true;
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Created)
+                {
+                    Content = JsonContent.Create(new Project { OrganizationId = 4, ProjectId = 1, ProjectName = "First project" })
+                });
+            }
+            if (path.EndsWith("/guidelines", StringComparison.Ordinal))
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
             object payload = path.EndsWith("/settings", StringComparison.Ordinal)
             ? new UserSettingsDto
             {
                 DefaultOrganizationId = useDefaultProject ? 3 : null,
                 DefaultProjectId = useDefaultProject ? 1 : null
             }
-            : hasProject && path.EndsWith("/organizations", StringComparison.Ordinal)
+            : _createdOrganization && path.EndsWith("/organizations", StringComparison.Ordinal)
+                ? new[] { new OrganizationSummaryDto(4, "New organization", OrganizationRole.Owner, false) }
+                : _createdProject && path.EndsWith("/4/projects", StringComparison.Ordinal)
+                    ? new[] { new Project { OrganizationId = 4, ProjectId = 1, ProjectName = "First project" } }
+                : path.EndsWith("/operations", StringComparison.Ordinal)
+                    ? new { OrganizationId = 4, State = "Active", OperationId = (string?)null, Error = (string?)null }
+            : (hasProject || hasOrganization) && path.EndsWith("/organizations", StringComparison.Ordinal)
                 ? new[] { new OrganizationSummaryDto(2, "ALPHA", OrganizationRole.Owner, false), new OrganizationSummaryDto(3, "BETA", OrganizationRole.Owner, false) }
                 : hasProject && path.EndsWith("/projects", StringComparison.Ordinal)
                     ? new[] { new Project { OrganizationId = path.Contains("/2/") ? 2 : 3, ProjectId = 1, ProjectName = path.Contains("/2/") ? "ALPHA project" : "BETA project" } }

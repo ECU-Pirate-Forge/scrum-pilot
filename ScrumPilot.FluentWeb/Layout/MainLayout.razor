@@ -94,7 +94,7 @@
                 <CascadingValue Value="Theme.IsDark" Name="IsDarkMode">
                     <CascadingValue @key="_work" Value="_work">
                         <div @key="_work">
-                            @if (_routeLoading)
+                            @if (_routeLoading || _resolvedUri != Navigation.Uri)
                             {
                                 <AppLoadingState />
                             }

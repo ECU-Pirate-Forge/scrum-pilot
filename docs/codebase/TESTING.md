@@ -63,6 +63,12 @@ git diff --check
 Use unique MSBuild binlogs and isolated artifacts paths for concurrent agent
 builds. Design-time model checks must not connect to a real installation.
 
+The mounted-shell regressions exercise each client's real router with synthetic
+HTTP responses, including empty organizations, organization/first-project
+creation, equal local project IDs across organizations, and deferred default
+redirects. They verify route-boundary ordering, not SQL provisioning or live
+browser acceptance.
+
 For live Aspire tests, stop the exact prior graph before refreshing child
 outputs. The current hosting SDK can resolve API and browser child projects
 through their default Release and Debug launch paths even when the test assembly
