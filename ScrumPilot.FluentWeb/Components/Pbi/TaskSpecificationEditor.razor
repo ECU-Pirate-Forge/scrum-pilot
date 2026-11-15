@@ -1,0 +1,123 @@
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@inject HttpClient Http
+@inject IJSRuntime JS
+@inject ILogger<TaskSpecificationEditor> Logger
+
+<section aria-label="Task specification">
+    <h2>Task #@TaskId specification</h2>
+    @if (_error.Length > 0) { <p role="alert">@_error</p> }
+    <p>Scope status: @(_status?.IsCurrent == true ? "Approved and current" : "Not implementation-approved")</p>
+    @foreach (var reason in _status?.ReviewReasons ?? []) { <p>@reason</p> }
+    <p>Revision @_revision. Edits create a new draft; only an Owner may approve exact file scope. Include test files and appropriate documentation changes.</p>
+    <label>Verified snapshot
+        <select @bind="_snapshotId">
+            <option value="0">Select a snapshot</option>
+            @foreach (var snapshot in Snapshots) { <option value="@snapshot.RepositorySnapshotId">@snapshot.CommitSha</option> }
+        </select>
+    </label>
+    <label>Structured implementation specification (JSON)
+        <textarea rows="22" @bind="_content" spellcheck="false"></textarea>
+    </label>
+    <label>Exact file operations (JSON array; category Source/Test/Documentation/Configuration, operation Add/Modify/Delete/Rename)
+        <textarea rows="10" @bind="_files" spellcheck="false"></textarea>
+    </label>
+    <FluentButton OnClick="SaveAsync">Save new draft revision</FluentButton>
+    @if (IsOwner) { <FluentButton OnClick="ApproveAsync">Approve this saved revision</FluentButton> }
+    <FluentButton OnClick="ExportAsync">Export Markdown handoff</FluentButton>
+    <FluentButton OnClick="ExportManifestAsync">Export scope manifest</FluentButton>
+    <details>
+        <summary>Revision history</summary>
+        @foreach (var revision in _history)
+        {
+            <p>Revision @revision.Revision / @revision.Approval / @revision.ContentHash</p>
+            <pre>@JsonSerializer.Serialize(revision.Content, EditorJson)</pre>
+        }
+    </details>
+    @if (IsOwner)
+    {
+        <label>GitHub PR number <input type="number" @bind="_prNumber" /></label>
+        <FluentButton OnClick="BindAsync">Bind PR and validate file scope</FluentButton>
+    }
+    <p>Required check: ScrumPilot / task-scope. Branch protection is unverified until a repository administrator confirms it. File scope is not a filesystem sandbox or proof that tests ran.</p>
+    <pre>@_checkResult</pre>
+</section>
+
+@code {
+    [Parameter] public int ProjectId { get; set; }
+    [Parameter] public int TaskId { get; set; }
+    [Parameter] public bool IsOwner { get; set; }
+    [Parameter] public RepositorySnapshot[] Snapshots { get; set; } = [];
+    private static readonly JsonSerializerOptions EditorJson = new(JsonSerializerDefaults.Web)
+        { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };
+    private TaskSpecificationStatusDto? _status;
+    private TaskSpecificationRevision[] _history = [];
+    private int _loadedTask, _revision, _snapshotId, _prNumber;
+    private string _content = "", _files = "[]", _error = "", _checkResult = "";
+    private string Url => $"api/projects/{ProjectId}/tasks/{TaskId}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedTask == TaskId) return;
+        _loadedTask = TaskId;
+        await LoadAsync();
+    }
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _status = await Http.GetFromJsonAsync<TaskSpecificationStatusDto>(Url + "/specifications");
+            _history = await Http.GetFromJsonAsync<TaskSpecificationRevision[]>(Url + "/specifications/history") ?? [];
+            var spec = _status?.Specification;
+            _revision = spec?.Revision ?? 0; _snapshotId = spec?.RepositorySnapshotId ?? 0;
+            _content = JsonSerializer.Serialize(spec?.Content ?? new TaskSpecificationContent(), EditorJson);
+            _files = JsonSerializer.Serialize(spec?.AllowedFiles.Select(file =>
+                new TaskFileProposal(file.Path, file.Category, file.Operation, file.Rationale, file.RenameFromPath)).ToArray() ?? [], EditorJson);
+            _checkResult = await Http.GetStringAsync(Url + "/pull-requests");
+        }
+        catch (HttpRequestException ex) { Logger.LogWarning(ex, "Task specification load failed"); _error = "Unable to load the specification."; }
+    }
+    private async Task SaveAsync()
+    {
+        try
+        {
+            var content = JsonSerializer.Deserialize<TaskSpecificationContent>(_content, EditorJson) ?? throw new JsonException();
+            var files = JsonSerializer.Deserialize<TaskFileProposal[]>(_files, EditorJson) ?? throw new JsonException();
+            await SendAsync(() => Http.PostAsJsonAsync(Url + "/specifications", new SaveTaskSpecificationRequest(content, files, _snapshotId, _revision)));
+        }
+        catch (JsonException) { _error = "The specification or file operations contain invalid JSON."; }
+    }
+    private Task ApproveAsync() => SendAsync(() => Http.PostAsJsonAsync(Url + "/specifications/approve", new ApproveTaskSpecificationRequest(_revision)));
+    private Task BindAsync() => SendAsync(() => Http.PostAsJsonAsync(Url + "/pull-requests", new BindTaskPullRequestRequest(_prNumber)));
+    private async Task SendAsync(Func<Task<HttpResponseMessage>> send)
+    {
+        _error = "";
+        try
+        {
+            using var response = await send();
+            if (!response.IsSuccessStatusCode) { _error = await response.Content.ReadAsStringAsync(); return; }
+            await LoadAsync();
+        }
+        catch (HttpRequestException ex) { Logger.LogWarning(ex, "Task specification mutation failed"); _error = "Unable to save/validate task scope."; }
+    }
+    private async Task ExportAsync()
+    {
+        try
+        {
+            var markdown = await Http.GetStringAsync(Url + "/specifications/export");
+            await JS.InvokeVoidAsync("mermaidHelper.downloadText", $"task-{TaskId}-specification.md", markdown);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JSException)
+        { Logger.LogWarning(ex, "Task specification export failed"); _error = "Unable to export the task specification."; }
+    }
+    private async Task ExportManifestAsync()
+    {
+        try
+        {
+            var manifest = await Http.GetStringAsync(Url + "/specifications/manifest");
+            await JS.InvokeVoidAsync("mermaidHelper.downloadText", $"task-{TaskId}-scope.json", manifest);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JSException)
+        { Logger.LogWarning(ex, "Task scope manifest export failed"); _error = "Unable to export the task scope manifest."; }
+    }
+}

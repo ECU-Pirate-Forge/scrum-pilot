@@ -6,7 +6,7 @@ using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.Data.Context
 {
-    public class ScrumPilotContext : IdentityDbContext<ApplicationUser>
+    public partial class ScrumPilotContext : IdentityDbContext<ApplicationUser>
     {
         public ScrumPilotContext(DbContextOptions<ScrumPilotContext> options) : base(options)
         {
@@ -29,6 +29,9 @@ namespace ScrumPilot.Data.Context
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+            ConfigurePlanning(modelBuilder);
+            ConfigurePlanningArtifactReviews(modelBuilder);
+            ConfigureScopeAttempts(modelBuilder);
 
             // Configure ApplicationUser entity
             modelBuilder.Entity<ApplicationUser>(entity =>
@@ -292,6 +295,9 @@ namespace ScrumPilot.Data.Context
 
         private void PrepareChangesForSave()
         {
+            PreparePlanningArtifactReviews();
+            PrepareScopeAttempts();
+            PreparePlanningChanges();
             TrackStatusChanges();
             UpdateTimestamps();
 

@@ -17,6 +17,8 @@ namespace ScrumPilot.Shared.Models
         /// <summary>Optional description of the project's purpose.</summary>
         public string? Description { get; set; }
 
+        public int? CurrentGuidelinesRevisionId { get; set; }
+
         /// <summary>Epics that belong to this project.</summary>
         public ICollection<Epic>? Epics { get; set; }
 

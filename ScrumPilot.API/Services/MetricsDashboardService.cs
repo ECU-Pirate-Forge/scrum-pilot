@@ -41,8 +41,8 @@ public class MetricsDashboardService : IMetricsDashboardService
     public async Task<SprintProgressDto> GetSprintProgressAsync(int sprintId)
     {
         var items = (await _pbis.GetFilteredPbisAsync(sprintId, null)).ToList();
-        var committed = items.Sum(p => (int)p.StoryPoints);
-        var completed = items.Where(p => p.Status == PbiStatus.Done).Sum(p => (int)p.StoryPoints);
+        var committed = items.Where(p => !p.ParentStoryId.HasValue).Sum(p => (int)p.StoryPoints);
+        var completed = items.Where(p => !p.ParentStoryId.HasValue && p.Status == PbiStatus.Done).Sum(p => (int)p.StoryPoints);
         return new SprintProgressDto(committed, completed, items.Count, items.Count(p => p.Status == PbiStatus.Done));
     }
 
@@ -57,7 +57,7 @@ public class MetricsDashboardService : IMetricsDashboardService
         var start = sprint.StartDate.Value.Date;
         var end = sprint.EndDate.Value.Date;
         var today = DateTime.UtcNow.Date;
-        var totalPoints = items.Sum(p => (int)p.StoryPoints);
+        var totalPoints = items.Where(p => !p.ParentStoryId.HasValue).Sum(p => (int)p.StoryPoints);
 
         // First/last business day — used to clamp completions that fall outside the window.
         var firstBizDay = start;
@@ -91,6 +91,7 @@ public class MetricsDashboardService : IMetricsDashboardService
         var completionsByDate = new Dictionary<DateTime, double>();
         foreach (var item in items)
         {
+            if (item.ParentStoryId.HasValue) continue;
             var pts = (int)item.StoryPoints;
             if (pts == 0) continue;
 
@@ -166,8 +167,8 @@ public class MetricsDashboardService : IMetricsDashboardService
         foreach (var sprint in closedSprints)
         {
             var items = (await _pbis.GetFilteredPbisAsync(sprint.SprintId, null)).ToList();
-            var committed = (double)items.Sum(p => (int)p.StoryPoints);
-            var completed = (double)items.Where(p => p.Status == PbiStatus.Done).Sum(p => (int)p.StoryPoints);
+            var committed = (double)items.Where(p => !p.ParentStoryId.HasValue).Sum(p => (int)p.StoryPoints);
+            var completed = (double)items.Where(p => !p.ParentStoryId.HasValue && p.Status == PbiStatus.Done).Sum(p => (int)p.StoryPoints);
             result.Add(new VelocityPoint(sprint.SprintTitle ?? $"Sprint {sprint.SprintId}", committed, completed));
         }
         return result;

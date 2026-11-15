@@ -46,7 +46,16 @@ else
             <div><dt>Epic</dt><dd>@(PbiModel.EpicId?.ToString() ?? "Unassigned")</dd></div>
             <div><dt>Assignee</dt><dd>@(string.IsNullOrWhiteSpace(PbiModel.AssignedToUserId) ? "Unassigned" : PbiModel.AssignedToUserId)</dd></div>
             <div><dt>Depends on</dt><dd>@(PbiModel.DependsOnPbiId?.ToString() ?? "None")</dd></div>
+            @if (PbiModel.ProblemStatementId.HasValue)
+            {
+                <div><dt>Problem statement</dt><dd>#@PbiModel.ProblemStatementId</dd></div>
+                <div><dt>Generation run</dt><dd>@(PbiModel.GenerationRunId?.ToString() ?? "Manually linked; no generation snapshot")</dd></div>
+            }
         </dl>
+        @if (PbiModel.ProjectId > 0 && (PbiModel.PbiId > 0 || Currency is not null))
+        {
+            <StoryProvenancePanel Pbi="PbiModel" Currency="Currency" CanLink="@(!ReadOnly && PersistOnSave)" OnChanged="HandleSavedAsync" />
+        }
     </FluentCard>
 
     <PbiDetailsDialog Pbi="PbiModel"
@@ -62,6 +71,7 @@ else
 
 @code {
     [Parameter] public ProductBacklogItem? PbiModel { get; set; }
+    [Parameter] public PlanningArtifactCurrency? Currency { get; set; }
     [Parameter] public int? ProjectId { get; set; }
     [Parameter] public bool ReadOnly { get; set; }
     [Parameter] public bool PersistOnSave { get; set; } = true;

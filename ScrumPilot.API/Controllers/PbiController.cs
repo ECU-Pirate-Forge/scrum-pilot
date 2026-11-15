@@ -69,6 +69,7 @@ public class PbiController(
     }
 
     [HttpPost("ImprovePbi")]
+    [ServiceFilter(typeof(PlanningErrorFilter))]
     public async Task<ActionResult<ProductBacklogItem>> ImprovePbi(
         [FromBody] ProductBacklogItem request,
         CancellationToken cancellationToken = default)
@@ -79,7 +80,7 @@ public class PbiController(
         if (!await ChangedRelatedIdsBelongToProject(existing, request, cancellationToken))
             return NotFound();
         ApplyMutableFields(existing, request);
-        return Ok(await pbiService.ImprovePbiAsync(existing));
+        return Ok(await pbiService.ImprovePbiAsync(existing, cancellationToken));
     }
 
     [HttpPost("createStory")]

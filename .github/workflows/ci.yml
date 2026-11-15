@@ -40,6 +40,8 @@ jobs:
 
       - name: Test (Unit Tests)
         run: dotnet test ./ScrumPilot.UnitTests/ScrumPilot.UnitTests.csproj --no-build --configuration Release --logger trx --results-directory ./TestResults
+      - name: Test (FluentWeb Tests)
+        run: dotnet test ./ScrumPilot.FluentWeb.Tests/ScrumPilot.FluentWeb.Tests.csproj --no-build --configuration Release --logger trx --results-directory ./TestResults
 
       - name: Publish API
         run: dotnet publish ./ScrumPilot.API/ScrumPilot.API.csproj --no-build --configuration Release --output ./publish/api

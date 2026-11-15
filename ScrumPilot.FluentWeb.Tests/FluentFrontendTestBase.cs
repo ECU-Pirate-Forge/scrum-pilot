@@ -30,6 +30,7 @@ public abstract class FluentFrontendTestBase : BunitContext
         Services.AddScoped<MetricsDashboardService>();
         Services.AddScoped<IAppNotificationService, AppNotificationService>();
         Services.AddScoped<IAppDialogService, AppDialogService>();
+        Services.AddSingleton(NSubstitute.Substitute.For<IProjectWorkClient>());
         Services.AddLogging();
         Services.AddSingleton(Http.CreateClient());
 

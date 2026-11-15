@@ -24,6 +24,9 @@
             <FluentTab Header="Stories" IconStart="@(new Icons.Regular.Size20.TaskListSquareLtr())">
                 <ProjectPbiPanel ProjectId="Project.ProjectId" Sprints="Sprints" Epics="Epics" Pbis="Pbis" Loading="LoadingStories" IsOwner="IsOwner" IsSaving="IsSaving" OnLoad="OnLoadStories" OnSave="OnSavePbi" OnDelete="OnDeletePbi" />
             </FluentTab>
+            <FluentTab Header="Guidelines">
+                <ProjectGuidelinesPanel @key="Project.ProjectId" ProjectId="Project.ProjectId" IsOwner="IsOwner" />
+            </FluentTab>
         </FluentTabs>
     }
 </FluentCard>

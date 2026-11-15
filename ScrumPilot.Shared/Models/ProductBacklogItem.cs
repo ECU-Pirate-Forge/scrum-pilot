@@ -53,6 +53,15 @@
         /// <summary>PBI ID this item depends on, used to build the dependency graph.</summary>
         public int? DependsOnPbiId { get; set; }
 
+        public int? ParentStoryId { get; set; }
+        public int? ProblemStatementId { get; set; }
+        public int? GenerationRunId { get; set; }
+
+        public string? GenerationCandidateKey { get; set; }
+
+        /// <summary>Portable optimistic concurrency token managed by persistence.</summary>
+        public long Version { get; set; }
+
         /// <summary>UTC timestamp when this PBI was created.</summary>
         public DateTime DateCreated { get; set; }
 

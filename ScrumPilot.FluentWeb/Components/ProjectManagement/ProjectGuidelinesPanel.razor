@@ -1,0 +1,140 @@
+@using System.Net
+@using System.Net.Http.Json
+@using System.Text
+@using ScrumPilot.Shared.Models
+@inject HttpClient Http
+
+<section aria-label="Project guidelines">
+    <h3>Project guidelines</h3>
+    <p>Saved guidance stays on the configured local AI service. Edits create immutable revisions; generated work is never overwritten.</p>
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <p role="alert">@_error</p>
+    }
+    @if (_loaded)
+    {
+        <p>Current revision: @(_current?.Revision.ToString() ?? "Not saved")</p>
+        @if (IsOwner)
+        {
+            <label for="@_editorId">Markdown guidelines (maximum 128 KiB UTF-8)</label>
+            <textarea id="@_editorId" rows="18" style="width:100%" @bind="_content" disabled="@_busy"></textarea>
+            <p>@Encoding.UTF8.GetByteCount(_content) / 131072 bytes</p>
+            <FluentButton OnClick="SaveAsync" Disabled="@(_busy || string.IsNullOrWhiteSpace(_content))">Save guidelines</FluentButton>
+            <FluentButton OnClick="UseTemplateAsync" Disabled="@(_busy || _content.Length > 0)">Use full 40-section template</FluentButton>
+        }
+        else
+        {
+            <p>Only organization owners can edit guidelines.</p>
+        }
+        <h4>Safe text preview</h4>
+        <pre style="white-space:pre-wrap;overflow-wrap:anywhere">@_content</pre>
+        <FluentButton OnClick="ReloadAsync" Disabled="_busy">Reload saved revision</FluentButton>
+        <h4>Revision history</h4>
+        @foreach (var revision in _history)
+        {
+            <details>
+                <summary>Revision @revision.Revision — @revision.CreatedAt.ToUniversalTime().ToString("u")</summary>
+                <pre style="white-space:pre-wrap;overflow-wrap:anywhere">@revision.Content</pre>
+                @if (IsOwner)
+                {
+                    <FluentButton OnClick="@(() => RestoreAsync(revision.ProjectGuidelinesRevisionId))" Disabled="_busy">Restore as new revision</FluentButton>
+                }
+            </details>
+        }
+    }
+</section>
+
+@code {
+    [Parameter] public int ProjectId { get; set; }
+    [Parameter] public bool IsOwner { get; set; }
+    private readonly string _editorId = "guidelines-" + Guid.NewGuid().ToString("N");
+    private ProjectGuidelinesRevision? _current;
+    private List<ProjectGuidelinesRevision> _history = [];
+    private string _content = "", _error = "";
+    private int _loadedProject;
+    private bool _busy, _loaded;
+    private string Endpoint => $"api/projects/{ProjectId}/guidelines";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedProject == ProjectId) return;
+        _loadedProject = ProjectId;
+        _loaded = false;
+        _content = "";
+        _history = [];
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _busy = true;
+        _error = "";
+        try
+        {
+            using var response = await Http.GetAsync(Endpoint);
+            response.EnsureSuccessStatusCode();
+            _current = response.StatusCode == HttpStatusCode.NoContent ? null :
+                await response.Content.ReadFromJsonAsync<ProjectGuidelinesRevision>();
+            _content = _current?.Content ?? "";
+            _history = await Http.GetFromJsonAsync<List<ProjectGuidelinesRevision>>(Endpoint + "/history") ?? [];
+            _loaded = true;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            _error = "Could not load guidelines. Retry when the project is available.";
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task UseTemplateAsync()
+    {
+        _busy = true;
+        try
+        {
+            var template = await Http.GetFromJsonAsync<TemplateContent>(Endpoint + "/template");
+            _content = template?.Content ?? "";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        { _error = "Could not load the canonical template."; }
+        finally { _busy = false; }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (Encoding.UTF8.GetByteCount(_content) > 128 * 1024)
+        {
+            _error = "Guidelines exceed 128 KiB UTF-8. Nothing was saved or truncated.";
+            return;
+        }
+        await WriteAsync(() => Http.PutAsJsonAsync(Endpoint,
+            new SaveProjectGuidelinesRequest(_content, _current?.ProjectGuidelinesRevisionId)));
+    }
+
+    private Task RestoreAsync(int id) => WriteAsync(() => Http.PostAsJsonAsync($"{Endpoint}/{id}/restore",
+        new RestoreProjectGuidelinesRequest(_current?.ProjectGuidelinesRevisionId)));
+
+    private async Task WriteAsync(Func<Task<HttpResponseMessage>> send)
+    {
+        if (!IsOwner || _busy) return;
+        _busy = true;
+        _error = "";
+        try
+        {
+            using var response = await send();
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = response.StatusCode == HttpStatusCode.Conflict
+                    ? "Guidelines changed. Copy your edits before reloading the saved revision."
+                    : "Guidelines could not be saved. Check your owner access and content.";
+                return;
+            }
+            _current = await response.Content.ReadFromJsonAsync<ProjectGuidelinesRevision>();
+            _content = _current?.Content ?? _content;
+            _history = await Http.GetFromJsonAsync<List<ProjectGuidelinesRevision>>(Endpoint + "/history") ?? [];
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        { _error = "Could not confirm the save. Copy your edits, then reload before retrying."; }
+        finally { _busy = false; }
+    }
+    private sealed record TemplateContent(string Content);
+}

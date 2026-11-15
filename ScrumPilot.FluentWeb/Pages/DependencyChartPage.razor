@@ -5,6 +5,8 @@
 @inject ProjectStateService ProjectState
 @inject IAppNotificationService Notifications
 @inject ILogger<DependencyChartPage> Logger
+@inject IProjectWorkClient WorkClient
+@implements IAsyncDisposable
 
 <PageTitle>Dependency Chart</PageTitle>
 
@@ -25,7 +27,11 @@
     }
     else
     {
-        <DependencyChart Pbis="_pbis" SprintId="SprintId" />
+        @if (_graph is not null)
+        {
+            <p role="status">@WorkClient.Status</p>
+            <SprintDependencyView Graph="_graph" OnChanged="RefreshAsync" />
+        }
     }
 </div>
 
@@ -33,7 +39,16 @@
     [SupplyParameterFromQuery(Name = "sprintId")] public int? SprintId { get; set; }
     [SupplyParameterFromQuery(Name = "projectId")] public int? ProjectId { get; set; }
 
-    private List<ProductBacklogItem> _pbis = [];
+    private DependencyGraphDto? _graph;
+    private int? _liveProjectId;
+    private bool _connectPending;
+    private bool _disposed;
+    private long _requestId;
+    protected override void OnInitialized() => ProjectState.OnChange += ProjectChanged;
+    private void ProjectChanged()
+    {
+        if (!_disposed && !ProjectId.HasValue) _ = InvokeAsync(LoadAsync);
+    }
     private bool _loading = true;
     private string _error = string.Empty;
     private string _sprintLabel = string.Empty;
@@ -60,7 +75,7 @@
     {
         _loading = true;
         _error = string.Empty;
-        _pbis = [];
+        _graph = null;
         _loadedSprintId = SprintId;
         _loadedProjectId = EffectiveProjectId;
 
@@ -72,11 +87,13 @@
                 return;
             }
 
-            var pbiUrl = SprintId.HasValue
-                ? $"api/Pbi/getNonDraftPbis?projectId={EffectiveProjectId.Value}&sprintId={SprintId.Value}"
-                : $"api/Pbi/getNonDraftPbis?projectId={EffectiveProjectId.Value}";
-
-            _pbis = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(pbiUrl) ?? [];
+            if (!SprintId.HasValue)
+            {
+                _error = "Choose a sprint from the Scrum board before viewing its dependency graph.";
+                return;
+            }
+            await FetchGraphAsync();
+            _connectPending = _liveProjectId != EffectiveProjectId;
 
             if (SprintId.HasValue)
             {
@@ -88,6 +105,7 @@
             {
                 _sprintLabel = "All sprints";
             }
+
         }
         catch (Exception ex)
         {
@@ -99,5 +117,45 @@
         {
             _loading = false;
         }
+    }
+
+    private async Task FetchGraphAsync()
+    {
+        var requestId = ++_requestId;
+        var project = EffectiveProjectId;
+        var sprint = SprintId;
+        var graph = await Http.GetFromJsonAsync<DependencyGraphDto>($"api/projects/{project}/sprints/{sprint}/dependency-graph");
+        if (!_disposed && requestId == _requestId && project == EffectiveProjectId && sprint == SprintId
+            && graph is not null && (_graph is null || graph.ProjectId != _graph.ProjectId
+                || graph.SprintId != _graph.SprintId || graph.Revision >= _graph.Revision))
+            _graph = graph;
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (_disposed || !EffectiveProjectId.HasValue || !SprintId.HasValue) return;
+        try { await FetchGraphAsync(); _error = ""; }
+        catch (HttpRequestException ex)
+        {
+            Logger.LogWarning(ex, "Graph refresh failed");
+            _error = "Unable to refresh dependencies. Check project access and retry.";
+            _graph = null;
+        }
+        if (!_disposed) await InvokeAsync(StateHasChanged);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_connectPending || !EffectiveProjectId.HasValue) return;
+        _connectPending = false;
+        _liveProjectId = EffectiveProjectId;
+        await WorkClient.StartAsync(_liveProjectId.Value, () => InvokeAsync(RefreshAsync));
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true; _requestId++;
+        ProjectState.OnChange -= ProjectChanged;
+        await WorkClient.DisposeAsync();
     }
 }

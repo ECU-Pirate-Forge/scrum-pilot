@@ -8,12 +8,24 @@
 @inject ProjectStateService ProjectState
 @inject IAppNotificationService Notifications
 @inject ILogger<PbiGeneration> Logger
+@implements IDisposable
 
 <PageTitle>Generate PBIs</PageTitle>
 
 <div class="pbi-generation-page">
     <AppPageHeader Title="Generate PBIs" Subtitle="Create draft backlog items from problem statements, themes, and milestones." />
 
+    @if (ProjectState.SelectedProjectId.HasValue)
+    {
+        <label><input type="checkbox" @bind="_useLegacyGeneration" /> Use legacy unlinked generation (does not include saved project guidance)</label>
+    }
+    @if (ProjectState.SelectedProjectId is int projectId && !_useLegacyGeneration)
+    {
+        <ProjectStoryGenerationPanel @key="projectId" ProjectId="projectId" />
+    }
+    else
+    {
+    <p>Select a project to use saved problem statements and private project guidance. Generation below uses only your input and remains unlinked.</p>
     <section class="sp-panel pbi-generation-form" aria-labelledby="problem-statements-heading">
         <h2 id="problem-statements-heading">Problem statements</h2>
         <div class="pbi-generation-input-row">
@@ -64,6 +76,7 @@
     <GeneratedPbiDialog PBIs="_generatedPbis"
                         ProjectId="ProjectState.SelectedProjectId"
                         @bind-Open="_generatedDialogOpen" />
+    }
 </div>
 
 @code {
@@ -72,7 +85,12 @@
     private readonly List<string> _problemStatements = [];
     private List<ProductBacklogItem> _generatedPbis = [];
     private bool _generatedDialogOpen;
+    private bool _useLegacyGeneration;
     private string _errorMessage = string.Empty;
+
+    protected override void OnInitialized() => ProjectState.OnChange += ProjectChanged;
+    private void ProjectChanged() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => ProjectState.OnChange -= ProjectChanged;
 
     private void AddProblemStatement()
     {

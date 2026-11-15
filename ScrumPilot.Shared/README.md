@@ -2,7 +2,83 @@
 
 📦 **Shared Models and Contracts Library**
 
-A .NET class library containing all data models, enums, and DTOs shared between `ScrumPilot.API`, `ScrumPilot.Web`, and `ScrumPilot.UnitTests`. This is the single source of truth for all data structures and API contracts.
+A .NET 10 class library containing models, enums, and DTOs shared by the API, FluentWeb, original Web compatibility client, and test projects. This is the single source of truth for shared API contracts.
+
+## Planning Contracts for Client Implementers
+
+The hierarchy is project → saved `ProblemStatement` → Story PBI → child Task PBI.
+`ProductBacklogItem.ParentStoryId` is containment, not a completion prerequisite.
+`ProblemStatementId`, `GenerationRunId`, and `GenerationCandidateKey` preserve
+source/run identity; `Version` is server-managed optimistic concurrency.
+Child tasks inherit the story sprint; child points do not add to story-point totals.
+
+| Contract file | Purpose |
+|---|---|
+| `Models/PlanningModels.cs` | Persisted revisions, source/run/input provenance, repository snapshots, exact allowed files, dependency reviews, PR checks |
+| `Models/ProjectGenerationDtos.cs` | Guidance writes, saved problems, project story batches/proposals/acceptance, explicit legacy linking, artifact currency |
+| `Models/TaskPlanningDtos.cs` | Task proposal keys, selected source paths, acceptance, specifications/approval, PR binding |
+| `Models/RepositoryPlanningDtos.cs` | Repository configuration with expected version, snapshot creation, configuration/enforcement status |
+| `Models/DependencyGraphDtos.cs` | Authoritative graph nodes/edges/revision, replacement dependencies, acceptance review |
+| `Models/DependencyGraphMermaid.cs` | Authoritative Mermaid serializer shared by API and client, including filtered views with prerequisite context |
+| `Models/PullRequestScopeAttempt.cs` | Durable repository/PR/head recovery identity, distinct from a completed scope-check result |
+
+Story proposal identities and task keys identify candidates within generation
+runs, not pre-created draft PBIs. Preview retains source/run audit without adding
+draft/backlog work; acceptance creates selected items and applies `AsDraft` only
+to those accepted items. Legacy stories can be linked
+explicitly but must not be assigned fabricated AI provenance.
+
+### Revision and status semantics
+
+- `PlanningArtifactCurrency` distinguishes source/guidance/archive changes, missing
+  generation snapshots, and dependency review. Review flags do not overwrite content.
+  `CurrentFingerprint`, `ContentChanged`, `ApplicabilityReviewed`,
+  `ApplicabilityReview`, and `CurrentSourceArchived` distinguish a matching audited
+  Owner applicability acknowledgement from original generation provenance.
+  `ReviewStoryApplicabilityRequest` sends exact `ExpectedFingerprint` plus `Reason`;
+  a stale fingerprint conflicts. Applicability review never clears dependency review
+  or approves task file scope.
+- `TaskSpecificationStatusDto.IsCurrent` describes the latest specification's
+  approval/input applicability, not whether the task can start or GitHub protection
+  is configured. Approval and amendments create new immutable revisions/hashes.
+  Approval resolves the snapshot's recorded branch and requires the same SHA;
+  branch movement requires a fresh snapshot, new draft, and reapproval.
+- `DependencyGraphNodeDto` separately exposes `CompletionSatisfied`,
+  `DependencyReady`, `ImplementationEligible`, `IsBoundary`, blockers, and reasons.
+  A Done workflow value can remain unsatisfied after invalidation.
+- `DependencyReview` is current only when `ReviewedRevision` matches
+  `InvalidationRevision`; stale review acknowledgements cannot waive new blockers.
+- `ProjectRepositoryStatus.AppConfigured` is configuration presence, not verified
+  installation/protection. Protection remains Unverified pending administrator action.
+
+The REST API uses numeric enums; FluentWeb's JSON editors use string names locally.
+Preserve existing enum values for compatibility:
+
+| Enum | Stable values |
+|---|---|
+| `PbiType` | Story=0, Bug=1, Task=2 |
+| `PbiStatus` | ToDo=0, InProgress=1, InReview=2, Done=3 |
+| `GenerationState` | Pending=0, Running=1, Succeeded=2, Failed=3, Cancelled=4 |
+| `SpecificationApproval` | Draft=0, Approved=1, Rejected=2 |
+| `TaskScopeMode` | Advisory=0, Enforced=1 |
+| `AllowedFileOperation` | Add=0, Modify=1, Delete=2, Rename=3 |
+| `AllowedFileCategory` | Source=0, Test=1, Configuration=2, Documentation=3, Other=4 |
+| `ScopeCheckState` | Pending=0, Passed=1, Failed=2, Error=3 |
+
+`DependsOnPbiId` remains a nullable single-edge compatibility projection.
+Do not treat null as “no prerequisites” for multi-edge work or send it to replace
+the complete graph. Ambiguous legacy edits conflict; use `SetDependenciesRequest`
+with all intended IDs and the returned graph revision.
+
+Use [API contracts](../docs/api.md) for precise version fields, error/retry behavior,
+and subscription reconciliation. Never include API credentials or App private keys
+in these shared models.
+The specification JSON manifest exposes revision/hash/currentness, branch/SHA,
+and exact file operations; Markdown also includes persisted/inherited
+prerequisites. Neither export grants approval or replaces live readiness checks.
+`PullRequestScopeAttempt` records a head before success publication; a journal
+entry is not a passed result. Do not infer that missing final check rows mean
+GitHub received no check: publication and database persistence are separate effects.
 
 ---
 
@@ -92,228 +168,17 @@ A .NET class library containing all data models, enums, and DTOs shared between 
 
 - `ScrumPilot.API` — server-side entities and DTOs
 - `ScrumPilot.Web` — client-side models and API contracts
+- `ScrumPilot.FluentWeb` — project-aware planning and graph contracts
 - `ScrumPilot.UnitTests` — test data and assertions
+- `ScrumPilot.FluentWeb.Tests` — Fluent component/workflow assertions
 
 
-## 🏗️ Architecture
+## Framework and Structure
 
-This project serves as a **shared library** that defines the common data structures and contracts used throughout the ScrumPilot application, ensuring consistency across all projects.
-
-### Purpose
-- **Model Consistency** - Single source of truth for data structures
-- **Type Safety** - Strong typing across project boundaries
-- **Code Reuse** - Shared logic and validation
-- **API Contracts** - DTOs for client-server communication
-
-## 📋 Models Overview
-
-### Core Domain Models
-
-#### Story
-Primary domain entity representing a user story:
-```csharp
-public class Story
-{
-    public Guid Id { get; set; }
-    public required string Title { get; set; }
-    public string Description { get; set; }
-    public StoryStatus Status { get; set; }
-    public StoryPriority Priority { get; set; }
-    public int? StoryPoints { get; set; }
-    public bool IsAiGenerated { get; set; }
-    public DateTime DateCreated { get; set; }
-    public DateTime LastUpdated { get; set; }
-    public Guid? AssignedUserId { get; set; }
-    public string? AcceptanceCriteria { get; set; }
-}
-```
-
-#### Student  
-User entity for team members:
-```csharp
-public class Student
-{
-    public Guid Id { get; set; }
-    public required string Name { get; set; }
-    public required string Email { get; set; }
-    public string? Role { get; set; }
-    public DateTime DateCreated { get; set; }
-}
-```
-
-### Enumerations
-
-#### StoryStatus
-Defines the lifecycle states of a user story:
-```csharp
-public enum StoryStatus
-{
-    ToDo = 0,       // Story is ready for work
-    InProgress = 1, // Story is currently being worked on
-    Done = 2        // Story is completed
-}
-```
-
-#### StoryPriority
-Defines the priority levels for stories:
-```csharp
-public enum StoryPriority
-{
-    Lowest = 0,     // Nice to have
-    Low = 1,        // Low priority
-    High = 2,       // Important
-    Highest = 3     // Critical/urgent
-}
-```
-
-### Data Transfer Objects
-
-#### AiStoryResponse
-Response model for AI-generated stories:
-```csharp
-public class AiStoryResponse
-{
-    public List<Story> Stories { get; set; } = new();
-    public string? GenerationMetadata { get; set; }
-    public DateTime GeneratedAt { get; set; }
-}
-```
-
-## 🛠️ Technology Stack
-
-### Framework
-- **.NET 10** - Target framework for modern C# features
-- **C# 14.0** - Latest language features
-- **Nullable Reference Types** - Enhanced null safety
-
-### Features
-- **Required Properties** - C# 11+ required keyword
-- **Global Using Statements** - Simplified using declarations  
-- **Implicit Usings** - Automatic common namespace imports
-
-## 📁 Project Structure
-
-```
-ScrumPilot.Shared/
-├── Models/                   # Domain models and DTOs
-│   ├── Story.cs                     # Primary domain entity
-│   ├── Student.cs                   # User/team member model
-│   ├── StoryStatus.cs              # Story lifecycle enumeration
-│   ├── StoryPriority.cs            # Priority level enumeration
-│   └── AiStoryResponse.cs          # AI generation response DTO
-└── ScrumPilot.Shared.csproj        # Project configuration
-```
-
-## 🔄 Usage Across Projects
-
-### In the API Project (ScrumPilot.API)
-```csharp
-using ScrumPilot.Shared.Models;
-
-[ApiController]
-public class StoryController : ControllerBase
-{
-    [HttpGet]
-    public async Task<ActionResult<List<Story>>> GetStories()
-    {
-        // Use shared Story model
-        var stories = await _storyService.GetAllStoriesAsync();
-        return Ok(stories);
-    }
-    
-    [HttpPost]
-    public async Task<ActionResult<Story>> CreateStory([FromBody] Story story)
-    {
-        // Shared model ensures type safety
-        var created = await _storyService.CreateStoryAsync(story);
-        return CreatedAtAction(nameof(GetStory), new { id = created.Id }, created);
-    }
-}
-```
-
-### In the Web Project (ScrumPilot.Web)
-```csharp
-@using ScrumPilot.Shared.Models
-
-@code {
-    private List<Story> stories = new();
-    
-    protected override async Task OnInitializedAsync()
-    {
-        // Use shared models for HTTP communication
-        stories = await Http.GetFromJsonAsync<List<Story>>("Story") ?? new();
-    }
-    
-    private Color GetPriorityColor(StoryPriority priority)
-    {
-        // Use shared enums for consistent logic
-        return priority switch
-        {
-            StoryPriority.Highest => Color.Error,
-            StoryPriority.High => Color.Warning,
-            StoryPriority.Low => Color.Info,
-            StoryPriority.Lowest => Color.Default,
-            _ => Color.Default
-        };
-    }
-}
-```
-
-### In Unit Tests (ScrumPilot.UnitTests)
-```csharp
-using ScrumPilot.Shared.Models;
-using AutoFixture;
-
-public class StoryServiceTests
-{
-    private readonly Fixture _fixture = new();
-    
-    [Fact]
-    public void CreateStory_Should_SetValidDefaults()
-    {
-        // Use shared models for test data
-        var story = _fixture.Create<Story>();
-        story.Status = StoryStatus.ToDo;
-        story.Priority = StoryPriority.High;
-        
-        Assert.Equal(StoryStatus.ToDo, story.Status);
-        Assert.Equal(StoryPriority.High, story.Priority);
-    }
-}
-```
-
-## 📦 Dependencies
-
-This project has **no external dependencies** - it's a pure .NET library containing only models and data structures.
-
-### Project Configuration
-```xml
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
-</Project>
-```
-
-## ✨ Key Features
-
-### Type Safety
-- Strong typing ensures compile-time error detection
-- Shared models prevent API/UI mismatches  
-- Enum values provide controlled vocabularies
-
-### Null Safety
-- Nullable reference types enabled
-- Required properties for essential fields
-- Explicit null handling throughout
-
-### Modern C# Features
-- Record types where appropriate
-- Pattern matching support
-- Global using statements
-- Implicit usings for common namespaces
+The project targets .NET 10 with nullable references and implicit usings.
+Models live under `Models/`; planning-poker contracts are in `Models/PlanningPoker/`.
+The current work-item model is `ProductBacklogItem`, not a separate `Story` class.
+Keep authorization, provider calls, and readiness algorithms in API services.
 
 ## 🔄 Versioning & Compatibility
 
@@ -330,40 +195,18 @@ For breaking changes:
 3. Update all consuming projects
 4. Remove deprecated properties in next major version
 
-## 🧪 Testing Considerations
+## Testing Considerations
 
-### Model Validation
-```csharp
-[Fact]
-public void Story_Should_RequireTitle()
-{
-    // Test required properties
-    var story = new Story { Title = "Test Story" };
-    Assert.NotNull(story.Title);
-}
+Test numeric enum stability, nullable source/parent compatibility, concurrency
+fields, graph/specification status distinctions, and JSON round trips. Use
+sanitized fixtures, not production/private inputs.
 
-[Theory]
-[InlineData(StoryStatus.ToDo)]
-[InlineData(StoryStatus.InProgress)]
-[InlineData(StoryStatus.Done)]
-public void Story_Should_AcceptValidStatuses(StoryStatus status)
-{
-    // Test enum values
-    var story = new Story { Title = "Test", Status = status };
-    Assert.Equal(status, story.Status);
-}
+```powershell
+dotnet test .\ScrumPilot.UnitTests\ScrumPilot.UnitTests.csproj --configuration Release
+dotnet test .\ScrumPilot.FluentWeb.Tests\ScrumPilot.FluentWeb.Tests.csproj --configuration Release
 ```
 
-### Data Generation
-```csharp
-// Use AutoFixture for test data
-var fixture = new Fixture();
-var story = fixture.Create<Story>();
-
-// Override specific properties as needed
-story.Status = StoryStatus.ToDo;
-story.IsAiGenerated = true;
-```
+Expected: passing test summaries. These commands do not report final validation.
 
 ## 🚀 Best Practices
 
@@ -387,9 +230,9 @@ story.IsAiGenerated = true;
 
 ## 📚 Related Documentation
 
-- [Story Model Usage in API](../ScrumPilot.API/README.md#story-controller)
-- [UI Component Integration](../ScrumPilot.Web/README.md#components)
-- [Testing Shared Models](../ScrumPilot.UnitTests/README.md#backend-testing)
+- [Planning API](../docs/api.md)
+- [FluentWeb workflows](../ScrumPilot.FluentWeb/README.md)
+- [Testing shared models](../ScrumPilot.UnitTests/README.md)
 
 ## 🔧 Troubleshooting
 

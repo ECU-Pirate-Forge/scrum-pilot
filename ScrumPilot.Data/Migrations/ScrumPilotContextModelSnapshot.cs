@@ -17,7 +17,7 @@ namespace ScrumPilot.Data.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.5")
+                .HasAnnotation("ProductVersion", "10.0.13")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -152,6 +152,16 @@ namespace ScrumPilot.Data.Migrations
                     b.HasKey("UserId", "LoginProvider", "Name");
 
                     b.ToTable("AspNetUserTokens", (string)null);
+                });
+
+            modelBuilder.Entity("ScrumPilot.Data.Context.PlanningPurgeScope", b =>
+                {
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("ProjectId");
+
+                    b.ToTable("PlanningPurgeScopes", (string)null);
                 });
 
             modelBuilder.Entity("ScrumPilot.Data.Models.ApplicationUser", b =>
@@ -290,6 +300,78 @@ namespace ScrumPilot.Data.Migrations
                     b.ToTable("Comment", (string)null);
                 });
 
+            modelBuilder.Entity("ScrumPilot.Shared.Models.DependencyReview", b =>
+                {
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PbiId")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("InvalidationRevision")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReviewedByActorId")
+                        .HasColumnType("text");
+
+                    b.Property<long?>("ReviewedRevision")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("ProjectId", "PbiId");
+
+                    b.ToTable("DependencyReviews", t =>
+                        {
+                            t.HasCheckConstraint("CK_DependencyReview_Revision", "\"InvalidationRevision\" >= 0 AND (\"ReviewedRevision\" IS NULL OR (\"ReviewedRevision\" >= 0 AND \"ReviewedRevision\" <= \"InvalidationRevision\"))");
+                        });
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.DependencyReviewEvent", b =>
+                {
+                    b.Property<int>("DependencyReviewEventId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("DependencyReviewEventId"));
+
+                    b.Property<bool>("Accepted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ActorId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("InvalidationRevision")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("PbiId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("DependencyReviewEventId");
+
+                    b.HasAlternateKey("ProjectId", "DependencyReviewEventId");
+
+                    b.HasIndex("ProjectId", "PbiId", "InvalidationRevision");
+
+                    b.ToTable("DependencyReviewEvents");
+                });
+
             modelBuilder.Entity("ScrumPilot.Shared.Models.Epic", b =>
                 {
                     b.Property<int>("EpicId")
@@ -315,6 +397,126 @@ namespace ScrumPilot.Data.Migrations
                     b.ToTable("Epic", (string)null);
                 });
 
+            modelBuilder.Entity("ScrumPilot.Shared.Models.GenerationInput", b =>
+                {
+                    b.Property<int>("GenerationInputId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("GenerationInputId"));
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("GenerationRunId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ProblemStatementId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ProjectGuidelinesRevisionId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("RepositorySnapshotId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("GenerationInputId");
+
+                    b.HasAlternateKey("ProjectId", "GenerationInputId");
+
+                    b.HasIndex("GenerationRunId")
+                        .IsUnique();
+
+                    b.HasIndex("ProjectId", "GenerationRunId");
+
+                    b.HasIndex("ProjectId", "ProblemStatementId");
+
+                    b.HasIndex("ProjectId", "ProjectGuidelinesRevisionId");
+
+                    b.HasIndex("ProjectId", "RepositorySnapshotId");
+
+                    b.ToTable("GenerationInputs");
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.GenerationRun", b =>
+                {
+                    b.Property<int>("GenerationRunId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("GenerationRunId"));
+
+                    b.Property<string>("ActorId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ErrorCode")
+                        .HasColumnType("text");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Model")
+                        .HasColumnType("text");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("GenerationRunId");
+
+                    b.HasIndex("ProjectId", "Kind", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.ToTable("GenerationRuns");
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.GitHubWebhookDelivery", b =>
+                {
+                    b.Property<string>("DeliveryId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("DeliveryId");
+
+                    b.ToTable("GitHubWebhookDeliveries");
+                });
+
             modelBuilder.Entity("ScrumPilot.Shared.Models.MessageTranscript", b =>
                 {
                     b.Property<int>("Id")
@@ -330,6 +532,46 @@ namespace ScrumPilot.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("MessageTranscripts");
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.NonTaskPullRequestException", b =>
+                {
+                    b.Property<int>("NonTaskPullRequestExceptionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("NonTaskPullRequestExceptionId"));
+
+                    b.Property<string>("ActorId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ProjectRepositoryId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PullRequestNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("NonTaskPullRequestExceptionId");
+
+                    b.HasAlternateKey("ProjectId", "NonTaskPullRequestExceptionId");
+
+                    b.HasIndex("ProjectId", "ProjectRepositoryId");
+
+                    b.HasIndex("ProjectRepositoryId", "PullRequestNumber")
+                        .IsUnique();
+
+                    b.ToTable("NonTaskPullRequestExceptions");
                 });
 
             modelBuilder.Entity("ScrumPilot.Shared.Models.Organization", b =>
@@ -458,6 +700,34 @@ namespace ScrumPilot.Data.Migrations
                     b.ToTable("OrganizationMemberships", (string)null);
                 });
 
+            modelBuilder.Entity("ScrumPilot.Shared.Models.PbiDependency", b =>
+                {
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DependentPbiId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PrerequisitePbiId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ActorId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("ProjectId", "DependentPbiId", "PrerequisitePbiId");
+
+                    b.HasIndex("ProjectId", "PrerequisitePbiId");
+
+                    b.ToTable("PbiDependencies", t =>
+                        {
+                            t.HasCheckConstraint("CK_Dependency_NotSelf", "\"DependentPbiId\" <> \"PrerequisitePbiId\"");
+                        });
+                });
+
             modelBuilder.Entity("ScrumPilot.Shared.Models.PbiStatusHistory", b =>
                 {
                     b.Property<int>("Id")
@@ -487,6 +757,81 @@ namespace ScrumPilot.Data.Migrations
                     b.ToTable("PbiStatusHistory", (string)null);
                 });
 
+            modelBuilder.Entity("ScrumPilot.Shared.Models.PlanningArtifactReview", b =>
+                {
+                    b.Property<int>("PlanningArtifactReviewId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("PlanningArtifactReviewId"));
+
+                    b.Property<string>("ActorId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("PbiId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.HasKey("PlanningArtifactReviewId");
+
+                    b.HasIndex("ProjectId", "PbiId", "Fingerprint");
+
+                    b.ToTable("PlanningArtifactReviews", (string)null);
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.ProblemStatement", b =>
+                {
+                    b.Property<int>("ProblemStatementId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ProblemStatementId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("ProblemStatementId");
+
+                    b.HasIndex("ProjectId", "IsArchived");
+
+                    b.ToTable("ProblemStatements");
+                });
+
             modelBuilder.Entity("ScrumPilot.Shared.Models.ProductBacklogItem", b =>
                 {
                     b.Property<int>("PbiId")
@@ -512,6 +857,13 @@ namespace ScrumPilot.Data.Migrations
                     b.Property<int?>("EpicId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("GenerationCandidateKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int?>("GenerationRunId")
+                        .HasColumnType("integer");
+
                     b.Property<bool>("IsDraft")
                         .HasColumnType("boolean");
 
@@ -528,9 +880,15 @@ namespace ScrumPilot.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int?>("ParentStoryId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Priority")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<int?>("ProblemStatementId")
+                        .HasColumnType("integer");
 
                     b.Property<int>("ProjectId")
                         .HasColumnType("integer");
@@ -554,17 +912,31 @@ namespace ScrumPilot.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
                     b.HasKey("PbiId");
 
                     b.HasIndex("AssignedToUserId");
 
                     b.HasIndex("EpicId");
 
-                    b.HasIndex("ProjectId");
-
                     b.HasIndex("SprintId");
 
-                    b.ToTable("Stories");
+                    b.HasIndex("GenerationRunId", "GenerationCandidateKey")
+                        .IsUnique();
+
+                    b.HasIndex("ProjectId", "GenerationRunId");
+
+                    b.HasIndex("ProjectId", "ParentStoryId");
+
+                    b.HasIndex("ProjectId", "ProblemStatementId");
+
+                    b.ToTable("Stories", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Stories_Parent", "\"ParentStoryId\" IS NULL OR \"ParentStoryId\" <> \"PbiId\"");
+                        });
                 });
 
             modelBuilder.Entity("ScrumPilot.Shared.Models.Project", b =>
@@ -574,6 +946,9 @@ namespace ScrumPilot.Data.Migrations
                         .HasColumnType("integer");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ProjectId"));
+
+                    b.Property<int?>("CurrentGuidelinesRevisionId")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Description")
                         .HasColumnType("text");
@@ -589,7 +964,64 @@ namespace ScrumPilot.Data.Migrations
 
                     b.HasIndex("OrganizationId");
 
+                    b.HasIndex("ProjectId", "CurrentGuidelinesRevisionId");
+
                     b.ToTable("Project", (string)null);
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.ProjectGraphState", b =>
+                {
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("ProjectId");
+
+                    b.ToTable("ProjectGraphStates");
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.ProjectGuidelinesRevision", b =>
+                {
+                    b.Property<int>("ProjectGuidelinesRevisionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ProjectGuidelinesRevisionId"));
+
+                    b.Property<string>("ActorId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("integer");
+
+                    b.HasKey("ProjectGuidelinesRevisionId");
+
+                    b.HasIndex("ProjectId", "Revision")
+                        .IsUnique();
+
+                    b.ToTable("ProjectGuidelinesRevisions", t =>
+                        {
+                            t.HasCheckConstraint("CK_Guidelines_Revision", "\"Revision\" > 0");
+                        });
                 });
 
             modelBuilder.Entity("ScrumPilot.Shared.Models.ProjectMembership", b =>
@@ -614,6 +1046,191 @@ namespace ScrumPilot.Data.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("ProjectMemberships", (string)null);
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.ProjectRepository", b =>
+                {
+                    b.Property<int>("ProjectRepositoryId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ProjectRepositoryId"));
+
+                    b.Property<string>("DefaultBranch")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("GitHubRepositoryId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("InstallationId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Owner")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("ProjectRepositoryId");
+
+                    b.HasIndex("GitHubRepositoryId")
+                        .IsUnique();
+
+                    b.HasIndex("ProjectId")
+                        .IsUnique();
+
+                    b.HasIndex("ProjectId", "GitHubRepositoryId")
+                        .IsUnique();
+
+                    b.ToTable("ProjectRepositories");
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.PullRequestScopeAttempt", b =>
+                {
+                    b.Property<int>("PullRequestScopeAttemptId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("PullRequestScopeAttemptId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("HeadSha")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ProjectRepositoryId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PullRequestNumber")
+                        .HasColumnType("integer");
+
+                    b.HasKey("PullRequestScopeAttemptId");
+
+                    b.HasIndex("ProjectId", "ProjectRepositoryId");
+
+                    b.HasIndex("ProjectRepositoryId", "PullRequestNumber");
+
+                    b.ToTable("PullRequestScopeAttempts");
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.PullRequestScopeCheck", b =>
+                {
+                    b.Property<int>("PullRequestScopeCheckId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("PullRequestScopeCheckId"));
+
+                    b.Property<string>("BaseSha")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("GitHubCheckId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("HeadSha")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("MergeBaseSha")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ResultJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("TaskPullRequestBindingId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TaskSpecificationRevisionId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("PullRequestScopeCheckId");
+
+                    b.HasAlternateKey("ProjectId", "PullRequestScopeCheckId");
+
+                    b.HasIndex("ProjectId", "TaskPullRequestBindingId");
+
+                    b.HasIndex("ProjectId", "TaskSpecificationRevisionId");
+
+                    b.HasIndex("TaskPullRequestBindingId", "HeadSha", "TaskSpecificationRevisionId", "CreatedAt");
+
+                    b.ToTable("PullRequestScopeChecks");
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.RepositorySnapshot", b =>
+                {
+                    b.Property<int>("RepositorySnapshotId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("RepositorySnapshotId"));
+
+                    b.Property<string>("Branch")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("CommitSha")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ProjectRepositoryId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TreeJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TreeSha")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("RepositorySnapshotId");
+
+                    b.HasIndex("ProjectId", "ProjectRepositoryId");
+
+                    b.HasIndex("ProjectRepositoryId", "Branch", "CommitSha")
+                        .IsUnique();
+
+                    b.ToTable("RepositorySnapshots");
                 });
 
             modelBuilder.Entity("ScrumPilot.Shared.Models.Sprint", b =>
@@ -650,6 +1267,176 @@ namespace ScrumPilot.Data.Migrations
                     b.HasIndex("ProjectId");
 
                     b.ToTable("Sprint", (string)null);
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.TaskAllowedFile", b =>
+                {
+                    b.Property<int>("TaskAllowedFileId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("TaskAllowedFileId"));
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Rationale")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("RenameFromPath")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<int>("TaskSpecificationRevisionId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("TaskAllowedFileId");
+
+                    b.HasAlternateKey("ProjectId", "TaskAllowedFileId");
+
+                    b.HasIndex("ProjectId", "TaskSpecificationRevisionId");
+
+                    b.HasIndex("TaskSpecificationRevisionId", "Path")
+                        .IsUnique();
+
+                    b.ToTable("TaskAllowedFiles", t =>
+                        {
+                            t.HasCheckConstraint("CK_AllowedFile_Rename", "(\"Operation\" = 'Rename' AND \"RenameFromPath\" IS NOT NULL) OR (\"Operation\" <> 'Rename' AND \"RenameFromPath\" IS NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.TaskPullRequestBinding", b =>
+                {
+                    b.Property<int>("TaskPullRequestBindingId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("TaskPullRequestBindingId"));
+
+                    b.Property<string>("ActorId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("PbiId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ProjectRepositoryId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PullRequestNumber")
+                        .HasColumnType("integer");
+
+                    b.HasKey("TaskPullRequestBindingId");
+
+                    b.HasIndex("ProjectId", "PbiId");
+
+                    b.HasIndex("ProjectId", "ProjectRepositoryId");
+
+                    b.HasIndex("ProjectRepositoryId", "PullRequestNumber")
+                        .IsUnique();
+
+                    b.HasIndex("PbiId", "ProjectRepositoryId", "PullRequestNumber")
+                        .IsUnique();
+
+                    b.ToTable("TaskPullRequestBindings", t =>
+                        {
+                            t.HasCheckConstraint("CK_Binding_Number", "\"PullRequestNumber\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.TaskSpecificationRevision", b =>
+                {
+                    b.Property<int>("TaskSpecificationRevisionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("TaskSpecificationRevisionId"));
+
+                    b.Property<string>("ActorId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Approval")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ApprovedByActorId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("GenerationRunId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PbiId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ProjectGuidelinesRevisionId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("RepositorySnapshotId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ScopeMode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("TaskSpecificationRevisionId");
+
+                    b.HasIndex("PbiId", "Revision")
+                        .IsUnique();
+
+                    b.HasIndex("ProjectId", "GenerationRunId");
+
+                    b.HasIndex("ProjectId", "PbiId");
+
+                    b.HasIndex("ProjectId", "ProjectGuidelinesRevisionId");
+
+                    b.HasIndex("ProjectId", "RepositorySnapshotId");
+
+                    b.ToTable("TaskSpecificationRevisions", t =>
+                        {
+                            t.HasCheckConstraint("CK_Specification_Revision", "\"Revision\" > 0");
+                        });
                 });
 
             modelBuilder.Entity("ScrumPilot.Shared.Models.UserDashboardPreference", b =>
@@ -743,12 +1530,97 @@ namespace ScrumPilot.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ScrumPilot.Shared.Models.DependencyReview", b =>
+                {
+                    b.HasOne("ScrumPilot.Shared.Models.ProductBacklogItem", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "PbiId")
+                        .HasPrincipalKey("ProjectId", "PbiId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.DependencyReviewEvent", b =>
+                {
+                    b.HasOne("ScrumPilot.Shared.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ScrumPilot.Shared.Models.ProductBacklogItem", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "PbiId")
+                        .HasPrincipalKey("ProjectId", "PbiId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ScrumPilot.Shared.Models.Epic", b =>
                 {
                     b.HasOne("ScrumPilot.Shared.Models.Project", null)
                         .WithMany("Epics")
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.GenerationInput", b =>
+                {
+                    b.HasOne("ScrumPilot.Shared.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ScrumPilot.Shared.Models.GenerationRun", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "GenerationRunId")
+                        .HasPrincipalKey("ProjectId", "GenerationRunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ScrumPilot.Shared.Models.ProblemStatement", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "ProblemStatementId")
+                        .HasPrincipalKey("ProjectId", "ProblemStatementId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ScrumPilot.Shared.Models.ProjectGuidelinesRevision", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "ProjectGuidelinesRevisionId")
+                        .HasPrincipalKey("ProjectId", "ProjectGuidelinesRevisionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ScrumPilot.Shared.Models.RepositorySnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "RepositorySnapshotId")
+                        .HasPrincipalKey("ProjectId", "RepositorySnapshotId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.GenerationRun", b =>
+                {
+                    b.HasOne("ScrumPilot.Shared.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.NonTaskPullRequestException", b =>
+                {
+                    b.HasOne("ScrumPilot.Shared.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ScrumPilot.Shared.Models.ProjectRepository", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "ProjectRepositoryId")
+                        .HasPrincipalKey("ProjectId", "ProjectRepositoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
@@ -784,12 +1656,54 @@ namespace ScrumPilot.Data.Migrations
                     b.Navigation("Organization");
                 });
 
+            modelBuilder.Entity("ScrumPilot.Shared.Models.PbiDependency", b =>
+                {
+                    b.HasOne("ScrumPilot.Shared.Models.ProductBacklogItem", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "DependentPbiId")
+                        .HasPrincipalKey("ProjectId", "PbiId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ScrumPilot.Shared.Models.ProductBacklogItem", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "PrerequisitePbiId")
+                        .HasPrincipalKey("ProjectId", "PbiId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ScrumPilot.Shared.Models.PbiStatusHistory", b =>
                 {
                     b.HasOne("ScrumPilot.Shared.Models.ProductBacklogItem", null)
                         .WithMany()
                         .HasForeignKey("PbiId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.PlanningArtifactReview", b =>
+                {
+                    b.HasOne("ScrumPilot.Shared.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ScrumPilot.Shared.Models.ProductBacklogItem", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "PbiId")
+                        .HasPrincipalKey("ProjectId", "PbiId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.ProblemStatement", b =>
+                {
+                    b.HasOne("ScrumPilot.Shared.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
@@ -813,6 +1727,24 @@ namespace ScrumPilot.Data.Migrations
                     b.HasOne("ScrumPilot.Shared.Models.Sprint", null)
                         .WithMany("ProductBacklogItems")
                         .HasForeignKey("SprintId");
+
+                    b.HasOne("ScrumPilot.Shared.Models.GenerationRun", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "GenerationRunId")
+                        .HasPrincipalKey("ProjectId", "GenerationRunId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ScrumPilot.Shared.Models.ProductBacklogItem", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "ParentStoryId")
+                        .HasPrincipalKey("ProjectId", "PbiId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ScrumPilot.Shared.Models.ProblemStatement", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "ProblemStatementId")
+                        .HasPrincipalKey("ProjectId", "ProblemStatementId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("ScrumPilot.Shared.Models.Project", b =>
@@ -823,7 +1755,31 @@ namespace ScrumPilot.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("ScrumPilot.Shared.Models.ProjectGuidelinesRevision", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "CurrentGuidelinesRevisionId")
+                        .HasPrincipalKey("ProjectId", "ProjectGuidelinesRevisionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Organization");
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.ProjectGraphState", b =>
+                {
+                    b.HasOne("ScrumPilot.Shared.Models.Project", null)
+                        .WithOne()
+                        .HasForeignKey("ScrumPilot.Shared.Models.ProjectGraphState", "ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.ProjectGuidelinesRevision", b =>
+                {
+                    b.HasOne("ScrumPilot.Shared.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("ScrumPilot.Shared.Models.ProjectMembership", b =>
@@ -847,6 +1803,64 @@ namespace ScrumPilot.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ScrumPilot.Shared.Models.ProjectRepository", b =>
+                {
+                    b.HasOne("ScrumPilot.Shared.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.PullRequestScopeAttempt", b =>
+                {
+                    b.HasOne("ScrumPilot.Shared.Models.ProjectRepository", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "ProjectRepositoryId")
+                        .HasPrincipalKey("ProjectId", "ProjectRepositoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.PullRequestScopeCheck", b =>
+                {
+                    b.HasOne("ScrumPilot.Shared.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ScrumPilot.Shared.Models.TaskPullRequestBinding", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "TaskPullRequestBindingId")
+                        .HasPrincipalKey("ProjectId", "TaskPullRequestBindingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ScrumPilot.Shared.Models.TaskSpecificationRevision", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "TaskSpecificationRevisionId")
+                        .HasPrincipalKey("ProjectId", "TaskSpecificationRevisionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.RepositorySnapshot", b =>
+                {
+                    b.HasOne("ScrumPilot.Shared.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ScrumPilot.Shared.Models.ProjectRepository", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "ProjectRepositoryId")
+                        .HasPrincipalKey("ProjectId", "ProjectRepositoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ScrumPilot.Shared.Models.Sprint", b =>
                 {
                     b.HasOne("ScrumPilot.Shared.Models.Project", null)
@@ -854,6 +1868,79 @@ namespace ScrumPilot.Data.Migrations
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.TaskAllowedFile", b =>
+                {
+                    b.HasOne("ScrumPilot.Shared.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ScrumPilot.Shared.Models.TaskSpecificationRevision", null)
+                        .WithMany("AllowedFiles")
+                        .HasForeignKey("ProjectId", "TaskSpecificationRevisionId")
+                        .HasPrincipalKey("ProjectId", "TaskSpecificationRevisionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.TaskPullRequestBinding", b =>
+                {
+                    b.HasOne("ScrumPilot.Shared.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ScrumPilot.Shared.Models.ProductBacklogItem", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "PbiId")
+                        .HasPrincipalKey("ProjectId", "PbiId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ScrumPilot.Shared.Models.ProjectRepository", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "ProjectRepositoryId")
+                        .HasPrincipalKey("ProjectId", "ProjectRepositoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.TaskSpecificationRevision", b =>
+                {
+                    b.HasOne("ScrumPilot.Shared.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ScrumPilot.Shared.Models.GenerationRun", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "GenerationRunId")
+                        .HasPrincipalKey("ProjectId", "GenerationRunId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ScrumPilot.Shared.Models.ProductBacklogItem", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "PbiId")
+                        .HasPrincipalKey("ProjectId", "PbiId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ScrumPilot.Shared.Models.ProjectGuidelinesRevision", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "ProjectGuidelinesRevisionId")
+                        .HasPrincipalKey("ProjectId", "ProjectGuidelinesRevisionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ScrumPilot.Shared.Models.RepositorySnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "RepositorySnapshotId")
+                        .HasPrincipalKey("ProjectId", "RepositorySnapshotId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("ScrumPilot.Shared.Models.UserDashboardPreference", b =>
@@ -907,6 +1994,11 @@ namespace ScrumPilot.Data.Migrations
             modelBuilder.Entity("ScrumPilot.Shared.Models.Sprint", b =>
                 {
                     b.Navigation("ProductBacklogItems");
+                });
+
+            modelBuilder.Entity("ScrumPilot.Shared.Models.TaskSpecificationRevision", b =>
+                {
+                    b.Navigation("AllowedFiles");
                 });
 #pragma warning restore 612, 618
         }

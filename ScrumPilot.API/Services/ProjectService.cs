@@ -11,7 +11,7 @@ public sealed class ProjectService(
     IProjectAccessRepository repository,
     IOrganizationAccessService accessService,
     TimeProvider timeProvider,
-    IPlanningPokerConnectionEvictor connectionEvictor) : IProjectService
+    IPlanningPokerConnectionEvictor connectionEvictor, ProjectWorkConnectionEvictor? workConnections = null) : IProjectService
 {
     private const int MaxNameLength = 200;
 
@@ -98,6 +98,7 @@ public sealed class ProjectService(
             throw new ProjectNotFoundException();
         }
         await connectionEvictor.EvictProjectAsync(projectId, cancellationToken);
+        if (workConnections is not null) await workConnections.EvictAsync(projectId: projectId, ct: cancellationToken);
     }
 
     public async Task<IReadOnlyList<ProjectMemberAccessDto>> GetMembersAsync(
@@ -151,6 +152,8 @@ public sealed class ProjectService(
                         userId,
                         projectId,
                         cancellationToken);
+                    if (workConnections is not null) await workConnections.EvictAsync(
+                        projectId: projectId, userId: userId, ct: cancellationToken);
                 }
                 return;
             case ProjectAccessMutationResult.ProjectNotFound:

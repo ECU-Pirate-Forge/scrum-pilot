@@ -40,9 +40,35 @@
 
                 <PbiCard PbiModel="current.Pbi"
                          ProjectId="ProjectId"
+                         Currency="@(current.Proposal?.Currency)"
                          PersistOnSave="false"
-                         ReadOnly="@(current.State != GeneratedPbiSaveState.Pending)"
+                         ReadOnly="@(current.State != GeneratedPbiSaveState.Pending || current.Proposal is not null)"
                          OnChanged="@((ProductBacklogItem pbi) => UpdateCurrent(pbi))" />
+
+                @if (current.Proposal is not null && current.State == GeneratedPbiSaveState.Pending)
+                {
+                    <fieldset disabled="@_isCommitting">
+                        <legend>Edit proposed story content</legend>
+                        <label>Title <input data-testid="project-proposal-title" @bind="current.Pbi.Title" maxlength="200" /></label>
+                        <label>Description and acceptance criteria (maximum 2000 characters) <textarea @bind="current.Pbi.Description" rows="6" maxlength="2000"></textarea></label>
+                        <label>Priority
+                            <select @bind="current.Pbi.Priority">
+                                @foreach (var priority in Enum.GetValues<PbiPriority>())
+                                {
+                                    <option value="@priority">@priority</option>
+                                }
+                            </select>
+                        </label>
+                        <label>Story points
+                            <select @bind="current.Pbi.StoryPoints">
+                                @foreach (var points in Enum.GetValues<PbiPoints>())
+                                {
+                                    <option value="@points">@((int)points)</option>
+                                }
+                            </select>
+                        </label>
+                    </fieldset>
+                }
 
                 <nav class="generated-dialog__nav" aria-label="Generated PBI navigation">
                     <FluentButton Appearance="ButtonAppearance.Outline" IconStart="@(new Icons.Regular.Size20.ChevronLeft())" OnClick="ShowPrevious" Disabled="@(_currentIndex == 0 || _isCommitting)">Previous</FluentButton>
@@ -77,6 +103,7 @@
 
 @code {
     [Parameter] public IReadOnlyList<ProductBacklogItem> PBIs { get; set; } = [];
+    [Parameter] public IReadOnlyList<StoryProposalDto> Proposals { get; set; } = [];
     [Parameter] public int? ProjectId { get; set; }
     [Parameter] public bool Open { get; set; }
     [Parameter] public EventCallback<bool> OpenChanged { get; set; }
@@ -85,6 +112,7 @@
 
     private readonly List<GeneratedPbiReviewItem> _items = [];
     private IReadOnlyList<ProductBacklogItem>? _initializedPbis;
+    private IReadOnlyList<StoryProposalDto>? _initializedProposals;
     private int _currentIndex;
     private bool _isCommitting;
     private string _errorMessage = string.Empty;
@@ -92,11 +120,21 @@
 
     protected override void OnParametersSet()
     {
-        if (!ReferenceEquals(_initializedPbis, PBIs))
+        if (!ReferenceEquals(_initializedPbis, PBIs) || !ReferenceEquals(_initializedProposals, Proposals))
         {
             _initializedPbis = PBIs;
+            _initializedProposals = Proposals;
             _items.Clear();
-            _items.AddRange(PBIs.Select(pbi => new GeneratedPbiReviewItem(pbi)));
+            if (Proposals.Count > 0)
+                _items.AddRange(Proposals.Select(proposal => new GeneratedPbiReviewItem(proposal.Pbi)
+                {
+                    Proposal = proposal,
+                    State = proposal.AcceptedPbiId.HasValue
+                        ? (proposal.Pbi.IsDraft ? GeneratedPbiSaveState.SavedAsDraft : GeneratedPbiSaveState.AddedToBacklog)
+                        : GeneratedPbiSaveState.Pending
+                }));
+            else
+                _items.AddRange(PBIs.Select(pbi => new GeneratedPbiReviewItem(pbi)));
             _currentIndex = 0;
             _errorMessage = string.Empty;
         }
@@ -135,6 +173,44 @@
         _isCommitting = true;
         try
         {
+            if (items.Any(item => item.Proposal is null && item.Pbi.GenerationRunId.HasValue))
+            {
+                _errorMessage = "Project-generated stories require their proposal identities. Reopen the project generation run.";
+                return;
+            }
+            if (items.Any(item => item.Proposal is not null))
+            {
+                if (items.Any(item => item.Proposal is null))
+                {
+                    _errorMessage = "Do not mix legacy results with project proposals. Reload the generation preview.";
+                    return;
+                }
+                // Partial network failures leave completed groups marked saved; retries update the same durable identities.
+                foreach (var group in items.GroupBy(item => item.Proposal!.GenerationRunId))
+                {
+                    var projectPayload = new AcceptProjectStoriesRequest(group.Key, asDraft, group.Select(item =>
+                        new AcceptStoryProposal(item.Proposal!.ProposalId, item.Proposal.Pbi.Version, item.Pbi.Title,
+                            item.Pbi.Description, item.Pbi.Priority, item.Pbi.StoryPoints)).ToList());
+                    using var projectResponse = await Http.PostAsJsonAsync($"api/projects/{ProjectId.Value}/story-generation/accept", projectPayload);
+                    if (!projectResponse.IsSuccessStatusCode)
+                    {
+                        _errorMessage = "Could not save this run. Reload on a version conflict; retrying never creates another story.";
+                        return;
+                    }
+                    var saved = await projectResponse.Content.ReadFromJsonAsync<List<ProductBacklogItem>>() ?? [];
+                    foreach (var item in group)
+                    {
+                        var updated = saved.SingleOrDefault(p => p.GenerationRunId == item.Proposal!.GenerationRunId &&
+                            p.GenerationCandidateKey == item.Proposal.Pbi.GenerationCandidateKey)
+                            ?? throw new System.Text.Json.JsonException("The acceptance response did not contain the requested candidate identity.");
+                        item.Pbi = updated;
+                        item.State = asDraft ? GeneratedPbiSaveState.SavedAsDraft : GeneratedPbiSaveState.AddedToBacklog;
+                    }
+                    await OnSaved.InvokeAsync(saved);
+                }
+                Notifications.ShowSuccess("Project stories saved with their source and generation run.");
+                return;
+            }
             foreach (var item in items)
             {
                 item.Pbi.ProjectId = ProjectId.Value;
@@ -160,10 +236,10 @@
             Notifications.ShowSuccess($"{items.Count} PBI{(items.Count == 1 ? string.Empty : "s")} saved {(asDraft ? "as drafts" : "to the backlog")}.");
             await OnSaved.InvokeAsync(payload);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
         {
             Logger.LogWarning(ex, "Failed to save generated PBIs");
-            _errorMessage = ex is TaskCanceledException ? "Saving PBIs timed out. Please try again." : "Network error while saving PBIs.";
+            _errorMessage = ex is TaskCanceledException ? "Saving PBIs timed out. Please try again." : "Could not confirm the save. Retry project proposals safely or reload the run.";
             Notifications.ShowError(_errorMessage);
         }
         finally
@@ -215,6 +291,7 @@
     private sealed class GeneratedPbiReviewItem(ProductBacklogItem pbi)
     {
         public ProductBacklogItem Pbi { get; set; } = pbi;
+        public StoryProposalDto? Proposal { get; init; }
         public GeneratedPbiSaveState State { get; set; }
     }
 

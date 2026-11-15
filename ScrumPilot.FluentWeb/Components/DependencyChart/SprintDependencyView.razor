@@ -1,0 +1,173 @@
+@using ScrumPilot.FluentWeb.Components.Pbi
+@inject IJSRuntime JS
+@inject HttpClient Http
+@inject ILogger<SprintDependencyView> Logger
+@implements IDisposable
+
+<section aria-label="Sprint dependencies">
+    <p>Revision @Graph.Revision. Arrows run from prerequisite to dependent. Ready does not mean approved file scope.</p>
+    <label>State filter
+        <select @bind="_filter">
+            <option value="">All states</option>
+            <option>Ready</option><option>Blocked</option><option>Active</option><option>Done</option><option>Needs review</option>
+        </select>
+    </label>
+    <label>Story or problem ID / title
+        <input @bind="_search" @bind:event="oninput" />
+    </label>
+    <div role="toolbar" aria-label="Graph viewport and export">
+        @foreach (var action in new[] { "in", "out", "left", "right", "up", "down", "reset" })
+        {
+            <FluentButton OnClick="@(() => ViewportAsync(action))">@(action == "in" ? "Zoom in" : action == "out" ? "Zoom out" : action == "reset" ? "Fit / reset" : $"Pan {action}")</FluentButton>
+        }
+        <FluentButton OnClick="@(() => ExportAsync("mmd"))">Export Mermaid</FluentButton>
+        <FluentButton OnClick="@(() => ExportAsync("svg"))">Export SVG</FluentButton>
+    </div>
+    @if (_error.Length > 0) { <p role="alert">@_error</p> }
+    @foreach (var diagnostic in Graph.Diagnostics) { <p role="alert">@diagnostic</p> }
+    @if (Graph.Nodes.Length > 200) { <p>Large graph: use filters and the dependency list. No work has been omitted from readiness calculations.</p> }
+    <div id="@_id" class="dependency-chart" aria-label="Dependency diagram"></div>
+    <p>Ready: prerequisites satisfied. Blocked: unresolved prerequisites. Active: started. Done: valid completion. Needs review: invalidated acceptance. External: outside this sprint.</p>
+    <table>
+        <caption>Dependency list (the filtered diagram retains prerequisite context)</caption>
+        <thead><tr><th>Work</th><th>State</th><th>Scope</th><th>Blockers / reason</th><th>Actions</th></tr></thead>
+        <tbody>
+            @foreach (var node in VisibleNodes)
+            {
+                <tr>
+                    <td><button @onclick="@(() => _selected = node.Item)">#@node.Item.PbiId @node.Item.Title</button>
+                        @if (node.IsBoundary) { <span> (External, read only)</span> }
+                        @if (node.Item.ParentStoryId.HasValue) { <span> / Story #@node.Item.ParentStoryId</span> }
+                        @if (node.Item.ProblemStatementId.HasValue) { <span> / Problem #@node.Item.ProblemStatementId</span> }
+                    </td>
+                    <td>@node.State</td>
+                    <td>@(node.ImplementationEligible ? "Approved implementation" : "Unapproved / legacy scope")</td>
+                    <td>@string.Join(" ", node.Reasons)</td>
+                    <td>
+                        @if (!node.IsBoundary)
+                        {
+                            <FluentButton OnClick="@(() => Edit(node))">Dependencies</FluentButton>
+                            @if (node.State == "Needs review")
+                            {
+                                <FluentButton OnClick="@(() => ReviewAsync(node.Item.PbiId))">Review acceptance</FluentButton>
+                            }
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    @if (_editing is not null)
+    {
+        <section aria-label="Edit dependencies">
+            <h3>Prerequisites for #@_editing.Item.PbiId</h3>
+            <p>Enter comma-separated prerequisite PBI IDs in this project. Empty removes dependencies. This may require acceptance reviews for already started work.</p>
+            <label>Prerequisite IDs <input @bind="_prerequisites" /></label>
+            <FluentButton OnClick="SaveDependenciesAsync">Save dependencies</FluentButton>
+            <FluentButton OnClick="@(() => _editing = null)">Cancel</FluentButton>
+        </section>
+    }
+</section>
+<PbiDetailsDialog Pbi="_selected" Open="@(_selected is not null)" ReadOnly="@(_selected is not null && Graph.Nodes.Any(node => node.Item.PbiId == _selected.PbiId && node.IsBoundary))"
+                  ProjectId="Graph.ProjectId" OnSaved="SavedAsync" OnCancelled="@(() => _selected = null)" />
+
+@code {
+    [Parameter, EditorRequired] public DependencyGraphDto Graph { get; set; } = default!;
+    [Parameter] public EventCallback OnChanged { get; set; }
+    private readonly string _id = "sprint-graph-" + Guid.NewGuid().ToString("N");
+    private string? _lastDefinition;
+    private string _filter = "", _search = "", _error = "", _prerequisites = "";
+    private DependencyGraphNodeDto? _editing;
+    private long _editRevision;
+    private int _editProject;
+    private ProductBacklogItem? _selected;
+    private DotNetObjectReference<SprintDependencyView>? _reference;
+    private IEnumerable<DependencyGraphNodeDto> VisibleNodes => Graph.Nodes.Where(node =>
+        (_filter.Length == 0 || node.State == _filter) && (_search.Length == 0 ||
+            $"{node.Item.PbiId} {node.Item.Title} {node.Item.ParentStoryId} {node.Item.ProblemStatementId}".Contains(_search, StringComparison.OrdinalIgnoreCase)));
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var ids = VisibleNodes.Select(node => node.Item.PbiId).ToHashSet();
+        var pending = new Queue<int>(ids);
+        while (pending.TryDequeue(out var id))
+        {
+            var node = Graph.Nodes.Single(item => item.Item.PbiId == id);
+            foreach (var prerequisite in node.BlockingIds.Concat(Graph.Edges.Where(edge => edge.DependentId == id)
+                         .Select(edge => edge.PrerequisiteId)))
+                if (Graph.Nodes.Any(item => item.Item.PbiId == prerequisite) && ids.Add(prerequisite)) pending.Enqueue(prerequisite);
+        }
+        var definition = DependencyGraphMermaid.Write(Graph.Nodes.Where(node => ids.Contains(node.Item.PbiId)).ToArray(), Graph.Edges, Graph.Revision);
+        if (_lastDefinition == definition) return;
+        _lastDefinition = definition;
+        try
+        {
+            await JS.InvokeVoidAsync("mermaidHelper.render", _id, definition);
+            _reference ??= DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("mermaidHelper.attachNodes", _id, _reference, ids.ToArray());
+            _error = "";
+        }
+        catch (JSException ex)
+        {
+            Logger.LogWarning(ex, "Sprint graph rendering failed");
+            _error = "Unable to render the chart. The dependency list remains available.";
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    [JSInvokable]
+    public async Task OpenNodeAsync(int id)
+    {
+        _selected = Graph.Nodes.SingleOrDefault(node => node.Item.PbiId == id)?.Item;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => _reference?.Dispose();
+
+    private async Task ViewportAsync(string action) => await JS.InvokeVoidAsync("mermaidHelper.viewport", _id, action);
+    private async Task ExportAsync(string format)
+    {
+        try { await JS.InvokeVoidAsync("mermaidHelper.download", _id, format); }
+        catch (JSException ex) { Logger.LogWarning(ex, "Graph export failed"); _error = "Render the graph before exporting."; }
+    }
+    private void Edit(DependencyGraphNodeDto node)
+    {
+        _editing = node;
+        _editRevision = Graph.Revision;
+        _editProject = Graph.ProjectId;
+        _prerequisites = string.Join(", ", Graph.Edges.Where(edge => edge.DependentId == node.Item.PbiId).Select(edge => edge.PrerequisiteId));
+    }
+    private async Task SaveDependenciesAsync()
+    {
+        if (_editing is null) return;
+        var segments = _prerequisites.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (segments.Any(segment => !int.TryParse(segment, out var id) || id <= 0))
+        { _error = "Use positive PBI IDs separated by commas."; return; }
+        await MutateAsync(() => Http.PutAsJsonAsync($"api/projects/{_editProject}/dependencies",
+            new SetDependenciesRequest(_editing.Item.PbiId, segments.Select(int.Parse).ToArray(), _editRevision)));
+    }
+    private async Task ReviewAsync(int id)
+    {
+        try
+        {
+            var reviews = await Http.GetFromJsonAsync<List<DependencyReview>>($"api/projects/{Graph.ProjectId}/dependency-reviews") ?? [];
+            var review = reviews.SingleOrDefault(item => item.PbiId == id);
+            if (review is null) { _error = "No review record is available. Resolve child/prerequisite work and refresh."; return; }
+            await MutateAsync(() => Http.PostAsJsonAsync($"api/projects/{Graph.ProjectId}/dependencies/review",
+                new ReviewDependencyRequest(id, review.InvalidationRevision)));
+        }
+        catch (HttpRequestException ex) { Logger.LogWarning(ex, "Review lookup failed"); _error = "Unable to load current acceptance review."; }
+    }
+    private async Task MutateAsync(Func<Task<HttpResponseMessage>> send)
+    {
+        try
+        {
+            using var response = await send();
+            if (!response.IsSuccessStatusCode) { _error = await response.Content.ReadAsStringAsync(); return; }
+            _editing = null; _error = "";
+            await OnChanged.InvokeAsync();
+        }
+        catch (HttpRequestException ex) { Logger.LogWarning(ex, "Dependency update failed"); _error = "Unable to update dependencies."; }
+    }
+    private async Task SavedAsync(ProductBacklogItem item) { _selected = null; await OnChanged.InvokeAsync(); }
+}

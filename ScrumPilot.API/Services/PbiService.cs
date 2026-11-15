@@ -11,11 +11,16 @@ namespace ScrumPilot.API.Services
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _configuration;
         private readonly IPbiRepository _pbiRepository;
-        public PbiService(HttpClient httpClient, IConfiguration configuration, IPbiRepository pbiRepository)
+        private readonly ScrumPilot.Data.Context.ScrumPilotContext? _planningContext;
+        private readonly LocalPlanningAi? _localPlanningAi;
+        public PbiService(HttpClient httpClient, IConfiguration configuration, IPbiRepository pbiRepository,
+            ScrumPilot.Data.Context.ScrumPilotContext? planningContext = null, LocalPlanningAi? localPlanningAi = null)
         {
             _httpClient = httpClient;
             _configuration = configuration;
             _pbiRepository = pbiRepository;
+            _planningContext = planningContext;
+            _localPlanningAi = localPlanningAi;
         }
 
         //public async Task<IEnumerable<ProductBacklogItem>> GetActivePbisAsync(int epicId) //This is for the Discord bot - Future State
@@ -73,8 +78,38 @@ namespace ScrumPilot.API.Services
                 .ToList();
         }
 
-        public async Task<ProductBacklogItem> ImprovePbiAsync(ProductBacklogItem pbi)
+        public async Task<ProductBacklogItem> ImprovePbiAsync(ProductBacklogItem pbi, CancellationToken cancellationToken = default)
         {
+            if (pbi.PbiId > 0 && pbi.ProjectId > 0 && _planningContext is not null)
+            {
+                var guidelines = await new ProjectGuidelinesService(_planningContext)
+                    .CurrentAsync(pbi.ProjectId, cancellationToken);
+                if (guidelines is not null)
+                {
+                    if (_localPlanningAi is null)
+                        throw new InvalidOperationException("Saved project guidance requires local planning AI. External fallback is disabled.");
+                    var output = await _localPlanningAi.GenerateAsync<ProjectStoryAiOutput>("""
+                        Improve this backlog item's title and description using the project guidelines.
+                        Preserve the item's intent. The description, including acceptance criteria, must not exceed 2000 characters. Return exactly one story in:
+                        {"stories":[{"title":"improved title","description":"user story and observable acceptance criteria","priority":"Medium","storyPoints":"Zero"}]}.
+                        Priority is None, Low, Medium or High. StoryPoints is Zero, One, Two, Three, Five, Eight, Thirteen or TwentyOne.
+                        Do not output identifiers or additional properties.
+                        """, new { pbi.Title, pbi.Description, pbi.Type, pbi.Priority, pbi.StoryPoints, Guidelines = guidelines.Content },
+                        cancellationToken);
+                    if (output.Stories is null || output.Stories.Count != 1)
+                        throw new InvalidOperationException("AI improvement must return exactly one item.");
+                    var improved = output.Stories[0];
+                    if (string.IsNullOrWhiteSpace(improved.Title) || improved.Title.Length > 200 ||
+                        string.IsNullOrWhiteSpace(improved.Description) || improved.Description.Length > 2000 ||
+                        !Enum.IsDefined(improved.Priority) || !Enum.IsDefined(improved.StoryPoints))
+                        throw new InvalidOperationException("Local AI returned invalid improvement content.");
+                    pbi.Title = improved.Title;
+                    pbi.Description = improved.Description;
+                    pbi.Priority = improved.Priority;
+                    pbi.StoryPoints = improved.StoryPoints;
+                    return pbi; // Preserve all server-loaded identity, source and run fields; caller decides whether to save.
+                }
+            }
             var groqApiKey = _configuration["GroqApiKey"];
             var prompt = BuildImprovementPrompt(pbi);
             string responseContent;

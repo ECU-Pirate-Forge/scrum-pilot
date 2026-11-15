@@ -64,6 +64,21 @@ builder.Services.AddAuthorizationBuilder()
 
 // Add services to the container.
 builder.Services.AddSignalR();
+builder.Services.AddScoped<ScrumPilot.API.Controllers.PlanningErrorFilter>();
+builder.Services.AddSingleton<ProjectWorkSubscriptions>();
+builder.Services.AddScoped<ProjectWorkNotifier>();
+builder.Services.AddScoped<ProjectGuidelinesService>();
+builder.Services.AddScoped<ProjectStoryGenerationService>();
+builder.Services.AddScoped<ProjectWorkConnectionEvictor>();
+builder.Services.AddScoped<ProjectDependencyService>();
+builder.Services.AddScoped<RepositoryContextService>();
+builder.Services.AddScoped<TaskSpecificationService>();
+builder.Services.AddScoped<TaskGenerationService>();
+builder.Services.AddScoped<PullRequestScopeService>();
+builder.Services.AddScoped<IPlanningMutationHandler>(services => services.GetRequiredService<ProjectDependencyService>());
+builder.Services.Configure<GitHubAppOptions>(builder.Configuration.GetSection("GitHubApp"));
+builder.Services.AddHttpClient<GitHubAppClient>();
+builder.Services.AddHttpClient<LocalPlanningAi>(client => client.Timeout = TimeSpan.FromMinutes(5));
 builder.Services.AddSingleton<PlanningPokerSessionService>();
 builder.Services.AddSingleton<IPlanningPokerConnectionEvictor, PlanningPokerConnectionEvictor>();
 builder.Services.AddScoped<IProjectService, ProjectService>();
@@ -88,7 +103,7 @@ builder.Services.AddHttpClient<IPbiService, PbiService>(client =>
 {
     client.Timeout = TimeSpan.FromMinutes(5);
 });
-builder.Services.AddControllers();
+builder.Services.AddControllers(options => options.Filters.AddService<ScrumPilot.API.Controllers.PlanningErrorFilter>());
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 builder.Services.AddSwaggerGen();
@@ -135,4 +150,5 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<PlanningPokerHub>("/hubs/planning-poker");
+app.MapHub<ProjectWorkHub>("/hubs/project-work");
 app.Run();

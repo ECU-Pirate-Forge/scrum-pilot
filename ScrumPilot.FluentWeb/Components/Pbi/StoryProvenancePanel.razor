@@ -1,0 +1,140 @@
+@using System.Net.Http.Json
+@using ScrumPilot.Shared.Models
+@inject HttpClient Http
+@inject OrganizationStateService OrganizationState
+
+@if (Pbi.ProblemStatementId.HasValue)
+{
+    @if (_currency?.RequiresReview == true)
+    {
+        <p role="status">Review needed:
+            @(_currency.ContentChanged ? "content or applicability inputs changed since Owner review; " : "")
+            @(_currency.SourceChanged ? "source changed; " : "")
+            @(_currency.GuidelinesChanged ? "guidelines changed; " : "")
+            @(_currency.SourceArchived ? "source archived; " : "")
+            @(_currency.DependencyReviewRequired ? "dependencies need review; " : "")
+            @(!_currency.HasGenerationSnapshot && !_currency.ApplicabilityReviewed ? "no generation snapshot; " : "")
+            existing content was retained.
+        </p>
+    }
+    @if (_currency?.ApplicabilityReviewed == true)
+    {
+        <p>Owner reviewed content applicability to the current source and guidelines. Original generation provenance was retained.</p>
+        @if (_currency.CurrentSourceArchived)
+        {
+            <p>The current source remains archived.</p>
+        }
+    }
+    else if (_currency is not null && !_currency.RequiresReview)
+    {
+        <p>Source and guidelines match the generation snapshot (guidelines revision ID @(_currency.GuidelinesRevisionId?.ToString() ?? "none")).</p>
+    }
+    @if (Pbi.PbiId > 0)
+    {
+        <FluentButton OnClick="LoadCurrencyAsync" Disabled="_busy">Refresh provenance</FluentButton>
+    }
+    @if (_currency?.ApplicabilityReview is { } review)
+    {
+        <p>Latest applicable or previous Owner review: @review.CreatedAt.ToUniversalTime().ToString("u") — @review.Reason</p>
+    }
+    @if (Pbi.PbiId > 0 && _currency is { CurrentFingerprint.Length: > 0 } &&
+        OrganizationState.SelectedOrganization?.Role == OrganizationRole.Owner)
+    {
+        <details>
+            <summary>Review content applicability</summary>
+            <p>Acknowledge that the existing story requirements still apply to the current source and guidelines.
+                This does not approve dependencies or overwrite content.</p>
+            <label>Review reason <textarea data-testid="applicability-review-reason" @bind="_reviewReason" maxlength="2000" rows="3"></textarea></label>
+            <FluentButton OnClick="ReviewAsync" Disabled="@(_busy || string.IsNullOrWhiteSpace(_reviewReason))">Confirm content applicability</FluentButton>
+        </details>
+    }
+}
+else if (CanLink && Pbi.PbiId > 0 && Pbi.Type == PbiType.Story)
+{
+    <details>
+        <summary>Link legacy story to a problem statement</summary>
+        <p>This records an explicit manual source link, not an AI generation history.</p>
+        <FluentButton OnClick="LoadSourcesAsync" Disabled="_busy">Choose problem statement</FluentButton>
+        @if (_sources is not null)
+        {
+            <label>
+                Problem statement
+                <select @bind="_sourceId">
+                    <option value="0">Select a source</option>
+                    @foreach (var source in _sources.Where(s => !s.IsArchived))
+                    {
+                        <option value="@source.ProblemStatementId">#@source.ProblemStatementId — @source.Title</option>
+                    }
+                </select>
+            </label>
+            <FluentButton OnClick="LinkAsync" Disabled="@(_busy || _sourceId == 0)">Confirm manual source link</FluentButton>
+        }
+    </details>
+}
+@if (_error.Length > 0) { <p role="alert">@_error</p> }
+
+@code {
+    [Parameter, EditorRequired] public ProductBacklogItem Pbi { get; set; } = default!;
+    [Parameter] public PlanningArtifactCurrency? Currency { get; set; }
+    [Parameter] public bool CanLink { get; set; }
+    [Parameter] public EventCallback<ProductBacklogItem> OnChanged { get; set; }
+    private PlanningArtifactCurrency? _currency;
+    private List<ProblemStatement>? _sources;
+    private (int Id, long Version, int? Source) _loaded;
+    private string _error = "";
+    private string _reviewReason = "";
+    private int _sourceId;
+    private bool _busy;
+    private string Root => $"api/projects/{Pbi.ProjectId}";
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Currency is not null) { _currency = Currency; return; }
+        var key = (Pbi.PbiId, Pbi.Version, Pbi.ProblemStatementId);
+        if (_loaded == key) return;
+        _loaded = key;
+        _currency = null;
+        _sources = null;
+        if (Pbi.ProblemStatementId.HasValue) await LoadCurrencyAsync();
+    }
+    private Task LoadCurrencyAsync() => WorkAsync(async () =>
+        _currency = await Http.GetFromJsonAsync<PlanningArtifactCurrency>($"{Root}/story-generation/stories/{Pbi.PbiId}/currency"));
+    private Task LoadSourcesAsync() => WorkAsync(async () =>
+        _sources = await Http.GetFromJsonAsync<List<ProblemStatement>>(Root + "/problem-statements") ?? []);
+    private Task ReviewAsync() => WorkAsync(async () =>
+    {
+        if (_currency is null) return;
+        using var response = await Http.PostAsJsonAsync($"{Root}/story-generation/stories/{Pbi.PbiId}/review",
+            new ReviewStoryApplicabilityRequest(_currency.CurrentFingerprint, _reviewReason));
+        if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
+        {
+            _error = "Story inputs changed. Refresh provenance and review again; your reason was retained.";
+            return;
+        }
+        response.EnsureSuccessStatusCode();
+        _currency = await response.Content.ReadFromJsonAsync<PlanningArtifactCurrency>();
+        _reviewReason = "";
+    });
+    private Task LinkAsync() => WorkAsync(async () =>
+    {
+        using var response = await Http.PostAsJsonAsync($"{Root}/story-generation/stories/{Pbi.PbiId}/link-source",
+            new LinkLegacyStoryRequest(_sourceId, Pbi.Version));
+        response.EnsureSuccessStatusCode();
+        var linked = await response.Content.ReadFromJsonAsync<ProductBacklogItem>();
+        if (linked is null) return;
+        Pbi.ProblemStatementId = linked.ProblemStatementId;
+        Pbi.Version = linked.Version;
+        Pbi.LastUpdated = linked.LastUpdated;
+        await OnChanged.InvokeAsync(Pbi);
+        _currency = await Http.GetFromJsonAsync<PlanningArtifactCurrency>($"{Root}/story-generation/stories/{Pbi.PbiId}/currency");
+    });
+    private async Task WorkAsync(Func<Task> action)
+    {
+        if (_busy) return;
+        _busy = true;
+        _error = "";
+        try { await action(); }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        { _error = "Provenance could not be loaded or updated. Refresh provenance before retrying; unsaved review text was retained."; }
+        finally { _busy = false; }
+    }
+}

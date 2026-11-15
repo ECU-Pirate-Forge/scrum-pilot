@@ -9,7 +9,7 @@ public sealed class OrganizationService(
     ICurrentUser currentUser,
     IOrganizationAccessService accessService,
     TimeProvider timeProvider,
-    IPlanningPokerConnectionEvictor connectionEvictor) : IOrganizationService
+    IPlanningPokerConnectionEvictor connectionEvictor, ProjectWorkConnectionEvictor? workConnections = null) : IOrganizationService
 {
     private const int MaxNameLength = 200;
 
@@ -98,6 +98,7 @@ public sealed class OrganizationService(
             UtcNow,
             cancellationToken));
         await connectionEvictor.EvictOrganizationAsync(organizationId, cancellationToken);
+        if (workConnections is not null) await workConnections.EvictAsync(organizationId: organizationId, ct: cancellationToken);
     }
 
     public async Task<OrganizationSummaryDto> RestoreAsync(
@@ -151,6 +152,7 @@ public sealed class OrganizationService(
 
         HandleMutation(await repository.PurgeAsync(organizationId, cancellationToken));
         await connectionEvictor.EvictOrganizationAsync(organizationId, cancellationToken);
+        if (workConnections is not null) await workConnections.EvictAsync(organizationId: organizationId, ct: cancellationToken);
     }
 
     public async Task<IReadOnlyList<OrganizationMemberDto>> ListMembersAsync(
@@ -181,6 +183,8 @@ public sealed class OrganizationService(
             userId,
             organizationId,
             cancellationToken);
+        if (workConnections is not null) await workConnections.EvictAsync(
+            organizationId: organizationId, userId: userId, ct: cancellationToken);
     }
 
     public async Task RemoveMemberAsync(
@@ -197,6 +201,8 @@ public sealed class OrganizationService(
             userId,
             organizationId,
             cancellationToken);
+        if (workConnections is not null) await workConnections.EvictAsync(
+            organizationId: organizationId, userId: userId, ct: cancellationToken);
     }
 
     public async Task LeaveAsync(
@@ -212,6 +218,8 @@ public sealed class OrganizationService(
             currentUser.UserId,
             organizationId,
             cancellationToken);
+        if (workConnections is not null) await workConnections.EvictAsync(
+            organizationId: organizationId, userId: currentUser.UserId, ct: cancellationToken);
     }
 
     private DateTime UtcNow => timeProvider.GetUtcNow().UtcDateTime;

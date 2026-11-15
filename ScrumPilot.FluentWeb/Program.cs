@@ -29,6 +29,7 @@ builder.Services.AddSingleton<ProjectStateService>();
 builder.Services.AddScoped<MetricsDashboardService>();
 builder.Services.AddScoped<OrganizationStateService>();
 builder.Services.AddScoped<AppThemeService>();
+builder.Services.AddScoped<IProjectWorkClient, ProjectWorkClient>();
 builder.Services.AddScoped<IAppNotificationService, AppNotificationService>();
 builder.Services.AddScoped<IAppDialogService, AppDialogService>();
 builder.Services.AddApexCharts();

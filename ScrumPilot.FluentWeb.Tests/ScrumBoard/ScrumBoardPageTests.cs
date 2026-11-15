@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
@@ -164,7 +165,10 @@ public class DependencyChartPageTests : FluentFrontendTestBase
     [Fact]
     public void Dependency_chart_page_passes_sprintId()
     {
-        Http.OnGetJson("api/Pbi/getNonDraftPbis", SampleItems());
+        var graph = new DependencyGraphDto(42, 10, 7, SampleItems().Select(item => new DependencyGraphNodeDto(
+            item, item.Status == PbiStatus.Done ? "Done" : "Active", item.Status == PbiStatus.Done,
+            false, false, false, [], [])).ToArray(), [new(2, 1)], "flowchart LR\nPBI1 --> PBI2", []);
+        Http.OnGetJson("api/projects/42/sprints/10/dependency-graph", graph);
         Http.OnGetJson("api/Sprint", new[] { new Sprint { SprintId = 10, ProjectId = 42, SprintTitle = "Sprint 10" } });
         Services.GetRequiredService<NavigationManager>().NavigateTo("/dependency-chart?sprintId=10");
 
@@ -172,9 +176,62 @@ public class DependencyChartPageTests : FluentFrontendTestBase
 
         cut.WaitForAssertion(() =>
         {
-            var chart = cut.FindComponent<DependencyChart>();
-            Assert.Equal(10, chart.Instance.SprintId);
-            Assert.Contains("depends on", chart.Instance.BuildMermaidDefinition());
+            var chart = cut.FindComponent<SprintDependencyView>();
+            Assert.Equal(10, chart.Instance.Graph.SprintId);
+            Assert.Equal(7, chart.Instance.Graph.Revision);
+            Assert.Contains("Foundation", cut.Markup);
+            Assert.Contains("Dependent work", cut.Markup);
+        });
+    }
+
+    [Fact]
+    public void MissingSprintRequiresExplicitSelection()
+    {
+        using var cut = Render<DependencyChartPage>();
+        cut.WaitForAssertion(() => Assert.Contains("Choose a sprint", cut.Markup));
+        Assert.Empty(cut.FindComponents<SprintDependencyView>());
+    }
+
+    [Fact]
+    public async Task LiveRefreshDoesNotReplaceTheDependencyEditorsExpectedRevision()
+    {
+        var graph = new DependencyGraphDto(42, 10, 7, SampleItems().Select(item => new DependencyGraphNodeDto(
+            item, "Active", false, false, false, false, [], [])).ToArray(), [new(2, 1)], "", []);
+        Http.On(HttpMethod.Put, "api/projects/42/dependencies", (_, _) =>
+            new HttpResponseMessage(HttpStatusCode.Conflict) { Content = new StringContent("Reload the changed graph.") });
+        using var cut = Render<SprintDependencyView>(parameters => parameters.Add(component => component.Graph, graph));
+        cut.FindAll("fluent-button").Last(button => button.TextContent.Trim() == "Dependencies").Click();
+        await cut.InvokeAsync(() => cut.Render(parameters => parameters.Add(component => component.Graph,
+            graph with { Revision = 8, Edges = [new(2, 1), new(2, 3)] })));
+        cut.FindAll("fluent-button").Single(button => button.TextContent.Trim() == "Save dependencies").Click();
+        cut.WaitForAssertion(() =>
+        {
+            var request = Assert.Single(Http.RequestsTo(HttpMethod.Put, "api/projects/42/dependencies"));
+            var body = JsonSerializer.Deserialize<SetDependenciesRequest>(request.Body!, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+            Assert.Equal(7, body.ExpectedRevision);
+            Assert.Contains("Reload the changed graph", cut.Markup);
+        });
+    }
+
+    [Fact]
+    public void ReadyFilterRetainsPrerequisiteContextInDiagramButNotFilteredTable()
+    {
+        var ready = new ProductBacklogItem { PbiId = 1, ProjectId = 42, Title = "Ready work" };
+        var blocked = new ProductBacklogItem { PbiId = 2, ProjectId = 42, Title = "Blocked work" };
+        var done = new ProductBacklogItem { PbiId = 3, ProjectId = 42, Title = "Completed prerequisite", Status = PbiStatus.Done };
+        var graph = new DependencyGraphDto(42, 10, 1,
+            [new(ready, "Ready", false, true, true, false, [], []),
+             new(blocked, "Blocked", false, false, false, false, [4], []),
+             new(done, "Done", true, false, false, false, [], [])], [new(1, 3)], "", []);
+        using var cut = Render<SprintDependencyView>(parameters => parameters.Add(component => component.Graph, graph));
+        cut.Find("select").Change("Ready");
+        cut.WaitForAssertion(() =>
+        {
+            var definition = (string)JSInterop.Invocations["mermaidHelper.render"].Last().Arguments[1]!;
+            Assert.Contains("Ready work", definition);
+            Assert.Contains("Completed prerequisite", definition);
+            Assert.DoesNotContain("Blocked work", definition);
+            Assert.DoesNotContain("Blocked work", cut.Find("tbody").TextContent);
         });
     }
 

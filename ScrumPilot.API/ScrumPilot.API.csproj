@@ -35,6 +35,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="..\docs\templates\ai-agent-project-guidelines.md" LogicalName="ScrumPilot.ProjectGuidelinesTemplate.md" />
     <ProjectReference Include="..\ScrumPilot.Data\ScrumPilot.Data.csproj" />
     <ProjectReference Include="..\ScrumPilot.Shared\ScrumPilot.Shared.csproj" />
     <ProjectReference Include="..\ScrumPilot.Web\ScrumPilot.Web.csproj" />

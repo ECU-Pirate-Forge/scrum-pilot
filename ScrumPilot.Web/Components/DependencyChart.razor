@@ -1,6 +1,8 @@
 @inject IJSRuntime JS
+@inject ILogger<DependencyChart> Logger
 
 <div>
+    <MudText Typo="Typo.body2">This compatibility chart shows the legacy dependency projection. Use the FluentWeb client for multiple dependencies, readiness reviews, and approved task specifications.</MudText>
     @if (!Pbis.Any())
     {
         <MudText Typo="Typo.body1" Style="font-style: italic; color: var(--mud-palette-text-secondary);">
@@ -24,14 +26,30 @@
     [Parameter, EditorRequired] public IReadOnlyList<ProductBacklogItem> Pbis { get; set; } = [];
 
     private readonly string _containerId = "dep-chart-" + Guid.NewGuid().ToString("N")[..8];
+    private string? _definition;
+    private bool _renderRequested;
     private bool HasAnyDependency => Pbis.Any(p => p.DependsOnPbiId.HasValue && Pbis.Any(x => x.PbiId == p.DependsOnPbiId.Value));
+
+    protected override void OnParametersSet()
+    {
+        var next = BuildMermaidDefinition();
+        _renderRequested = next != _definition;
+        _definition = next;
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && Pbis.Any())
+        if ((firstRender || _renderRequested) && Pbis.Any())
         {
-            var definition = BuildMermaidDefinition();
-            await JS.InvokeVoidAsync("mermaidHelper.render", _containerId, definition);
+            _renderRequested = false;
+            try
+            {
+                await JS.InvokeVoidAsync("mermaidHelper.render", _containerId, _definition);
+            }
+            catch (JSException ex)
+            {
+                Logger.LogError(ex, "Unable to render dependency chart");
+            }
         }
     }
 
@@ -43,7 +61,9 @@
         // Declare all nodes — Done uses a stadium shape to visually separate them
         foreach (var pbi in Pbis)
         {
-            var safeTitle = pbi.Title.Replace("\"", "'").Replace("\n", " ");
+            var safeTitle = string.Concat(pbi.Title.Select(character =>
+                char.IsAsciiLetterOrDigit(character) || character is ' ' or '-' or '_' or '.'
+                    ? character.ToString() : char.IsControl(character) ? " " : $"#{(int)character};"));
             var truncated = safeTitle.Length > 40 ? safeTitle[..40] + "…" : safeTitle;
             var flagIndicator = pbi.IsFlagged ? " 🚩" : "";
 

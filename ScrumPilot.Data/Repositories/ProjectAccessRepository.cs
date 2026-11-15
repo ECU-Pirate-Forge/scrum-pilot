@@ -111,6 +111,8 @@ public sealed class ProjectAccessRepository(ScrumPilotContext context)
         }
 
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        await context.PurgeProjectPlanningAsync(projectId, cancellationToken);
+        project.CurrentGuidelinesRevisionId = null;
         var usersWithProjectDefault = await context.Users
             .Where(user => user.DefaultProjectId == projectId)
             .ToListAsync(cancellationToken);

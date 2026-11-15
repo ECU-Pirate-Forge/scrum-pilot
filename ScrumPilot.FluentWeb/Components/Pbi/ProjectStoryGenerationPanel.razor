@@ -1,0 +1,142 @@
+@using System.Net.Http.Json
+@using ScrumPilot.Shared.Models
+@inject HttpClient Http
+
+<section aria-label="Project story generation">
+    <h2>Saved problem statements</h2>
+    <p>Generation uses this project's saved guidelines and local AI only. Previews do not add backlog items or drafts. Only accepted proposals create work.</p>
+    @if (_error.Length > 0) { <p role="alert">@_error</p> }
+    @if (_notice.Length > 0) { <p role="status">@_notice</p> }
+    <fieldset disabled="@_busy">
+        <legend>Add a problem statement</legend>
+        <label>Title <input @bind="_title" maxlength="200" /></label>
+        <label>Problem <textarea @bind="_text" rows="4"></textarea></label>
+        <FluentButton OnClick="CreateAsync" Disabled="@(_busy || string.IsNullOrWhiteSpace(_title) || string.IsNullOrWhiteSpace(_text))">Save problem statement</FluentButton>
+    </fieldset>
+    @foreach (var source in _sources)
+    {
+        <fieldset disabled="@_busy" @key="source.ProblemStatementId">
+            <legend>Problem #@source.ProblemStatementId @(source.IsArchived ? "(archived)" : "")</legend>
+            @if (!source.IsArchived)
+            {
+                <label><input type="checkbox" checked="@_selected.Contains(source.ProblemStatementId)" @onchange="@(() => Toggle(source.ProblemStatementId))" /> Generate stories for this problem</label>
+            }
+            <label>Title <input @bind="source.Title" maxlength="200" /></label>
+            <label>Problem text <textarea @bind="source.Text" rows="3"></textarea></label>
+            <FluentButton OnClick="@(() => SaveSourceAsync(source, source.IsArchived))" Disabled="_busy">Save edits</FluentButton>
+            <FluentButton OnClick="@(() => SaveSourceAsync(source, !source.IsArchived))" Disabled="_busy">@(source.IsArchived ? "Unarchive" : "Archive")</FluentButton>
+        </fieldset>
+    }
+    <FluentButton OnClick="GenerateAsync" Disabled="@(_busy || _selected.Count == 0)">Generate selected stories (local)</FluentButton>
+    <FluentButton OnClick="ReloadAsync" Disabled="_busy">Reload statements and runs</FluentButton>
+    @if (_busy) { <p role="status">Working…</p> }
+    <h3>Generation runs</h3>
+    @foreach (var run in _runs)
+    {
+        <div>
+            Problem #@run.ProblemStatementId · Run #@run.GenerationRunId · @run.State
+            @if (run.ErrorCode is not null) { <span> — @run.ErrorCode. Retry generation with a new run.</span> }
+            @if (run.Proposals.Count > 0)
+            {
+                <FluentButton OnClick="@(() => Review(run.Proposals))" Disabled="_busy">Review run #@run.GenerationRunId</FluentButton>
+            }
+        </div>
+    }
+    <GeneratedPbiDialog PBIs="_previewPbis" Proposals="_previewProposals" ProjectId="ProjectId"
+                        @bind-Open="_previewOpen" OnClosed="RefreshRunsSafelyAsync" />
+</section>
+
+@code {
+    [Parameter] public int ProjectId { get; set; }
+    private List<ProblemStatement> _sources = [];
+    private List<ProjectStoryRunResult> _runs = [];
+    private readonly HashSet<int> _selected = [];
+    private List<StoryProposalDto> _previewProposals = [];
+    private List<ProductBacklogItem> _previewPbis = [];
+    private string _title = "", _text = "", _error = "", _notice = "";
+    private string _generationKey = Guid.NewGuid().ToString("N");
+    private bool _busy, _previewOpen;
+    private int _loadedProject;
+    private string Root => $"api/projects/{ProjectId}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedProject == ProjectId) return;
+        _loadedProject = ProjectId;
+        _selected.Clear();
+        _sources = [];
+        _runs = [];
+        _previewOpen = false;
+        await ReloadAsync();
+    }
+    private void Toggle(int id)
+    {
+        if (!_selected.Add(id)) _selected.Remove(id);
+    }
+    private Task CreateAsync() => WorkAsync(async () =>
+    {
+        using var response = await Http.PostAsJsonAsync(Root + "/problem-statements",
+            new SaveProblemStatementRequest(_title, _text, null, false));
+        response.EnsureSuccessStatusCode();
+        var source = await response.Content.ReadFromJsonAsync<ProblemStatement>();
+        if (source is not null)
+        {
+            _sources.Add(source);
+            _selected.Add(source.ProblemStatementId);
+        }
+        _title = _text = "";
+    });
+    private Task SaveSourceAsync(ProblemStatement source, bool archived) => WorkAsync(async () =>
+    {
+        using var response = await Http.PutAsJsonAsync($"{Root}/problem-statements/{source.ProblemStatementId}",
+            new SaveProblemStatementRequest(source.Title, source.Text, source.Version, archived));
+        response.EnsureSuccessStatusCode();
+        var saved = await response.Content.ReadFromJsonAsync<ProblemStatement>();
+        if (saved is not null) _sources[_sources.IndexOf(source)] = saved;
+        if (archived) _selected.Remove(source.ProblemStatementId);
+        _generationKey = Guid.NewGuid().ToString("N");
+        _notice = "Source saved. Existing generated stories were retained and may need review.";
+        await RefreshRunsAsync();
+    });
+    private Task GenerateAsync() => WorkAsync(async () =>
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+        using var response = await Http.PostAsJsonAsync(Root + "/story-generation",
+            new GenerateProjectStoriesRequest(_generationKey, _selected.Order().ToArray()), timeout.Token);
+        response.EnsureSuccessStatusCode();
+        var batch = await response.Content.ReadFromJsonAsync<ProjectStoryBatchResult>(timeout.Token);
+        _generationKey = Guid.NewGuid().ToString("N");
+        var proposals = batch?.Results.SelectMany(r => r.Proposals).ToList() ?? [];
+        var failed = batch?.Results.Count(r => r.ErrorCode is not null) ?? 0;
+        _notice = $"{proposals.Count} proposals generated without creating work. {failed} source(s) failed; successful runs are available below.";
+        if (proposals.Count > 0) Review(proposals);
+        await RefreshRunsAsync();
+    });
+    private void Review(IReadOnlyList<StoryProposalDto> proposals)
+    {
+        _previewProposals = proposals.ToList();
+        _previewPbis = proposals.Select(p => p.Pbi).ToList();
+        _previewOpen = true;
+    }
+    private Task ReloadAsync() => WorkAsync(async () =>
+    {
+        _sources = await Http.GetFromJsonAsync<List<ProblemStatement>>(Root + "/problem-statements") ?? [];
+        _selected.RemoveWhere(id => !_sources.Any(s => s.ProblemStatementId == id && !s.IsArchived));
+        await RefreshRunsAsync();
+    });
+    private async Task RefreshRunsAsync() =>
+        _runs = await Http.GetFromJsonAsync<List<ProjectStoryRunResult>>(Root + "/story-generation") ?? [];
+    private Task RefreshRunsSafelyAsync() => WorkAsync(RefreshRunsAsync);
+    private async Task WorkAsync(Func<Task> action)
+    {
+        if (_busy) return;
+        _busy = true;
+        _error = "";
+        try { await action(); }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            _error = "Project operation failed. Reload on a version conflict. If generation timed out, retry without editing to reuse its request identity. No external AI fallback is used.";
+        }
+        finally { _busy = false; }
+    }
+}

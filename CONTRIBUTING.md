@@ -8,14 +8,19 @@ By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ScrumPilot is a .NET 10 solution composed of:
 
-- `ScrumPilot.Web`: Blazor WebAssembly client
+- `ScrumPilot.FluentWeb`: Fluent UI Blazor client with full project-planning workflows
+- `ScrumPilot.Web`: original Blazor WebAssembly compatibility client
 - `ScrumPilot.API`: ASP.NET Core REST API and SignalR hub
 - `ScrumPilot.Data`: Entity Framework Core data access and migrations
 - `ScrumPilot.Shared`: shared models and API contracts
 - `ScrumPilot.AppHost`: Aspire local orchestration
 - `ScrumPilot.UnitTests`: xUnit and bUnit tests
+- `ScrumPilot.FluentWeb.Tests`: Fluent client component/workflow tests
 
 The standard local setup uses SQLite and Ollama. PostgreSQL, Groq, and SendGrid are optional and are not required for ordinary development.
+Saved project/private repository planning always uses local Ollama; Groq is only
+an option for the generic compatibility path. GitHub snapshots and scope checks
+also require externally configured App installation/access.
 
 ## 1. Install Prerequisites
 
@@ -24,7 +29,7 @@ Install the following tools:
 | Tool | Required version | Check command |
 |---|---|---|
 | Git | Current supported release | `git --version` |
-| .NET SDK | `10.0.401` or a compatible .NET 10 SDK | `dotnet --version` |
+| .NET SDK | `10.0.403`, with `global.json` roll-forward policy | `dotnet --version` |
 | Aspire CLI | Compatible with Aspire AppHost `13.6.0` | `aspire --version` |
 | Ollama | Current supported release | `ollama --version` |
 
@@ -173,17 +178,18 @@ dotnet dev-certs https --trust
 
 Linux trust configuration varies by distribution. You can create the certificate with `dotnet dev-certs https` and then follow the [.NET HTTPS certificate guidance](https://learn.microsoft.com/aspnet/core/security/enforcing-ssl#trust-the-aspnet-core-https-development-certificate) for your browser and distribution.
 
-From the repository root, start the API and Web client through the AppHost:
+From the repository root, start the API and both clients through the AppHost:
 
 ```shell
 aspire run --apphost ./ScrumPilot.AppHost/ScrumPilot.AppHost.csproj
 ```
 
-Aspire prints a dashboard URL. Open it to view resource status, logs, traces, and the current HTTP/HTTPS endpoints. Wait until both `webapi` and `web` report that they are running, then open the Web endpoint.
+Aspire prints a dashboard URL. Open it to view resource status, logs, traces, and the current HTTP/HTTPS endpoints. Wait for `webapi` and the desired client to run. Choose **fluentweb** for project guidelines, saved problems, task specifications, and dependency graphs; **web** is the original compatibility client.
 
 The default launch profiles normally expose:
 
 - Web: `https://localhost:7280` or `http://localhost:5199`
+- FluentWeb: `https://localhost:7380` or `http://localhost:5299`
 - API: `https://localhost:7195` or `http://localhost:5219`
 - Swagger: `https://localhost:7195/swagger`
 
@@ -210,13 +216,13 @@ Terminal 1, API:
 dotnet run --project ./ScrumPilot.API/ScrumPilot.API.csproj --launch-profile https
 ```
 
-Terminal 2, Web:
+Terminal 2, FluentWeb:
 
 ```shell
-dotnet run --project ./ScrumPilot.Web/ScrumPilot.Web.csproj --launch-profile https
+dotnet run --project ./ScrumPilot.FluentWeb/ScrumPilot.FluentWeb.csproj --launch-profile https
 ```
 
-The Web client reads its API base URL from `ScrumPilot.Web/wwwroot/appsettings.json`, which defaults to `https://localhost:7195/`.
+The Fluent client reads its API base URL from `ScrumPilot.FluentWeb/wwwroot/appsettings.json`. The original client uses `ScrumPilot.Web/wwwroot/appsettings.json`; both default to `https://localhost:7195/`. To test compatibility UI instead, run `dotnet run --project ./ScrumPilot.Web/ScrumPilot.Web.csproj --launch-profile https`.
 
 ## 7. Create a Branch
 
@@ -253,6 +259,34 @@ Follow the existing project boundaries and naming style:
 - Update documentation when commands, configuration, or behavior changes.
 - Do not include generated `bin` or `obj` output, local databases, model files, credentials, or editor-specific files.
 
+### Planning scope and documentation
+
+For approved task work, change only listed paths/operations, including tests,
+documentation, migrations/snapshots, build files, and workflows. Stop for an
+Owner-approved amendment if another path is necessary; PR text cannot approve
+its own scope. Do not mix unrelated formatting, refactoring, or dependency upgrades.
+
+Keep the [feature guides](docs/index.md), [API contracts](docs/api.md), component
+READMEs, and Unreleased changelog aligned with implemented UI/services. Link the
+[canonical template](docs/templates/ai-agent-project-guidelines.md) rather than
+forking its 40 sections. Record exact commands actually run, outcomes, and
+unverified dependencies; suggested verification is not executed verification.
+
+Saved guidance/problems/private source require loopback `OllamaBaseUrl` and
+`OllamaModel`, with no external-provider fallback. Tests must use sanitized fixtures
+and provider doubles, not submit private repository context to hosted AI.
+Never commit GitHub App keys or webhook secrets. A GitHub repository must be
+exclusively linked to one ScrumPilot project; repository administrators separately
+require `ScrumPilot / task-scope`. Scope checks do not sandbox agents.
+
+Include feature-focused coverage for tenant isolation, source/revision currency,
+path operations, inherited sprints, child-point accounting, effective cycles,
+reopen/review propagation, and live focus/reconnect/reconciliation. Check that
+previews retain audit without creating PBIs, approval rejects a moved snapshot
+branch, and both export formats retain scope/provenance. Migration/purge
+changes need both-provider review and preserved provenance. Do not claim browser
+performance from the passing pure 200-node/1,000-edge fixture.
+
 ### Run a Focused Test
 
 During development, filter to the affected class or behavior:
@@ -270,8 +304,18 @@ Stop the running Aspire AppHost before building to avoid locked assembly files. 
 ```shell
 dotnet format ./ScrumPilot.slnx --verify-no-changes
 dotnet test ./ScrumPilot.UnitTests/ScrumPilot.UnitTests.csproj --configuration Release
+dotnet test ./ScrumPilot.FluentWeb.Tests/ScrumPilot.FluentWeb.Tests.csproj --configuration Release
 dotnet build ./ScrumPilot.slnx --configuration Release
 ```
+
+Expected: clean format verification, passing summaries for both test projects,
+and a successful Release build. CI builds first, then runs both test projects with
+`--no-build --configuration Release --logger trx --results-directory ./TestResults`.
+See [test commands and limitations](ScrumPilot.UnitTests/README.md).
+The [recorded baseline](ScrumPilot.UnitTests/README.md#recorded-validation-scope)
+includes three unchanged seeder test failures and four whitespace errors in full
+format verification. Preserve and report these failures; do not silently fix,
+exclude, or relabel them as passing in an unrelated change.
 
 If formatting verification fails, apply the repository format and review the resulting diff:
 
@@ -395,6 +439,7 @@ A useful pull request description includes:
 ## Verification
 - `dotnet format ./ScrumPilot.slnx --verify-no-changes`
 - `dotnet test ./ScrumPilot.UnitTests/ScrumPilot.UnitTests.csproj --configuration Release`
+- `dotnet test ./ScrumPilot.FluentWeb.Tests/ScrumPilot.FluentWeb.Tests.csproj --configuration Release`
 - `dotnet build ./ScrumPilot.slnx --configuration Release`
 
 ## Screenshots
@@ -477,7 +522,10 @@ Invoke-RestMethod http://localhost:11434/api/tags
 curl http://localhost:11434/api/tags
 ```
 
-If the configured model is absent, run `ollama pull gemma4:latest`. Also remove or empty `GroqApiKey`; a non-empty Groq key makes the API choose Groq instead of Ollama.
+If the configured model is absent, run `ollama pull gemma4:latest` (or your chosen
+model). For the generic compatibility generator, a nonempty `GroqApiKey` selects
+Groq; remove/empty it to test that generator with Ollama. Saved/project-aware
+planning ignores that fallback choice and requires local loopback Ollama.
 
 ### HTTPS Certificate Errors
 
@@ -510,7 +558,11 @@ dotnet build ./ScrumPilot.slnx
 
 ### Reset the Local SQLite Database
 
-Resetting deletes local development data. Stop the API first, then remove `ScrumPilot.Data/scrumpilot.db` if it exists. The API recreates and seeds the database on its next startup.
+Resetting deletes local development data, including planning provenance. Use this
+only for disposable local data, never to repair an upgrade or bypass retained-history
+constraints. Back up valuable data and use reviewed migrations instead. Stop the
+API first, then remove `ScrumPilot.Data/scrumpilot.db` if it exists. The API recreates
+and seeds the database on its next startup.
 
 #### Windows PowerShell
 

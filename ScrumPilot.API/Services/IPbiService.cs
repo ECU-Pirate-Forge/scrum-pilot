@@ -47,6 +47,6 @@ namespace ScrumPilot.API.Services
         /// Rewrites and improves an existing PBI using the configured AI provider's one-item array response.
         /// Returns the improved PBI without persisting changes.
         /// </summary>
-        Task<ProductBacklogItem> ImprovePbiAsync(ProductBacklogItem pbi);
+        Task<ProductBacklogItem> ImprovePbiAsync(ProductBacklogItem pbi, CancellationToken cancellationToken = default);
     }
 }

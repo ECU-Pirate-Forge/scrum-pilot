@@ -222,6 +222,8 @@ public sealed class OrganizationRepository(ScrumPilotContext context) : IOrganiz
         var projectIds = context.Projects
             .Where(x => x.OrganizationId == organizationId)
             .Select(x => x.ProjectId);
+        foreach (var projectId in await projectIds.ToListAsync(cancellationToken))
+            await context.PurgeProjectPlanningAsync(projectId, cancellationToken);
         await context.Users
             .Where(x => x.DefaultOrganizationId == organizationId)
             .ExecuteUpdateAsync(
