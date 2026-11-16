@@ -120,6 +120,24 @@ public sealed class InfrastructureTests(ITestOutputHelper output)
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DatabaseCommandDoesNotClaimApiListeningEndpoints(bool initialize)
+    {
+        await using var builder = await Graph(
+            "--Infrastructure:Initialize=" + initialize,
+            "--BootstrapAdmin:Email=operator@example.invalid",
+            "--BootstrapAdmin:Password=integration-only-password");
+        var migration = builder.Resources.OfType<ProjectResource>().Single(r => r.Name == "database-init");
+        var api = builder.Resources.OfType<ProjectResource>().Single(r => r.Name == "webapi");
+
+        Assert.Empty(migration.Annotations.OfType<EndpointAnnotation>());
+        Assert.Contains(api.Annotations.OfType<EndpointAnnotation>(), endpoint => endpoint.Name == "https");
+        var environment = await Environment(builder, migration);
+        Assert.Equal("Development", environment.GetValueOrDefault("ASPNETCORE_ENVIRONMENT"));
+    }
+
     [Fact]
     public async Task PrivateConfigurationNeverFlowsToWasm()
     {

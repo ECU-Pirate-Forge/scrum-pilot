@@ -130,12 +130,15 @@ public static class InfrastructureGraph
         var initialize = builder.Configuration.GetValue<bool>("Infrastructure:Initialize");
         var gitHubIntegration = builder.Configuration.GetValue<bool>("Features:GitHubIntegration");
         var gitHubIntegrationValue = gitHubIntegration.ToString().ToLowerInvariant();
-        var migration = builder.AddProject<Projects.ScrumPilot_API>("database-init")
+        // Command-only execution must not reserve the API launch profile's listening ports.
+        var migration = builder.AddProject<Projects.ScrumPilot_API>("database-init", launchProfileName: null)
             .WithArgs(initialize ? "--initialize" : "--migrate")
             .WithEnvironment("Features__GitHubIntegration", gitHubIntegrationValue)
             .WithReference(control, "control")
             .WithReference(runtime, "tenant-server")
             .WithReference(admin, "tenant-admin");
+        if (!builder.ExecutionContext.IsPublishMode)
+            migration.WithEnvironment("ASPNETCORE_ENVIRONMENT", builder.Environment.EnvironmentName);
         if (sql is not null)
             migration.WaitFor(sql);
         if (initialize)
