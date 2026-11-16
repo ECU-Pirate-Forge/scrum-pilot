@@ -237,6 +237,7 @@ public static class InfrastructureGraph
                     .WithEnvironment("TEMP", temporary)
                     .WithEnvironment("TMPDIR", temporary);
             }
+            ConfigureDevTunnel(builder, api, webGateway, fluentGateway);
         }
         if (builder.ExecutionContext.IsPublishMode)
         {
@@ -264,6 +265,34 @@ public static class InfrastructureGraph
                 .WithEnvironment("SendGrid__InvitationBaseUrl",
                     ReferenceExpression.Create($"{webGateway.GetEndpoint("https")}/web/accept-invitation"));
         }
+    }
+
+    // Local-only public URLs. Browsers reach the API through each gateway's
+    // same-origin /{client}/_api/webapi proxy, so CORS needs no tunnel origins.
+    private static void ConfigureDevTunnel(IDistributedApplicationBuilder builder,
+        IResourceBuilder<ProjectResource> api, IResourceBuilder<ProjectResource> webGateway,
+        IResourceBuilder<ProjectResource> fluentGateway)
+    {
+        var settings = builder.Configuration.GetSection("DevTunnels");
+        if (!settings.GetValue<bool>("Enabled"))
+            return;
+        var targets = new[] { ("WebApi", api), ("Web", webGateway), ("FluentWeb", fluentGateway) }
+            .Where(target => settings.GetValue(target.Item1, true))
+            .Select(target => target.Item2)
+            .ToArray();
+        if (targets.Length == 0)
+            return;
+        var tunnelId = settings["TunnelId"];
+        var tunnel = builder.AddDevTunnel("devtunnel",
+            string.IsNullOrWhiteSpace(tunnelId) ? null : tunnelId,
+            new Aspire.Hosting.DevTunnels.DevTunnelOptions
+            {
+                AllowAnonymous = settings.GetValue<bool>("AllowAnonymous"),
+                Description = "ScrumPilot local development"
+            });
+        // HTTPS targets avoid the API's HTTP-to-localhost redirect.
+        foreach (var target in targets)
+            tunnel.WithReference(target.GetEndpoint("https"));
     }
 
     // The preview Blazor publisher omits its HTTP-OTLP argument in publish mode.

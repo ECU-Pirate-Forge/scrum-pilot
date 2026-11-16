@@ -33,10 +33,32 @@ public sealed class GitHubWebhookTests
         { AppId = "123", PrivateKeyPem = "must-not-be-read", WebhookSecret = "test-secret" }), Options.Create(new FeatureOptions()));
         Assert.False(github.IsConfigured);
         Assert.False(github.IsWebhookConfigured);
+        var body = "{}"u8.ToArray();
+        var signature = "sha256=" + Convert.ToHexString(HMACSHA256.HashData("test-secret"u8, body));
+        Assert.False(github.VerifyWebhook(body, signature));
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             github.GetTreeAsync(42, 99, "owner", "repository", "main", default));
         Assert.Contains("disabled", error.Message);
         Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task DisabledIntegrationCannotTreatExistingRepositoryAuthorityAsCurrent()
+    {
+        await using var control = new ControlPlaneContext(new DbContextOptionsBuilder<ControlPlaneContext>()
+            .UseSqlServer("Server=unused;Database=unused;Integrated Security=true")
+            .AddInterceptors(new RejectDatabaseOpen()).Options);
+        var registry = new GitHubRepositoryRegistry(control, new TenantSelection { OrganizationId = 1 },
+            Options.Create(new FeatureOptions()));
+        Assert.False(await registry.IsCurrentAsync(new ProjectRepository
+        {
+            ProjectId = 1,
+            GitHubRepositoryId = 99,
+            RegistrationId = Guid.NewGuid(),
+            Owner = "owner",
+            Name = "repository",
+            DefaultBranch = "main"
+        }, default));
     }
 
     [Fact]

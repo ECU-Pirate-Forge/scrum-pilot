@@ -1,5 +1,6 @@
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.DevTunnels;
 using Aspire.Hosting.Testing;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
@@ -111,6 +112,47 @@ public sealed class InfrastructureTests(ITestOutputHelper output)
             Assert.DoesNotContain("signing-key", json);
             Assert.DoesNotContain("integration-private-sendgrid", json);
         }
+    }
+
+    [Fact]
+    public async Task DevTunnelsAreDisabledByDefault()
+    {
+        await using var builder = await Graph();
+        Assert.Empty(builder.Resources.OfType<DevTunnelResource>());
+        Assert.Empty(builder.Resources.OfType<DevTunnelPortResource>());
+    }
+
+    [Fact]
+    public async Task EnabledDevTunnelExposesSelectedHttpsEndpointsWithAuthentication()
+    {
+        await using var builder = await Graph("--DevTunnels:Enabled=true", "--DevTunnels:WebApi=false");
+        var tunnel = Assert.Single(builder.Resources.OfType<DevTunnelResource>());
+        Assert.False(tunnel.Options.AllowAnonymous);
+        Assert.Equal(["devtunnel-fluentweb-gateway-https", "devtunnel-web-gateway-https"],
+            builder.Resources.OfType<DevTunnelPortResource>().Select(port => port.Name).Order());
+    }
+
+    [Fact]
+    public async Task EnabledDevTunnelCanExposeApiAnonymously()
+    {
+        await using var builder = await Graph("--DevTunnels:Enabled=true", "--DevTunnels:AllowAnonymous=true",
+            "--DevTunnels:Web=false", "--DevTunnels:FluentWeb=false");
+        Assert.True(Assert.Single(builder.Resources.OfType<DevTunnelResource>()).Options.AllowAnonymous);
+        var port = Assert.Single(builder.Resources.OfType<DevTunnelPortResource>());
+        Assert.Equal("devtunnel-webapi-https", port.Name);
+    }
+
+    [Fact]
+    public async Task PublishModeNeverModelsDevTunnels()
+    {
+        await using var builder = await DistributedApplicationTestingBuilder.CreateAsync<Projects.ScrumPilot_AppHost>(
+        [
+            "--operation=publish",
+            "--Aspire:Store:Path=" + Directory.CreateTempSubdirectory("scrumpilot-aspire-graph-state-").FullName,
+            "--DevTunnels:Enabled=true"
+        ]);
+        Assert.True(builder.ExecutionContext.IsPublishMode);
+        Assert.Empty(builder.Resources.OfType<DevTunnelResource>());
     }
 
     [Fact]

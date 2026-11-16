@@ -14,11 +14,13 @@ AI-assisted Scrum project management for multi-organization teams, built with
 - Invitations, project access, provisioning/retry, and 30-day deletion/restore.
 - SQL Server backup/recovery and retention-gated permanent purge.
 - Versioned project Markdown guidelines and persisted problem-to-story lineage.
-- AI-generated child-task specifications with reviewed implementation, test and
-  documentation file scopes, immutable approvals and portable handoffs.
+- Optional AI-generated child-task specifications with reviewed implementation,
+  test and documentation file scopes, immutable approvals and portable handoffs
+  (GitHub integration feature flag; disabled by default).
 - Live sprint dependency graphs with readiness, completion/reopen propagation
   and audited dependency reviews.
-- GitHub App task-scope checks with durable publication recovery.
+- Optional GitHub App task-scope checks with durable publication recovery
+  (disabled by default).
 
 Both **MudBlazor Web** and **FluentWeb** are supported. FluentWeb must reach
 reviewed functional, visualization, and presentation parity before Web is retired.
@@ -27,9 +29,14 @@ reviewed functional, visualization, and presentation parity before Web is retire
 
 In FluentWeb, select an organization/project, paste the project's Markdown
 architecture and standards, save a problem statement, and review generated
-stories before accepting them. Generate child tasks, inspect their exact file
-operations and verification steps, and obtain Owner scope approval before an AI
-agent implements them. A Ready graph node does not itself authorize file edits.
+stories before accepting them. Story generation and ordinary backlog tasks do
+not require source control. Repository-dependent **Task Planning** is disabled
+by default with `Features:GitHubIntegration=false`.
+
+When that feature is explicitly enabled, generate child tasks, inspect their
+exact file operations and verification steps, and obtain Owner scope approval
+before an AI agent implements them. A Ready graph node does not itself authorize
+file edits.
 
 The [40-section guidelines template](docs/templates/ai-agent-project-guidelines.md)
 is copy/paste guidance for a project, not a hard-coded ScrumPilot technology

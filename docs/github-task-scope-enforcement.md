@@ -7,6 +7,35 @@ Repository branch rules make that result a merge gate.
 This is not a filesystem sandbox, semantic code review, proof that tests ran, or
 protection against authorized repository-administrator bypass.
 
+## Feature flag (disabled by default)
+
+`Features:GitHubIntegration` defaults to `false`. The current release does not
+require a repository or GitHub credentials for stories or ordinary backlog tasks.
+While disabled, FluentWeb hides **Task Planning** and repository/PR scope controls;
+direct task-planning links show a disabled notice without loading repository data.
+Repository, task-generation, specification/handoff, PR-binding/exception, and
+webhook endpoints return `404` with a disabled-feature diagnostic. GitHub API calls
+and webhook processing are disabled even if credentials remain configured.
+
+To opt in, set the AppHost environment variable `Features__GitHubIntegration=true`
+and restart that exact AppHost. AppHost supplies the same public flag to the API,
+migration process, and both browser clients, including published gateways. For
+direct starts, configure `Features:GitHubIntegration` on the API and in
+FluentWeb's public browser configuration, then restart/reload them.
+
+Disabling does not delete repository registrations, snapshots, specifications,
+bindings or recovery journals, and cannot revoke a check already published to
+GitHub. Freeze merges before disabling an existing integration. If bound work is
+edited while disabled, its central repository authority is suspended with an
+explicit recovery diagnostic, without contacting GitHub. Re-enabling does not
+reactivate suspended authority: an Owner must reconcile repository configuration
+and revalidate scope. Keep merges frozen after re-enabling until an Owner has
+reconciled retained bindings and revalidated current PR heads; webhook events
+received while disabled are not processed. Maintenance/deletion requiring external
+check invalidation can remain fenced until GitHub access is restored; disabling
+is not a recovery bypass. The instructions below apply only when the feature is
+enabled.
+
 ## GitHub App Setup
 
 A repository administrator registers and installs an App on the intended

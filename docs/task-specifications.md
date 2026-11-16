@@ -1,5 +1,11 @@
 # Task Specifications and AI Handoff
 
+Repository-dependent task generation, specifications, approvals and handoffs
+require `Features:GitHubIntegration=true` and are disabled by default. Story
+generation and manually managed backlog tasks do not require GitHub. See the
+[feature flag](github-task-scope-enforcement.md#feature-flag-disabled-by-default)
+before enabling the task-planning workflow below.
+
 The planning hierarchy is:
 
 ```text

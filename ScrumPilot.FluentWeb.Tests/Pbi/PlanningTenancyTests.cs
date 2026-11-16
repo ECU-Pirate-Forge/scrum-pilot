@@ -131,6 +131,8 @@ public sealed class PlanningTenancyTests : FluentFrontendTestBase
         var graph = new DependencyGraphDto(17, 4, 9,
             [new(pbi, "Ready", false, true, false, false, [], [])], [], "", []);
         using var cut = Render<SprintDependencyView>(p => p.Add(x => x.CapturedWork, scope).Add(x => x.Graph, graph));
+        Assert.DoesNotContain("Unapproved / legacy scope", cut.Markup);
+        Assert.DoesNotContain("approved file scope", cut.Markup);
         await cut.InvokeAsync(() => cut.Instance.OpenNodeAsync(5, 999));
         Assert.False(cut.FindComponent<PbiDetailsDialog>().Instance.Open);
         scope.Dispose();

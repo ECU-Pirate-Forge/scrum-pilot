@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ScrumPilot.API.Authorization;
@@ -25,6 +24,9 @@ public sealed class PlanningControllerRouteTests
     [InlineData("POST", "/api/organizations/1/projects/1/task-generation/preview")]
     [InlineData("POST", "/api/organizations/1/projects/1/task-generation/accept")]
     [InlineData("GET", "/api/organizations/1/projects/1/tasks/1/specifications")]
+    [InlineData("GET", "/api/organizations/1/projects/1/tasks/1/specifications/history")]
+    [InlineData("GET", "/api/organizations/1/projects/1/tasks/1/specifications/export")]
+    [InlineData("GET", "/api/organizations/1/projects/1/tasks/1/specifications/manifest")]
     [InlineData("POST", "/api/organizations/1/projects/1/tasks/1/specifications")]
     [InlineData("POST", "/api/organizations/1/projects/1/tasks/1/specifications/approve")]
     [InlineData("GET", "/api/organizations/1/projects/1/tasks/1/pull-requests")]
@@ -33,12 +35,36 @@ public sealed class PlanningControllerRouteTests
     [InlineData("POST", "/api/integrations/github/webhooks")]
     public async Task DisabledIntegrationRejectsRepositoryPlanningBeforeAuthenticationOrStorage(string method, string path)
     {
+        await using var application = await BoundaryAsync(enabled: false);
+        using var client = application.GetTestClient();
+        using var request = new HttpRequestMessage(new HttpMethod(method), path) { Content = JsonContent.Create(new { }) };
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.Equal("GitHub integration is disabled.", problem?.Title);
+        using var ordinaryPlanning = await client.GetAsync("/api/organizations/1/projects/1/problem-statements");
+        Assert.Equal(HttpStatusCode.Unauthorized, ordinaryPlanning.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("/api/organizations/1/projects/1/task-generation/preview")]
+    [InlineData("/api/integrations/github/webhooks")]
+    public async Task EnabledIntegrationContinuesToNormalRequestProcessing(string path)
+    {
+        await using var application = await BoundaryAsync(enabled: true);
+        using var client = application.GetTestClient();
+        using var response = await client.PostAsJsonAsync(path, new { });
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    private static async Task<WebApplication> BoundaryAsync(bool enabled)
+    {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
-        builder.Services.Configure<FeatureOptions>(_ => { });
+        builder.Services.Configure<FeatureOptions>(options => options.GitHubIntegration = enabled);
         builder.Services.AddControllers().AddApplicationPart(typeof(ProjectRepositoryController).Assembly);
         builder.Logging.ClearProviders();
-        await using var application = builder.Build();
+        var application = builder.Build();
         application.UseRouting();
         application.UseMiddleware<GitHubIntegrationMiddleware>();
         application.Use((HttpContext http, RequestDelegate _) =>
@@ -48,14 +74,7 @@ public sealed class PlanningControllerRouteTests
         });
         application.MapControllers();
         await application.StartAsync();
-        using var client = application.GetTestClient();
-        using var request = new HttpRequestMessage(new HttpMethod(method), path) { Content = JsonContent.Create(new { }) };
-        using var response = await client.SendAsync(request);
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
-        Assert.Equal("GitHub integration is disabled.", problem?.Title);
-        using var ordinaryPlanning = await client.GetAsync("/api/organizations/1/projects/1/problem-statements");
-        Assert.Equal(HttpStatusCode.Unauthorized, ordinaryPlanning.StatusCode);
+        return application;
     }
 
     [Theory]

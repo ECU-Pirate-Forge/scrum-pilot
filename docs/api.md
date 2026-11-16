@@ -48,6 +48,13 @@ current membership/project checks. There are no unqualified compatibility aliase
 | `/dependency-graph`, `/sprints/{sprintId}/dependency-graph`, `/dependencies`, `/dependency-reviews` | Authoritative readiness, normalized prerequisites and audited reviews |
 | `/tasks/{taskId}/pull-requests`, `/repository/non-task-exceptions` | Owner task binding, check history and audited non-task exceptions |
 
+`Features:GitHubIntegration` is **false by default**. Repository, task-generation,
+task-specification (including history/export/manifest), and pull-request routes
+in this table, plus the GitHub webhook, return `404` while disabled. Guidelines,
+problem statements, story generation, ordinary backlog work, and dependency
+reviews remain available without source control. See the
+[feature flag and existing-check precautions](github-task-scope-enforcement.md#feature-flag-disabled-by-default).
+
 Failed story-generation runs retain their existing `errorCode` and may include a
 privacy-safe `errorMessage` identifying the failure. Older runs can omit the
 message; model output and project content are not included in the diagnostic.

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using ScrumPilot.Data.Context;
 using ScrumPilot.API.Services;
 using ScrumPilot.Shared.Models;
+using ScrumPilot.API.Configuration;
 using Xunit;
 
 namespace ScrumPilot.UnitTests.Backend.ServiceTests;
@@ -12,6 +13,38 @@ public sealed class PullRequestScopeServiceTests
 {
     private static PullRequestScopeService Service(TaskPlanningFixture fixture) =>
         new(fixture.Db, fixture.GitHub, fixture.Specs, fixture.Control, fixture.Registry);
+
+    [Fact]
+    public async Task DisabledIntegrationLetsBoundWorkChangeButFencesItsRepositoryWithoutGitHubCalls()
+    {
+        await using var f = await TaskPlanningFixture.CreateAsync();
+        await f.ApproveAsync();
+        await Service(f).BindAsync(f.ProjectId, f.TaskId, 7, "owner", default);
+        var requestCount = f.Http.Requests.Count;
+        var attempts = await f.Control.PullRequestScopeAttempts.CountAsync();
+        using var http = new HttpClient(f.Http, disposeHandler: false);
+        var features = Options.Create(new FeatureOptions());
+        var github = new GitHubAppClient(http, Options.Create(new GitHubAppOptions()), features);
+        var registry = new GitHubRepositoryRegistry(f.Control, f.Selection, features);
+        var scope = new PullRequestScopeService(f.Db, github, f.Specs, f.Control, registry);
+        var dependencies = new ProjectDependencyService(f.Db, f.Notifier, registry, scope: scope);
+
+        f.TaskItem.Description = "Updated without source control.";
+        await dependencies.SaveAsync(default);
+
+        Assert.Equal(requestCount, f.Http.Requests.Count);
+        var registration = await f.Control.GitHubRepositoryRegistrations.SingleAsync();
+        Assert.Equal(ScrumPilot.Data.Models.RepositoryRegistrationState.Suspended, registration.State);
+        Assert.Contains("disabled", registration.RecoveryError);
+        Assert.False(await f.Registry.IsCurrentAsync(f.Repository, default));
+        Assert.Equal(attempts, await f.Control.PullRequestScopeAttempts.CountAsync());
+        Assert.Single(await f.Db.TaskPullRequestBindings.ToListAsync());
+        await using var persisted = f.NewContext();
+        Assert.Equal("Updated without source control.",
+            (await persisted.Stories.SingleAsync(item => item.PbiId == f.TaskId)).Description);
+        var graph = await dependencies.ReadAsync(f.ProjectId, null, default);
+        Assert.Equal("Ready", graph.Nodes.Single(node => node.Item.PbiId == f.TaskId).State);
+    }
 
     [Fact]
     public async Task BindAndRevalidate_AllowedDiffPublishesSuccessAndAppendsChecksForSameBinding()

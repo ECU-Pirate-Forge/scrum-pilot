@@ -35,11 +35,34 @@ not client input or manually enumerated AppHost databases.
 | JWT signing/issuer/audience | API | Private signing material; never a browser setting |
 | Invitation email/link settings | API | Private delivery credential; validated public link base |
 | Public API endpoint/proxy settings | Browser gateways/clients | Safe public runtime configuration only |
+| `Features:GitHubIntegration` | API and browser clients | Public flag; defaults to `false`, including repository-dependent task planning |
+| `DevTunnels:*` | AppHost only | Local run mode only; never published or exposed to browsers |
 
 AppHost supplies these first. Direct API startup uses the same keys through
 environment variables (`ConnectionStrings__control`, for example), user-secrets
 or a protected deployment secret store. A process started outside AppHost does
 not inherit another process's resource injection automatically.
+
+### Dev tunnels
+
+To share a local run, enable [Dev Tunnels](https://learn.microsoft.com/azure/developer/dev-tunnels/overview)
+in the AppHost (`ScrumPilot.AppHost/appsettings.json`, user secrets, or
+`DevTunnels__Enabled=true`). Tunnels are disabled by default and are not used by
+publish/deploy.
+
+| Key | Default | Effect |
+|---|---|---|
+| `DevTunnels:Enabled` | `false` | Adds one `devtunnel` resource |
+| `DevTunnels:WebApi` / `Web` / `FluentWeb` | `true` | Tunnels the HTTPS endpoint of `webapi`, `web-gateway` or `fluentweb-gateway` |
+| `DevTunnels:AllowAnonymous` | `false` | Allows public access; otherwise only the signed-in tunnel owner can open the URLs |
+| `DevTunnels:TunnelId` | generated | Reuses a stable tunnel ID across runs |
+
+Aspire installs the `devtunnel` CLI and prompts for login when needed. The
+dashboard shows each port's public URL. Browsers reach the API through each
+gateway's same-origin `/{client}/_api/webapi` proxy, so you only need to tunnel
+the API itself for direct external callers. Invitation links and API CORS keep
+their local gateway origins. Prefer authenticated tunnels, and enable anonymous
+access only for data that is safe to expose.
 
 Never commit private values or copy them into WebAssembly `wwwroot` settings,
 Docker build arguments, screenshots, telemetry, publish bundles or CI artifacts.
