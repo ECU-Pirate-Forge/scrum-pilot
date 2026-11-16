@@ -51,6 +51,63 @@ public sealed class InfrastructureTests(ITestOutputHelper output)
     }
 
     [Theory]
+    [InlineData(null, null, 5299, 7380)]
+    [InlineData(15299, 17380, 15299, 17380)]
+    public async Task FluentGatewayUsesConfiguredPublicPorts(int? http, int? https, int expectedHttp, int expectedHttps)
+    {
+        var overrides = http.HasValue
+            ? new[] { "--Gateways:FluentWeb:HttpPort=" + http, "--Gateways:FluentWeb:HttpsPort=" + https }
+            : Array.Empty<string>();
+        await using var builder = await Graph(overrides);
+        var gateway = builder.Resources.Single(r => r.Name == "fluentweb-gateway");
+        var endpoints = gateway.Annotations.OfType<EndpointAnnotation>().ToArray();
+        Assert.Equal(expectedHttp, endpoints.Single(e => e.Name == "http").Port);
+        Assert.Equal(expectedHttps, endpoints.Single(e => e.Name == "https").Port);
+        Assert.All(endpoints, endpoint => Assert.True(endpoint.IsProxied));
+        var webGateway = builder.Resources.Single(r => r.Name == "web-gateway");
+        Assert.All(webGateway.Annotations.OfType<EndpointAnnotation>(), endpoint => Assert.Null(endpoint.Port));
+    }
+
+    [Theory]
+    [InlineData("HttpPort", 0)]
+    [InlineData("HttpsPort", -1)]
+    [InlineData("HttpsPort", 65536)]
+    public async Task FluentGatewayRejectsInvalidPublicPorts(string key, int port)
+    {
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await using var builder = await Graph($"--Gateways:FluentWeb:{key}={port}");
+        });
+        Assert.Contains($"Gateways:FluentWeb:{key}", exception.Message);
+    }
+
+    [Fact]
+    public async Task FluentGatewayRejectsDuplicatePublicPorts()
+    {
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await using var builder = await Graph("--Gateways:FluentWeb:HttpPort=7380");
+        });
+        Assert.Contains("must be different", exception.Message);
+    }
+
+    [Fact]
+    public async Task PublishedFluentGatewayIgnoresLocalPublicPorts()
+    {
+        await using var builder = await DistributedApplicationTestingBuilder.CreateAsync<Projects.ScrumPilot_AppHost>(
+        [
+            "--operation=publish",
+            "--Aspire:Store:Path=" + Directory.CreateTempSubdirectory("scrumpilot-aspire-graph-state-").FullName,
+            "--Gateways:FluentWeb:HttpPort=0",
+            "--Gateways:FluentWeb:HttpsPort=0"
+        ]);
+        var gateway = builder.Resources.Single(r => r.Name == "fluentweb-gateway");
+        var endpoint = Assert.Single(gateway.Annotations.OfType<EndpointAnnotation>());
+        Assert.Equal("http", endpoint.Name);
+        Assert.Null(endpoint.Port);
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task GitHubFeatureFlagFlowsToApiAndBothBrowsers(bool enabled)

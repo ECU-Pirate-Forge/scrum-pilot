@@ -213,6 +213,21 @@ public static class InfrastructureGraph
 #pragma warning restore ASPIREBLAZOR001
         if (!builder.ExecutionContext.IsPublishMode)
         {
+            foreach (var (scheme, key) in new[]
+            {
+                ("http", "Gateways:FluentWeb:HttpPort"),
+                ("https", "Gateways:FluentWeb:HttpsPort")
+            })
+            {
+                var port = builder.Configuration.GetValue<int>(key);
+                if (port is < 1 or > 65535)
+                    throw new InvalidOperationException($"Set {key} to a port between 1 and 65535.");
+                fluentGateway.WithEndpoint(scheme, endpoint => endpoint.Port = port);
+            }
+            if (fluentGateway.GetEndpoint("http").EndpointAnnotation.Port ==
+                fluentGateway.GetEndpoint("https").EndpointAnnotation.Port)
+                throw new InvalidOperationException("Gateways:FluentWeb:HttpPort and Gateways:FluentWeb:HttpsPort must be different.");
+
             if (OperatingSystem.IsWindows())
             {
                 // Preview gateway builds wait for output EOF; reused MSBuild nodes retain those handles.
