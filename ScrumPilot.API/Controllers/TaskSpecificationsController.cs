@@ -10,6 +10,7 @@ namespace ScrumPilot.API.Controllers;
 [ApiController]
 [Route("api/organizations/{organizationId:int}/projects/{projectId:int}/tasks/{taskId:int}/specifications")]
 [ServiceFilter(typeof(PlanningErrorFilter))]
+[ServiceFilter(typeof(GitHubFeatureFilter))]
 public sealed class TaskSpecificationsController(ICurrentUser user, IOrganizationAccessService access,
     OrganizationContext db, TaskSpecificationService specs, PullRequestScopeService scope,
     ProjectWorkNotifier notifier) : ProjectPlanningControllerBase(user, access)

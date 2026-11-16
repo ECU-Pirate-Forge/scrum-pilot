@@ -40,7 +40,7 @@ public static class DependencyGraphEvaluator
         foreach (var item in items.Where(item => item.ParentStoryId.HasValue))
         {
             if (!byId.TryGetValue(item.ParentStoryId!.Value, out var parent)
-                || parent.Type != PbiType.Story || item.Type != PbiType.Task
+                || parent.Type is not (PbiType.Story or PbiType.Bug) || item.Type != PbiType.Task
                 || parent.ProjectId != item.ProjectId)
             {
                 invalidParents.Add(item.PbiId);
@@ -96,7 +96,7 @@ public static class DependencyGraphEvaluator
         {
             var blockers = execution[item.PbiId].Where(id => !satisfied.GetValueOrDefault(id)).Order().ToArray();
             var reasons = new List<string>();
-            if (invalidParents.Contains(item.PbiId)) reasons.Add("Parent story is missing or invalid.");
+            if (invalidParents.Contains(item.PbiId)) reasons.Add("Parent work item is missing or invalid.");
             if (needsReview?.Contains(item.PbiId) == true) reasons.Add("A prerequisite changed; acceptance review is required.");
             foreach (var id in blockers)
                 reasons.Add(byId.ContainsKey(id) ? $"Prerequisite #{id} is not satisfied." : $"Prerequisite #{id} is missing.");

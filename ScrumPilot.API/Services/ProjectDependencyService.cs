@@ -1,5 +1,7 @@
 using System.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using ScrumPilot.API.Configuration;
 using ScrumPilot.Data.Context;
 using ScrumPilot.Data.Repositories;
 using ScrumPilot.Shared.Models;
@@ -9,7 +11,8 @@ namespace ScrumPilot.API.Services;
 public sealed class ProjectDependencyService(
     OrganizationContext db, ProjectWorkNotifier notifier, GitHubRepositoryRegistry registry,
     ScrumPilot.API.Authorization.ICurrentUser? currentUser = null,
-    PullRequestScopeService? scope = null) : IPlanningMutationHandler
+    PullRequestScopeService? scope = null,
+    IOptions<GitHubIntegrationOptions>? githubOptions = null) : IPlanningMutationHandler
 {
     public async Task<DependencyGraphDto> ReadAsync(int projectId, int? sprintId, CancellationToken ct)
     {
@@ -93,6 +96,22 @@ public sealed class ProjectDependencyService(
         await notifier.NotifyAsync(projectId, state.Revision, ct);
     }
 
+    public async Task DeleteChildTaskAsync(int projectId, int taskId, CancellationToken ct)
+    {
+        await DeleteTasksAsync(projectId, [taskId], ct);
+    }
+
+    public async Task<int[]> DeleteGeneratedChildTasksAsync(int projectId, int[] parentPbiIds, CancellationToken ct)
+    {
+        var taskIds = await db.Stories.AsNoTracking().Where(item => item.ProjectId == projectId
+            && item.Type == PbiType.Task && item.Origin == PbiOrigin.AiGenerated
+            && item.ParentStoryId.HasValue && parentPbiIds.Contains(item.ParentStoryId.Value))
+            .Select(item => item.PbiId).ToArrayAsync(ct);
+        if (taskIds.Length == 0) return [];
+        await DeleteTasksAsync(projectId, taskIds, ct);
+        return taskIds;
+    }
+
     public async Task ReviewAsync(int projectId, ReviewDependencyRequest request, string actor, CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
@@ -149,7 +168,7 @@ public sealed class ProjectDependencyService(
         foreach (var projectId in changes.Select(change => change.Item.ProjectId).Distinct().Order())
         {
             await db.AcquirePlanningPolicyLockAsync(projectId, ct);
-            if (scope is not null)
+            if (scope is not null && githubOptions?.Value.Enabled != false)
                 foreach (var task in await db.Stories.Where(item => item.ProjectId == projectId && item.Type == PbiType.Task
                              && (changedSources.Contains(item.PbiId) || item.ParentStoryId.HasValue && changedSources.Contains(item.ParentStoryId.Value))).ToListAsync(ct))
                     await scope.InvalidateTaskAsync(projectId, task.PbiId, ct);
@@ -169,8 +188,8 @@ public sealed class ProjectDependencyService(
                 if (change.Item.ParentStoryId is int parentId)
                 {
                     var parent = await db.Stories.SingleOrDefaultAsync(item => item.ProjectId == projectId && item.PbiId == parentId, ct);
-                    if (parent is null || parent.Type != PbiType.Story || change.Item.Type != PbiType.Task)
-                        throw new ArgumentException("A child task must reference a story in its own project.");
+                    if (parent is null || parent.Type is not (PbiType.Story or PbiType.Bug) || change.Item.Type != PbiType.Task)
+                        throw new ArgumentException("A child task must reference a story or bug in its own project.");
                     if (parent.Status == PbiStatus.Done && !change.Item.IsDraft
                         && (change.State == EntityState.Added || change.OldDraft))
                         throw new InvalidOperationException("Reopen the parent story before adding committed child work.");
@@ -179,7 +198,7 @@ public sealed class ProjectDependencyService(
                         throw new InvalidOperationException("Move the parent story; child sprint assignment is inherited.");
                     change.Item.SprintId = parent.SprintId;
                 }
-                if (change.Item.Type == PbiType.Story && change.Item.SprintId != change.OldSprintId)
+                if (change.Item.Type is PbiType.Story or PbiType.Bug && change.Item.SprintId != change.OldSprintId)
                 {
                     var children = await db.Stories.Where(item => item.ProjectId == projectId && item.ParentStoryId == change.Item.PbiId).ToListAsync(ct);
                     foreach (var child in children) child.SprintId = change.Item.SprintId;
@@ -217,8 +236,9 @@ public sealed class ProjectDependencyService(
             await db.SaveChangesAsync(ct);
             var items = await db.Stories.Where(item => item.ProjectId == state.ProjectId).ToListAsync(ct);
             if (items.Any(item => item.ParentStoryId.HasValue && (item.Type != PbiType.Task
-                || !items.Any(parent => parent.PbiId == item.ParentStoryId && parent.Type == PbiType.Story))))
-                throw new InvalidOperationException("Parent relationships must remain task-to-story.");
+                || !items.Any(parent => parent.PbiId == item.ParentStoryId
+                    && parent.Type is PbiType.Story or PbiType.Bug))))
+                throw new InvalidOperationException("Parent relationships must remain task-to-story-or-bug.");
             var links = await LinksAsync(state.ProjectId, items, ct);
             var reviews = await db.DependencyReviews.Where(review => review.ProjectId == state.ProjectId
                 && review.ReviewedRevision != review.InvalidationRevision).Select(review => review.PbiId).ToListAsync(ct);
@@ -264,6 +284,49 @@ public sealed class ProjectDependencyService(
             db.Entry(state).Property(item => item.Revision).IsModified = true;
         }
         return state;
+    }
+
+    private async Task DeleteTasksAsync(int projectId, int[] taskIds, CancellationToken ct)
+    {
+        if (taskIds.Length == 0) return;
+        var ownsTransaction = db.Database.CurrentTransaction is null;
+        await using var transaction = ownsTransaction
+            ? await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct) : null;
+        await db.AcquirePlanningPolicyLockAsync(projectId, ct);
+        var tasks = await db.Stories.Where(item => item.ProjectId == projectId
+            && taskIds.Contains(item.PbiId) && item.Type == PbiType.Task && item.ParentStoryId.HasValue).ToListAsync(ct);
+        if (tasks.Count != taskIds.Distinct().Count())
+            throw new KeyNotFoundException("A selected child task was not found in this project.");
+
+        var items = await db.Stories.Where(item => item.ProjectId == projectId).ToListAsync(ct);
+        var evaluation = DependencyGraphEvaluator.Evaluate(items, await LinksAsync(projectId, items, ct));
+        var graph = await TouchAsync(projectId, null, ct);
+        foreach (var dependent in items.Where(item => !taskIds.Contains(item.PbiId)
+                     && item.DependsOnPbiId.HasValue && taskIds.Contains(item.DependsOnPbiId.Value)))
+            dependent.DependsOnPbiId = null;
+        await db.SaveChangesAsync(ct);
+        await EnsureFirstRevisionAsync(graph, ct);
+
+        var runIds = tasks.Where(item => item.GenerationRunId.HasValue)
+            .Select(item => item.GenerationRunId!.Value).Distinct().ToArray();
+        foreach (var run in await db.GenerationRuns.Where(item =>
+                     item.ProjectId == projectId && runIds.Contains(item.GenerationRunId)).ToListAsync(ct))
+        {
+            run.State = GenerationState.Cancelled;
+            run.CompletedAt = DateTime.UtcNow;
+        }
+
+        await db.PurgeTaskPlanningAsync(projectId, taskIds, ct);
+        db.Stories.RemoveRange(tasks);
+        await db.SaveChangesAsync(ct);
+        await InvalidateAsync(projectId, items, evaluation, taskIds, graph.Revision, ct, taskIds.ToHashSet());
+        await db.SaveChangesAsync(ct);
+
+        if (transaction is not null)
+        {
+            await transaction.CommitAsync(ct);
+            await notifier.NotifyAsync(projectId, graph.Revision, ct);
+        }
     }
 
     private async Task EnsureFirstRevisionAsync(ProjectGraphState state, CancellationToken ct)

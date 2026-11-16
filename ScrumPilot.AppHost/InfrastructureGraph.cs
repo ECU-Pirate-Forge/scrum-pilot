@@ -143,6 +143,7 @@ public static class InfrastructureGraph
                     Parameter(builder, "bootstrap-password", "BootstrapAdmin:Password", secret: true));
         }
 
+        var githubIntegrationEnabled = builder.Configuration.GetValue("GitHubIntegration:Enabled", false);
         var api = builder.AddProject<Projects.ScrumPilot_API>("webapi")
             .WithReference(control, "control")
             .WithReference(runtime, "tenant-server")
@@ -156,6 +157,7 @@ public static class InfrastructureGraph
             .WithEnvironment("SendGrid__FromEmail", sendGridEmail)
             .WithEnvironment("SendGrid__FromName", sendGridName)
             .WithEnvironment("AI__Model", model)
+            .WithEnvironment("GitHubIntegration__Enabled", githubIntegrationEnabled.ToString())
             .WithEnvironment("SqlServer__BackupServerPath",
                 backupServerPath)
             .WithEnvironment("SqlServer__BackupApplicationPath", backupDirectory ?? "")
@@ -193,7 +195,9 @@ public static class InfrastructureGraph
         // origin, causing browsers to discard Authorization on the redirected hop.
         var apiScheme = builder.ExecutionContext.IsPublishMode ? "http" : "https";
         var web = builder.AddBlazorWasmProject<Projects.ScrumPilot_Web>("web").WithReference(api.GetEndpoint(apiScheme));
-        var fluent = builder.AddBlazorWasmProject<Projects.ScrumPilot_FluentWeb>("fluentweb").WithReference(api.GetEndpoint(apiScheme));
+        var fluent = builder.AddBlazorWasmProject<Projects.ScrumPilot_FluentWeb>("fluentweb")
+            .WithReference(api.GetEndpoint(apiScheme))
+            .WithEnvironment("GitHubIntegration__Enabled", githubIntegrationEnabled.ToString());
         var webGateway = builder.AddBlazorGateway("web-gateway")
             .WithBlazorClientApp(web, proxyTelemetry: true).WithExternalHttpEndpoints()
             .WithEnvironment("Logging__LogLevel__Microsoft.AspNetCore", "Warning")

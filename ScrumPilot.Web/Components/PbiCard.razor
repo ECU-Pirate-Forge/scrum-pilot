@@ -449,8 +449,8 @@
                             @if (isEditMode)
                             {
                                 <MudTextField @bind-Value="editIssueLink"
-                                              Label="Issue Link"
-                                              Placeholder="https://github.com/org/repo/issues/123"
+                                              Label="External Issue Link"
+                                              Placeholder="https://example.com/issues/123"
                                               Variant="Variant.Outlined"
                                               Adornment="Adornment.Start"
                                               AdornmentIcon="@Icons.Material.Filled.Link" />
@@ -459,7 +459,7 @@
                             {
                                 <MudPaper Class="pa-3"
                                           Style="background-color: var(--mud-palette-action-hover); border-radius: 8px;">
-                                    <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">Issue Link</MudText>
+                                    <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">External Issue Link</MudText>
                                     @if (!string.IsNullOrWhiteSpace(PbiModel.IssueLink))
                                     {
                                         <MudLink Href="@PbiModel.IssueLink" Target="_blank"
