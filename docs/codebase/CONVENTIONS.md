@@ -12,6 +12,7 @@
 - Treat explicit organization routes as authoritative. Capture cancellable work scope rather than mutating global HTTP state.
 - Keep shared transport UI-neutral and preserve both clients' supported workflows.
 - Define orchestration configuration in AppHost first, with matching project direct-start fallbacks.
+- All block statements must be enclosed in { } even if there is only one statement.
 
 ## Errors
 

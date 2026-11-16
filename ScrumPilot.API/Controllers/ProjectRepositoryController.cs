@@ -8,6 +8,7 @@ using ScrumPilot.Shared.Models;
 namespace ScrumPilot.API.Controllers;
 
 [ApiController]
+[GitHubIntegration]
 [Route("api/organizations/{organizationId:int}/projects/{projectId:int}/repository")]
 [ServiceFilter(typeof(PlanningErrorFilter))]
 public sealed class ProjectRepositoryController(ICurrentUser user, IOrganizationAccessService access,

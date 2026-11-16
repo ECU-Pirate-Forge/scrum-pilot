@@ -13,7 +13,7 @@ namespace ScrumPilot.API.Services;
 public sealed class ProjectStoryGenerationService(OrganizationContext db, LocalPlanningAi ai,
     IPlanningMutationHandler planning, PlanningInferenceSession inference,
     ScrumPilot.API.Configuration.AiOptions options, PullRequestScopeService? scopes = null,
-    ProjectWorkNotifier? notifier = null)
+    ProjectWorkNotifier? notifier = null, ILogger<ProjectStoryGenerationService>? logger = null)
 {
     private static readonly JsonSerializerOptions SnapshotJsonOptions = new(JsonSerializerDefaults.Web);
     private const string Instructions = """
@@ -91,7 +91,8 @@ public sealed class ProjectStoryGenerationService(OrganizationContext db, LocalP
             }
             if (source.IsArchived)
             {
-                results.Add(new(id, null, GenerationState.Failed, "source_archived", []));
+                results.Add(new(id, null, GenerationState.Failed, "source_archived", [])
+                    { ErrorMessage = FailureMessage("source_archived") });
                 continue;
             }
             var guidelines = await new ProjectGuidelinesService(db).CurrentAsync(projectId, ct);
@@ -124,19 +125,26 @@ public sealed class ProjectStoryGenerationService(OrganizationContext db, LocalP
             try
             {
                 var output = await inference.RunAsync(projectId,
-                    () => ai.GenerateAsync<ProjectStoryAiOutput>(Instructions, snapshot, ct), ct);
+                    () => ai.GenerateStoryAsync<ProjectStoryAiOutput>(Instructions, snapshot, ct), ct);
                 db.Attach(run);
                 await using var resultTransaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
                 await db.AcquirePlanningPolicyLockAsync(projectId, ct);
                 await RequireCurrentInputAsync(projectId, snapshot, ct);
                 if (output.Stories is null || output.Stories.Count is < 1 or > 100)
-                    throw new JsonException("Story output must contain 1–100 stories.");
+                    throw new InvalidStoryOutputException("story_count");
                 foreach (var story in output.Stories)
                 {
-                    if (story is null) throw new JsonException("Story output contains an empty item.");
-                    ValidateStory(story.Title, story.Description);
-                    if (!Enum.IsDefined(story.Priority) || !Enum.IsDefined(story.StoryPoints))
-                        throw new JsonException("Story output contains invalid planning values.");
+                    if (story is null) throw new InvalidStoryOutputException("empty_story");
+                    if (string.IsNullOrWhiteSpace(story.Title) || story.Title.Trim().Length > 200)
+                        throw new InvalidStoryOutputException("story_title");
+                    if (string.IsNullOrWhiteSpace(story.Description))
+                        throw new InvalidStoryOutputException("story_description");
+                    if (story.Description.Length > 2000)
+                        throw new InvalidStoryOutputException("story_description_length");
+                    if (!Enum.IsDefined(story.Priority))
+                        throw new InvalidStoryOutputException("story_priority");
+                    if (!Enum.IsDefined(story.StoryPoints))
+                        throw new InvalidStoryOutputException("story_points");
                 }
                 var candidates = output.Stories.Select((story, index) => new StoredStoryProposal(index + 1, $"story-{index + 1}", story)).ToArray();
                 db.GenerationInputs.Add(Input(run, snapshot, candidates));
@@ -157,10 +165,26 @@ public sealed class ProjectStoryGenerationService(OrganizationContext db, LocalP
                     InvalidOperationException => "local_provider_not_ready",
                     _ => "invalid_story_output"
                 };
+                var failureCategory = ex switch
+                {
+                    LocalPlanningAi.InvalidJsonException json => json.Category,
+                    InvalidStoryOutputException story => story.Category,
+                    LocalPlanningAi.InputTooLargeException => "input_too_large",
+                    InputChangedException => "input_changed",
+                    OperationCanceledException => "cancelled",
+                    HttpRequestException => "provider_unavailable",
+                    JsonException => "invalid_story_json",
+                    InvalidOperationException => "provider_not_ready",
+                    ArgumentException => "invalid_story_output",
+                    _ => throw new InvalidOperationException("Unhandled generation failure category.")
+                };
+                var message = FailureMessage(failureCategory);
+                logger?.LogWarning("Story generation run {RunId} failed with {FailureCategory}: {FailureMessage}",
+                    run.GenerationRunId, failureCategory, message);
                 run.CompletedAt = DateTime.UtcNow;
-                db.GenerationInputs.Add(Input(run, snapshot, []));
+                db.GenerationInputs.Add(Input(run, snapshot, [], failureCategory));
                 await db.SaveChangesAsync(CancellationToken.None);
-                results.Add(new(id, run.GenerationRunId, run.State, run.ErrorCode, []));
+                results.Add(new(id, run.GenerationRunId, run.State, run.ErrorCode, []) { ErrorMessage = message });
                 if (ct.IsCancellationRequested) break;
                 continue;
             }
@@ -176,7 +200,7 @@ public sealed class ProjectStoryGenerationService(OrganizationContext db, LocalP
         var guidelines = await new ProjectGuidelinesService(db).CurrentAsync(projectId, ct);
         if (source is null || source.IsArchived || source.Version != snapshot.ProblemVersion ||
             guidelines?.ProjectGuidelinesRevisionId != snapshot.GuidelinesRevisionId)
-            throw new InvalidOperationException("The problem statement or project guidance changed during inference; regenerate.");
+            throw new InputChangedException();
     }
 
     public async Task<List<ProjectStoryRunResult>> RunsAsync(int projectId, int? sourceId, CancellationToken ct)
@@ -205,7 +229,8 @@ public sealed class ProjectStoryGenerationService(OrganizationContext db, LocalP
         }
         var snapshot = JsonSerializer.Deserialize<StoredStorySnapshot>(input.SnapshotJson, SnapshotJsonOptions);
         if (snapshot?.Proposals is null)
-            return new(input.ProblemStatementId ?? 0, runId, run.State, run.ErrorCode, []);
+            return new(input.ProblemStatementId ?? 0, runId, run.State, run.ErrorCode, [])
+                { ErrorMessage = FailureMessage(snapshot?.FailureCategory) };
         var items = await db.Stories.AsNoTracking().Where(p => p.ProjectId == projectId &&
             p.GenerationRunId == runId).OrderBy(p => p.PbiId).ToListAsync(ct);
         var proposals = new List<StoryProposalDto>();
@@ -220,7 +245,8 @@ public sealed class ProjectStoryGenerationService(OrganizationContext db, LocalP
                 accepted is not null ? savedCurrencies[accepted.PbiId] : commonCurrency,
                 accepted?.PbiId));
         }
-        return new(input.ProblemStatementId!.Value, runId, run.State, run.ErrorCode, proposals);
+        return new(input.ProblemStatementId!.Value, runId, run.State, run.ErrorCode, proposals)
+            { ErrorMessage = FailureMessage(snapshot.FailureCategory) };
     }
 
     public async Task<List<ProductBacklogItem>> AcceptAsync(int projectId, AcceptProjectStoriesRequest request, CancellationToken ct)
@@ -354,14 +380,42 @@ public sealed class ProjectStoryGenerationService(OrganizationContext db, LocalP
     public Task<PlanningArtifactCurrency> CurrencyAsync(int projectId, int pbiId, CancellationToken ct) =>
         ProjectStoryCurrency.ReadAsync(db, projectId, pbiId, ct);
 
-    private static GenerationInput Input(GenerationRun run, ProjectStoryInputSnapshot source, IReadOnlyList<StoredStoryProposal> proposals) => new()
+    private static GenerationInput Input(GenerationRun run, ProjectStoryInputSnapshot source,
+        IReadOnlyList<StoredStoryProposal> proposals, string? failureCategory = null) => new()
     {
         ProjectId = run.ProjectId,
         GenerationRunId = run.GenerationRunId,
         ProblemStatementId = source.ProblemStatementId,
         ProjectGuidelinesRevisionId = source.GuidelinesRevisionId,
-        SnapshotJson = JsonSerializer.Serialize(new StoredStorySnapshot(source, proposals), SnapshotJsonOptions)
+        SnapshotJson = JsonSerializer.Serialize(new StoredStorySnapshot(source, proposals, FailureCategory: failureCategory), SnapshotJsonOptions)
     };
+
+    private static string? FailureMessage(string? category) => LocalPlanningAi.JsonFailureMessage(category) ?? category switch
+    {
+        "story_count" => "Local AI must return between 1 and 100 stories.",
+        "empty_story" => "Local AI returned an empty story.",
+        "story_title" => "A generated story needs a title of at most 200 characters.",
+        "story_description" => "A generated story needs a description.",
+        "story_description_length" => "A generated story description exceeds 2,000 characters.",
+        "input_too_large" => "The selected planning context exceeds 192 KiB; reduce the input and retry.",
+        "input_changed" => "The problem statement or project guidance changed during generation; retry.",
+        "cancelled" => "Story generation was cancelled.",
+        "provider_unavailable" => "The local AI provider is unavailable.",
+        "provider_not_ready" => "The local AI provider or planning context is not ready.",
+        "invalid_story_json" => "The generated story data could not be read as JSON.",
+        "invalid_story_output" => "The generated story data failed validation.",
+        "source_archived" => "The problem statement is archived.",
+        _ => null
+    };
+
+    private sealed class InvalidStoryOutputException(string category) : JsonException
+    {
+        public string Category { get; } = category;
+    }
+
+    private sealed class InputChangedException : InvalidOperationException
+    {
+    }
 
     private static ProductBacklogItem NewStory(int projectId, int runId, int sourceId, StoredStoryProposal candidate,
         ProjectStoryAiContent content, bool draft) => new()

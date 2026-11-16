@@ -10,6 +10,7 @@ namespace ScrumPilot.API.Controllers;
 public sealed record NonTaskExceptionRequest(int PullRequestNumber, string Reason);
 
 [ApiController]
+[GitHubIntegration]
 [Route("api/organizations/{organizationId:int}/projects/{projectId:int}")]
 [ServiceFilter(typeof(PlanningErrorFilter))]
 public sealed class TaskPullRequestsController(ICurrentUser user, IOrganizationAccessService access,

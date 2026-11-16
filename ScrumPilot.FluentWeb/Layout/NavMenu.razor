@@ -1,4 +1,5 @@
 @inject NavigationManager Navigation
+@inject Microsoft.Extensions.Options.IOptions<FeatureOptions> Features
 @using Microsoft.AspNetCore.Components.Routing
 @implements IDisposable
 <FluentNav Id="main-menu" Width="240px" UseIcons="true">
@@ -6,7 +7,10 @@
     <FluentNavItem Href="@WorkLink("project-management")" IconRest="@(new Icons.Regular.Size20.BoardSplit())" IconActive="@(new Icons.Filled.Size20.BoardSplit())">Manage Project</FluentNavItem>
     <FluentNavItem Href="@WorkLink("organization-management")" IconRest="@(new Icons.Regular.Size20.BuildingMultiple())" IconActive="@(new Icons.Filled.Size20.BuildingMultiple())">Manage Organization</FluentNavItem>
     <FluentNavItem Href="@WorkLink("pbigeneration")" IconRest="@(new Icons.Regular.Size20.Lightbulb())" IconActive="@(new Icons.Filled.Size20.Lightbulb())">Generate</FluentNavItem>
-    <FluentNavItem Href="@WorkLink("task-planning")" IconRest="@(new Icons.Regular.Size20.TaskListSquareLtr())" IconActive="@(new Icons.Filled.Size20.TaskListSquareLtr())">Task Planning</FluentNavItem>
+    @if (Features.Value.GitHubIntegration)
+    {
+        <FluentNavItem Href="@WorkLink("task-planning")" IconRest="@(new Icons.Regular.Size20.TaskListSquareLtr())" IconActive="@(new Icons.Filled.Size20.TaskListSquareLtr())">Task Planning</FluentNavItem>
+    }
     <FluentNavItem Href="@WorkLink("draft-stories")" IconRest="@(new Icons.Regular.Size20.DocumentEdit())" IconActive="@(new Icons.Filled.Size20.DocumentEdit())">Draft Stories</FluentNavItem>
     <FluentNavItem Href="@WorkLink("backlog")" IconRest="@(new Icons.Regular.Size20.TaskListSquareLtr())" IconActive="@(new Icons.Filled.Size20.TaskListSquareLtr())">Backlog</FluentNavItem>
     <FluentNavItem Href="@WorkLink("planning-poker")" IconRest="@(new Icons.Regular.Size20.PeopleTeam())" IconActive="@(new Icons.Filled.Size20.PeopleTeam())">Planning Poker</FluentNavItem>

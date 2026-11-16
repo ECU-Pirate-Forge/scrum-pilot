@@ -11,6 +11,7 @@ using OpenTelemetry;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Trace;
+using ScrumPilot.Shared.Models;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.Configuration.AddEnvironmentVariables();
@@ -19,6 +20,7 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 
 builder.Services.AddFluentUIComponents();
 builder.Services.AddAuthorizationCore();
+builder.Services.Configure<FeatureOptions>(builder.Configuration.GetSection("Features"));
 builder.Services.AddScoped<JwtAuthStateProvider>();
 builder.Services.AddScoped<AuthenticationStateProvider>(provider => provider.GetRequiredService<JwtAuthStateProvider>());
 builder.Services.AddScoped<IAuthService, AuthService>();

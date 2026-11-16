@@ -17,6 +17,7 @@ using ScrumPilot.API.Services;
 using ScrumPilot.Data.Context;
 using ScrumPilot.Data.Models;
 using ScrumPilot.Data.Tenancy;
+using ScrumPilot.Shared.Models;
 using Xunit;
 
 namespace ScrumPilot.UnitTests.Backend.ServiceTests;
@@ -24,11 +25,27 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests;
 public sealed class GitHubWebhookTests
 {
     [Fact]
+    public async Task IntegrationIsDisabledEvenWhenCredentialsRemainConfigured()
+    {
+        using var handler = new PlanningGitHubHandler();
+        using var http = new HttpClient(handler);
+        var github = new GitHubAppClient(http, Options.Create(new GitHubAppOptions
+        { AppId = "123", PrivateKeyPem = "must-not-be-read", WebhookSecret = "test-secret" }), Options.Create(new FeatureOptions()));
+        Assert.False(github.IsConfigured);
+        Assert.False(github.IsWebhookConfigured);
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            github.GetTreeAsync(42, 99, "owner", "repository", "main", default));
+        Assert.Contains("disabled", error.Message);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
     public void SignatureValidatesExactBodyAndRejectsTampering()
     {
         var body = Encoding.UTF8.GetBytes("{\"action\":\"synchronize\"}");
         var signature = "sha256=" + Convert.ToHexString(HMACSHA256.HashData(Encoding.UTF8.GetBytes("test-secret"), body));
-        var client = new GitHubAppClient(new HttpClient(), Options.Create(new GitHubAppOptions { WebhookSecret = "test-secret" }));
+        var client = new GitHubAppClient(new HttpClient(), Options.Create(new GitHubAppOptions { WebhookSecret = "test-secret" }),
+            Options.Create(new FeatureOptions { GitHubIntegration = true }));
         Assert.True(client.VerifyWebhook(body, signature));
         Assert.False(client.VerifyWebhook(Encoding.UTF8.GetBytes("{}"), signature));
         Assert.False(client.VerifyWebhook(body, "sha256=" + new string('z', 64)));
@@ -42,7 +59,8 @@ public sealed class GitHubWebhookTests
             .UseSqlServer("Server=unused;Database=unused;Integrated Security=true")
             .AddInterceptors(new RejectDatabaseOpen()).Options);
         using var http = new HttpClient();
-        var github = new GitHubAppClient(http, Options.Create(new GitHubAppOptions { WebhookSecret = "test-secret" }));
+        var github = new GitHubAppClient(http, Options.Create(new GitHubAppOptions { WebhookSecret = "test-secret" }),
+            Options.Create(new FeatureOptions { GitHubIntegration = true }));
         var scopes = Substitute.For<IServiceScopeFactory>();
         var controller = Controller(github, control, scopes);
         SetRequest(controller, "not json", "pull_request");
@@ -62,7 +80,8 @@ public sealed class GitHubWebhookTests
     {
         await using var fixture = await TaskPlanningFixture.CreateAsync();
         using var http = new HttpClient();
-        var github = new GitHubAppClient(http, Options.Create(new GitHubAppOptions { WebhookSecret = "test-secret" }));
+        var github = new GitHubAppClient(http, Options.Create(new GitHubAppOptions { WebhookSecret = "test-secret" }),
+            Options.Create(new FeatureOptions { GitHubIntegration = true }));
         var scopes = Substitute.For<IServiceScopeFactory>();
         var controller = Controller(github, fixture.Control, scopes);
         SetRequest(controller, body, eventName);
@@ -85,7 +104,8 @@ public sealed class GitHubWebhookTests
             return scopeService;
         }).BuildServiceProvider();
         using var http = new HttpClient();
-        var github = new GitHubAppClient(http, Options.Create(new GitHubAppOptions { WebhookSecret = "test-secret" }));
+        var github = new GitHubAppClient(http, Options.Create(new GitHubAppOptions { WebhookSecret = "test-secret" }),
+            Options.Create(new FeatureOptions { GitHubIntegration = true }));
         var controller = Controller(github, fixture.Control, services.GetRequiredService<IServiceScopeFactory>());
         SetRequest(controller, "{\"repository\":{\"id\":99},\"installation\":{\"id\":42},\"number\":7}", "pull_request");
         Assert.IsType<NoContentResult>(await controller.Receive(default));
@@ -119,7 +139,8 @@ public sealed class GitHubWebhookTests
         await fixture.Control.SaveChangesAsync();
         fixture.Http.Checks.Clear();
         using var http = new HttpClient();
-        var github = new GitHubAppClient(http, Options.Create(new GitHubAppOptions { WebhookSecret = "test-secret" }));
+        var github = new GitHubAppClient(http, Options.Create(new GitHubAppOptions { WebhookSecret = "test-secret" }),
+            Options.Create(new FeatureOptions { GitHubIntegration = true }));
         var scopes = Substitute.For<IServiceScopeFactory>();
         var controller = Controller(github, fixture.Control, scopes, new(fixture.Control, fixture.GitHub));
         SetRequest(controller,
@@ -144,7 +165,8 @@ public sealed class GitHubWebhookTests
         var lifecycle = new PlanningIntegrationLifecycle(control, recovery ?? new(control, github),
             new(hub, new ProjectWorkSubscriptions(), NullLogger<ProjectWorkConnectionEvictor>.Instance),
             Substitute.For<IPlanningPokerConnectionEvictor>(), NullLogger<PlanningIntegrationLifecycle>.Instance);
-        return new(github, control, new(control, new TenantSelection()), scopes, lifecycle)
+        return new(github, control, new(control, new TenantSelection(),
+            Options.Create(new FeatureOptions { GitHubIntegration = true })), scopes, lifecycle)
         {
             ControllerContext = new() { HttpContext = new DefaultHttpContext() }
         };

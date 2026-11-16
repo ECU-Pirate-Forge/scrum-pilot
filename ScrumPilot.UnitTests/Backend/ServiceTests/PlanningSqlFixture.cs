@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using ScrumPilot.API.Authorization;
 using ScrumPilot.API.Services;
@@ -20,7 +21,8 @@ internal sealed class PlanningSqlFixture : IAsyncDisposable
     public ControlPlaneContext Control => files.Control;
     public Organization Organization { get; private set; } = default!;
     public TenantSelection Selection { get; } = new();
-    public GitHubRepositoryRegistry Registry => new(Control, Selection);
+    public GitHubRepositoryRegistry Registry => new(Control, Selection,
+        Options.Create(new FeatureOptions { GitHubIntegration = true }));
     public OrganizationContext Db { get; private set; } = default!;
     public IOrganizationAccessService Access { get; private set; } = default!;
     public PlanningInferenceSession Inference { get; private set; } = default!;

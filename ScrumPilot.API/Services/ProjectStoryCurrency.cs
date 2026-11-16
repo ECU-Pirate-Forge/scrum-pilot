@@ -148,4 +148,5 @@ public static class ProjectStoryCurrency
 internal sealed record ProjectStoryInputSnapshot(int ProblemStatementId, long ProblemVersion, string Title, string Text,
     int? GuidelinesRevisionId, string? Guidelines);
 internal sealed record StoredStoryProposal(int ProposalId, string CandidateKey, ProjectStoryAiContent Content);
-internal sealed record StoredStorySnapshot(ProjectStoryInputSnapshot Input, IReadOnlyList<StoredStoryProposal> Proposals, int SchemaVersion = 1);
+internal sealed record StoredStorySnapshot(ProjectStoryInputSnapshot Input, IReadOnlyList<StoredStoryProposal> Proposals,
+    int SchemaVersion = 1, string? FailureCategory = null);

@@ -7,10 +7,15 @@
 @using ScrumPilot.FluentWeb.Components.Pbi
 @inject OrganizationStateService OrganizationState
 @inject ILogger<TaskPlanning> Logger
+@inject Microsoft.Extensions.Options.IOptions<FeatureOptions> Features
 
 <PageTitle>Task Planning</PageTitle>
 <AppPageHeader Title="Task Planning" Subtitle="Review repository context, decompose stories, and approve bounded implementation specifications." />
-@if (!ProjectId.HasValue)
+@if (!Features.Value.GitHubIntegration)
+{
+    <p role="status">GitHub integration and repository-dependent task planning are disabled. Use story generation and the backlog to plan work without source control.</p>
+}
+else if (!ProjectId.HasValue)
 {
     <p>Select a project before planning tasks.</p>
 }
@@ -87,7 +92,7 @@ else
 
     private async Task LoadAsync()
     {
-        if (!Scope.IsCurrent || !ProjectId.HasValue) return;
+        if (!Features.Value.GitHubIntegration || !Scope.IsCurrent || !ProjectId.HasValue) return;
         var generation = ++_loadGeneration;
         var project = ProjectId;
         try
@@ -132,7 +137,7 @@ else
     });
     private async Task ExecuteAsync(Func<Task> action)
     {
-        if (!Scope.IsCurrent || _busy || !ProjectId.HasValue) return;
+        if (!Features.Value.GitHubIntegration || !Scope.IsCurrent || _busy || !ProjectId.HasValue) return;
         _busy = true; _error = "";
         try { await action(); }
         catch (OperationCanceledException) when (!Scope.IsCurrent) { }

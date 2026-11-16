@@ -33,6 +33,7 @@ public abstract class FluentFrontendTestBase : BunitContext
         Services.AddScoped<IAppDialogService, AppDialogService>();
         Services.AddSingleton(NSubstitute.Substitute.For<IProjectWorkClient>());
         Services.AddLogging();
+        Services.Configure<FeatureOptions>(_ => { });
         Services.AddSingleton(Http.CreateClient());
         Services.AddSingleton(Http);
         RenderTree.Add<WorkTestBoundary>();

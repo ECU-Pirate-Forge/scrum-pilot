@@ -6,7 +6,10 @@ public sealed record SaveProblemStatementRequest(string Title, string Text, long
 public sealed record GenerateProjectStoriesRequest(string IdempotencyKey, IReadOnlyList<int> ProblemStatementIds);
 public sealed record ProjectStoryBatchResult(IReadOnlyList<ProjectStoryRunResult> Results);
 public sealed record ProjectStoryRunResult(int ProblemStatementId, int? GenerationRunId, GenerationState State,
-    string? ErrorCode, IReadOnlyList<StoryProposalDto> Proposals);
+    string? ErrorCode, IReadOnlyList<StoryProposalDto> Proposals)
+{
+    public string? ErrorMessage { get; init; }
+}
 /// <summary>ProposalId identifies an immutable server-owned candidate within its run, not a PBI. No PBI exists until acceptance.</summary>
 public sealed record StoryProposalDto(int ProposalId, int ProblemStatementId, int GenerationRunId,
     ProductBacklogItem Pbi, PlanningArtifactCurrency Currency, int? AcceptedPbiId = null);

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using ScrumPilot.Data.Context;
 using ScrumPilot.API.Services;
 using ScrumPilot.Shared.Models;
@@ -236,7 +237,8 @@ public sealed class PullRequestScopeServiceTests
         // transaction that would have recorded the green scope check was cancelled.
         await using var recovery = f.NewContext();
         await using var recoveryControl = f.NewControl();
-        var recoveryRegistry = new GitHubRepositoryRegistry(recoveryControl, f.Selection);
+        var recoveryRegistry = new GitHubRepositoryRegistry(recoveryControl, f.Selection,
+            Options.Create(new FeatureOptions { GitHubIntegration = true }));
         var binding = await recovery.TaskPullRequestBindings.SingleOrDefaultAsync();
         if (nonTask) Assert.Null(binding);
         else Assert.Equal(f.TaskId, Assert.IsType<TaskPullRequestBinding>(binding).PbiId);

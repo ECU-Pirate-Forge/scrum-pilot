@@ -48,6 +48,14 @@ current membership/project checks. There are no unqualified compatibility aliase
 | `/dependency-graph`, `/sprints/{sprintId}/dependency-graph`, `/dependencies`, `/dependency-reviews` | Authoritative readiness, normalized prerequisites and audited reviews |
 | `/tasks/{taskId}/pull-requests`, `/repository/non-task-exceptions` | Owner task binding, check history and audited non-task exceptions |
 
+Failed story-generation runs retain their existing `errorCode` and may include a
+privacy-safe `errorMessage` identifying the failure. Older runs can omit the
+message; model output and project content are not included in the diagnostic.
+Story generation requests schema-constrained JSON from local Ollama using the
+story contract, including allowed priority and story-point values. Responses
+still undergo strict JSON and story-content validation; invalid output is not
+repaired or accepted automatically. Retry a failed generation with a new run.
+
 Use the contract's expected problem/PBI/repository version, guideline revision,
 specification revision, graph revision or applicability fingerprint. A `409`
 means reload/reconcile; it is not permission to guess a version. No PBIs are

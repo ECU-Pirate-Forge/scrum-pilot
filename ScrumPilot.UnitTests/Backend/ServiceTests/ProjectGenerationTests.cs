@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
@@ -96,6 +97,9 @@ public sealed class ProjectGenerationTests
         { stories = new[] { new { title = "Too long", description = new string('x', 2001), priority = "Low", storyPoints = "Zero" } } });
         var failed = await fixture.Service.GenerateAsync(fixture.ProjectId, new("too-long", [source.ProblemStatementId]), "actor", default);
         Assert.Equal("invalid_story_output", failed.Results[0].ErrorCode);
+        Assert.Equal("A generated story description exceeds 2,000 characters.", failed.Results[0].ErrorMessage);
+        Assert.Equal(failed.Results[0].ErrorMessage,
+            (await fixture.Service.RunAsync(fixture.ProjectId, failed.Results[0].GenerationRunId!.Value, default)).ErrorMessage);
         Assert.Empty(await fixture.Db.Stories.ToListAsync());
         fixture.Handler.RawOutput = JsonSerializer.Serialize(new
         { stories = new[] { new { title = "Within limit", description = new string('x', 2000), priority = "Low", storyPoints = "Zero" } } });
@@ -109,6 +113,27 @@ public sealed class ProjectGenerationTests
         var saved = await fixture.Service.AcceptAsync(fixture.ProjectId,
             request with { Items = [request.Items[0] with { Description = new string('x', 2000) }] }, default);
         Assert.Equal(2000, saved[0].Description.Length);
+    }
+
+    [Theory]
+    [InlineData("{private-value", "Local AI returned malformed JSON.")]
+    [InlineData("""{"stories":"private-value"}""", "The stories field must be an array.")]
+    [InlineData("""{"stories":[]}""", "Local AI must return between 1 and 100 stories.")]
+    public async Task GenerationReportsAndPersistsSafeSpecificFailure(string output, string message)
+    {
+        await using var fixture = await Fixture.Create();
+        fixture.Handler.RawOutput = output;
+        var source = await fixture.Service.SaveProblemAsync(fixture.ProjectId, null, new("Source", "Content", null, false), default);
+
+        var result = Assert.Single((await fixture.Service.GenerateAsync(fixture.ProjectId,
+            new("invalid-json", [source.ProblemStatementId]), "actor", default)).Results);
+        Assert.Equal("invalid_story_output", result.ErrorCode);
+        Assert.Equal(message, result.ErrorMessage);
+        Assert.Equal(message, (await fixture.Service.RunAsync(fixture.ProjectId, result.GenerationRunId!.Value, default)).ErrorMessage);
+        Assert.DoesNotContain("private-value", result.ErrorMessage);
+        Assert.Contains(message, Assert.Single(fixture.Logger.Messages));
+        Assert.DoesNotContain("private-value", fixture.Logger.Messages[0]);
+        Assert.Empty(await fixture.Db.Stories.ToListAsync());
     }
 
     [Fact]
@@ -291,7 +316,8 @@ public sealed class ProjectGenerationTests
             ActorId = "owner"
         }));
         await fixture.Db.SaveChangesAsync();
-        var github = new GitHubAppClient(new HttpClient(fixture.Handler), Options.Create(new GitHubAppOptions()));
+        var github = new GitHubAppClient(new HttpClient(fixture.Handler), Options.Create(new GitHubAppOptions()),
+            Options.Create(new FeatureOptions { GitHubIntegration = true }));
         var notifier = new ProjectWorkNotifier(Substitute.For<IHubContext<ProjectWorkHub>>(), new(),
             Substitute.For<IOrganizationAccessService>(), NullLogger<ProjectWorkNotifier>.Instance, fixture.Sql.Selection);
         await fixture.Sql.RegisterAsync(repository);
@@ -483,7 +509,9 @@ public sealed class ProjectGenerationTests
         var good = await fixture.Service.SaveProblemAsync(fixture.ProjectId, null, new("Good", "good", null, false), default);
         var bad = await fixture.Service.SaveProblemAsync(fixture.ProjectId, null, new("Bad", "fail-source", null, false), default);
         var response = await fixture.Service.GenerateAsync(fixture.ProjectId, new("mixed", [bad.ProblemStatementId, good.ProblemStatementId]), "actor", default);
-        Assert.NotNull(response.Results[0].ErrorCode);
+        Assert.Equal("local_provider_unavailable", response.Results[0].ErrorCode);
+        Assert.Equal("The local AI provider is unavailable.", response.Results[0].ErrorMessage);
+        Assert.Contains(response.Results[0].ErrorMessage!, Assert.Single(fixture.Logger.Messages));
         Assert.Equal(2, response.Results[1].Proposals.Count);
         await Assert.ThrowsAsync<KeyNotFoundException>(() => fixture.Service.GenerateAsync(
             fixture.ProjectId, new("foreign", [99999]), "actor", default));
@@ -576,8 +604,9 @@ public sealed class ProjectGenerationTests
         public AiHandler Handler { get; } = new();
         public IPlanningMutationHandler Planning { get; } = new DirectSave(sql.Db);
         public AiOptions Options { get; } = new() { Model = "test" };
+        public RecordingLogger Logger { get; } = new();
         public LocalPlanningAi Ai => new(new PlanningTestChatClient(new HttpClient(Handler)), Options);
-        public ProjectStoryGenerationService Service => new(Db, Ai, Planning, sql.Inference, Options);
+        public ProjectStoryGenerationService Service => new(Db, Ai, Planning, sql.Inference, Options, logger: Logger);
         public static async Task<Fixture> Create(params IInterceptor[] interceptors)
         {
             var sql = await PlanningSqlFixture.CreateAsync(interceptors);
@@ -590,6 +619,19 @@ public sealed class ProjectGenerationTests
         public async ValueTask DisposeAsync()
         {
             await sql.DisposeAsync();
+        }
+    }
+
+    private sealed class RecordingLogger : ILogger<ProjectStoryGenerationService>
+    {
+        public List<string> Messages { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            Assert.Null(exception);
+            Messages.Add(formatter(state, exception));
         }
     }
 

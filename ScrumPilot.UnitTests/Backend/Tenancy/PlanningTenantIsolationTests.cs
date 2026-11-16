@@ -1,5 +1,6 @@
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using ScrumPilot.API.Services;
 using ScrumPilot.Data.Models;
 using ScrumPilot.Data.Tenancy;
@@ -23,7 +24,8 @@ public sealed class PlanningTenantIsolationTests
         first.Control.Organizations.Add(otherOrganization);
         await first.Control.SaveChangesAsync();
         var otherRegistry = new GitHubRepositoryRegistry(first.Control,
-            new TenantSelection { OrganizationId = otherOrganization.OrganizationId });
+            new TenantSelection { OrganizationId = otherOrganization.OrganizationId },
+            Options.Create(new FeatureOptions { GitHubIntegration = true }));
         Assert.True(await first.Registry.IsCurrentAsync(first.Repository, default));
         Assert.False(await otherRegistry.IsCurrentAsync(first.Repository, default));
         await Assert.ThrowsAsync<InvalidOperationException>(() =>

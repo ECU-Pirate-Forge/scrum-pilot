@@ -8,6 +8,7 @@ using ScrumPilot.FluentWeb.Components.DependencyChart;
 using ScrumPilot.FluentWeb.Components.Pbi;
 using ScrumPilot.FluentWeb.Components.ProjectManagement;
 using ScrumPilot.FluentWeb.Pages;
+using ScrumPilot.FluentWeb.Layout;
 using ScrumPilot.FluentWeb.Services;
 using ScrumPilot.FluentWeb.Tests.TestHelpers;
 using ScrumPilot.Shared.Models;
@@ -18,8 +19,23 @@ namespace ScrumPilot.FluentWeb.Tests.Pbi;
 public sealed class PlanningTenancyTests : FluentFrontendTestBase
 {
     [Fact]
+    public void Disabled_task_planning_has_no_navigation_or_repository_requests()
+    {
+        using var client = Http.CreateClient();
+        using var scope = new WorkScope(client, 2, 17);
+        using var menu = Render<NavMenu>();
+        Assert.DoesNotContain("task-planning", menu.Markup);
+        using var page = Render<TaskPlanning>(p => p.Add(x => x.CapturedWork, scope));
+        Assert.Contains("GitHub integration and repository-dependent task planning are disabled.", page.Markup);
+        Assert.DoesNotContain("Generate task preview", page.Markup);
+        Assert.DoesNotContain("Repository and scope enforcement", page.Markup);
+        Assert.Empty(Http.Requests);
+    }
+
+    [Fact]
     public void Task_planning_uses_captured_tenant_and_project_not_mutable_selections()
     {
+        Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<FeatureOptions>>().Value.GitHubIntegration = true;
         Services.GetRequiredService<ProjectStateService>().SetProject(new Project { ProjectId = 99, ProjectName = "Other selection" });
         Services.GetRequiredService<OrganizationStateService>().SetOrganization(new(1, "Other tenant", OrganizationRole.Owner, false));
         using var client = Http.CreateClient();
@@ -31,6 +47,8 @@ public sealed class PlanningTenancyTests : FluentFrontendTestBase
         Http.OnGetJson("api/organizations/2/projects/17/repository/snapshots", Array.Empty<RepositorySnapshot>());
         Http.OnGetJson("api/organizations/2/projects/17/repository", new ProjectRepositoryStatus(null, false, "Not configured"));
         using var cut = Render<TaskPlanning>(p => p.Add(x => x.CapturedWork, scope));
+        using var menu = Render<NavMenu>();
+        Assert.Contains("task-planning", menu.Markup);
         cut.WaitForAssertion(() => Assert.Contains("Scoped story", cut.Markup));
         Assert.All(Http.Requests, request => Assert.StartsWith("api/organizations/2/", request.Path));
         Assert.Contains(Http.Requests, request => request.Path.EndsWith("/pbi/getallpbis") && request.Query == "?projectId=17");

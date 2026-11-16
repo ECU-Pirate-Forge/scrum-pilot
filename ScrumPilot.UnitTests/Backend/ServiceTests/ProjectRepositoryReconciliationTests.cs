@@ -48,7 +48,8 @@ public sealed class ProjectRepositoryReconciliationTests
         using var http = new HttpClient(new PlanningGitHubHandler { RepositoryId = 100 });
         using var rsa = RSA.Create(2048);
         var github = new GitHubAppClient(http, Options.Create(new GitHubAppOptions
-        { AppId = "123", PrivateKeyPem = rsa.ExportPkcs8PrivateKeyPem() }));
+        { AppId = "123", PrivateKeyPem = rsa.ExportPkcs8PrivateKeyPem() }),
+            Options.Create(new FeatureOptions { GitHubIntegration = true }));
         var user = Substitute.For<ICurrentUser>();
         user.UserId.Returns("owner");
         var controller = new ProjectRepositoryController(user, fixture.Access, fixture.Db, github,

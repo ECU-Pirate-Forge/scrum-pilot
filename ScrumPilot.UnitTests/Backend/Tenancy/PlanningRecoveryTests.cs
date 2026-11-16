@@ -47,7 +47,8 @@ public sealed class PlanningRecoveryTests
         using var client = new HttpClient(handler);
         using var rsa = RSA.Create(2048);
         var github = new GitHubAppClient(client, Options.Create(new GitHubAppOptions
-        { AppId = "123", PrivateKeyPem = rsa.ExportPkcs8PrivateKeyPem() }));
+        { AppId = "123", PrivateKeyPem = rsa.ExportPkcs8PrivateKeyPem() }),
+            Options.Create(new ScrumPilot.Shared.Models.FeatureOptions { GitHubIntegration = true }));
         var observer = new PlanningIntegrationLifecycle(fixture.Control, new(fixture.Control, github),
             new(Substitute.For<IHubContext<ProjectWorkHub>>(), new(), NullLogger<ProjectWorkConnectionEvictor>.Instance),
             Substitute.For<IPlanningPokerConnectionEvictor>(), NullLogger<PlanningIntegrationLifecycle>.Instance);
@@ -112,7 +113,8 @@ public sealed class PlanningRecoveryTests
             using var client = new HttpClient(handler);
             using var rsa = RSA.Create(2048);
             var github = new GitHubAppClient(client, Options.Create(new GitHubAppOptions
-            { AppId = "123", PrivateKeyPem = rsa.ExportPkcs8PrivateKeyPem() }));
+            { AppId = "123", PrivateKeyPem = rsa.ExportPkcs8PrivateKeyPem() }),
+                Options.Create(new ScrumPilot.Shared.Models.FeatureOptions { GitHubIntegration = true }));
             var hub = Substitute.For<IHubContext<ProjectWorkHub>>();
             var subscriptions = new ProjectWorkSubscriptions();
             subscriptions.Connections["first"] = new("owner", project.ProjectId, first.OrganizationId);

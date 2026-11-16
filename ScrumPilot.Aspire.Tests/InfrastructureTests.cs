@@ -49,6 +49,19 @@ public sealed class InfrastructureTests(ITestOutputHelper output)
         Assert.DoesNotContain(builder.Resources, r => r.Name.StartsWith(InfrastructureGraph.CatalogPrefix));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GitHubFeatureFlagFlowsToApiAndBothBrowsers(bool enabled)
+    {
+        await using var builder = await Graph("--Features:GitHubIntegration=" + enabled);
+        foreach (var name in new[] { "webapi", "web", "fluentweb" })
+        {
+            var environment = await Environment(builder, builder.Resources.Single(r => r.Name == name));
+            Assert.Equal(enabled.ToString().ToLowerInvariant(), environment["Features__GitHubIntegration"]);
+        }
+    }
+
     [Fact]
     public async Task PrivateConfigurationNeverFlowsToWasm()
     {
@@ -74,20 +87,24 @@ public sealed class InfrastructureTests(ITestOutputHelper output)
         Assert.Contains("Cors__AllowedOrigins__1", environment.Keys);
     }
 
-    [Fact]
-    public async Task PublishedPublicConfigurationIsValidJsonAfterExpressionExpansion()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PublishedPublicConfigurationIsValidJsonAfterExpressionExpansion(bool gitHubIntegration)
     {
         await using var builder = await Graph();
         var origin = InfrastructureGraph.Parameter(builder, "test-public-origin",
             "Public:WebOrigin", "https://example.invalid");
         foreach (var client in new[] { "web", "fluentweb" })
         {
-            var expression = InfrastructureGraph.PublicBrowserConfiguration(client, origin);
+            var expression = InfrastructureGraph.PublicBrowserConfiguration(client, origin, gitHubIntegration);
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             var json = await expression.GetValueAsync(timeout.Token);
             using var config = JsonDocument.Parse(json!);
             var environment = config.RootElement.GetProperty("webAssembly").GetProperty("environment");
-            Assert.Equal(4, environment.EnumerateObject().Count());
+            Assert.Equal(5, environment.EnumerateObject().Count());
+            Assert.Equal(gitHubIntegration.ToString().ToLowerInvariant(),
+                environment.GetProperty("Features__GitHubIntegration").GetString());
             Assert.Equal($"https://example.invalid/{client}/_api/webapi",
                 environment.GetProperty("services__webapi__http__0").GetString());
             Assert.Equal("http/protobuf", environment.GetProperty("OTEL_EXPORTER_OTLP_PROTOCOL").GetString());

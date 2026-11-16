@@ -2,9 +2,12 @@
 @inject IJSRuntime JS
 @inherits PlanningComponentBase
 @inject ILogger<SprintDependencyView> Logger
+@inject Microsoft.Extensions.Options.IOptions<FeatureOptions> Features
 
 <section aria-label="Sprint dependencies">
-    <p>Revision @Graph.Revision. Arrows run from prerequisite to dependent. Ready does not mean approved file scope.</p>
+    <p>Revision @Graph.Revision. Arrows run from prerequisite to dependent.
+        @if (Features.Value.GitHubIntegration) { <span>Ready does not mean approved file scope.</span> }
+    </p>
     <label>State filter
         <select @bind="_filter">
             <option value="">All states</option>
@@ -29,7 +32,7 @@
     <p>Ready: prerequisites satisfied. Blocked: unresolved prerequisites. Active: started. Done: valid completion. Needs review: invalidated acceptance. External: outside this sprint.</p>
     <table>
         <caption>Dependency list (the filtered diagram retains prerequisite context)</caption>
-        <thead><tr><th>Work</th><th>State</th><th>Scope</th><th>Blockers / reason</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Work</th><th>State</th>@if (Features.Value.GitHubIntegration) { <th>Scope</th> }<th>Blockers / reason</th><th>Actions</th></tr></thead>
         <tbody>
             @foreach (var node in VisibleNodes)
             {
@@ -40,7 +43,10 @@
                         @if (node.Item.ProblemStatementId.HasValue) { <span> / Problem #@node.Item.ProblemStatementId</span> }
                     </td>
                     <td>@node.State</td>
-                    <td>@(node.ImplementationEligible ? "Approved implementation" : "Unapproved / legacy scope")</td>
+                    @if (Features.Value.GitHubIntegration)
+                    {
+                        <td>@(node.ImplementationEligible ? "Approved implementation" : "Unapproved / legacy scope")</td>
+                    }
                     <td>@string.Join(" ", node.Reasons)</td>
                     <td>
                         @if (!node.IsBoundary)

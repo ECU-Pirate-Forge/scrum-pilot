@@ -7,6 +7,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using ScrumPilot.API.Configuration;
+using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.API.Services;
 
@@ -19,11 +20,12 @@ public sealed record VerifiedPullRequest(string HeadSha, string BaseSha, string 
 public sealed record PullRequestIdentity(string HeadSha, bool IsOpen);
 
 /// <summary>Fixed-host GitHub App access. This client never checks out or executes repository code.</summary>
-public sealed class GitHubAppClient(HttpClient http, IOptions<GitHubAppOptions> options)
+public sealed class GitHubAppClient(HttpClient http, IOptions<GitHubAppOptions> options, IOptions<FeatureOptions> features)
 {
-    public bool IsConfigured => !string.IsNullOrWhiteSpace(options.Value.AppId)
+    public bool IntegrationEnabled => features.Value.GitHubIntegration;
+    public bool IsConfigured => IntegrationEnabled && !string.IsNullOrWhiteSpace(options.Value.AppId)
         && !string.IsNullOrWhiteSpace(options.Value.PrivateKeyPem);
-    public bool IsWebhookConfigured => !string.IsNullOrWhiteSpace(options.Value.WebhookSecret);
+    public bool IsWebhookConfigured => IntegrationEnabled && !string.IsNullOrWhiteSpace(options.Value.WebhookSecret);
 
     public async Task<VerifiedRepositoryTree> GetTreeAsync(
         long installationId, long repositoryId, string owner, string repository, string branch,
@@ -172,7 +174,7 @@ public sealed class GitHubAppClient(HttpClient http, IOptions<GitHubAppOptions> 
 
     public bool VerifyWebhook(ReadOnlySpan<byte> body, string signature)
     {
-        if (string.IsNullOrWhiteSpace(options.Value.WebhookSecret)
+        if (!IsWebhookConfigured
             || !signature.StartsWith("sha256=", StringComparison.Ordinal) || signature.Length != 71)
             return false;
         byte[] supplied;
@@ -184,6 +186,7 @@ public sealed class GitHubAppClient(HttpClient http, IOptions<GitHubAppOptions> 
 
     private async Task<string> InstallationToken(long installationId, long repositoryId, CancellationToken ct)
     {
+        if (!IntegrationEnabled) throw new InvalidOperationException("GitHub integration is disabled.");
         if (!IsConfigured) throw new InvalidOperationException("GitHub App is not configured. Configure its App ID and private key on the API.");
         if (installationId <= 0 || repositoryId <= 0) throw new ArgumentException("GitHub installation and repository IDs must be positive.");
         using var rsa = RSA.Create();

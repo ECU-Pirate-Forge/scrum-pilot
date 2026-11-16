@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Net;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
+using ScrumPilot.Client;
 using ScrumPilot.FluentWeb.Services;
 using ScrumPilot.FluentWeb.Components.Pbi;
 using ScrumPilot.FluentWeb.Components.ProjectManagement;
@@ -13,6 +14,27 @@ namespace ScrumPilot.FluentWeb.Tests.Pbi;
 
 public sealed class ProjectGenerationUiTests : FluentFrontendTestBase
 {
+    [Fact]
+    public void StoryRunsShowSpecificAndLegacyFailureMessages()
+    {
+        using var client = Http.CreateClient();
+        using var scope = new WorkScope(client, 2, 17);
+        Http.OnGetJson("api/organizations/2/projects/17/problem-statements", Array.Empty<ProblemStatement>());
+        Http.OnGetJson("api/organizations/2/projects/17/story-generation", new[]
+        {
+            new ProjectStoryRunResult(1, 7, GenerationState.Failed, "invalid_story_output", [])
+                { ErrorMessage = "Local AI returned malformed JSON." },
+            new ProjectStoryRunResult(2, 8, GenerationState.Failed, "invalid_story_output", [])
+        });
+        using var cut = Render<ProjectStoryGenerationPanel>(p => p.Add(c => c.ProjectId, 17).Add(c => c.CapturedWork, scope));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("Local AI returned malformed JSON.", cut.Markup);
+            Assert.Contains("Generation failed.", cut.Markup);
+            Assert.Contains("invalid_story_output", cut.Markup);
+        });
+    }
+
     [Theory]
     [InlineData(OrganizationRole.Owner, true)]
     [InlineData(OrganizationRole.Member, false)]

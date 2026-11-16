@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using ScrumPilot.API.Authorization;
 using ScrumPilot.API.Services;
 using ScrumPilot.Data.Context;
 using ScrumPilot.Data.Tenancy;
@@ -10,6 +11,7 @@ using ScrumPilot.Shared.Models;
 namespace ScrumPilot.API.Controllers;
 
 [ApiController]
+[GitHubIntegration]
 [Route("api/integrations/github/webhooks")]
 [ServiceFilter(typeof(PlanningErrorFilter))]
 public sealed class GitHubWebhooksController(GitHubAppClient github, ControlPlaneContext control,

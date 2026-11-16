@@ -3,17 +3,21 @@ using ScrumPilot.Data.Context;
 using ScrumPilot.Data.Models;
 using ScrumPilot.Data.Tenancy;
 using ScrumPilot.Shared.Models;
+using Microsoft.Extensions.Options;
 
 namespace ScrumPilot.API.Services;
 
-public sealed class GitHubRepositoryRegistry(ControlPlaneContext control, TenantSelection selection)
+public sealed class GitHubRepositoryRegistry(ControlPlaneContext control, TenantSelection selection,
+    IOptions<FeatureOptions> features, ILogger<GitHubRepositoryRegistry>? logger = null)
 {
+    public bool IntegrationEnabled => features.Value.GitHubIntegration;
+
     public Task<bool> IsValidationCurrentAsync(ProjectRepository repository, PullRequestScopeCheck check, CancellationToken ct) =>
         check.RepositoryVersion == repository.Version ? IsCurrentAsync(repository, ct) : Task.FromResult(false);
 
     public async Task<bool> IsCurrentAsync(ProjectRepository repository, CancellationToken ct)
     {
-        if (selection.OrganizationId is not int organizationId || repository.RegistrationId == Guid.Empty)
+        if (!IntegrationEnabled || selection.OrganizationId is not int organizationId || repository.RegistrationId == Guid.Empty)
             return false;
         return await (from registration in control.GitHubRepositoryRegistrations.AsNoTracking()
                       join organization in control.Organizations.AsNoTracking()
@@ -38,6 +42,21 @@ public sealed class GitHubRepositoryRegistry(ControlPlaneContext control, Tenant
             throw new InvalidOperationException("Repository policy is suspended or changed. An Owner must reconcile its configuration and scope checks.");
         return await control.GitHubRepositoryRegistrations.AsNoTracking()
             .SingleAsync(item => item.GitHubRepositoryId == repository.GitHubRepositoryId, ct);
+    }
+
+    public async Task SuspendWhileDisabledAsync(ProjectRepository repository, CancellationToken ct)
+    {
+        if (IntegrationEnabled) throw new InvalidOperationException("GitHub integration is enabled.");
+        var owned = await RequireOwnedAsync(repository, ct);
+        var registration = await control.GitHubRepositoryRegistrations.SingleAsync(
+            item => item.RegistrationId == owned.RegistrationId, ct);
+        if (registration.State is not (RepositoryRegistrationState.Retiring or RepositoryRegistrationState.Retired))
+            registration.State = RepositoryRegistrationState.Suspended;
+        registration.RecoveryError = "GitHub integration is disabled; external checks are not invalidated. Freeze merges and reconcile repository authority before re-enabling.";
+        registration.UpdatedAt = DateTime.UtcNow;
+        await control.SaveChangesAsync(ct);
+        logger?.LogWarning("Repository {RepositoryId} was fenced while GitHub integration is disabled; external checks require reconciliation",
+            repository.GitHubRepositoryId);
     }
 
     public async Task<GitHubRepositoryRegistration> RequireOwnedAsync(ProjectRepository repository, CancellationToken ct) =>

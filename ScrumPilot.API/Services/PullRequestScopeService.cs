@@ -114,6 +114,11 @@ public sealed class PullRequestScopeService(OrganizationContext db, GitHubAppCli
         foreach (var binding in bindings)
         {
             var repository = await db.ProjectRepositories.SingleAsync(item => item.ProjectRepositoryId == binding.ProjectRepositoryId, ct);
+            if (!github.IntegrationEnabled)
+            {
+                await registry.SuspendWhileDisabledAsync(repository, ct);
+                continue;
+            }
             const string pending = "Task inputs or scope are changing. Revalidate the approved specification before merging.";
             var invalidatedHeads = await InvalidateKnownHeadsAsync(repository, binding.PullRequestNumber, pending, ct);
             var pr = await github.GetPullRequestIdentityAsync(repository.InstallationId, repository.GitHubRepositoryId,

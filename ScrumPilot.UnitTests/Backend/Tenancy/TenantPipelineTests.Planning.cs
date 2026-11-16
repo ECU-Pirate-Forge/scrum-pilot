@@ -58,9 +58,10 @@ public sealed partial class TenantPipelineTests
         {
             AppId = "123",
             PrivateKeyPem = signingKey.ExportPkcs8PrivateKeyPem()
-        }));
+        }), Options.Create(new FeatureOptions { GitHubIntegration = true }));
         serviceOverrides = services =>
         {
+            services.Configure<FeatureOptions>(features => features.GitHubIntegration = true);
             services.AddSingleton<IChatClient>(chat);
             services.AddScoped<GitHubAppClient>(_ => github);
         };

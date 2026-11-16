@@ -128,8 +128,11 @@ public static class InfrastructureGraph
         var sendGridEmail = Parameter(builder, "sendgrid-from", "SendGrid:FromEmail", "");
         var sendGridName = Parameter(builder, "sendgrid-name", "SendGrid:FromName", "ScrumPilot");
         var initialize = builder.Configuration.GetValue<bool>("Infrastructure:Initialize");
+        var gitHubIntegration = builder.Configuration.GetValue<bool>("Features:GitHubIntegration");
+        var gitHubIntegrationValue = gitHubIntegration.ToString().ToLowerInvariant();
         var migration = builder.AddProject<Projects.ScrumPilot_API>("database-init")
             .WithArgs(initialize ? "--initialize" : "--migrate")
+            .WithEnvironment("Features__GitHubIntegration", gitHubIntegrationValue)
             .WithReference(control, "control")
             .WithReference(runtime, "tenant-server")
             .WithReference(admin, "tenant-admin");
@@ -144,6 +147,7 @@ public static class InfrastructureGraph
         }
 
         var api = builder.AddProject<Projects.ScrumPilot_API>("webapi")
+            .WithEnvironment("Features__GitHubIntegration", gitHubIntegrationValue)
             .WithReference(control, "control")
             .WithReference(runtime, "tenant-server")
             .WithReference(admin, "tenant-admin")
@@ -194,6 +198,8 @@ public static class InfrastructureGraph
         var apiScheme = builder.ExecutionContext.IsPublishMode ? "http" : "https";
         var web = builder.AddBlazorWasmProject<Projects.ScrumPilot_Web>("web").WithReference(api.GetEndpoint(apiScheme));
         var fluent = builder.AddBlazorWasmProject<Projects.ScrumPilot_FluentWeb>("fluentweb").WithReference(api.GetEndpoint(apiScheme));
+        web.WithEnvironment("Features__GitHubIntegration", gitHubIntegrationValue);
+        fluent.WithEnvironment("Features__GitHubIntegration", gitHubIntegrationValue);
         var webGateway = builder.AddBlazorGateway("web-gateway")
             .WithBlazorClientApp(web, proxyTelemetry: true).WithExternalHttpEndpoints()
             .WithEnvironment("Logging__LogLevel__Microsoft.AspNetCore", "Warning")
@@ -246,8 +252,8 @@ public static class InfrastructureGraph
             api.WithEnvironment("Cors__AllowedOrigins__0", webOrigin)
                 .WithEnvironment("Cors__AllowedOrigins__1", fluentOrigin)
                 .WithEnvironment("SendGrid__InvitationBaseUrl", Parameter(builder, "invitation-url", "SendGrid:InvitationBaseUrl"));
-            ConfigurePublishedTelemetry(webGateway, "web", dashboardKey!, webOrigin);
-            ConfigurePublishedTelemetry(fluentGateway, "fluentweb", dashboardKey!, fluentOrigin);
+            ConfigurePublishedTelemetry(webGateway, "web", dashboardKey!, webOrigin, gitHubIntegration);
+            ConfigurePublishedTelemetry(fluentGateway, "fluentweb", dashboardKey!, fluentOrigin, gitHubIntegration);
         }
         else
         {
@@ -263,12 +269,13 @@ public static class InfrastructureGraph
     // The preview Blazor publisher omits its HTTP-OTLP argument in publish mode.
     // Complete its generated YARP/configuration model without exposing dashboard headers.
     private static void ConfigurePublishedTelemetry(IResourceBuilder<ProjectResource> gateway, string client,
-        IResourceBuilder<ParameterResource> dashboardKey, IResourceBuilder<ParameterResource> publicOrigin)
+        IResourceBuilder<ParameterResource> dashboardKey, IResourceBuilder<ParameterResource> publicOrigin,
+        bool gitHubIntegration)
     {
         gateway.WithEnvironment(context =>
         {
             var key = $"ClientApps__{client}__ConfigResponse";
-            context.EnvironmentVariables[key] = PublicBrowserConfiguration(client, publicOrigin);
+            context.EnvironmentVariables[key] = PublicBrowserConfiguration(client, publicOrigin, gitHubIntegration);
             var route = $"ReverseProxy__Routes__route-otlp-{client}";
             context.EnvironmentVariables[$"{route}__ClusterId"] = "cluster-otlp-dashboard";
             context.EnvironmentVariables[$"{route}__Match__Path"] = $"/{client}/_otlp/{{**catch-all}}";
@@ -280,7 +287,7 @@ public static class InfrastructureGraph
     }
 
     internal static ReferenceExpression PublicBrowserConfiguration(string client,
-        IResourceBuilder<ParameterResource> publicOrigin)
+        IResourceBuilder<ParameterResource> publicOrigin, bool gitHubIntegration = false)
     {
         var config = System.Text.Json.JsonSerializer.Serialize(new
         {
@@ -288,6 +295,7 @@ public static class InfrastructureGraph
             {
                 environment = new Dictionary<string, string>
                 {
+                    ["Features__GitHubIntegration"] = gitHubIntegration.ToString().ToLowerInvariant(),
                     ["services__webapi__http__0"] = $"__PUBLIC_ORIGIN__/{client}/_api/webapi",
                     ["OTEL_SERVICE_NAME"] = client,
                     ["OTEL_EXPORTER_OTLP_ENDPOINT"] = $"/{client}/_otlp",

@@ -35,7 +35,10 @@
     {
         <div>
             Problem #@run.ProblemStatementId · Run #@run.GenerationRunId · @run.State
-            @if (run.ErrorCode is not null) { <span> — @run.ErrorCode. Retry generation with a new run.</span> }
+            @if (run.ErrorCode is not null)
+            {
+                <span> — @run.ErrorCode. @(run.ErrorMessage ?? "Generation failed.") Retry generation with a new run.</span>
+            }
             @if (run.Proposals.Count > 0)
             {
                 <FluentButton OnClick="@(() => Review(run.Proposals))" Disabled="_busy">Review run #@run.GenerationRunId</FluentButton>

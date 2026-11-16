@@ -187,7 +187,8 @@ internal sealed class TaskPlanningFixture : IAsyncDisposable
     private TaskPlanningFixture()
     {
         _client = new(Http);
-        GitHub = new(_client, Options.Create(new GitHubAppOptions { AppId = "123", PrivateKeyPem = AppKey.Value }));
+        GitHub = new(_client, Options.Create(new GitHubAppOptions { AppId = "123", PrivateKeyPem = AppKey.Value }),
+            Options.Create(new FeatureOptions { GitHubIntegration = true }));
     }
 
     public static async Task<TaskPlanningFixture> CreateAsync()
