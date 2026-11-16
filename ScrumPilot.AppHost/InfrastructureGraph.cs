@@ -128,11 +128,14 @@ public static class InfrastructureGraph
         var sendGridEmail = Parameter(builder, "sendgrid-from", "SendGrid:FromEmail", "");
         var sendGridName = Parameter(builder, "sendgrid-name", "SendGrid:FromName", "ScrumPilot");
         var initialize = builder.Configuration.GetValue<bool>("Infrastructure:Initialize");
-        var migration = builder.AddProject<Projects.ScrumPilot_API>("database-init")
+        // Command-only execution must not reserve the API launch profile's listening ports.
+        var migration = builder.AddProject<Projects.ScrumPilot_API>("database-init", launchProfileName: null)
             .WithArgs(initialize ? "--initialize" : "--migrate")
             .WithReference(control, "control")
             .WithReference(runtime, "tenant-server")
             .WithReference(admin, "tenant-admin");
+        if (!builder.ExecutionContext.IsPublishMode)
+            migration.WithEnvironment("ASPNETCORE_ENVIRONMENT", builder.Environment.EnvironmentName);
         if (sql is not null)
             migration.WaitFor(sql);
         if (initialize)

@@ -19,6 +19,13 @@ opening them. The worktree-isolated start must not reuse another installation's
 SQL resources. Do not force-stop persistent resources or delete their volumes
 without explicit data-loss approval.
 
+The command-only `database-init` resource disables the API launch profile so
+initialization/migrations do not reserve the API's HTTP/HTTPS proxy ports.
+Local command execution explicitly retains the AppHost's environment without
+passing a development environment into published deployments.
+Only `webapi` owns those endpoints; competing reservations leave gateway API
+requests timing out and can surface as "Organization unavailable" in FluentWeb.
+
 Private connection/JWT/email/operator settings are distributed only to server
 resources. Browser gateways supply public endpoints and telemetry proxy metadata,
 not private credentials. Project settings remain compatible direct-start fallbacks.
