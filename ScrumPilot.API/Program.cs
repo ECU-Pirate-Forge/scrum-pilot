@@ -117,9 +117,11 @@ builder.Services.AddScoped<ProjectGuidelinesService>();
 builder.Services.AddScoped<ProjectStoryGenerationService>();
 builder.Services.AddScoped<ProjectWorkConnectionEvictor>();
 builder.Services.AddScoped<ProjectDependencyService>();
+builder.Services.AddScoped<ScrumPilot.API.Controllers.GitHubFeatureFilter>();
 builder.Services.AddScoped<RepositoryContextService>();
 builder.Services.AddScoped<TaskSpecificationService>();
 builder.Services.AddScoped<TaskGenerationService>();
+builder.Services.AddScoped<TaskCreationService>();
 builder.Services.AddScoped<PullRequestScopeService>();
 builder.Services.AddScoped<IPlanningMutationHandler>(services => services.GetRequiredService<ProjectDependencyService>());
 

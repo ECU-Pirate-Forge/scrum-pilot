@@ -5,72 +5,138 @@
 @using System.Text.Json.Serialization
 @using ScrumPilot.FluentWeb.Components.ProjectManagement
 @using ScrumPilot.FluentWeb.Components.Pbi
+@using ScrumPilot.Shared.Models
+@inject IJSRuntime JS
+@inject IConfiguration Configuration
 @inject OrganizationStateService OrganizationState
 @inject ILogger<TaskPlanning> Logger
-@inject Microsoft.Extensions.Options.IOptions<FeatureOptions> Features
 
 <PageTitle>Task Planning</PageTitle>
-<AppPageHeader Title="Task Planning" Subtitle="Review repository context, decompose stories, and approve bounded implementation specifications." />
-@if (!Features.Value.GitHubIntegration)
-{
-    <p role="status">GitHub integration and repository-dependent task planning are disabled. Use story generation and the backlog to plan work without source control.</p>
-}
-else if (!ProjectId.HasValue)
+<AppPageHeader Title="Task Planning" Subtitle="Create and regenerate tasks from existing stories and bugs." />
+@if (!ProjectId.HasValue)
 {
     <p>Select a project before planning tasks.</p>
 }
 else
 {
-    <ProjectRepositorySettings @key="(Scope.OrganizationId, ProjectId.Value)" CapturedWork="Scope" ProjectId="ProjectId.Value" IsOwner="IsOwner" />
     @if (_error.Length > 0) { <p role="alert">@_error</p> }
-    <FluentButton OnClick="LoadAsync">Refresh work and snapshots</FluentButton>
-    <section aria-label="Generate tasks from stories">
-        <h2>Generate tasks</h2>
-        <p>Private repository context is processed on local Ollama. Task proposals are not saved until accepted. Child tasks inherit the source story's sprint.</p>
-        @foreach (var story in _items.Where(item => item.Type == PbiType.Story && !item.IsDraft))
+    <FluentButton OnClick="LoadAsync">Refresh work</FluentButton>
+    <section aria-label="Create tasks from existing work">
+        <h2>Create tasks from a story or bug</h2>
+        <p>Tasks are created as drafts and inherit the selected source's sprint. AI task specs include current project guidelines and a copyable implementation handoff.</p>
+        <label>Source story or bug
+            <select @bind="_sourcePbiId">
+                <option value="0">Select a committed story or bug</option>
+                @foreach (var source in EligibleSources)
+                {
+                    <option value="@source.PbiId">#@source.PbiId @source.Type: @source.Title</option>
+                }
+            </select>
+        </label>
+        @if (SelectedSource is { } sourcePbi)
         {
-            <label><input type="checkbox" checked="@_selectedStories.Contains(story.PbiId)" @onchange="args => Select(story.PbiId, args.Value is true)" />
-                #@story.PbiId @story.Title
+            <section aria-label="Add a task manually">
+                <h3>Add a task manually</h3>
+                <label>Task title <input @bind="_manualTitle" /></label>
+                <label>Task description <textarea rows="4" @bind="_manualDescription"></textarea></label>
+                <FluentButton OnClick="CreateManualAsync" Disabled="_busy">Add draft task</FluentButton>
+            </section>
+            <section aria-label="Generate tasks with AI">
+                <h3>Generate tasks with AI</h3>
+                <p>Generation uses this work item's content and current project guidelines; no GitHub repository or file snapshot is needed.</p>
+                @if (HasGeneratedTasks(sourcePbi.PbiId))
+                {
+                    <FluentButton OnClick="() => GenerateTasksAsync(true)" Disabled="_busy" Loading="_busy">Regenerate and replace generated tasks</FluentButton>
+                }
+                else
+                {
+                    <FluentButton OnClick="() => GenerateTasksAsync(false)" Disabled="_busy" Loading="_busy">Generate task preview</FluentButton>
+                }
+                @if (_creationPreview is not null)
+                {
+                    <h4>Review and edit proposals</h4>
+                    <p>Edit proposal JSON before accepting. Regeneration removes only previously generated child tasks; manually added tasks are preserved.</p>
+                    @foreach (var proposal in _creationProposals)
+                    {
+                        <label><input type="checkbox" @bind="proposal.Selected" /> Accept @proposal.Key</label>
+                        <textarea rows="16" @bind="proposal.Json" spellcheck="false" aria-label="@($"Proposal {proposal.Key}")"></textarea>
+                    }
+                    <label><input type="checkbox" @bind="_asDraft" /> Save accepted work as drafts</label>
+                    <FluentButton OnClick="AcceptCreatedTasksAsync" Disabled="_busy">Save selected task proposals</FluentButton>
+                }
+            </section>
+            <section aria-label="Tasks associated with selected work item">
+                <h3>Child tasks</h3>
+                @foreach (var task in ChildTasks(sourcePbi.PbiId))
+                {
+                    <details>
+                        <summary>#@task.PbiId @task.Title (@(task.IsDraft ? "Draft" : task.Status.ToString()))</summary>
+                        @if (task.Origin == PbiOrigin.AiGenerated)
+                        {
+                            <label>Copyable implementation spec
+                                <textarea rows="16" readonly>@task.Description</textarea>
+                            </label>
+                        }
+                        else
+                        {
+                            <p>@task.Description</p>
+                        }
+                        <FluentButton OnClick="() => DeleteTaskAsync(task)" Disabled="_busy">Remove task</FluentButton>
+                    </details>
+                }
+                @if (!ChildTasks(sourcePbi.PbiId).Any()) { <p>No child tasks yet.</p> }
+            </section>
+        }
+    </section>
+
+    @if (_githubEnabled)
+    {
+        <ProjectRepositorySettings @key="(Scope.OrganizationId, ProjectId.Value)" CapturedWork="Scope" ProjectId="ProjectId.Value" IsOwner="IsOwner" />
+        <section aria-label="GitHub-backed task implementation planning">
+            <h2>Repository-backed task specification and PR enforcement</h2>
+            <label>Task
+                <select @bind="_taskId">
+                    <option value="0">Select a task</option>
+                    @foreach (var task in _items.Where(item => item.Type == PbiType.Task))
+                    { <option value="@task.PbiId">#@task.PbiId @task.Title</option> }
+                </select>
             </label>
-        }
-        <label>Branch for a new immutable snapshot <input @bind="_branch" /></label>
-        <FluentButton OnClick="CreateSnapshotAsync" Disabled="_busy">Verify branch snapshot</FluentButton>
-        <label>Repository snapshot
-            <select @bind="_snapshotId">
-                <option value="0">Select a verified snapshot</option>
-                @foreach (var snapshot in _snapshots) { <option value="@snapshot.RepositorySnapshotId">@snapshot.CommitSha</option> }
-            </select>
-        </label>
-        <label>Relevant source paths (one per line, exact repository-relative paths)
-            <textarea rows="5" @bind="_sourcePaths"></textarea>
-        </label>
-        <FluentButton OnClick="GenerateAsync" Disabled="_busy" Loading="_busy">Generate task preview</FluentButton>
-        @if (_preview is not null)
-        {
-            <h3>Review task proposals</h3>
-            <p>Edit the structured proposal JSON, including exact files, commands, documentation, and dependencies. Dependencies on unaccepted task keys are rejected.</p>
-            @foreach (var proposal in _proposals)
+            @if (_taskId > 0)
+            { <TaskSpecificationEditor @key="(Scope.OrganizationId, ProjectId.Value, _taskId)" CapturedWork="Scope" ProjectId="ProjectId.Value" TaskId="_taskId" IsOwner="IsOwner" Snapshots="_snapshots" /> }
+        </section>
+        <section aria-label="Legacy repository-backed task generation">
+            <h2>Generate tasks with repository context</h2>
+            @foreach (var story in _items.Where(item => item.Type == PbiType.Story && !item.IsDraft))
             {
-                <label><input type="checkbox" @bind="proposal.Selected" /> Accept @proposal.Key</label>
-                <textarea rows="20" @bind="proposal.Json" spellcheck="false" aria-label="@($"Proposal {proposal.Key}")"></textarea>
+                <label><input type="checkbox" checked="@_selectedStories.Contains(story.PbiId)" @onchange="args => Select(story.PbiId, args.Value is true)" />
+                    #@story.PbiId @story.Title
+                </label>
             }
-            <label><input type="checkbox" @bind="_asDraft" /> Save as draft work</label>
-            <FluentButton OnClick="AcceptAsync" Disabled="_busy">Save selected task proposals</FluentButton>
-        }
-    </section>
-    <section aria-label="Task specifications">
-        <h2>Manual and generated task specifications</h2>
-        <p>Create manual Task PBIs in the backlog, then select them here to use the same specification and file-scope approval format.</p>
-        <label>Task
-            <select @bind="_taskId">
-                <option value="0">Select a task</option>
-                @foreach (var task in _items.Where(item => item.Type == PbiType.Task))
-                { <option value="@task.PbiId">#@task.PbiId @task.Title</option> }
-            </select>
-        </label>
-        @if (_taskId > 0)
-        { <TaskSpecificationEditor @key="(Scope.OrganizationId, ProjectId.Value, _taskId)" CapturedWork="Scope" ProjectId="ProjectId.Value" TaskId="_taskId" IsOwner="IsOwner" Snapshots="_snapshots" /> }
-    </section>
+            <label>Branch for a new immutable snapshot <input @bind="_branch" /></label>
+            <FluentButton OnClick="CreateSnapshotAsync" Disabled="_busy">Verify branch snapshot</FluentButton>
+            <label>Repository snapshot
+                <select @bind="_snapshotId">
+                    <option value="0">Select a verified snapshot</option>
+                    @foreach (var snapshot in _snapshots) { <option value="@snapshot.RepositorySnapshotId">@snapshot.CommitSha</option> }
+                </select>
+            </label>
+            <label>Relevant source paths (one per line, exact repository-relative paths)
+                <textarea rows="5" @bind="_sourcePaths"></textarea>
+            </label>
+            <FluentButton OnClick="GenerateAsync" Disabled="_busy" Loading="_busy">Generate repository-bound task preview</FluentButton>
+            @if (_githubPreview is not null)
+            {
+                <h3>Review repository-bound task proposals</h3>
+                @foreach (var proposal in _githubProposals)
+                {
+                    <label><input type="checkbox" @bind="proposal.Selected" /> Accept @proposal.Key</label>
+                    <textarea rows="20" @bind="proposal.Json" spellcheck="false" aria-label="@($"Proposal {proposal.Key}")"></textarea>
+                }
+                <label><input type="checkbox" @bind="_asDraft" /> Save as draft work</label>
+                <FluentButton OnClick="AcceptAsync" Disabled="_busy">Save selected repository-bound task proposals</FluentButton>
+            }
+        </section>
+    }
 }
 
 @code {
@@ -81,38 +147,140 @@ else
         && OrganizationState.SelectedOrganization.Role == OrganizationRole.Owner;
     private ProductBacklogItem[] _items = [];
     private RepositorySnapshot[] _snapshots = [];
+    private int _sourcePbiId, _taskId, _snapshotId;
+    private string _manualTitle = "", _manualDescription = "";
     private readonly HashSet<int> _selectedStories = [];
-    private readonly List<ProposalEditor> _proposals = [];
-    private TaskGenerationPreviewDto? _preview;
+    private readonly List<ProposalEditor> _githubProposals = [];
+    private readonly List<TaskCreationProposalEditor> _creationProposals = [];
+    private TaskGenerationPreviewDto? _githubPreview;
+    private TaskCreationPreviewDto? _creationPreview;
     private string _branch = "main", _sourcePaths = "", _error = "";
-    private int _snapshotId, _taskId;
-    private bool _busy, _asDraft;
+    private bool _busy, _asDraft = true, _githubEnabled;
     private long _loadGeneration;
-    protected override Task OnInitializedAsync() => LoadAsync();
+    private IEnumerable<ProductBacklogItem> EligibleSources => _items.Where(item =>
+        (item.Type is PbiType.Story or PbiType.Bug) && !item.IsDraft && item.Status != PbiStatus.Done);
+    private ProductBacklogItem? SelectedSource => _items.SingleOrDefault(item =>
+        item.PbiId == _sourcePbiId && (item.Type is PbiType.Story or PbiType.Bug)
+        && !item.IsDraft && item.Status != PbiStatus.Done);
+
+    protected override Task OnInitializedAsync()
+    {
+        return LoadAsync();
+    }
 
     private async Task LoadAsync()
     {
-        if (!Features.Value.GitHubIntegration || !Scope.IsCurrent || !ProjectId.HasValue) return;
+        if (!Scope.IsCurrent || !ProjectId.HasValue) return;
         var generation = ++_loadGeneration;
         var project = ProjectId;
         try
         {
+            FeatureSettings? features;
+            try
+            {
+                features = await Http.GetFromJsonAsync<FeatureSettings>("api/features");
+            }
+            catch (HttpRequestException ex)
+            {
+                Logger.LogWarning(ex, "Unable to load API feature settings; using the client fallback");
+                features = null;
+            }
+
             var items = await Http.GetFromJsonAsync<ProductBacklogItem[]>($"api/Pbi/getAllPbis?projectId={project}") ?? [];
-            var snapshots = await Http.GetFromJsonAsync<RepositorySnapshot[]>($"api/projects/{project}/repository/snapshots") ?? [];
-            if (Scope.IsCurrent && generation == _loadGeneration) { _items = items; _snapshots = snapshots; }
+            var githubEnabled = features?.GitHubIntegrationEnabled
+                ?? (bool.TryParse(Configuration["Features:GitHubIntegration"], out var enabled) && enabled);
+            var snapshots = githubEnabled
+                ? await Http.GetFromJsonAsync<RepositorySnapshot[]>($"api/projects/{project}/repository/snapshots") ?? []
+                : [];
+            if (Scope.IsCurrent && generation == _loadGeneration)
+            {
+                _githubEnabled = githubEnabled;
+                _items = items;
+                _snapshots = snapshots;
+                if (!EligibleSources.Any(item => item.PbiId == _sourcePbiId)) _sourcePbiId = 0;
+            }
         }
         catch (OperationCanceledException) when (!Scope.IsCurrent) { }
-        catch (HttpRequestException ex) { if (!Scope.IsCurrent || generation != _loadGeneration) return; Logger.LogWarning(ex, "Task planning load failed"); _error = "Unable to load project work or repository snapshots."; }
+        catch (HttpRequestException ex)
+        {
+            if (!Scope.IsCurrent || generation != _loadGeneration) return;
+            Logger.LogWarning(ex, "Task planning load failed");
+            _error = "Unable to load project work or feature settings.";
+        }
     }
-    private void Select(int id, bool selected) { if (selected) _selectedStories.Add(id); else _selectedStories.Remove(id); }
+
+    private bool HasGeneratedTasks(int parentId) => _items.Any(item => item.Type == PbiType.Task
+        && item.Origin == PbiOrigin.AiGenerated && item.ParentStoryId == parentId);
+
+    private IEnumerable<ProductBacklogItem> ChildTasks(int parentId) => _items.Where(item =>
+        item.Type == PbiType.Task && item.ParentStoryId == parentId).OrderBy(item => item.PbiId);
+
+    private void Select(int id, bool selected)
+    {
+        if (selected) _selectedStories.Add(id);
+        else _selectedStories.Remove(id);
+    }
+
+    private async Task CreateManualAsync() => await ExecuteAsync(async () =>
+    {
+        using var response = await Http.PostAsJsonAsync(
+            $"api/organizations/{Scope.OrganizationId}/projects/{ProjectId}/task-creation",
+            new CreateManualChildTaskRequest(_sourcePbiId, _manualTitle, _manualDescription));
+        if (!response.IsSuccessStatusCode) { _error = await Http.ReadAsStringAsync(response.Content); return; }
+        _manualTitle = "";
+        _manualDescription = "";
+        await LoadAsync();
+    });
+
+    private async Task GenerateTasksAsync(bool replaceGeneratedTasks) => await ExecuteAsync(async () =>
+    {
+        using var response = await Http.PostAsJsonAsync(
+            $"api/organizations/{Scope.OrganizationId}/projects/{ProjectId}/task-creation/preview",
+            new GenerateTaskCreationPreviewRequest([_sourcePbiId], Guid.NewGuid().ToString("N"), replaceGeneratedTasks));
+        if (!response.IsSuccessStatusCode) { _error = await Http.ReadAsStringAsync(response.Content); return; }
+        _creationPreview = await Http.ReadFromJsonAsync<TaskCreationPreviewDto>(response.Content);
+        _creationProposals.Clear();
+        foreach (var task in _creationPreview?.Tasks ?? [])
+            _creationProposals.Add(new(task.Key, JsonSerializer.Serialize(task, EditorJson)));
+    });
+
+    private async Task AcceptCreatedTasksAsync() => await ExecuteAsync(async () =>
+    {
+        if (_creationPreview is null) return;
+        var tasks = _creationProposals.Where(proposal => proposal.Selected)
+            .Select(proposal => JsonSerializer.Deserialize<TaskCreationProposalDto>(proposal.Json, EditorJson)
+                ?? throw new JsonException()).ToArray();
+        using var response = await Http.PostAsJsonAsync(
+            $"api/organizations/{Scope.OrganizationId}/projects/{ProjectId}/task-creation/accept",
+            new AcceptTaskCreationProposalsRequest(_creationPreview.GenerationRunId, tasks, _asDraft));
+        if (!response.IsSuccessStatusCode) { _error = await Http.ReadAsStringAsync(response.Content); return; }
+        _creationPreview = null;
+        _creationProposals.Clear();
+        _asDraft = true;
+        await LoadAsync();
+    });
+
+    private async Task DeleteTaskAsync(ProductBacklogItem task) => await ExecuteAsync(async () =>
+    {
+        if (!await JS.InvokeAsync<bool>("confirm",
+                $"Permanently remove task #{task.PbiId} and its task-owned planning records?"))
+            return;
+        using var response = await Http.DeleteAsync(
+            $"api/organizations/{Scope.OrganizationId}/projects/{ProjectId}/task-creation/{task.PbiId}");
+        if (!response.IsSuccessStatusCode) { _error = await Http.ReadAsStringAsync(response.Content); return; }
+        await LoadAsync();
+    });
+
     private async Task CreateSnapshotAsync() => await ExecuteAsync(async () =>
     {
         var project = ProjectId;
         using var response = await Http.PostAsJsonAsync($"api/projects/{project}/repository/snapshots", new CreateRepositorySnapshotRequest(_branch));
         if (!response.IsSuccessStatusCode) { _error = await Http.ReadAsStringAsync(response.Content); return; }
         var snapshot = await Http.ReadFromJsonAsync<RepositorySnapshot>(response.Content);
-        await LoadAsync(); _snapshotId = snapshot?.RepositorySnapshotId ?? 0;
+        await LoadAsync();
+        _snapshotId = snapshot?.RepositorySnapshotId ?? 0;
     });
+
     private async Task GenerateAsync() => await ExecuteAsync(async () =>
     {
         var project = ProjectId;
@@ -120,31 +288,57 @@ else
             new GenerateTaskPreviewRequest(_selectedStories.Order().ToArray(), _snapshotId,
                 _sourcePaths.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), Guid.NewGuid().ToString("N")));
         if (!response.IsSuccessStatusCode) { _error = await Http.ReadAsStringAsync(response.Content); return; }
-        _preview = await Http.ReadFromJsonAsync<TaskGenerationPreviewDto>(response.Content);
-        _proposals.Clear();
-        foreach (var task in _preview?.Tasks ?? []) _proposals.Add(new(task.Key, JsonSerializer.Serialize(task, EditorJson)));
+        _githubPreview = await Http.ReadFromJsonAsync<TaskGenerationPreviewDto>(response.Content);
+        _githubProposals.Clear();
+        foreach (var task in _githubPreview?.Tasks ?? [])
+            _githubProposals.Add(new(task.Key, JsonSerializer.Serialize(task, EditorJson)));
     });
+
     private async Task AcceptAsync() => await ExecuteAsync(async () =>
     {
-        if (_preview is null) return;
+        if (_githubPreview is null) return;
         var project = ProjectId;
-        var tasks = _proposals.Where(proposal => proposal.Selected)
-            .Select(proposal => JsonSerializer.Deserialize<TaskProposalDto>(proposal.Json, EditorJson) ?? throw new JsonException()).ToArray();
+        var tasks = _githubProposals.Where(proposal => proposal.Selected)
+            .Select(proposal => JsonSerializer.Deserialize<TaskProposalDto>(proposal.Json, EditorJson)
+                ?? throw new JsonException()).ToArray();
         using var response = await Http.PostAsJsonAsync($"api/projects/{project}/task-generation/accept",
-            new AcceptTaskProposalsRequest(_preview.GenerationRunId, tasks, _asDraft));
+            new AcceptTaskProposalsRequest(_githubPreview.GenerationRunId, tasks, _asDraft));
         if (!response.IsSuccessStatusCode) { _error = await Http.ReadAsStringAsync(response.Content); return; }
-        _preview = null; _proposals.Clear(); await LoadAsync();
+        _githubPreview = null;
+        _githubProposals.Clear();
+        await LoadAsync();
     });
+
     private async Task ExecuteAsync(Func<Task> action)
     {
-        if (!Features.Value.GitHubIntegration || !Scope.IsCurrent || _busy || !ProjectId.HasValue) return;
-        _busy = true; _error = "";
+        if (!Scope.IsCurrent || _busy || !ProjectId.HasValue) return;
+        _busy = true;
+        _error = "";
         try { await action(); }
         catch (OperationCanceledException) when (!Scope.IsCurrent) { }
-        catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException)
-        { if (!Scope.IsCurrent) return; Logger.LogWarning(ex, "Task planning operation failed"); _error = ex is JsonException ? "A proposal contains invalid JSON." : "Planning failed or timed out. Check configuration and retry."; }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException or JSException)
+        {
+            if (!Scope.IsCurrent) return;
+            Logger.LogWarning(ex, "Task planning operation failed");
+            _error = ex is JsonException ? "A proposal contains invalid JSON."
+                : "Planning failed or timed out. Check configuration and retry.";
+        }
         finally { _busy = false; }
     }
+
     private sealed class ProposalEditor(string key, string json)
-    { public string Key { get; } = key; public string Json { get; set; } = json; public bool Selected { get; set; } = true; }
+    {
+        public string Key { get; } = key;
+        public string Json { get; set; } = json;
+        public bool Selected { get; set; } = true;
+    }
+
+    private sealed class TaskCreationProposalEditor(string key, string json)
+    {
+        public string Key { get; } = key;
+        public string Json { get; set; } = json;
+        public bool Selected { get; set; } = true;
+    }
+
+    private sealed record FeatureSettings(bool GitHubIntegrationEnabled);
 }

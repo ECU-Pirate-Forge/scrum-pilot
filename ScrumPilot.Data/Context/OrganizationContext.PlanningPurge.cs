@@ -11,6 +11,57 @@ internal sealed class PlanningPurgeScope
 
 public sealed partial class OrganizationContext
 {
+    /// <summary>Deletes planning artifacts owned by one task inside an explicit task-removal transaction.</summary>
+    public async Task PurgeTaskPlanningAsync(int projectId, IReadOnlyCollection<int> taskIds, CancellationToken ct)
+    {
+        if (Database.CurrentTransaction is null)
+            throw new InvalidOperationException("Task planning purge requires an enclosing deletion transaction.");
+        if (taskIds.Count == 0) return;
+
+        await AcquirePlanningPolicyLockAsync(projectId, ct);
+        await AcquireProjectLockAsync("planning-purge", projectId, ct);
+        await Database.ExecuteSqlInterpolatedAsync(
+            $"""INSERT INTO [PlanningPurgeScopes] ([ProjectId], [TransactionId]) VALUES ({projectId}, CURRENT_TRANSACTION_ID())""", ct);
+
+        var bindingIds = await TaskPullRequestBindings.Where(item =>
+            item.ProjectId == projectId && taskIds.Contains(item.PbiId))
+            .Select(item => item.TaskPullRequestBindingId).ToArrayAsync(ct);
+        var revisionIds = await TaskSpecificationRevisions.Where(item =>
+            item.ProjectId == projectId && taskIds.Contains(item.PbiId))
+            .Select(item => item.TaskSpecificationRevisionId).ToArrayAsync(ct);
+
+        await PullRequestScopeChecks.Where(item => item.ProjectId == projectId
+            && bindingIds.Contains(item.TaskPullRequestBindingId)).ExecuteDeleteAsync(ct);
+        await TaskAllowedFiles.Where(item => item.ProjectId == projectId
+            && revisionIds.Contains(item.TaskSpecificationRevisionId)).ExecuteDeleteAsync(ct);
+        await TaskSpecificationRevisions.Where(item => item.ProjectId == projectId
+            && taskIds.Contains(item.PbiId)).ExecuteDeleteAsync(ct);
+        await TaskPullRequestBindings.Where(item => item.ProjectId == projectId
+            && taskIds.Contains(item.PbiId)).ExecuteDeleteAsync(ct);
+        await DependencyReviewEvents.Where(item => item.ProjectId == projectId
+            && taskIds.Contains(item.PbiId)).ExecuteDeleteAsync(ct);
+        await PlanningArtifactReviews.Where(item => item.ProjectId == projectId
+            && taskIds.Contains(item.PbiId)).ExecuteDeleteAsync(ct);
+        await DependencyReviews.Where(item => item.ProjectId == projectId
+            && taskIds.Contains(item.PbiId)).ExecuteDeleteAsync(ct);
+        await PbiDependencies.Where(item => item.ProjectId == projectId
+            && (taskIds.Contains(item.DependentPbiId) || taskIds.Contains(item.PrerequisitePbiId))).ExecuteDeleteAsync(ct);
+
+        await Database.ExecuteSqlInterpolatedAsync(
+            $"""DELETE FROM "PlanningPurgeScopes" WHERE "ProjectId" = {projectId}""", ct);
+        foreach (var entry in ChangeTracker.Entries().Where(entry =>
+                     entry.Entity is TaskAllowedFile file && file.ProjectId == projectId && revisionIds.Contains(file.TaskSpecificationRevisionId)
+                     || entry.Entity is TaskSpecificationRevision specification && specification.ProjectId == projectId && taskIds.Contains(specification.PbiId)
+                     || entry.Entity is TaskPullRequestBinding binding && binding.ProjectId == projectId && taskIds.Contains(binding.PbiId)
+                     || entry.Entity is PullRequestScopeCheck check && check.ProjectId == projectId && bindingIds.Contains(check.TaskPullRequestBindingId)
+                     || entry.Entity is PbiDependency dependency && dependency.ProjectId == projectId
+                         && (taskIds.Contains(dependency.DependentPbiId) || taskIds.Contains(dependency.PrerequisitePbiId))
+                     || entry.Entity is DependencyReviewEvent reviewEvent && reviewEvent.ProjectId == projectId && taskIds.Contains(reviewEvent.PbiId)
+                     || entry.Entity is PlanningArtifactReview artifactReview && artifactReview.ProjectId == projectId && taskIds.Contains(artifactReview.PbiId)
+                     || entry.Entity is DependencyReview review && review.ProjectId == projectId && taskIds.Contains(review.PbiId)).ToList())
+            entry.State = EntityState.Detached;
+    }
+
     /// <summary>Used only by the authorized project-delete and retention-controlled organization-purge transactions.</summary>
     public async Task PurgeProjectPlanningAsync(int projectId, CancellationToken ct)
     {

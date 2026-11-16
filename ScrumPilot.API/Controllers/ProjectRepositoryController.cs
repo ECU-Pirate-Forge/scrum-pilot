@@ -11,6 +11,7 @@ namespace ScrumPilot.API.Controllers;
 [GitHubIntegration]
 [Route("api/organizations/{organizationId:int}/projects/{projectId:int}/repository")]
 [ServiceFilter(typeof(PlanningErrorFilter))]
+[ServiceFilter(typeof(GitHubFeatureFilter))]
 public sealed class ProjectRepositoryController(ICurrentUser user, IOrganizationAccessService access,
     OrganizationContext db, GitHubAppClient github, RepositoryContextService context, ControlPlaneContext control,
     GitHubRepositoryRegistry registry, GitHubCheckRecovery recovery) : ProjectPlanningControllerBase(user, access)

@@ -42,6 +42,7 @@ current membership/project checks. There are no unqualified compatibility aliase
 | `/guidelines`, `/guidelines/template`, `/guidelines/history`, `/guidelines/{revisionId}/restore` | Current Markdown and immutable history/template/restore |
 | `/problem-statements` | Save, edit and archive source problems |
 | `/story-generation` | Local previews, retained inputs, selected/idempotent acceptance, explicit source linking and applicability review |
+| `/task-creation` | Repository-independent manual task creation, AI task previews/acceptance from committed Stories or Bugs, and task removal |
 | `/repository`, `/repository/snapshots` | Owner configuration, global repository reservation and immutable SHA/tree context |
 | `/task-generation/preview`, `/task-generation/accept` | Reviewable child-task proposals and selected acceptance |
 | `/tasks/{taskId}/specifications` | Immutable drafts/approval/amendment history, Markdown and JSON handoff |
@@ -67,7 +68,15 @@ Use the contract's expected problem/PBI/repository version, guideline revision,
 specification revision, graph revision or applicability fingerprint. A `409`
 means reload/reconcile; it is not permission to guess a version. No PBIs are
 created before explicit proposal acceptance. Child tasks inherit the source
-story's sprint and do not double-count story points.
+Story or Bug's sprint and do not double-count story points.
+
+The `Features:GitHubIntegration` setting defaults to `false` in AppHost, API, and
+FluentWeb configuration. AppHost passes its value to both clients and the API.
+When disabled, GitHub-backed planning routes return `404`, and FluentWeb hides
+repository configuration and repository-bound planning controls. The separate
+`/task-creation` routes remain available to authorized project members and do
+not require a repository or GitHub credentials. Direct API and FluentWeb starts
+can use the same setting as a local fallback.
 
 Members with project access manage saved problems, work, draft specifications
 and dependencies. Owner-only actions include guidance changes, repository

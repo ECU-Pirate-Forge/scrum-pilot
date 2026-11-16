@@ -34,6 +34,27 @@ column limit is not the 128 KiB UTF-8 guideline/saved-problem limit. Split overl
 large stories or shorten their descriptions rather than assuming input size
 limits also apply to generated work.
 
+## Create Tasks from Existing Stories and Bugs
+
+In FluentWeb, open **Task Planning** for a project and select a committed Story
+or Bug. You can add a child task manually or request an AI preview based on the
+selected work item and current project guidelines. This flow does not require a
+configured repository, snapshot, GitHub credential, or GitHub feature enablement.
+AI proposals remain reviewable before selected tasks are saved; accepted tasks
+default to drafts. Regeneration can replace AI-generated child tasks while
+preserving manually entered tasks. Task removal requires confirmation.
+
+Generated task descriptions include a copyable implementation specification
+containing the source item, project guidelines, and instructions for the
+implementation agent to review the existing system, ask exactly five
+clarifying questions before implementing, follow project conventions, and edit
+only the specific files necessary for the change.
+
+The independent task-creation API is under
+`/api/organizations/{organizationId}/projects/{projectId}/task-creation`.
+GitHub-backed repository configuration and task planning remain separate and
+are disabled by default; see the [API feature setting](api.md#guided-planning).
+
 Expected result: previews retain source/run audit and server-assigned proposal
 identities, but create **no draft or backlog PBIs before acceptance**. Acceptance
 creates work only for selected proposals; `AsDraft` controls whether those accepted

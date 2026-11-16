@@ -14,6 +14,7 @@ namespace ScrumPilot.API.Controllers;
 [GitHubIntegration]
 [Route("api/integrations/github/webhooks")]
 [ServiceFilter(typeof(PlanningErrorFilter))]
+[ServiceFilter(typeof(GitHubFeatureFilter))]
 public sealed class GitHubWebhooksController(GitHubAppClient github, ControlPlaneContext control,
     GitHubRepositoryRegistry registry, IServiceScopeFactory scopes, PlanningIntegrationLifecycle lifecycle) : ControllerBase
 {

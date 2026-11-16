@@ -9,6 +9,7 @@ namespace ScrumPilot.API.Controllers;
 [GitHubIntegration]
 [Route("api/organizations/{organizationId:int}/projects/{projectId:int}/task-generation")]
 [ServiceFilter(typeof(PlanningErrorFilter))]
+[ServiceFilter(typeof(GitHubFeatureFilter))]
 public sealed class TaskGenerationController(ICurrentUser user, IOrganizationAccessService access,
     TaskGenerationService generation) : ProjectPlanningControllerBase(user, access)
 {

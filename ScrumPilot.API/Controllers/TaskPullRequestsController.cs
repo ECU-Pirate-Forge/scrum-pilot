@@ -13,6 +13,7 @@ public sealed record NonTaskExceptionRequest(int PullRequestNumber, string Reaso
 [GitHubIntegration]
 [Route("api/organizations/{organizationId:int}/projects/{projectId:int}")]
 [ServiceFilter(typeof(PlanningErrorFilter))]
+[ServiceFilter(typeof(GitHubFeatureFilter))]
 public sealed class TaskPullRequestsController(ICurrentUser user, IOrganizationAccessService access,
     OrganizationContext db, PullRequestScopeService scope, GitHubRepositoryRegistry registry) : ProjectPlanningControllerBase(user, access)
 {

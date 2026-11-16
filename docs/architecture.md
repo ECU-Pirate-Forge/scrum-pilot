@@ -73,6 +73,11 @@ logic depends on `IChatClient`, so a later adapter can be introduced through DI.
 Provider calls do not own a database context, and authorization is rechecked
 before generated work is returned or saved.
 
+Task creation is independent of GitHub repository context: authorized project
+members can manually add tasks or preview and accept AI-generated tasks from
+committed Stories or Bugs. GitHub-backed task planning is a separate, disabled-
+by-default feature controlled by `Features:GitHubIntegration`.
+
 Provisioning, schema changes, backup/recovery, and purge use durable operation
 states. Maintenance is persisted before connections are evicted and work is
 drained. Recovery clears restored Member grants before activation; a durable
