@@ -55,6 +55,10 @@ and the [review API](api.md#project-story-generation).
 The assembled local-AI prompt is limited to 192 KiB UTF-8; nothing is silently truncated. Secret/sensitive context paths, binary content, symlinks/submodules, and unverifiable trees are rejected. Reduce context if needed. The current UI is a JSON editor, not a visual decomposition wizard. Unaccepted task proposals do not create task PBIs; accepting creates tasks and initial specification revisions. A rejected/unchecked task proposal does not enter the sprint.
 Task-generation audit retains the exact request, instructions, and local context,
 including failed-run inputs; failure does not discard that recorded context.
+Local planning requests use Ollama's structured-output JSON Schema, derived from
+the expected response contract. Responses must contain only JSON, without code
+fences or commentary. Invalid responses fail generation rather than being
+silently repaired or sent to another provider.
 
 Child tasks inherit their story's sprint, including no sprint. Moving a story
 moves its children. A task cannot independently move out of its parent sprint.
