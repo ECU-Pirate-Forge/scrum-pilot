@@ -99,6 +99,45 @@ public sealed class LocalPlanningAiTests
     }
 
     [Fact]
+    public async Task TaskGenerationRequestsItsJsonSchemaFromTheProvider()
+    {
+        var handler = new StubHandler { Output = """{"tasks":[]}""" };
+        await Service(handler).GenerateStructuredAsync<TaskGenerationOutput>("Return task proposals.", new { story = "A" }, default);
+
+        var format = Assert.IsType<ChatResponseFormatJson>(handler.ResponseFormat);
+        Assert.True(format.Schema.HasValue);
+        var schema = format.Schema.Value;
+        Assert.Equal("object", schema.GetProperty("type").GetString());
+        Assert.False(schema.GetProperty("additionalProperties").GetBoolean());
+        Assert.Contains("tasks", schema.GetProperty("required").EnumerateArray().Select(value => value.GetString()));
+        var tasks = schema.GetProperty("properties").GetProperty("tasks");
+        Assert.Equal("array", tasks.GetProperty("type").GetString());
+        var task = tasks.GetProperty("items");
+        Assert.False(task.GetProperty("additionalProperties").GetBoolean());
+        Assert.Equal(
+            ["key", "parentStoryId", "title", "content", "files", "dependsOnKeys", "existingPrerequisites"],
+            task.GetProperty("properties").EnumerateObject().Select(property => property.Name));
+        Assert.Equal("object", task.GetProperty("properties").GetProperty("content").GetProperty("type").GetString());
+        var file = task.GetProperty("properties").GetProperty("files").GetProperty("items");
+        Assert.Contains("Source", file.GetProperty("properties").GetProperty("category").GetProperty("enum")
+            .EnumerateArray().Select(value => value.GetString()));
+    }
+
+    [Theory]
+    [InlineData("```json\n{\"text\":\"generated\"}\n```")]
+    [InlineData("{\"text\":\"generated\"}\nHere is my plan.")]
+    [InlineData("Here is the JSON:\n{\"text\":\"generated\"}")]
+    public async Task NonJsonResponsesAreRejectedWithoutRepairOrRetry(string output)
+    {
+        var handler = new StubHandler { Output = output };
+
+        await Assert.ThrowsAsync<JsonException>(() =>
+            Service(handler).GenerateAsync<Answer>("Return JSON.", new { story = "A" }, default));
+
+        Assert.Equal(1, handler.RequestCount);
+    }
+
+    [Fact]
     public async Task OversizedContextIsRejectedRatherThanTruncated()
     {
         var handler = new StubHandler();

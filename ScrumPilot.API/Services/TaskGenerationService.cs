@@ -89,7 +89,7 @@ public sealed class TaskGenerationService(OrganizationContext db, LocalPlanningA
         try
         {
             var output = await inference.RunAsync(projectId,
-                () => ai.GenerateAsync<TaskGenerationOutput>(instructions, context, ct), ct);
+                () => ai.GenerateStructuredAsync<TaskGenerationOutput>(instructions, context, ct), ct);
             db.Attach(run);
             await using var resultTransaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
             await db.AcquirePlanningPolicyLockAsync(projectId, ct);
