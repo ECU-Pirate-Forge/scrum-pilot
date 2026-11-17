@@ -113,7 +113,7 @@ public sealed class TaskCreationService(
         try
         {
             var output = await inference.RunAsync(projectId,
-                () => ai.GenerateAsync<TaskCreationAiOutput>(prompt, context, ct), ct);
+                () => ai.GenerateStructuredAsync<TaskCreationAiOutput>(prompt, context, ct), ct);
             db.Attach(run);
             await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
             await db.AcquirePlanningPolicyLockAsync(projectId, ct);

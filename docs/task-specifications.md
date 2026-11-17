@@ -44,6 +44,10 @@ AI proposals remain reviewable before selected tasks are saved; accepted tasks
 default to drafts. Regeneration can replace AI-generated child tasks while
 preserving manually entered tasks. Task removal requires confirmation.
 
+This independent task-creation flow sends its task response JSON Schema to
+Ollama, just like repository-backed task generation. Code fences or commentary
+are rejected, not stripped or retried without schema constraints.
+
 Generated task descriptions include a copyable implementation specification
 containing the source item, project guidelines, and instructions for the
 implementation agent to review the existing system, ask exactly five

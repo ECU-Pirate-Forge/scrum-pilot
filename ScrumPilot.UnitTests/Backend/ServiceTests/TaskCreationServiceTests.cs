@@ -2,7 +2,9 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
+using OllamaSharp;
 using ScrumPilot.API.Configuration;
 using ScrumPilot.API.Services;
 using ScrumPilot.Shared.Models;
@@ -12,6 +14,47 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests;
 
 public sealed class TaskCreationServiceTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PreviewSendsTaskCreationSchemaThroughOllamaAndNeverRepairsFencedOutput(bool returnFences)
+    {
+        await using var f = await TaskPlanningFixture.CreateAsync();
+        using var handler = new SchemaAwareOllamaHandler(f.Story.PbiId, returnFences);
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:11434") };
+        using var chat = new OllamaApiClient(http);
+        var service = Service(f, chat);
+        var before = await f.Db.Stories.CountAsync();
+        var request = new GenerateTaskCreationPreviewRequest([f.Story.PbiId], "schema-task-creation", ReplaceGeneratedTasks: true);
+
+        if (returnFences)
+        {
+            await Assert.ThrowsAsync<JsonException>(() => service.PreviewAsync(f.ProjectId, request, "owner", default));
+            Assert.Equal(GenerationState.Failed, (await f.Db.GenerationRuns.SingleAsync()).State);
+            Assert.Equal(nameof(JsonException), (await f.Db.GenerationRuns.SingleAsync()).ErrorCode);
+            using var input = JsonDocument.Parse((await f.Db.GenerationInputs.SingleAsync()).SnapshotJson);
+            Assert.False(input.RootElement.TryGetProperty("Preview", out _));
+        }
+        else
+        {
+            var preview = await service.PreviewAsync(f.ProjectId, request, "owner", default);
+            Assert.Equal(f.Story.PbiId, Assert.Single(preview.Tasks).ParentPbiId);
+            Assert.Equal(GenerationState.Succeeded, (await f.Db.GenerationRuns.SingleAsync()).State);
+        }
+
+        Assert.Equal(before, await f.Db.Stories.CountAsync());
+        Assert.Equal(1, handler.Calls);
+        var schema = handler.Request.GetProperty("format");
+        Assert.Equal("object", schema.GetProperty("type").GetString());
+        Assert.False(schema.GetProperty("additionalProperties").GetBoolean());
+        var tasks = schema.GetProperty("properties").GetProperty("tasks");
+        Assert.Equal("array", tasks.GetProperty("type").GetString());
+        var task = tasks.GetProperty("items");
+        Assert.False(task.GetProperty("additionalProperties").GetBoolean());
+        Assert.Equal(["key", "parentPbiId", "title", "description", "dependsOnKeys", "existingPrerequisites"],
+            task.GetProperty("required").EnumerateArray().Select(property => property.GetString()));
+    }
+
     [Fact]
     public async Task PreviewAndAccept_WorkWithoutRepositoryAndIncludeGuidelinesAndHandoff()
     {
@@ -111,12 +154,45 @@ public sealed class TaskCreationServiceTests
             service.CreateManualAsync(f.ProjectId, new(bug.PbiId, "Another task", "Should be rejected."), default));
     }
 
-    private static TaskCreationService Service(TaskPlanningFixture f, HttpClient http)
+    private static TaskCreationService Service(TaskPlanningFixture f, HttpClient http) =>
+        Service(f, new PlanningTestChatClient(http));
+
+    private static TaskCreationService Service(TaskPlanningFixture f, IChatClient chat)
     {
         var options = new AiOptions { Model = "fake-task-model" };
-        return new(f.Db, new LocalPlanningAi(new PlanningTestChatClient(http), options),
+        return new(f.Db, new LocalPlanningAi(chat, options),
             new ProjectDependencyService(f.Db, f.Notifier, f.Registry), f.Notifier, options,
             NullLogger<TaskCreationService>.Instance, f.Inference);
+    }
+
+    private sealed class SchemaAwareOllamaHandler(int parentPbiId, bool returnFences) : HttpMessageHandler
+    {
+        public int Calls { get; private set; }
+        public JsonElement Request { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Assert.Equal("/api/chat", request.RequestUri!.AbsolutePath);
+            Calls++;
+            using var document = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
+            Request = document.RootElement.Clone();
+            var output = JsonSerializer.Serialize(new TaskCreationAiOutput(
+                [new("worker", parentPbiId, "Implement worker", "Implement the requested worker behavior.", [], [])]),
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            if (returnFences || !Request.TryGetProperty("format", out var format) || format.ValueKind != JsonValueKind.Object)
+                output = "```json\n" + output + "\n```";
+            return new(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new
+                {
+                    model = "fake-task-model",
+                    created_at = "2026-11-17T00:00:00Z",
+                    message = new { role = "assistant", content = output },
+                    done = true,
+                    done_reason = "stop"
+                })
+            };
+        }
     }
 
     private sealed class TaskCreationAiHandler : HttpMessageHandler
