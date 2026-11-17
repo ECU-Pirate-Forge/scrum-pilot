@@ -7,7 +7,8 @@
 @using ScrumPilot.FluentWeb.Components.Pbi
 @using ScrumPilot.Shared.Models
 @inject IJSRuntime JS
-@inject IConfiguration Configuration
+@inject Microsoft.Extensions.Options.IOptions<FeatureOptions> Features
+@inject HttpClient FeatureHttp
 @inject OrganizationStateService OrganizationState
 @inject ILogger<TaskPlanning> Logger
 
@@ -178,7 +179,7 @@ else
             FeatureSettings? features;
             try
             {
-                features = await Http.GetFromJsonAsync<FeatureSettings>("api/features");
+                features = await FeatureHttp.GetFromJsonAsync<FeatureSettings>("api/features", Scope.Cancellation);
             }
             catch (HttpRequestException ex)
             {
@@ -188,7 +189,7 @@ else
 
             var items = await Http.GetFromJsonAsync<ProductBacklogItem[]>($"api/Pbi/getAllPbis?projectId={project}") ?? [];
             var githubEnabled = features?.GitHubIntegrationEnabled
-                ?? (bool.TryParse(Configuration["Features:GitHubIntegration"], out var enabled) && enabled);
+                ?? Features.Value.GitHubIntegration;
             var snapshots = githubEnabled
                 ? await Http.GetFromJsonAsync<RepositorySnapshot[]>($"api/projects/{project}/repository/snapshots") ?? []
                 : [];
@@ -224,7 +225,7 @@ else
     private async Task CreateManualAsync() => await ExecuteAsync(async () =>
     {
         using var response = await Http.PostAsJsonAsync(
-            $"api/organizations/{Scope.OrganizationId}/projects/{ProjectId}/task-creation",
+            $"api/projects/{ProjectId}/task-creation",
             new CreateManualChildTaskRequest(_sourcePbiId, _manualTitle, _manualDescription));
         if (!response.IsSuccessStatusCode) { _error = await Http.ReadAsStringAsync(response.Content); return; }
         _manualTitle = "";
@@ -235,7 +236,7 @@ else
     private async Task GenerateTasksAsync(bool replaceGeneratedTasks) => await ExecuteAsync(async () =>
     {
         using var response = await Http.PostAsJsonAsync(
-            $"api/organizations/{Scope.OrganizationId}/projects/{ProjectId}/task-creation/preview",
+            $"api/projects/{ProjectId}/task-creation/preview",
             new GenerateTaskCreationPreviewRequest([_sourcePbiId], Guid.NewGuid().ToString("N"), replaceGeneratedTasks));
         if (!response.IsSuccessStatusCode) { _error = await Http.ReadAsStringAsync(response.Content); return; }
         _creationPreview = await Http.ReadFromJsonAsync<TaskCreationPreviewDto>(response.Content);
@@ -251,7 +252,7 @@ else
             .Select(proposal => JsonSerializer.Deserialize<TaskCreationProposalDto>(proposal.Json, EditorJson)
                 ?? throw new JsonException()).ToArray();
         using var response = await Http.PostAsJsonAsync(
-            $"api/organizations/{Scope.OrganizationId}/projects/{ProjectId}/task-creation/accept",
+            $"api/projects/{ProjectId}/task-creation/accept",
             new AcceptTaskCreationProposalsRequest(_creationPreview.GenerationRunId, tasks, _asDraft));
         if (!response.IsSuccessStatusCode) { _error = await Http.ReadAsStringAsync(response.Content); return; }
         _creationPreview = null;
@@ -266,7 +267,7 @@ else
                 $"Permanently remove task #{task.PbiId} and its task-owned planning records?"))
             return;
         using var response = await Http.DeleteAsync(
-            $"api/organizations/{Scope.OrganizationId}/projects/{ProjectId}/task-creation/{task.PbiId}");
+            $"api/projects/{ProjectId}/task-creation/{task.PbiId}");
         if (!response.IsSuccessStatusCode) { _error = await Http.ReadAsStringAsync(response.Content); return; }
         await LoadAsync();
     });

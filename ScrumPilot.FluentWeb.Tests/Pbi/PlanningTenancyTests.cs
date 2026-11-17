@@ -18,18 +18,87 @@ namespace ScrumPilot.FluentWeb.Tests.Pbi;
 
 public sealed class PlanningTenancyTests : FluentFrontendTestBase
 {
-    [Fact]
-    public void Disabled_task_planning_has_no_navigation_or_repository_requests()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Task_planning_navigation_is_available_independently_of_github(bool enabled)
     {
+        Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<FeatureOptions>>().Value.GitHubIntegration = enabled;
+        using var menu = Render<NavMenu>();
+        Assert.Contains("task-planning", menu.Markup);
+    }
+
+    [Fact]
+    public async Task Disabled_github_allows_task_preview_for_a_selected_story()
+    {
+        Http.OnGetJson("api/features", new { GitHubIntegrationEnabled = false });
+        Http.OnGetJson("api/organizations/2/Pbi/getAllPbis", new[]
+        {
+            new ProductBacklogItem { PbiId = 5, ProjectId = 17, Title = "Scoped story", Type = PbiType.Story }
+        });
+        Http.On(HttpMethod.Post, "api/organizations/2/projects/17/task-creation/preview", (_, _) =>
+            MockHttpHandler.Json(new TaskCreationPreviewDto(7, null,
+                [new("task-1", 5, "Draft task", "Implement it", [], [], 1, "story")])));
+        Http.On(HttpMethod.Post, "api/organizations/2/projects/17/task-creation/accept", (_, _) =>
+            MockHttpHandler.Json(Array.Empty<ProductBacklogItem>()));
         using var client = Http.CreateClient();
         using var scope = new WorkScope(client, 2, 17);
-        using var menu = Render<NavMenu>();
-        Assert.DoesNotContain("task-planning", menu.Markup);
         using var page = Render<TaskPlanning>(p => p.Add(x => x.CapturedWork, scope));
-        Assert.Contains("GitHub integration and repository-dependent task planning are disabled.", page.Markup);
-        Assert.DoesNotContain("Generate task preview", page.Markup);
-        Assert.DoesNotContain("Repository and scope enforcement", page.Markup);
-        Assert.Empty(Http.Requests);
+        page.WaitForAssertion(() => Assert.Contains("Scoped story", page.Markup));
+        page.Find("select").Change("5");
+        await page.FindAll("fluent-button").Single(x => x.TextContent.Contains("Generate task preview")).ClickAsync(new());
+        page.WaitForAssertion(() => Assert.Contains("Review and edit proposals", page.Markup));
+        page.Find("input[type=checkbox]").Change(true);
+        await page.FindAll("fluent-button").Single(x => x.TextContent.Contains("Save selected task proposals")).ClickAsync(new());
+        Assert.Contains(Http.Requests, request => request.Method == HttpMethod.Post
+            && request.Path == "api/organizations/2/projects/17/task-creation/preview");
+        Assert.Contains(Http.Requests, request => request.Method == HttpMethod.Post
+            && request.Path == "api/organizations/2/projects/17/task-creation/accept");
+        Assert.DoesNotContain(Http.Requests, request => request.Path.Contains("/repository"));
+    }
+
+    [Fact]
+    public async Task Disabled_github_allows_manual_task_creation_for_a_bug()
+    {
+        Http.OnGetJson("api/features", new { GitHubIntegrationEnabled = false });
+        Http.OnGetJson("api/organizations/2/Pbi/getAllPbis", new[]
+        {
+            new ProductBacklogItem { PbiId = 8, ProjectId = 17, Title = "Scoped bug", Type = PbiType.Bug }
+        });
+        Http.On(HttpMethod.Post, "api/organizations/2/projects/17/task-creation", (_, _) =>
+            MockHttpHandler.Json(new ProductBacklogItem { Title = "Fix bug" }));
+        using var client = Http.CreateClient();
+        using var scope = new WorkScope(client, 2, 17);
+        using var page = Render<TaskPlanning>(p => p.Add(x => x.CapturedWork, scope));
+        page.WaitForAssertion(() => Assert.Contains("Scoped bug", page.Markup));
+        page.Find("select").Change("8");
+        page.Find("section[aria-label='Add a task manually'] input").Change("Fix bug");
+        page.Find("section[aria-label='Add a task manually'] textarea").Change("Repair behavior");
+        await page.FindAll("fluent-button").Single(x => x.TextContent.Contains("Add draft task")).ClickAsync(new());
+        var request = Assert.Single(Http.Requests, request => request.Method == HttpMethod.Post);
+        Assert.Equal("api/organizations/2/projects/17/task-creation", request.Path);
+        Assert.Contains("\"parentPbiId\":8", request.Body);
+    }
+
+    [Fact]
+    public async Task Removing_a_child_task_uses_the_captured_organization()
+    {
+        JSInterop.Setup<bool>("confirm", _ => true).SetResult(true);
+        Http.OnGetJson("api/features", new { GitHubIntegrationEnabled = false });
+        Http.OnGetJson("api/organizations/2/Pbi/getAllPbis", new[]
+        {
+            new ProductBacklogItem { PbiId = 5, ProjectId = 17, Title = "Scoped story", Type = PbiType.Story },
+            new ProductBacklogItem { PbiId = 9, ProjectId = 17, Title = "Child task", Type = PbiType.Task, ParentStoryId = 5 }
+        });
+        Http.OnStatus(HttpMethod.Delete, "api/organizations/2/projects/17/task-creation/9", HttpStatusCode.NoContent);
+        using var client = Http.CreateClient();
+        using var scope = new WorkScope(client, 2, 17);
+        using var page = Render<TaskPlanning>(p => p.Add(x => x.CapturedWork, scope));
+        page.WaitForAssertion(() => Assert.Contains("Scoped story", page.Markup));
+        page.Find("select").Change("5");
+        await page.FindAll("fluent-button").Single(x => x.TextContent.Contains("Remove task")).ClickAsync(new());
+        Assert.Contains(Http.Requests, request => request.Method == HttpMethod.Delete
+            && request.Path == "api/organizations/2/projects/17/task-creation/9");
     }
 
     [Fact]
@@ -46,11 +115,13 @@ public sealed class PlanningTenancyTests : FluentFrontendTestBase
         });
         Http.OnGetJson("api/organizations/2/projects/17/repository/snapshots", Array.Empty<RepositorySnapshot>());
         Http.OnGetJson("api/organizations/2/projects/17/repository", new ProjectRepositoryStatus(null, false, "Not configured"));
+        Http.OnGetJson("api/features", new { GitHubIntegrationEnabled = true });
         using var cut = Render<TaskPlanning>(p => p.Add(x => x.CapturedWork, scope));
         using var menu = Render<NavMenu>();
         Assert.Contains("task-planning", menu.Markup);
         cut.WaitForAssertion(() => Assert.Contains("Scoped story", cut.Markup));
-        Assert.All(Http.Requests, request => Assert.StartsWith("api/organizations/2/", request.Path));
+        Assert.All(Http.Requests, request => Assert.True(request.Path == "api/features"
+            || request.Path.StartsWith("api/organizations/2/", StringComparison.Ordinal)));
         Assert.Contains(Http.Requests, request => request.Path.EndsWith("/pbi/getallpbis") && request.Query == "?projectId=17");
         Assert.True(cut.FindAll("fluent-button").Single(x => x.TextContent.Contains("Verify and save repository")).HasAttribute("disabled"));
         Assert.True(OrganizationRoutes.IsWorkPage(new Uri("https://gateway/fluentweb/organizations/2/task-planning?projectId=17")));
