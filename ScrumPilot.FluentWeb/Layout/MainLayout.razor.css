@@ -1,3 +1,7 @@
+:root {
+    --layout-header-height: 85px;
+}
+
 ::deep .sp-header-button {
     color: var(--sp-on-brand);
 }
@@ -6,3 +10,10 @@
     border-color: rgba(255, 255, 255, 0.55);
     font-weight: 600;
 }
+
+::deep .sp-header {
+    min-height: 96px;
+    padding-block: 0.5rem;
+    box-sizing: border-box;
+}
+
