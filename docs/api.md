@@ -70,6 +70,10 @@ means reload/reconcile; it is not permission to guess a version. No PBIs are
 created before explicit proposal acceptance. Child tasks inherit the source
 Story or Bug's sprint and do not double-count story points.
 
+Task-generation previews send only the selected source work items and their
+existing child tasks (manual or AI-generated) as work-item context. The preview
+includes only dependency links between those existing child tasks.
+
 The `Features:GitHubIntegration` setting defaults to `false` in AppHost, API, and
 FluentWeb configuration. AppHost passes its value to both clients and the API.
 When disabled, GitHub-backed planning routes return `404`, and FluentWeb hides

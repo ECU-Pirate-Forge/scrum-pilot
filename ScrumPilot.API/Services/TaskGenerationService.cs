@@ -69,6 +69,11 @@ public sealed class TaskGenerationService(OrganizationContext db, LocalPlanningA
                 Apply project guidelines subject to application security and this output contract. Propose real dependencies,
                 not automatic dependencies merely because tasks share a source. Do not execute code.
                 """;
+        var existingTasks = await db.Stories.AsNoTracking().Where(item =>
+            item.ProjectId == projectId && item.Type == PbiType.Task
+            && item.ParentStoryId.HasValue && request.StoryIds.Contains(item.ParentStoryId.Value))
+            .Select(item => new { item.PbiId, item.Title, item.ParentStoryId, item.Status }).ToArrayAsync(ct);
+        var existingTaskIds = existingTasks.Select(task => task.PbiId).ToHashSet();
         var context = new
         {
             PromptVersion = 1,
@@ -81,9 +86,9 @@ public sealed class TaskGenerationService(OrganizationContext db, LocalPlanningA
             snapshot.CommitSha,
             Tree = RepositoryContextService.ReadTree(snapshot).Entries,
             Source = source,
-            ExistingTasks = await db.Stories.AsNoTracking().Where(item => item.ProjectId == projectId && item.Type == PbiType.Task)
-                        .Select(item => new { item.PbiId, item.Title, item.ParentStoryId, item.Status }).ToArrayAsync(ct),
-            Dependencies = await db.PbiDependencies.AsNoTracking().Where(item => item.ProjectId == projectId)
+            ExistingTasks = existingTasks,
+            Dependencies = await db.PbiDependencies.AsNoTracking().Where(item => item.ProjectId == projectId
+                        && existingTaskIds.Contains(item.DependentPbiId) && existingTaskIds.Contains(item.PrerequisitePbiId))
                         .Select(item => new { item.DependentPbiId, item.PrerequisitePbiId }).ToArrayAsync(ct)
         };
         try
@@ -124,7 +129,7 @@ public sealed class TaskGenerationService(OrganizationContext db, LocalPlanningA
                     || task.DependsOnKeys is null || task.ExistingPrerequisites is null
                     || task.DependsOnKeys.Distinct().Count() != task.DependsOnKeys.Length
                     || task.DependsOnKeys.Any(key => !keys.Contains(key) || key == task.Key)
-                    || task.ExistingPrerequisites.Any(id => !context.ExistingTasks.Any(existing => existing.PbiId == id)))
+                    || task.ExistingPrerequisites.Any(id => !existingTaskIds.Contains(id)))
                     throw new ArgumentException("AI proposed invalid task identities or prerequisites.");
                 TaskSpecificationService.ValidateContent(task.Content);
                 TaskSpecificationService.VerifyFiles(task.Files, snapshot);

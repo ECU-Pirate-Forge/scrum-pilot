@@ -87,7 +87,8 @@ public sealed class TaskCreationService(
             Do not output identifiers other than parentPbiId and task dependency keys. Do not execute code.
             """;
         var existingTasks = await db.Stories.AsNoTracking().Where(item =>
-            item.ProjectId == projectId && item.Type == PbiType.Task)
+            item.ProjectId == projectId && item.Type == PbiType.Task
+            && item.ParentStoryId.HasValue && request.ParentPbiIds.Contains(item.ParentStoryId.Value))
             .Select(item => new { item.PbiId, item.Title, item.ParentStoryId, item.Status }).ToArrayAsync(ct);
         var existingTaskIds = existingTasks.Select(task => task.PbiId).ToHashSet();
         var context = new
@@ -106,7 +107,8 @@ public sealed class TaskCreationService(
             GuidelinesRevisionId = guidance?.ProjectGuidelinesRevisionId,
             Guidelines = guidance?.Content,
             ExistingTasks = existingTasks,
-            Dependencies = await db.PbiDependencies.AsNoTracking().Where(item => item.ProjectId == projectId)
+            Dependencies = await db.PbiDependencies.AsNoTracking().Where(item => item.ProjectId == projectId
+                    && existingTaskIds.Contains(item.DependentPbiId) && existingTaskIds.Contains(item.PrerequisitePbiId))
                 .Select(item => new { item.DependentPbiId, item.PrerequisitePbiId }).ToArrayAsync(ct)
         };
 

@@ -98,6 +98,16 @@ public sealed class TaskGenerationServiceTests
     public async Task PreviewAndAccept_RetriesAreIdempotentAndPersistParentLinkedDraftScopeAndDependencies()
     {
         await using var f = await TaskPlanningFixture.CreateAsync();
+        var otherStory = new ProductBacklogItem { ProjectId = f.ProjectId, Title = "Unselected story", Type = PbiType.Story };
+        f.Db.Stories.Add(otherStory);
+        await f.Db.SaveChangesAsync();
+        var otherTask = new ProductBacklogItem
+        {
+            ProjectId = f.ProjectId, Title = "Unrelated child task", Type = PbiType.Task, ParentStoryId = otherStory.PbiId
+        };
+        f.Db.Stories.Add(otherTask);
+        await f.Db.SaveChangesAsync();
+
         var first = Proposal(f);
         var second = first with { Key = "second", Title = "Follow-up task", DependsOnKeys = [first.Key] };
         var handler = new PlanningAiHandler { Output = SerializeOutput(first, second) };

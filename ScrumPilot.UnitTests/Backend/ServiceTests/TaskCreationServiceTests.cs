@@ -15,6 +15,52 @@ namespace ScrumPilot.UnitTests.Backend.ServiceTests;
 public sealed class TaskCreationServiceTests
 {
     [Theory]
+    [InlineData(PbiType.Story)]
+    [InlineData(PbiType.Bug)]
+    public async Task PreviewSendsOnlySelectedSourceAndItsExistingTasks(PbiType sourceType)
+    {
+        await using var f = await TaskPlanningFixture.CreateAsync();
+        f.Story.Type = sourceType;
+        f.TaskItem.Origin = PbiOrigin.AiGenerated;
+        var otherStory = new ProductBacklogItem { ProjectId = f.ProjectId, Title = "Unselected story", Type = PbiType.Story };
+        f.Db.Stories.Add(otherStory);
+        await f.Db.SaveChangesAsync();
+        var manualTask = new ProductBacklogItem
+        {
+            ProjectId = f.ProjectId, Title = "Manual child task", Type = PbiType.Task, ParentStoryId = f.Story.PbiId
+        };
+        var otherTask = new ProductBacklogItem
+        {
+            ProjectId = f.ProjectId, Title = "Unrelated child task", Type = PbiType.Task, ParentStoryId = otherStory.PbiId
+        };
+        f.Db.Stories.AddRange(manualTask, otherTask,
+            new ProductBacklogItem { ProjectId = f.ProjectId, Title = "Standalone task", Type = PbiType.Task });
+        await f.Db.SaveChangesAsync();
+        f.Db.PbiDependencies.AddRange(
+            new() { ProjectId = f.ProjectId, DependentPbiId = f.TaskId, PrerequisitePbiId = manualTask.PbiId },
+            new() { ProjectId = f.ProjectId, DependentPbiId = manualTask.PbiId, PrerequisitePbiId = otherTask.PbiId });
+        await f.Db.SaveChangesAsync();
+
+        using var handler = new SchemaAwareOllamaHandler(f.Story.PbiId, returnFences: false);
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:11434") };
+        using var chat = new OllamaApiClient(http);
+        var preview = await Service(f, chat).PreviewAsync(f.ProjectId,
+            new([f.Story.PbiId], "scoped-task-creation", ReplaceGeneratedTasks: true), "owner", default);
+
+        Assert.Equal(f.Story.PbiId, Assert.Single(preview.Tasks).ParentPbiId);
+        var userMessage = Assert.Single(handler.Request.GetProperty("messages").EnumerateArray(),
+            message => message.GetProperty("role").GetString() == "user");
+        using var payload = JsonDocument.Parse(userMessage.GetProperty("content").GetString()!);
+        var context = payload.RootElement;
+        Assert.Equal(f.Story.PbiId, Assert.Single(context.GetProperty("sources").EnumerateArray()).GetProperty("pbiId").GetInt32());
+        Assert.Equal(new[] { f.TaskId, manualTask.PbiId }.Order(),
+            context.GetProperty("existingTasks").EnumerateArray().Select(task => task.GetProperty("pbiId").GetInt32()).Order());
+        var dependency = Assert.Single(context.GetProperty("dependencies").EnumerateArray());
+        Assert.Equal(f.TaskId, dependency.GetProperty("dependentPbiId").GetInt32());
+        Assert.Equal(manualTask.PbiId, dependency.GetProperty("prerequisitePbiId").GetInt32());
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task PreviewSendsTaskCreationSchemaThroughOllamaAndNeverRepairsFencedOutput(bool returnFences)
