@@ -71,8 +71,9 @@ default organization/project selections.
 
 ## Getting started
 
-Prerequisites: the .NET SDK selected by [global.json](global.json), a compatible
-Aspire CLI, a Linux-container runtime for local SQL Server 2025, and an existing
+Prerequisites: the SDKs selected by [the solution](global.json) and
+[the AppHost](ScrumPilot.AppHost/global.json), a compatible Aspire CLI,
+a Linux-container runtime for local SQL Server 2025, and an existing
 host Ollama installation for AI. SQL Server 2025 can also be supplied externally.
 Browser-interoperability tests use Node.js 22+ with its built-in test runner;
 there is no root npm dependency restore.

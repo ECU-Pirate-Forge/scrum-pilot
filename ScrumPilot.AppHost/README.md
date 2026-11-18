@@ -8,6 +8,13 @@ Use a persistent local SQL Server container or explicitly configured external
 SQL Server 2025. Organization catalogs are provisioned dynamically from the
 trusted server template; they are not hard-coded individually into the graph.
 
+Install the SDK selected by the [solution's global.json](../global.json) and
+the .NET 11 SDK selected by [the AppHost's global.json](./global.json) in the
+same .NET installation. Aspire launches both Blazor gateway tools from this
+directory. The gateway tool targets .NET 11; running it with SDK 10 reports
+`Settings file 'DotnetToolSettings.xml' was not found in the package`.
+The application's target frameworks are unchanged.
+
 ```powershell
 aspire start --non-interactive --isolated --apphost .\ScrumPilot.AppHost\ScrumPilot.AppHost.csproj
 aspire wait webapi

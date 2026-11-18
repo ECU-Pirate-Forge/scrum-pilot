@@ -1,4 +1,4 @@
-<Project Sdk="Aspire.AppHost.Sdk/13.6.5">
+<Project Sdk="Aspire.AppHost.Sdk/17.0.0">
 
   <ItemGroup>
     <ProjectReference Include="..\ScrumPilot.API\ScrumPilot.API.csproj" />
@@ -7,10 +7,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Aspire.Hosting.Blazor" Version="13.6.5-preview.1.26559.7" />
-    <PackageReference Include="Aspire.Hosting.DevTunnels" Version="13.6.5" />
-    <PackageReference Include="Aspire.Hosting.Docker" Version="13.6.5" />
-    <PackageReference Include="Aspire.Hosting.SqlServer" Version="13.6.5" />
+    <PackageReference Include="Aspire.Hosting.Blazor" Version="17.0.0-preview.1.26567.5" />
+    <PackageReference Include="Aspire.Hosting.DevTunnels" Version="17.0.0" />
+    <PackageReference Include="Aspire.Hosting.Docker" Version="17.0.0" />
+    <PackageReference Include="Aspire.Hosting.SqlServer" Version="17.0.0" />
   </ItemGroup>
 
   <ItemGroup>
