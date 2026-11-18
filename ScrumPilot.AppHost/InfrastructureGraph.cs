@@ -188,23 +188,23 @@ public static class InfrastructureGraph
         // Model AI as a visible optional dependency, NOT a readiness wait.
         api.WithRelationship(ollama, "Uses");
 
-#pragma warning disable ASPIREBLAZOR001
+#pragma warning disable ASPIREBLAZOR001, ASPIREDOTNETPROJECT001
         // A local HTTP upstream redirects outside the gateway to the API's HTTPS
         // origin, causing browsers to discard Authorization on the redirected hop.
         var apiScheme = builder.ExecutionContext.IsPublishMode ? "http" : "https";
         var web = builder.AddBlazorWasmProject<Projects.ScrumPilot_Web>("web").WithReference(api.GetEndpoint(apiScheme));
         var fluent = builder.AddBlazorWasmProject<Projects.ScrumPilot_FluentWeb>("fluentweb").WithReference(api.GetEndpoint(apiScheme));
-        var webGateway = builder.AddBlazorGateway("web-gateway")
+        var webGateway = builder.AddDotnetProjectBlazorGateway("web-gateway")
             .WithBlazorClientApp(web, proxyTelemetry: true).WithExternalHttpEndpoints()
             .WithEnvironment("Logging__LogLevel__Microsoft.AspNetCore", "Warning")
             .WithEnvironment("Logging__LogLevel__Yarp.ReverseProxy", "Warning")
             .WithHttpHealthCheck("/web/_blazor/_configuration");
-        var fluentGateway = builder.AddBlazorGateway("fluentweb-gateway")
+        var fluentGateway = builder.AddDotnetProjectBlazorGateway("fluentweb-gateway")
             .WithBlazorClientApp(fluent, proxyTelemetry: true).WithExternalHttpEndpoints()
             .WithEnvironment("Logging__LogLevel__Microsoft.AspNetCore", "Warning")
             .WithEnvironment("Logging__LogLevel__Yarp.ReverseProxy", "Warning")
             .WithHttpHealthCheck("/fluentweb/_blazor/_configuration");
-#pragma warning restore ASPIREBLAZOR001
+#pragma warning restore ASPIREBLAZOR001, ASPIREDOTNETPROJECT001
         if (!builder.ExecutionContext.IsPublishMode)
         {
             if (OperatingSystem.IsWindows())
@@ -217,25 +217,11 @@ public static class InfrastructureGraph
             }
             // Gateway environment callbacks build clients sharing the same obj outputs.
             fluentGateway.WaitFor(webGateway);
-            // Both supported gateways execute the same file-based helper. The
-            // SDK's shared runfile cache can rewrite a DLL already loaded by the
-            // other gateway on Windows. Give each helper its own temp/build cache.
-            foreach (var gateway in new[] { webGateway, fluentGateway })
-            {
-                var temporary = Directory.CreateDirectory(Path.Combine(
-                    builder.Configuration["Aspire:Store:Path"] ?? builder.AppHostDirectory,
-                    ".aspire", "gateway-temp", gateway.Resource.Name)).FullName;
-                if (!OperatingSystem.IsWindows())
-                    File.SetUnixFileMode(temporary, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-                gateway.WithEnvironment("TMP", temporary)
-                    .WithEnvironment("TEMP", temporary)
-                    .WithEnvironment("TMPDIR", temporary);
-            }
         }
         if (builder.ExecutionContext.IsPublishMode)
         {
             // TLS terminates at the operator's ingress, not at an unconfigured container.
-            foreach (var resource in new[] { api.Resource, webGateway.Resource, fluentGateway.Resource })
+            foreach (var resource in new IResource[] { api.Resource, webGateway.Resource, fluentGateway.Resource })
             {
                 foreach (var annotation in resource.Annotations.OfType<EndpointAnnotation>()
                     .Where(e => e.UriScheme == "https").ToArray())
@@ -262,7 +248,8 @@ public static class InfrastructureGraph
 
     // The preview Blazor publisher omits its HTTP-OTLP argument in publish mode.
     // Complete its generated YARP/configuration model without exposing dashboard headers.
-    private static void ConfigurePublishedTelemetry(IResourceBuilder<ProjectResource> gateway, string client,
+    private static void ConfigurePublishedTelemetry(
+        IResourceBuilder<Aspire.Hosting.Dotnet.DotnetProjectResource> gateway, string client,
         IResourceBuilder<ParameterResource> dashboardKey, IResourceBuilder<ParameterResource> publicOrigin)
     {
         gateway.WithEnvironment(context =>

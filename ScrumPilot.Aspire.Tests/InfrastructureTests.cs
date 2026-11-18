@@ -43,6 +43,8 @@ public sealed class InfrastructureTests(ITestOutputHelper output)
         Assert.Equal(2, builder.Resources.OfType<BlazorWasmAppResource>().Count());
         Assert.Contains(builder.Resources, r => r.Name == "web-gateway");
         Assert.Contains(builder.Resources, r => r.Name == "fluentweb-gateway");
+        Assert.All(builder.Resources.Where(r => r.Name.EndsWith("-gateway", StringComparison.Ordinal)),
+            resource => Assert.IsType<global::Aspire.Hosting.Dotnet.DotnetProjectResource>(resource));
         var image = Assert.Single(builder.Resources.OfType<SqlServerServerResource>())
             .Annotations.OfType<ContainerImageAnnotation>().Single();
         Assert.StartsWith("2025-", image.Tag);
