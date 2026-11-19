@@ -192,17 +192,39 @@ public sealed class InfrastructureTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task DevTunnelsAreDisabledByDefault()
+    public async Task DisabledDevTunnelsDoNotAddResources()
     {
-        await using var builder = await Graph();
+        await using var builder = await Graph("--DevTunnels:Enabled=false");
         Assert.Empty(builder.Resources.OfType<DevTunnelResource>());
         Assert.Empty(builder.Resources.OfType<DevTunnelPortResource>());
+    }
+
+    [Theory]
+    [InlineData(false, true, "localhost", 7380, "https://localhost:7380/fluentweb/accept-invitation")]
+    [InlineData(true, false, "localhost", 7380, "https://localhost:7380/fluentweb/accept-invitation")]
+    [InlineData(true, true, "fluent.example.test", 443, "https://fluent.example.test/fluentweb/accept-invitation")]
+    public async Task InvitationLinkUsesFluentWebHttpsOrigin(
+        bool tunnelsEnabled, bool fluentTunnelEnabled, string host, int port, string expected)
+    {
+        await using var builder = await Graph($"--DevTunnels:Enabled={tunnelsEnabled}",
+            $"--DevTunnels:FluentWeb={fluentTunnelEnabled}");
+        var api = builder.Resources.Single(r => r.Name == "webapi");
+        var environment = await Environment(builder, api);
+        var expression = Assert.IsType<ReferenceExpression>(environment["SendGrid__InvitationBaseUrl"]);
+        var endpoint = Assert.IsType<EndpointReference>(Assert.Single(expression.ValueProviders));
+        Assert.Equal("fluentweb-gateway", endpoint.Resource.Name);
+        Assert.Equal(tunnelsEnabled && fluentTunnelEnabled ? "tunnel" : "https", endpoint.EndpointName);
+        endpoint.EndpointAnnotation.AllocatedEndpoint = new AllocatedEndpoint(endpoint.EndpointAnnotation, host, port);
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        Assert.Equal(new Uri(expected), new Uri((await expression.GetValueAsync(timeout.Token))!));
     }
 
     [Fact]
     public async Task EnabledDevTunnelExposesSelectedHttpsEndpointsWithAuthentication()
     {
-        await using var builder = await Graph("--DevTunnels:Enabled=true", "--DevTunnels:WebApi=false");
+        await using var builder = await Graph("--DevTunnels:Enabled=true", "--DevTunnels:WebApi=false",
+            "--DevTunnels:AllowAnonymous=false", "--DevTunnels:Web=true", "--DevTunnels:FluentWeb=true");
         var tunnel = Assert.Single(builder.Resources.OfType<DevTunnelResource>());
         Assert.False(tunnel.Options.AllowAnonymous);
         Assert.Equal(["devtunnel-fluentweb-gateway-https", "devtunnel-web-gateway-https"],

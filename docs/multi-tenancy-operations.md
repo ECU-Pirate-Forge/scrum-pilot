@@ -59,10 +59,14 @@ publish/deploy.
 
 Aspire installs the `devtunnel` CLI and prompts for login when needed. The
 dashboard shows each port's public URL. Browsers reach the API through each
-gateway's same-origin `/{client}/_api/webapi` proxy, so you only need to tunnel
-the API itself for direct external callers. Invitation links and API CORS keep
-their local gateway origins. Prefer authenticated tunnels, and enable anonymous
-access only for data that is safe to expose.
+gateway's `/{client}/_api/webapi` proxy on the origin opened in the browser,
+even if the gateway advertises a localhost address. You only need to tunnel
+the API itself for direct external callers. New invitation emails use
+`/fluentweb/accept-invitation` on the FluentWeb HTTPS tunnel when enabled,
+or the local FluentWeb HTTPS gateway otherwise. API CORS keeps its local
+gateway origins. Recipients must have access to the tunnel and sign in to
+ScrumPilot with a confirmed email matching the invitation. Prefer authenticated
+tunnels, and enable anonymous access only for data that is safe to expose.
 
 Never commit private values or copy them into WebAssembly `wwwroot` settings,
 Docker build arguments, screenshots, telemetry, publish bundles or CI artifacts.

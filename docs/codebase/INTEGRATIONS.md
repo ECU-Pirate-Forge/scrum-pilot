@@ -31,6 +31,9 @@ SendGrid__InvitationBaseUrl
 
 AppHost supplies them first; direct API startup uses the same keys. The invitation
 URL is public; delivery keys are never sent to browsers or baked into images.
+For publishing or direct API startup, configure `SendGrid__InvitationBaseUrl`
+with the deployed FluentWeb acceptance URL (for example,
+`https://app.example.com/fluentweb/accept-invitation` for an Aspire gateway).
 Non-loopback links require HTTPS. Tokens are hashed, expire, are revocable and
 single-use, and require a confirmed matching email on acceptance.
 

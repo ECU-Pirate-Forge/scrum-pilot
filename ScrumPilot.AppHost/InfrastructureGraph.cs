@@ -241,7 +241,6 @@ public static class InfrastructureGraph
             }
             // Gateway environment callbacks build clients sharing the same obj outputs.
             fluentGateway.WaitFor(webGateway);
-            ConfigureDevTunnel(builder, api, webGateway, fluentGateway);
         }
         if (builder.ExecutionContext.IsPublishMode)
         {
@@ -262,29 +261,31 @@ public static class InfrastructureGraph
         }
         else
         {
+            var invitationEndpoint = ConfigureDevTunnel(builder, api, webGateway, fluentGateway);
             api.WithEnvironment("Cors__AllowedOrigins__0", webGateway.GetEndpoint("https"))
                 .WithEnvironment("Cors__AllowedOrigins__1", fluentGateway.GetEndpoint("https"))
                 .WithEnvironment("Cors__AllowedOrigins__2", webGateway.GetEndpoint("http"))
                 .WithEnvironment("Cors__AllowedOrigins__3", fluentGateway.GetEndpoint("http"))
                 .WithEnvironment("SendGrid__InvitationBaseUrl",
-                    ReferenceExpression.Create($"{webGateway.GetEndpoint("https")}/web/accept-invitation"));
+                    ReferenceExpression.Create($"{invitationEndpoint}/fluentweb/accept-invitation"));
         }
     }
 
     // Local-only public URLs. Browsers reach the API through each gateway's
     // same-origin /{client}/_api/webapi proxy, so CORS needs no tunnel origins.
-    private static void ConfigureDevTunnel(IDistributedApplicationBuilder builder,
+    private static EndpointReference ConfigureDevTunnel(IDistributedApplicationBuilder builder,
         IResourceBuilder<ProjectResource> api,
         IResourceBuilder<Aspire.Hosting.Dotnet.DotnetProjectResource> webGateway,
         IResourceBuilder<Aspire.Hosting.Dotnet.DotnetProjectResource> fluentGateway)
     {
+        var fluentHttps = fluentGateway.GetEndpoint("https");
         var settings = builder.Configuration.GetSection("DevTunnels");
         if (!settings.GetValue<bool>("Enabled"))
-            return;
+            return fluentHttps;
         if (!settings.GetValue("WebApi", true) &&
             !settings.GetValue("Web", true) &&
             !settings.GetValue("FluentWeb", true))
-            return;
+            return fluentHttps;
         var tunnelId = settings["TunnelId"];
         var tunnel = builder.AddDevTunnel("devtunnel",
             string.IsNullOrWhiteSpace(tunnelId) ? null : tunnelId,
@@ -299,7 +300,11 @@ public static class InfrastructureGraph
         if (settings.GetValue("Web", true))
             tunnel.WithReference(webGateway.GetEndpoint("https"));
         if (settings.GetValue("FluentWeb", true))
-            tunnel.WithReference(fluentGateway.GetEndpoint("https"));
+        {
+            tunnel.WithReference(fluentHttps);
+            return tunnel.GetEndpoint(fluentHttps);
+        }
+        return fluentHttps;
     }
 
     // The preview Blazor publisher omits its HTTP-OTLP argument in publish mode.
