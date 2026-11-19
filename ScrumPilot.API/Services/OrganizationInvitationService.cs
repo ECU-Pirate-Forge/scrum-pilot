@@ -1,6 +1,7 @@
 using System.Net.Mail;
 using System.Security.Cryptography;
 using ScrumPilot.API.Authorization;
+using ScrumPilot.API.Configuration;
 using ScrumPilot.Data.Repositories;
 using ScrumPilot.Shared.Models;
 
@@ -13,7 +14,9 @@ public sealed class OrganizationInvitationService(
     IOrganizationAccessService accessService,
     IInvitationEmailSender emailSender,
     TimeProvider timeProvider,
-    ILogger<OrganizationInvitationService> logger) : IOrganizationInvitationService
+    ILogger<OrganizationInvitationService> logger,
+    IConfiguration configuration,
+    IHostEnvironment environment) : IOrganizationInvitationService
 {
     private static readonly TimeSpan Lifetime = TimeSpan.FromHours(72);
 
@@ -50,11 +53,32 @@ public sealed class OrganizationInvitationService(
         CancellationToken cancellationToken = default)
     {
         await RequireOwnerAsync(organizationId, cancellationToken);
+        var (replacement, token) = await ReplacePendingAsync(organizationId, invitationId, cancellationToken);
+        await DeliverAsync(replacement, token, cancellationToken);
+        return ToDto(replacement);
+    }
+
+    public async Task<OrganizationInvitationLinkResponse> CreateShareLinkAsync(
+        int organizationId,
+        int invitationId,
+        CancellationToken cancellationToken = default)
+    {
+        await RequireOwnerAsync(organizationId, cancellationToken);
+        if (!InvitationLink.TryGetBaseUri(configuration["SendGrid:InvitationBaseUrl"], environment, out var baseUri))
+            throw new OrganizationValidationException("Configure a valid public invitation URL before creating share links.");
+
+        var (replacement, token) = await ReplacePendingAsync(organizationId, invitationId, cancellationToken);
+        return new(ToDto(replacement), InvitationLink.Build(baseUri!, token));
+    }
+
+    private async Task<(OrganizationInvitation Invitation, string Token)> ReplacePendingAsync(
+        int organizationId, int invitationId, CancellationToken cancellationToken)
+    {
         var existing = await repository.GetAsync(organizationId, invitationId, cancellationToken)
             ?? throw new OrganizationNotFoundException("The invitation was not found.");
         if (existing.Status != OrganizationInvitationStatus.Pending)
         {
-            throw new OrganizationConflictException("Only a pending invitation can be resent.");
+            throw new OrganizationConflictException("Only pending invitations can be replaced.");
         }
         var (replacement, token) = CreateInvitation(
             organizationId,
@@ -68,8 +92,7 @@ public sealed class OrganizationInvitationService(
                           cancellationToken))
                       ?? throw new OrganizationConflictException(
                           "The invitation is no longer pending.");
-        await DeliverAsync(replacement, token, cancellationToken);
-        return ToDto(replacement);
+        return (replacement, token);
     }
 
     public async Task RevokeAsync(

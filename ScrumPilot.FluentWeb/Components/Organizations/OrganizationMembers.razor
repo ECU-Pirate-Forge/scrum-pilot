@@ -1,6 +1,7 @@
 @implements IDisposable
 @inject HttpClient Http
 @inject IAppDialogService Dialogs
+@inject IJSRuntime JS
 @inject ILogger<OrganizationMembers> Logger
 
 <FluentCard Class="organization-members">
@@ -58,9 +59,18 @@
             <div class="invitation-row">
                 <span>@invitation.Email — @invitation.Role</span>
                 @if (!string.IsNullOrWhiteSpace(invitation.DeliveryError)) { <span class="error-text">@invitation.DeliveryError</span> }
+                <FluentButton data-action="copy-invite-link" Appearance="ButtonAppearance.Subtle" Disabled="@_creatingLink" OnClick="@(() => CopyInviteLinkAsync(invitation))">Copy invite link</FluentButton>
                 <FluentButton Appearance="ButtonAppearance.Subtle" OnClick="@(() => ResendAsync(invitation))">Resend</FluentButton>
                 <FluentButton Appearance="ButtonAppearance.Subtle" OnClick="@(() => RevokeAsync(invitation))">Revoke</FluentButton>
             </div>
+        }
+        @if (_copyMessage is not null)
+        {
+            <p role="status">@_copyMessage</p>
+        }
+        @if (_manualInviteLink is not null)
+        {
+            <label>Invitation link <input type="text" readonly value="@_manualInviteLink" /></label>
         }
     }
 
@@ -84,6 +94,9 @@
     private string _email = string.Empty;
     private OrganizationRole _inviteRole = OrganizationRole.Member;
     private string? _error;
+    private bool _creatingLink;
+    private string? _copyMessage;
+    private string? _manualInviteLink;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -103,6 +116,9 @@
         _members = [];
         _invitations = [];
         _error = null;
+        _creatingLink = false;
+        _copyMessage = null;
+        _manualInviteLink = null;
         _loading = true;
         await LoadAsync(key, generation, _loadCancellation.Token);
         if (IsCurrent(key, generation)) _loading = false;
@@ -151,6 +167,63 @@
     private Task ResendAsync(OrganizationInvitationDto invitation) =>
         MutateAsync(id => Http.PostAsync($"api/organizations/{id}/invitations/{invitation.OrganizationInvitationId}/resend", null), "Unable to resend the invitation.");
 
+    private async Task CopyInviteLinkAsync(OrganizationInvitationDto invitation)
+    {
+        var key = (OrganizationId, CanManage);
+        var generation = _generation;
+        if (!key.CanManage || _creatingLink || !IsCurrent(key, generation)) return;
+        _creatingLink = true;
+        try
+        {
+            if (!await Dialogs.ConfirmAsync("Copy invite link",
+                $"Create a new link for {invitation.Email}? This invalidates previous links for this invitation and does not send an email.",
+                "Create link", "Cancel") || !IsCurrent(key, generation))
+                return;
+
+            _error = _copyMessage = _manualInviteLink = null;
+            var token = _loadCancellation?.Token ?? CancellationToken.None;
+            using var response = await Http.PostAsync(
+                $"api/organizations/{key.OrganizationId}/invitations/{invitation.OrganizationInvitationId}/share-link", null, token);
+            if (!IsCurrent(key, generation)) return;
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await ErrorAsync(response, "Unable to create the invitation link.");
+                if (IsCurrent(key, generation)) _error = error;
+                return;
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<OrganizationInvitationLinkResponse>(token);
+            if (!IsCurrent(key, generation)) return;
+            if (result?.Invitation is null || string.IsNullOrWhiteSpace(result.Url))
+                throw new System.Text.Json.JsonException("Missing invitation link response.");
+
+            var index = _invitations.FindIndex(item => item.OrganizationInvitationId == invitation.OrganizationInvitationId);
+            if (index >= 0) _invitations[index] = result.Invitation;
+            try
+            {
+                await JS.InvokeVoidAsync("navigator.clipboard.writeText", token, result.Url);
+                if (IsCurrent(key, generation)) _copyMessage = "Invitation link copied.";
+            }
+            catch (JSException)
+            {
+                if (!IsCurrent(key, generation)) return;
+                _manualInviteLink = result.Url;
+                _copyMessage = "Clipboard access was unavailable. Copy the invitation link below.";
+            }
+        }
+        catch (OperationCanceledException) when (!IsCurrent(key, generation)) { }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException or NotSupportedException or OperationCanceledException)
+        {
+            Logger.LogWarning("Unable to create an invitation link for organization {OrganizationId}: {ErrorType}.",
+                key.OrganizationId, ex.GetType().Name);
+            if (IsCurrent(key, generation)) _error = "Unable to create the invitation link. Refresh the invitation list before trying again.";
+        }
+        finally
+        {
+            if (IsCurrent(key, generation)) _creatingLink = false;
+        }
+    }
+
     private async Task RevokeAsync(OrganizationInvitationDto invitation)
     {
         var key = (OrganizationId, CanManage);
@@ -168,11 +241,19 @@
         _error = null;
         try
         {
-            var response = await action(key.OrganizationId);
+            using var response = await action(key.OrganizationId);
             if (!IsCurrent(key, generation)) return;
             if (!response.IsSuccessStatusCode)
             {
-                _error = await ErrorAsync(response, fallback);
+                var error = await ErrorAsync(response, fallback);
+                if (!IsCurrent(key, generation)) return;
+                if (response.StatusCode == HttpStatusCode.BadGateway)
+                {
+                    // Delivery can fail after the pending invitation was saved.
+                    await ReloadAsync(key);
+                    generation++;
+                }
+                if (IsCurrent(key, generation)) _error = error;
                 return;
             }
             onSuccess?.Invoke();

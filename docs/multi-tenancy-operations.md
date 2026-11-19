@@ -156,6 +156,11 @@ Members need grants tied to the current membership instance. In FluentWeb,
 an organization Owner can open **Manage Organization**, find the member by
 username under **<project name> access**, and select **Grant access**. Accepting
 an invitation joins the organization but does not grant project access.
+If email delivery is blocked, an Owner can use **Manage Organization > Members >
+Pending invitations > Copy invite link** in FluentWeb. Creating the link replaces
+the previous link without sending email. Share it privately with the intended
+recipient, who must still sign in with the invited email address. The link uses
+the configured `SendGrid:InvitationBaseUrl` and expires after 72 hours.
 The final Owner
 cannot leave, be removed, or be demoted.
 

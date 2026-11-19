@@ -20,7 +20,7 @@ public abstract class FluentFrontendTestBase : BunitContext
     /// <summary>Route-based HTTP fake backing the injected HttpClient. Register routes before rendering.</summary>
     protected MockHttpHandler Http { get; } = new();
 
-    protected FluentFrontendTestBase()
+    protected FluentFrontendTestBase(IAppDialogService? dialogs = null)
     {
         Services.AddFluentUIComponents();
         Authorization = AddAuthorization();
@@ -30,7 +30,10 @@ public abstract class FluentFrontendTestBase : BunitContext
         Services.AddScoped<OrganizationStateService>();
         Services.AddScoped<AppThemeService>();
         Services.AddScoped<IAppNotificationService, AppNotificationService>();
-        Services.AddScoped<IAppDialogService, AppDialogService>();
+        if (dialogs is null)
+            Services.AddScoped<IAppDialogService, AppDialogService>();
+        else
+            Services.AddSingleton(dialogs);
         Services.AddSingleton(NSubstitute.Substitute.For<IProjectWorkClient>());
         Services.AddLogging();
         Services.Configure<FeatureOptions>(_ => { });

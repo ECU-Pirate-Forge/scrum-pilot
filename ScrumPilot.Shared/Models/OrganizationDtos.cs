@@ -64,6 +64,9 @@ public record OrganizationMemberDto(
     DateTime JoinedAt,
     string? UserName = null);
 
+/// <summary>One-time response containing a replacement pending invitation and its shareable link.</summary>
+public sealed record OrganizationInvitationLinkResponse(OrganizationInvitationDto Invitation, string Url);
+
 /// <summary>Public projection of an organization invitation without secret token data.</summary>
 /// <param name="OrganizationInvitationId">Invitation identifier.</param>
 /// <param name="OrganizationId">Organization identifier.</param>

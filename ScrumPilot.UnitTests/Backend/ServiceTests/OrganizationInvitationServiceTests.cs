@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using ScrumPilot.UnitTests.Backend.Tenancy;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using ScrumPilot.API.Authorization;
@@ -47,7 +49,9 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
             _access,
             _sender,
             _clock,
-            _logger);
+            _logger,
+            LinkConfiguration(),
+            Substitute.For<IHostEnvironment>());
     }
 
     [Fact]
@@ -69,6 +73,42 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
         Assert.Null(stored.DeliveryError);
         Assert.Equal(stored.OrganizationInvitationId, result.OrganizationInvitationId);
     }
+
+    [Fact]
+    public async Task ShareLink_ReplacesEmailLinkWithoutSendingAndCanOnlyBeAcceptedByInvitee()
+    {
+        await SeedAsync();
+        var original = await _service.InviteAsync(_organizationId, new("member@example.com", OrganizationRole.Member));
+        var originalToken = Assert.IsType<string>(_sender.Token);
+        _currentUser.UserId.Returns("member");
+        await Assert.ThrowsAsync<OrganizationForbiddenException>(() =>
+            _service.CreateShareLinkAsync(_organizationId, original.OrganizationInvitationId));
+        _currentUser.UserId.Returns("owner");
+
+        var result = await _service.CreateShareLinkAsync(_organizationId, original.OrganizationInvitationId);
+        var link = new Uri(result.Url);
+        Assert.Equal("https://app.example.test/fluentweb/accept-invitation", link.GetLeftPart(UriPartial.Path));
+        Assert.StartsWith("?token=", link.Query);
+        var token = link.Query["?token=".Length..];
+        Assert.NotEqual(originalToken, token);
+        Assert.Equal(originalToken, _sender.Token);
+        Assert.Null(result.Invitation.LastSentAt);
+        var pending = Assert.Single((await _service.ListAsync(_organizationId))
+            .Where(item => item.Status == OrganizationInvitationStatus.Pending));
+        Assert.Equal(result.Invitation.OrganizationInvitationId, pending.OrganizationInvitationId);
+
+        _currentUser.UserId.Returns("owner");
+        await Assert.ThrowsAsync<OrganizationForbiddenException>(() => _service.AcceptAsync(new(token)));
+        _currentUser.UserId.Returns("member");
+        await Assert.ThrowsAsync<OrganizationNotFoundException>(() => _service.AcceptAsync(new(originalToken)));
+        Assert.Equal(_organizationId, (await _service.AcceptAsync(new(token))).OrganizationId);
+    }
+
+    private static IConfiguration LinkConfiguration() => new ConfigurationBuilder()
+        .AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["SendGrid:InvitationBaseUrl"] = "https://app.example.test/fluentweb/accept-invitation"
+        }).Build();
 
     [Fact]
     public async Task InviteAsync_NonOwnerIsForbidden()
@@ -400,7 +440,9 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
             access,
             _sender,
             _clock,
-            _logger);
+            _logger,
+            LinkConfiguration(),
+            Substitute.For<IHostEnvironment>());
 
         Task Action() => operation switch
         {
@@ -515,7 +557,9 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
             _access,
             _sender,
             _clock,
-            _logger);
+            _logger,
+            LinkConfiguration(),
+            Substitute.For<IHostEnvironment>());
 
     private static ApplicationUser User(string id, string email) => new()
     {

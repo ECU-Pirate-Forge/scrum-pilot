@@ -51,6 +51,17 @@ public sealed class OrganizationInvitationController(
                 invitationId,
                 cancellationToken));
 
+    /// <summary>Replaces a pending invitation and returns a shareable link without sending email.</summary>
+    [HttpPost("{invitationId:int}/share-link")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public Task<ActionResult<OrganizationInvitationLinkResponse>> CreateShareLink(
+        int organizationId,
+        int invitationId,
+        CancellationToken cancellationToken = default) =>
+        ExecuteAsync(
+            () => service.CreateShareLinkAsync(organizationId, invitationId, cancellationToken),
+            value => Ok(value));
+
     [HttpPost("~/api/organization-invitations/accept")]
     public Task<ActionResult<AcceptedOrganizationDto>> Accept(
         [FromBody] AcceptOrganizationInvitationRequest request,

@@ -2,6 +2,8 @@ using System.Net;
 using System.Text.Json;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.JSInterop;
+using NSubstitute;
 using ScrumPilot.FluentWeb.Components.Organizations;
 using ScrumPilot.FluentWeb.Pages;
 using ScrumPilot.FluentWeb.Services;
@@ -15,11 +17,13 @@ public class ManagementPageTests : FluentFrontendTestBase
 {
     private readonly ProjectStateService _projectState;
     private readonly OrganizationStateService _organizationState;
+    private readonly IAppDialogService _dialogs;
     private bool _nextConfirmation;
     private bool _lastDestructive;
 
-    public ManagementPageTests()
+    public ManagementPageTests() : base(Substitute.For<IAppDialogService>())
     {
+        _dialogs = Services.GetRequiredService<IAppDialogService>();
         _projectState = Services.GetRequiredService<ProjectStateService>();
         _organizationState = Services.GetRequiredService<OrganizationStateService>();
     }
@@ -120,6 +124,72 @@ public class ManagementPageTests : FluentFrontendTestBase
         {
             Assert.Single(Http.RequestsTo(HttpMethod.Put, $"{path}/member-id"));
             Assert.Contains("Access granted", cut.Markup);
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Pending_invitation_can_be_copied_with_manual_fallback(bool clipboardBlocked)
+    {
+        const string url = "https://app.example.test/fluentweb/accept-invitation?token=test-token";
+        const string path = "api/organizations/7/invitations";
+        var invitation = new OrganizationInvitationDto(11, 7, "member@example.test", "owner",
+            OrganizationRole.Member, OrganizationInvitationStatus.Pending, DateTime.UnixEpoch,
+            DateTime.UnixEpoch.AddDays(3), null, null, null);
+        Http.OnGetJson("api/organizations/7/members", Array.Empty<OrganizationMemberDto>());
+        Http.OnGetJson(path, new[] { invitation });
+        Http.On(HttpMethod.Post, $"{path}/11/share-link", (_, _) => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = System.Net.Http.Json.JsonContent.Create(
+                new OrganizationInvitationLinkResponse(invitation with { OrganizationInvitationId = 12 }, url))
+        });
+        _dialogs.ConfirmAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>())
+            .Returns(true);
+        var clipboard = JSInterop.SetupVoid("navigator.clipboard.writeText", url);
+        if (clipboardBlocked) clipboard.SetException(new JSException("Clipboard blocked"));
+        else clipboard.SetVoidResult();
+
+        using var cut = Render<OrganizationMembers>(parameters => parameters
+            .Add(p => p.OrganizationId, 7)
+            .Add(p => p.CanManage, true));
+
+        cut.WaitForElement("fluent-button[data-action='copy-invite-link']").Click();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(Http.RequestsTo(HttpMethod.Post, $"{path}/11/share-link"));
+            Assert.Single(clipboard.Invocations);
+            Assert.Contains(clipboardBlocked ? "Clipboard access was unavailable." : "Invitation link copied.", cut.Markup);
+            if (clipboardBlocked) Assert.Equal(url, cut.Find("input[readonly]").GetAttribute("value"));
+            else Assert.DoesNotContain(url, cut.Markup);
+        });
+    }
+
+    [Fact]
+    public void Failed_email_delivery_refreshes_pending_invitations_for_manual_sharing()
+    {
+        const string path = "api/organizations/7/invitations";
+        var invitation = new OrganizationInvitationDto(11, 7, "member@example.test", "owner",
+            OrganizationRole.Member, OrganizationInvitationStatus.Pending, DateTime.UnixEpoch,
+            DateTime.UnixEpoch.AddDays(3), null, null, "Delivery failed.");
+        Http.OnGetJson("api/organizations/7/members", Array.Empty<OrganizationMemberDto>());
+        Http.OnGetJson(path, Array.Empty<OrganizationInvitationDto>());
+        Http.On(HttpMethod.Post, path, (_, _) =>
+        {
+            Http.OnGetJson(path, new[] { invitation });
+            return new HttpResponseMessage(HttpStatusCode.BadGateway);
+        });
+
+        using var cut = Render<OrganizationMembers>(parameters => parameters
+            .Add(p => p.OrganizationId, 7)
+            .Add(p => p.CanManage, true));
+
+        cut.Find("fluent-text-input").Change("member@example.test");
+        cut.Find("fluent-button[data-action='invite']").Click();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("Unable to send invitation.", cut.Markup);
+            Assert.Single(cut.FindAll("fluent-button[data-action='copy-invite-link']"));
         });
     }
 

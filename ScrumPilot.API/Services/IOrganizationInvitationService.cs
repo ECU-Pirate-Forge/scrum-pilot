@@ -15,6 +15,10 @@ public interface IOrganizationInvitationService
         int organizationId,
         int invitationId,
         CancellationToken cancellationToken = default);
+    Task<OrganizationInvitationLinkResponse> CreateShareLinkAsync(
+        int organizationId,
+        int invitationId,
+        CancellationToken cancellationToken = default);
     Task RevokeAsync(
         int organizationId,
         int invitationId,

@@ -66,7 +66,7 @@ public sealed class SendGridInvitationEmailSender(
                 "SendGrid configuration is invalid.",
                 exception);
         }
-        var url = BuildInvitationUrl(configuration.InvitationBaseUrl, token);
+        var url = InvitationLink.Build(new Uri(configuration.InvitationBaseUrl), token);
         var message = new InvitationEmailMessage(
             configuration.FromEmail,
             configuration.FromName,
@@ -101,13 +101,4 @@ public sealed class SendGridInvitationEmailSender(
         }
     }
 
-    private static string BuildInvitationUrl(string baseUrl, string token)
-    {
-        var builder = new UriBuilder(baseUrl);
-        var parameter = $"token={Uri.EscapeDataString(token)}";
-        builder.Query = string.IsNullOrEmpty(builder.Query)
-            ? parameter
-            : $"{builder.Query.TrimStart('?')}&{parameter}";
-        return builder.Uri.AbsoluteUri;
-    }
 }

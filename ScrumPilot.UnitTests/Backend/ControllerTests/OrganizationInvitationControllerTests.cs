@@ -254,7 +254,9 @@ public sealed class OrganizationInvitationControllerTests
             access,
             sender,
             TimeProvider.System,
-            NullLogger<OrganizationInvitationService>.Instance);
+            NullLogger<OrganizationInvitationService>.Instance,
+            new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build(),
+            Substitute.For<Microsoft.Extensions.Hosting.IHostEnvironment>());
     }
 
     private static OrganizationInvitationDto Dto() => new(
