@@ -232,6 +232,29 @@ public sealed class InfrastructureTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task OnlyFluentWebTunnelDashboardLinkOpensTheClientPath()
+    {
+        await using var builder = await Graph("--DevTunnels:Enabled=true",
+            "--DevTunnels:WebApi=true", "--DevTunnels:Web=true", "--DevTunnels:FluentWeb=true");
+
+        foreach (var port in builder.Resources.OfType<DevTunnelPortResource>())
+        {
+            const string origin = "https://tunnel.example.test";
+            var endpoint = new EndpointReference(port, "tunnel");
+            endpoint.EndpointAnnotation.AllocatedEndpoint =
+                new AllocatedEndpoint(endpoint.EndpointAnnotation, "tunnel.example.test", 443);
+            var url = new ResourceUrlAnnotation { Endpoint = endpoint, Url = origin };
+            var context = new ResourceUrlsCallbackContext(builder.ExecutionContext, port, [url], CancellationToken.None);
+            foreach (var annotation in port.Annotations.OfType<ResourceUrlsCallbackAnnotation>())
+                await annotation.Callback(context);
+
+            var displayedUrl = Assert.Single(context.Urls, link => link.Endpoint?.EndpointName == "tunnel");
+            Assert.Equal(new Uri(port.Name == "devtunnel-fluentweb-gateway-https" ? origin + "/fluentweb/" : origin),
+                new Uri(new Uri(origin), displayedUrl.Url));
+        }
+    }
+
+    [Fact]
     public async Task EnabledDevTunnelCanExposeApiAnonymously()
     {
         await using var builder = await Graph("--DevTunnels:Enabled=true", "--DevTunnels:AllowAnonymous=true",

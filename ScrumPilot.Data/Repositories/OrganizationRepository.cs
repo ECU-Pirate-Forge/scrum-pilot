@@ -258,7 +258,8 @@ public sealed class OrganizationRepository(ControlPlaneContext context,
                 x.OrganizationId,
                 x.UserId,
                 x.Role,
-                x.JoinedAt))
+                x.JoinedAt,
+                context.Users.Where(user => user.Id == x.UserId).Select(user => user.UserName).FirstOrDefault()))
             .ToListAsync(cancellationToken);
 
     public async Task<OrganizationMutationResult> UpdateMemberRoleAsync(

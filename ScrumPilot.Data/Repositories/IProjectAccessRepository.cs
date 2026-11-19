@@ -36,7 +36,8 @@ public interface IProjectAccessRepository
 
     Task<IReadOnlyList<ProjectMemberAccessDto>> GetMembersAsync(
         int projectId,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        bool includeUngranted = false);
 
     Task<ProjectAccessMutationResult> SetAccessAsync(
         int projectId,

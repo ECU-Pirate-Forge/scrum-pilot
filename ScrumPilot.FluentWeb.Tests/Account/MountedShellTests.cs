@@ -19,6 +19,21 @@ namespace ScrumPilot.FluentWeb.Tests.Account;
 
 public sealed class MountedShellTests : BunitContext
 {
+    [Fact]
+    public void Signed_out_invitation_opens_the_login_form_and_preserves_the_return_url()
+    {
+        var navigation = new MountedNavigation("accept-invitation?token=diagnostic-placeholder");
+        RegisterRouterSession(navigation, new SessionHandler(), authenticated: false);
+
+        using var cut = Render<CascadingAuthenticationState>(p => p.AddChildContent<ScrumPilot.FluentWeb.App>());
+
+        cut.WaitForAssertion(() =>
+        {
+            var login = cut.FindComponent<Login>();
+            Assert.Equal("/fluentweb/accept-invitation?token=diagnostic-placeholder", login.Instance.ReturnUrl);
+        });
+    }
+
     [Theory]
     [InlineData("backlog")]
     [InlineData("project-management")]
@@ -106,13 +121,16 @@ public sealed class MountedShellTests : BunitContext
         });
     }
 
-    private void RegisterRouterSession(MountedNavigation navigation, SessionHandler handler)
+    private void RegisterRouterSession(MountedNavigation navigation, SessionHandler handler, bool authenticated = true)
     {
         Services.AddFluentUIComponents();
         var authorization = this.AddAuthorization();
-        authorization.SetAuthorized("Test");
-        authorization.SetRoles("Admin");
-        authorization.SetClaims(new Claim(ClaimTypes.NameIdentifier, "test-owner"));
+        if (authenticated)
+        {
+            authorization.SetAuthorized("Test");
+            authorization.SetRoles("Admin");
+            authorization.SetClaims(new Claim(ClaimTypes.NameIdentifier, "test-owner"));
+        }
         Services.AddSingleton<NavigationManager>(navigation);
         Services.AddSingleton(new HttpClient(handler) { BaseAddress = new Uri("https://gateway.test/fluentweb/_api/webapi/") });
         Services.AddScoped<OrganizationStateService>();

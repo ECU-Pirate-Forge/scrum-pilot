@@ -112,7 +112,10 @@ public sealed class ProjectService(
             throw new ProjectNotFoundException();
         }
 
-        return await repository.GetMembersAsync(projectId, cancellationToken);
+        var organizationId = await accessService.GetOrganizationIdForProjectAsync(projectId, cancellationToken)
+            ?? throw new ProjectNotFoundException();
+        var isOwner = await accessService.IsOrganizationOwnerAsync(userId, organizationId, cancellationToken);
+        return await repository.GetMembersAsync(projectId, cancellationToken, includeUngranted: isOwner);
     }
 
     public async Task SetAccessAsync(

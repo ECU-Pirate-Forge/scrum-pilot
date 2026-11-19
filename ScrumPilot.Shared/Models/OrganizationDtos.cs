@@ -56,11 +56,13 @@ public record AcceptedOrganizationDto(int OrganizationId);
 /// <param name="UserId">Member's Identity identifier.</param>
 /// <param name="Role">Member's organization role.</param>
 /// <param name="JoinedAt">UTC date and time when the member joined.</param>
+/// <param name="UserName">Member's account username, when available.</param>
 public record OrganizationMemberDto(
     int OrganizationId,
     string UserId,
     OrganizationRole Role,
-    DateTime JoinedAt);
+    DateTime JoinedAt,
+    string? UserName = null);
 
 /// <summary>Public projection of an organization invitation without secret token data.</summary>
 /// <param name="OrganizationInvitationId">Invitation identifier.</param>

@@ -31,6 +31,30 @@ public sealed class ProjectAccessRepositoryTests
         Assert.Single(await fixture.Repository.GetMembersAsync(fixture.ProjectId));
     }
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UngrantedMember_IsVisibleOnlyInGrantManagementList(bool includeUngranted)
+    {
+        using var fixture = new TenantAccessFixture(grant: false);
+        var user = await fixture.Files.Control.Users.SingleAsync(x => x.Id == "member");
+        user.UserName = "new-member@example.test";
+        await fixture.Files.Control.SaveChangesAsync();
+
+        var members = await fixture.Repository.GetMembersAsync(fixture.ProjectId, includeUngranted: includeUngranted);
+        Assert.Contains(members, x => x.UserId == "owner");
+        if (includeUngranted)
+        {
+            var member = Assert.Single(members, x => x.UserId == "member");
+            Assert.False(member.HasExplicitAccess);
+            Assert.Equal("new-member@example.test", member.UserName);
+        }
+        else
+        {
+            Assert.DoesNotContain(members, x => x.UserId == "member");
+        }
+    }
+
+    [Theory]
     [InlineData("owner", ProjectAccessMutationResult.TargetIsOwner)]
     [InlineData("admin", ProjectAccessMutationResult.TargetNotMember)]
     public async Task Mutation_RequiresOrdinaryCurrentTarget(string user, ProjectAccessMutationResult expected)

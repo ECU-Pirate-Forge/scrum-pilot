@@ -78,8 +78,8 @@ public class ManagementPageTests : FluentFrontendTestBase
     {
         Http.OnGetJson("api/organizations/7/members", new List<OrganizationMemberDto>
         {
-            new(7, "owner-user", OrganizationRole.Owner, new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc)),
-            new(7, "member-user", OrganizationRole.Member, new DateTime(2026, 1, 3, 0, 0, 0, DateTimeKind.Utc)),
+            new(7, "owner-id", OrganizationRole.Owner, new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc), "owner@example.test"),
+            new(7, "member-id", OrganizationRole.Member, new DateTime(2026, 1, 3, 0, 0, 0, DateTimeKind.Utc), "member@example.test"),
         });
         Http.OnGetJson("api/organizations/7/invitations", new List<OrganizationInvitationDto>());
 
@@ -87,9 +87,40 @@ public class ManagementPageTests : FluentFrontendTestBase
             .Add(p => p.OrganizationId, 7)
             .Add(p => p.CanManage, true));
 
-        cut.WaitForAssertion(() => Assert.Contains("member-user", cut.Markup));
-        Assert.Contains("owner-user", cut.Markup);
+        cut.WaitForAssertion(() => Assert.Contains("member@example.test", cut.Markup));
+        Assert.Contains("owner@example.test", cut.Markup);
+        Assert.DoesNotContain("member-id", cut.Markup);
         Assert.Contains("Promote", cut.Markup);
+    }
+
+    [Fact]
+    public void Owner_can_grant_project_access_to_a_named_member_without_access()
+    {
+        SelectOrganization();
+        const string path = "api/organizations/7/projects/44/members";
+        var member = new ProjectMemberAccessDto("member-id", OrganizationRole.Member, false, "member@example.test");
+        Http.OnGetJson(path, new[] { member });
+        Http.On(HttpMethod.Put, $"{path}/member-id", (_, _) =>
+        {
+            Http.OnGetJson(path, new[] { member with { HasExplicitAccess = true } });
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
+        });
+
+        using var cut = Render<ProjectAccessEditor>(parameters => parameters
+            .Add(p => p.ProjectId, 44)
+            .Add(p => p.CanManage, true));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("member@example.test", cut.Markup);
+            Assert.Contains("No access", cut.Markup);
+        });
+        cut.Find("fluent-button[data-user='member-id']").Click();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(Http.RequestsTo(HttpMethod.Put, $"{path}/member-id"));
+            Assert.Contains("Access granted", cut.Markup);
+        });
     }
 
     [Fact]

@@ -118,7 +118,14 @@ public partial class MainLayout
 
     private async Task LoadSessionAsync()
     {
-        if (_disposed || !_authenticated) return;
+        if (_disposed) return;
+        if (!_authenticated)
+        {
+            // Public routes still need to resolve when there is no organization session to load.
+            _resolvedUri = Navigation.Uri;
+            StateHasChanged();
+            return;
+        }
         var generation = ++_loadGeneration;
         _sessionCancellation?.Cancel();
         _sessionCancellation?.Dispose();

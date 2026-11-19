@@ -29,7 +29,7 @@
     else
     {
         <FluentDataGrid TGridItem="OrganizationMemberDto" Items="@_members.AsQueryable()" GridTemplateColumns="1fr .5fr .7fr auto" Class="management-grid">
-            <PropertyColumn Property="@(member => member.UserId)" Title="User" Sortable="true" />
+            <PropertyColumn Property="@(member => member.UserName ?? "Unknown user")" Title="User" Sortable="true" />
             <PropertyColumn Property="@(member => member.Role)" Title="Role" Sortable="true" />
             <TemplateColumn Title="Joined" Context="member">@member.JoinedAt.ToString("MMM dd, yyyy")</TemplateColumn>
             <TemplateColumn Title="Actions" Context="member">

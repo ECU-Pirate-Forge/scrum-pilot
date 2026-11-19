@@ -14,7 +14,7 @@
     else
     {
         <FluentDataGrid TGridItem="ProjectMemberAccessDto" Items="@_members.AsQueryable()" GridTemplateColumns="1fr 1fr auto" Class="management-grid">
-            <PropertyColumn Property="@(member => member.UserId)" Title="User" Sortable="true" />
+            <PropertyColumn Property="@(member => member.UserName ?? "Unknown user")" Title="User" Sortable="true" />
             <TemplateColumn Title="Access" Context="member">@AccessText(member)</TemplateColumn>
             <TemplateColumn Title="Actions" Context="member">
                 @if (CanManage)

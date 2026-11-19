@@ -15,4 +15,5 @@ public record SetProjectAccessRequest([property: JsonRequired] bool HasAccess);
 public record ProjectMemberAccessDto(
     string UserId,
     OrganizationRole OrganizationRole,
-    bool HasExplicitAccess);
+    bool HasExplicitAccess,
+    string? UserName = null);

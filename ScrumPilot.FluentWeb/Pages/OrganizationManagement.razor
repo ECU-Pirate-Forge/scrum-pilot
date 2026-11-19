@@ -13,7 +13,7 @@
 <PageTitle>Organization Management</PageTitle>
 
 <div class="organization-management-page">
-    <AppPageHeader Title="Organization Management" Subtitle="Manage organization details, members, project access and lifecycle." />
+    <AppPageHeader Title="@(_selected?.Name ?? "Organization Management")" Subtitle="Manage organization details, members, project access and lifecycle." />
     @if (OrganizationId == 0)
     {
         <h2>Organization directory</h2>

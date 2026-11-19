@@ -58,15 +58,18 @@ publish/deploy.
 | `DevTunnels:TunnelId` | generated | Reuses a stable tunnel ID across runs |
 
 Aspire installs the `devtunnel` CLI and prompts for login when needed. The
-dashboard shows each port's public URL. Browsers reach the API through each
+dashboard shows each port's public URL. The FluentWeb tunnel's dashboard link
+opens `/fluentweb/` directly. Browsers reach the API through each
 gateway's `/{client}/_api/webapi` proxy on the origin opened in the browser,
 even if the gateway advertises a localhost address. You only need to tunnel
 the API itself for direct external callers. New invitation emails use
 `/fluentweb/accept-invitation` on the FluentWeb HTTPS tunnel when enabled,
 or the local FluentWeb HTTPS gateway otherwise. API CORS keeps its local
-gateway origins. Recipients must have access to the tunnel and sign in to
-ScrumPilot with a confirmed email matching the invitation. Prefer authenticated
-tunnels, and enable anonymous access only for data that is safe to expose.
+gateway origins. If recipients aren't signed in, FluentWeb opens the sign-in
+form and returns them to the invitation afterward. Recipients must have access
+to the tunnel and use a confirmed ScrumPilot email matching the invitation.
+Prefer authenticated tunnels, and enable anonymous access only for data that
+is safe to expose.
 
 Never commit private values or copy them into WebAssembly `wwwroot` settings,
 Docker build arguments, screenshots, telemetry, publish bundles or CI artifacts.
@@ -149,7 +152,11 @@ connection to another catalog or manually clearing registry/fence fields.
 
 Global Admin creates organizations and performs platform purge, but needs
 membership for work. Owners manage membership and implicitly access local projects;
-Members need grants tied to the current membership instance. The final Owner
+Members need grants tied to the current membership instance. In FluentWeb,
+an organization Owner can open **Manage Organization**, find the member by
+username under **<project name> access**, and select **Grant access**. Accepting
+an invitation joins the organization but does not grant project access.
+The final Owner
 cannot leave, be removed, or be demoted.
 
 Creation durably records provisioning state before external database work.

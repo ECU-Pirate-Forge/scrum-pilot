@@ -69,15 +69,25 @@ public sealed class TenantProjectAccessRepository(
         await transaction.CommitAsync(cancellationToken);
         return true;
     }
-    public async Task<IReadOnlyList<ProjectMemberAccessDto>> GetMembersAsync(int projectId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<ProjectMemberAccessDto>> GetMembersAsync(
+        int projectId, CancellationToken cancellationToken = default, bool includeUngranted = false)
     {
         if (await GetForUpdateAsync(projectId, cancellationToken) is null) return [];
         var memberships = await control.OrganizationMemberships.AsNoTracking()
-            .Where(x => x.OrganizationId == OrganizationId).ToListAsync(cancellationToken);
+            .Where(x => x.OrganizationId == OrganizationId)
+            .Select(x => new
+            {
+                x.UserId,
+                x.Role,
+                x.MembershipInstanceId,
+                UserName = control.Users.Where(user => user.Id == x.UserId).Select(user => user.UserName).FirstOrDefault()
+            }).ToListAsync(cancellationToken);
         var grants = await tenant.ProjectMemberships.AsNoTracking().Where(x => x.ProjectId == projectId).ToListAsync(cancellationToken);
-        return memberships.Where(m => m.Role == OrganizationRole.Owner || grants.Any(g => g.UserId == m.UserId && g.MembershipInstanceId == m.MembershipInstanceId))
-            .Select(m => new ProjectMemberAccessDto(m.UserId, m.Role,
-                grants.Any(g => g.UserId == m.UserId && g.MembershipInstanceId == m.MembershipInstanceId))).ToList();
+        var currentGrants = grants.Select(g => (g.UserId, g.MembershipInstanceId)).ToHashSet();
+        return memberships.Select(m => new ProjectMemberAccessDto(m.UserId, m.Role,
+                currentGrants.Contains((m.UserId, m.MembershipInstanceId)), m.UserName))
+            .Where(m => includeUngranted || m.OrganizationRole == OrganizationRole.Owner || m.HasExplicitAccess)
+            .ToList();
     }
     public async Task<ProjectAccessMutationResult> SetAccessAsync(int projectId, string userId, bool hasAccess, string grantedByUserId, DateTime grantedAt, CancellationToken cancellationToken = default)
     {

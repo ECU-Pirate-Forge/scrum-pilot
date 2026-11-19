@@ -302,7 +302,11 @@ public static class InfrastructureGraph
         if (settings.GetValue("FluentWeb", true))
         {
             tunnel.WithReference(fluentHttps);
-            return tunnel.GetEndpoint(fluentHttps);
+            var publicEndpoint = tunnel.GetEndpoint(fluentHttps);
+            builder.CreateResourceBuilder<Aspire.Hosting.DevTunnels.DevTunnelPortResource>(
+                    $"{tunnel.Resource.Name}-{fluentGateway.Resource.Name}-{fluentHttps.EndpointName}")
+                .WithUrlForEndpoint(publicEndpoint.EndpointName, url => url.Url = "/fluentweb/");
+            return publicEndpoint;
         }
         return fluentHttps;
     }
