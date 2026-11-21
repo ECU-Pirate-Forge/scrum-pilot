@@ -2,11 +2,14 @@ using System.Data;
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using ScrumPilot.Data.Context;
+using ScrumPilot.Data.Tenancy;
 using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.Data.Repositories;
 
-public sealed class OrganizationInvitationRepository(ScrumPilotContext context)
+public sealed class OrganizationInvitationRepository(
+    ScrumPilotContext context,
+    TenantStorage? tenantStorage = null)
     : IOrganizationInvitationRepository
 {
     public async Task<OrganizationInvitation> ReplacePendingAsync(
@@ -196,10 +199,11 @@ public sealed class OrganizationInvitationRepository(ScrumPilotContext context)
                     await transaction.CommitAsync(cancellationToken);
                     return InvitationAcceptanceResult.Expired;
                 }
-                if (!await context.Organizations.AnyAsync(
+                var organization = await context.Organizations.SingleOrDefaultAsync(
                         x => x.OrganizationId == invitation.OrganizationId
                              && x.DeletedAt == null,
-                        cancellationToken))
+                        cancellationToken);
+                if (organization is null)
                 {
                     return InvitationAcceptanceResult.Invalid;
                 }
@@ -213,18 +217,61 @@ public sealed class OrganizationInvitationRepository(ScrumPilotContext context)
                     return InvitationAcceptanceResult.ExistingMember;
                 }
 
+                var membershipInstanceId = Guid.NewGuid();
                 context.OrganizationMemberships.Add(new OrganizationMembership
                 {
                     OrganizationId = invitation.OrganizationId,
                     UserId = userId,
+                MembershipInstanceId = membershipInstanceId,
                     Role = invitation.Role,
                     JoinedAt = utcNow
                 });
+
+                if (tenantStorage is not null && invitation.DefaultProjectId.HasValue)
+                {
+                try
+                {
+                    using var tenant = tenantStorage.Open(organization);
+                    var projectExists = await tenant.Projects.AnyAsync(
+                        project => project.ProjectId == invitation.DefaultProjectId
+                                   && project.OrganizationId == invitation.OrganizationId,
+                        cancellationToken);
+                    if (!projectExists)
+                    {
+                        return InvitationAcceptanceResult.Invalid;
+                    }
+                    if (invitation.Role == OrganizationRole.Member)
+                    {
+                        tenant.ProjectMemberships.Add(new ProjectMembership
+                        {
+                            ProjectId = invitation.DefaultProjectId.Value,
+                            UserId = userId,
+                            MembershipInstanceId = membershipInstanceId,
+                            GrantedAt = utcNow,
+                            GrantedByUserId = invitation.InvitedByUserId
+                        });
+                        await tenant.SaveChangesAsync(cancellationToken);
+                    }
+                }
+                catch (TenantUnavailableException)
+                {
+                    return InvitationAcceptanceResult.Invalid;
+                }
+                }
+
+                var user = await context.Users.SingleAsync(
+                candidate => candidate.Id == userId,
+                cancellationToken);
+                user.DefaultOrganizationId = invitation.DefaultOrganizationId
+                ?? invitation.OrganizationId;
+                user.DefaultProjectId = invitation.DefaultProjectId;
                 invitation.Status = OrganizationInvitationStatus.Accepted;
                 invitation.AcceptedAt = utcNow;
                 await context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
-                return InvitationAcceptanceResult.Succeeded(invitation.OrganizationId);
+                return InvitationAcceptanceResult.Succeeded(
+                invitation.OrganizationId,
+                invitation.DefaultProjectId);
             }
         }
         catch (Exception exception) when (
@@ -268,5 +315,7 @@ public sealed class OrganizationInvitationRepository(ScrumPilotContext context)
         x.ExpiresAt,
         x.AcceptedAt,
         x.LastSentAt,
-        x.DeliveryError);
+        x.DeliveryError,
+        x.DefaultOrganizationId,
+        x.DefaultProjectId);
 }

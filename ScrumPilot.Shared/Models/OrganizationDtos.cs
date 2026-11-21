@@ -36,7 +36,10 @@ public record RenameOrganizationRequest(string Name);
 /// <param name="Role">Role assigned when the invitation is accepted.</param>
 public record InviteOrganizationMemberRequest(
     string Email,
-    [property: JsonRequired] OrganizationRole Role);
+    [property: JsonRequired] OrganizationRole Role,
+    int? DefaultOrganizationId = null,
+    int? DefaultProjectId = null,
+    string? Password = null);
 
 /// <summary>Request to change an organization member's role.</summary>
 /// <param name="Role">New role for the member.</param>
@@ -49,7 +52,9 @@ public record AcceptOrganizationInvitationRequest(string Token);
 
 /// <summary>Result returned after an organization invitation is accepted.</summary>
 /// <param name="OrganizationId">Identifier of the organization the user joined.</param>
-public record AcceptedOrganizationDto(int OrganizationId);
+public record AcceptedOrganizationDto(
+    int OrganizationId,
+    int? DefaultProjectId = null);
 
 /// <summary>Public projection of an organization member.</summary>
 /// <param name="OrganizationId">Organization identifier.</param>
@@ -90,4 +95,6 @@ public record OrganizationInvitationDto(
     DateTime ExpiresAt,
     DateTime? AcceptedAt,
     DateTime? LastSentAt,
-    string? DeliveryError);
+    string? DeliveryError,
+    int? DefaultOrganizationId = null,
+    int? DefaultProjectId = null);

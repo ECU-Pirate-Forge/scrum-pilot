@@ -89,12 +89,56 @@ public sealed class OrganizationManagementTests : FrontendTestBase
 
         cut.Find("input[type='email']").Change("new@example.com");
         await cut.Find("button[data-action='invite']").ClickAsync(new());
-        cut.Find("input[type='checkbox']").Change(true);
+        cut.FindAll("input[type='checkbox']").Last().Change(true);
         await cut.Find("button[data-action='promote']").ClickAsync(new());
 
         Assert.Contains(HttpRequestLog, x => x.Method == HttpMethod.Post && x.Url == "api/organizations/7/invitations");
         Assert.Contains(HttpRequestLog, x => x.Method == HttpMethod.Put && x.Url == "api/organizations/7/members/user-1/role");
         Assert.Contains("must retain an owner", cut.Markup);
+    }
+
+    [Fact]
+    public async Task CSV_invitation_input_sends_one_request_per_unique_email()
+    {
+        var invitationCount = 0;
+        HttpResponseFactory = request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (request.Method == HttpMethod.Post && path.EndsWith("/invitations"))
+            {
+                invitationCount++;
+                return Json(new OrganizationInvitationDto(
+                    invitationCount,
+                    7,
+                    $"member-{invitationCount}@example.com",
+                    "owner",
+                    OrganizationRole.Member,
+                    OrganizationInvitationStatus.Pending,
+                    DateTime.UtcNow,
+                    DateTime.UtcNow.AddDays(1),
+                    null,
+                    null,
+                    null),
+                    HttpStatusCode.Created);
+            }
+            if (path.EndsWith("/members"))
+                return Json(Array.Empty<OrganizationMemberDto>());
+            if (path.EndsWith("/invitations"))
+                return Json(Array.Empty<OrganizationInvitationDto>());
+            return Json(Array.Empty<object>());
+        };
+        var cut = Render<OrganizationMembers>(p => p
+            .Add(x => x.OrganizationId, 7)
+            .Add(x => x.CanManage, true));
+
+        cut.Find("input[type='email']").Change(
+            "first@example.com, SECOND@example.com; first@example.com\nthird@example.com");
+        await cut.Find("button[data-action='invite']").ClickAsync(new());
+
+        Assert.Equal(3, invitationCount);
+        Assert.Equal(3, HttpRequestLog.Count(x =>
+            x.Method == HttpMethod.Post && x.Url == "api/organizations/7/invitations"));
+        Assert.Contains("Invite email(s)", cut.Markup);
     }
 
     [Fact]
@@ -389,7 +433,7 @@ public sealed class OrganizationManagementTests : FrontendTestBase
             .Add(component => component.OrganizationId, 1)
             .Add(component => component.CanManage, true));
         cut.WaitForState(() => cut.Markup.Contains("member-a", StringComparison.Ordinal));
-        cut.Find("input[type='checkbox']").Change(true);
+        cut.FindAll("input[type='checkbox']").Last().Change(true);
         var mutation = cut.Find("button[data-action='promote']").ClickAsync(new());
 
         cut.Render(parameters => parameters
@@ -456,15 +500,15 @@ public sealed class OrganizationManagementTests : FrontendTestBase
         var members = Render<OrganizationMembers>(parameters => parameters
             .Add(component => component.OrganizationId, 7)
             .Add(component => component.CanManage, true));
-        members.WaitForState(() => HttpRequestLog.Count == 2);
+        members.WaitForState(() => HttpRequestLog.Count == 3);
         members.Render();
         var access = Render<ProjectAccessEditor>(parameters => parameters
             .Add(component => component.ProjectId, 12)
             .Add(component => component.CanManage, true));
-        access.WaitForState(() => HttpRequestLog.Count == 3);
+        access.WaitForState(() => HttpRequestLog.Count == 4);
         access.Render();
 
-        Assert.Equal(3, HttpRequestLog.Count);
+        Assert.Equal(4, HttpRequestLog.Count);
     }
 
     [Fact]

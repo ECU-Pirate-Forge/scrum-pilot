@@ -1,8 +1,13 @@
 using System.Net.Mail;
 using System.Security.Cryptography;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using ScrumPilot.API.Authorization;
 using ScrumPilot.API.Configuration;
+using ScrumPilot.Data.Context;
+using ScrumPilot.Data.Models;
 using ScrumPilot.Data.Repositories;
+using ScrumPilot.Data.Tenancy;
 using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.API.Services;
@@ -16,7 +21,10 @@ public sealed class OrganizationInvitationService(
     TimeProvider timeProvider,
     ILogger<OrganizationInvitationService> logger,
     IConfiguration configuration,
-    IHostEnvironment environment) : IOrganizationInvitationService
+    IHostEnvironment environment,
+    ControlPlaneContext? controlContext = null,
+    TenantStorage? tenantStorage = null,
+    UserManager<ApplicationUser>? userManager = null) : IOrganizationInvitationService
 {
     private static readonly TimeSpan Lifetime = TimeSpan.FromHours(72);
 
@@ -28,14 +36,30 @@ public sealed class OrganizationInvitationService(
         await RequireOwnerAsync(organizationId, cancellationToken);
         var (email, normalizedEmail) = ValidateEmail(request.Email);
         ValidateRole(request.Role);
+        if (request.DefaultOrganizationId.HasValue
+            && request.DefaultOrganizationId.Value != organizationId)
+        {
+            throw new OrganizationValidationException("The default organization must be the invited organization.");
+        }
+        if (request.DefaultProjectId.HasValue
+            && !await IsProjectAvailableAsync(
+                organizationId,
+                request.DefaultProjectId.Value,
+                cancellationToken))
+        {
+            throw new OrganizationValidationException("The default project is not available in the invited organization.");
+        }
+        await ProvisionAccountAsync(email, request.Password, cancellationToken);
         var (invitation, token) = CreateInvitation(
             organizationId,
             email,
             normalizedEmail,
-            request.Role);
+            request.Role,
+            request.DefaultOrganizationId ?? organizationId,
+            request.DefaultProjectId);
         await ExecuteMutationAsync(
             () => repository.ReplacePendingAsync(invitation, cancellationToken));
-        await DeliverAsync(invitation, token, cancellationToken);
+        await DeliverAsync(invitation, token, request.Password, cancellationToken);
         return ToDto(invitation);
     }
 
@@ -54,7 +78,7 @@ public sealed class OrganizationInvitationService(
     {
         await RequireOwnerAsync(organizationId, cancellationToken);
         var (replacement, token) = await ReplacePendingAsync(organizationId, invitationId, cancellationToken);
-        await DeliverAsync(replacement, token, cancellationToken);
+        await DeliverAsync(replacement, token, null, cancellationToken);
         return ToDto(replacement);
     }
 
@@ -84,7 +108,9 @@ public sealed class OrganizationInvitationService(
             organizationId,
             existing.Email,
             existing.NormalizedEmail,
-            existing.Role);
+            existing.Role,
+            existing.DefaultOrganizationId,
+            existing.DefaultProjectId);
         replacement = await ExecuteMutationAsync(() => repository.ReplaceAsync(
                           organizationId,
                           invitationId,
@@ -122,12 +148,20 @@ public sealed class OrganizationInvitationService(
         // TODO: A future change-email workflow must re-confirm the new Identity email
         // before it can become authoritative for invitation acceptance.
         var user = await userLookup.FindByIdAsync(currentUser.UserId, cancellationToken);
-        if (user is null
-            || !user.EmailConfirmed
-            || string.IsNullOrWhiteSpace(user.Email))
+        if (user is null)
         {
             throw new OrganizationForbiddenException(
                 "The invitation cannot be accepted by this account.");
+        }
+        if (!user.EmailConfirmed)
+        {
+            throw new OrganizationForbiddenException(
+                "Confirm this account's email address before accepting the invitation.");
+        }
+        if (string.IsNullOrWhiteSpace(user.Email))
+        {
+            throw new OrganizationForbiddenException(
+                "This account does not have a verified email address.");
         }
         var normalizedEmail = NormalizeEmail(user.Email);
         var result = await ExecuteMutationAsync(() => repository.AcceptAsync(
@@ -139,10 +173,12 @@ public sealed class OrganizationInvitationService(
         switch (result.Status)
         {
             case InvitationAcceptanceStatus.Success when result.OrganizationId.HasValue:
-                return new AcceptedOrganizationDto(result.OrganizationId.Value);
+                return new AcceptedOrganizationDto(
+                    result.OrganizationId.Value,
+                    result.DefaultProjectId);
             case InvitationAcceptanceStatus.EmailMismatch:
                 throw new OrganizationForbiddenException(
-                    "The invitation cannot be accepted by this account.");
+                    "Sign in with the email address that received this invitation.");
             case InvitationAcceptanceStatus.Expired:
             case InvitationAcceptanceStatus.ExistingMember:
                 throw new OrganizationConflictException(
@@ -156,11 +192,12 @@ public sealed class OrganizationInvitationService(
     private async Task DeliverAsync(
         OrganizationInvitation invitation,
         string token,
+        string? password,
         CancellationToken cancellationToken)
     {
         try
         {
-            await emailSender.SendAsync(invitation.Email, token, cancellationToken);
+            await emailSender.SendAsync(invitation.Email, token, password, cancellationToken);
         }
         catch (InvitationDeliveryException exception)
         {
@@ -173,6 +210,81 @@ public sealed class OrganizationInvitationService(
         invitation.LastSentAt = UtcNow;
         invitation.DeliveryError = null;
         await TryRecordDeliveryAsync(invitation, cancellationToken);
+    }
+
+    private async Task ProvisionAccountAsync(
+        string email,
+        string? password,
+        CancellationToken cancellationToken)
+    {
+        if (userManager is null) return;
+
+        var user = await userManager.FindByEmailAsync(email);
+        if (user is null)
+        {
+            if (string.IsNullOrWhiteSpace(password))
+            {
+                throw new OrganizationValidationException(
+                    "A password is required when creating a new invitation account.");
+            }
+            user = new ApplicationUser
+            {
+                UserName = email,
+                Email = email,
+                EmailConfirmed = true
+            };
+            var created = await userManager.CreateAsync(user, password);
+            if (!created.Succeeded)
+            {
+                throw new OrganizationValidationException(
+                    "The invitation account could not be created: "
+                    + string.Join("; ", created.Errors.Select(error => error.Description)));
+            }
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(password))
+        {
+            var resetToken = await userManager.GeneratePasswordResetTokenAsync(user);
+            var reset = await userManager.ResetPasswordAsync(user, resetToken, password);
+            if (!reset.Succeeded)
+            {
+                throw new OrganizationValidationException(
+                    "The invitation account password could not be set: "
+                    + string.Join("; ", reset.Errors.Select(error => error.Description)));
+            }
+        }
+    }
+
+    private async Task<bool> IsProjectAvailableAsync(
+        int organizationId,
+        int projectId,
+        CancellationToken cancellationToken)
+    {
+        if (controlContext is null || tenantStorage is null) return true;
+        var organization = await controlContext.Organizations
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                candidate => candidate.OrganizationId == organizationId,
+                cancellationToken);
+        if (organization is null
+            || organization.DeletedAt.HasValue
+            || organization.StorageState != "Active")
+        {
+            return false;
+        }
+        try
+        {
+            using var tenant = tenantStorage.Open(organization);
+            return await tenant.Projects.AnyAsync(
+                project => project.ProjectId == projectId
+                           && project.OrganizationId == organizationId,
+                cancellationToken);
+        }
+        catch (TenantUnavailableException)
+        {
+            return false;
+        }
     }
 
     private async Task TryRecordDeliveryAsync(
@@ -199,7 +311,9 @@ public sealed class OrganizationInvitationService(
         int organizationId,
         string email,
         string normalizedEmail,
-        OrganizationRole role)
+        OrganizationRole role,
+        int? defaultOrganizationId,
+        int? defaultProjectId)
     {
         var tokenBytes = RandomNumberGenerator.GetBytes(32);
         var token = Base64UrlEncode(tokenBytes);
@@ -211,6 +325,8 @@ public sealed class OrganizationInvitationService(
             TokenHash = Convert.ToHexString(SHA256.HashData(tokenBytes)),
             InvitedByUserId = currentUser.UserId,
             Role = role,
+            DefaultOrganizationId = defaultOrganizationId,
+            DefaultProjectId = defaultProjectId,
             Status = OrganizationInvitationStatus.Pending,
             CreatedAt = UtcNow,
             ExpiresAt = UtcNow.Add(Lifetime)

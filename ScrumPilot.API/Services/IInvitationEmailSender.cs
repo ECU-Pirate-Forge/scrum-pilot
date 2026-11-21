@@ -5,6 +5,7 @@ public interface IInvitationEmailSender
     Task SendAsync(
         string email,
         string token,
+        string? password = null,
         CancellationToken cancellationToken = default);
 }
 

@@ -239,6 +239,8 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
         await _service.AcceptAsync(new(newToken!));
         Assert.True(await _context.OrganizationMemberships.AnyAsync(x =>
             x.UserId == "member" && x.Role == OrganizationRole.Member));
+        var membership = await _context.OrganizationMemberships.SingleAsync(x => x.UserId == "member");
+        Assert.NotEqual(Guid.Empty, membership.MembershipInstanceId);
     }
 
     [Fact]
@@ -592,7 +594,11 @@ public sealed class OrganizationInvitationServiceTests : IAsyncDisposable
         public bool InvitationWasPersisted { get; private set; }
         public Func<Task<bool>>? InvitationPersisted { get; set; }
 
-        public async Task SendAsync(string email, string token, CancellationToken cancellationToken = default)
+        public async Task SendAsync(
+            string email,
+            string token,
+            string? password = null,
+            CancellationToken cancellationToken = default)
         {
             SendCount++;
             Token = token;

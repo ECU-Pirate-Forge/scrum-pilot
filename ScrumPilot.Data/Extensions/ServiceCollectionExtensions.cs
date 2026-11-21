@@ -60,7 +60,9 @@ namespace ScrumPilot.Data.Extensions
             services.AddScoped<IOrganizationRepository>(p => new OrganizationRepository(p.GetRequiredService<ControlPlaneContext>(),
                 p.GetServices<ITenantLifecycleObserver>())
             { Operations = p.GetRequiredService<TenantOperations>(), Storage = p.GetRequiredService<TenantStorage>() });
-            services.AddScoped<IOrganizationInvitationRepository>(p => new OrganizationInvitationRepository(p.GetRequiredService<ControlPlaneContext>()));
+            services.AddScoped<IOrganizationInvitationRepository>(p => new OrganizationInvitationRepository(
+                p.GetRequiredService<ControlPlaneContext>(),
+                p.GetRequiredService<TenantStorage>()));
 
             return services;
         }

@@ -166,6 +166,52 @@ public class ManagementPageTests : FluentFrontendTestBase
     }
 
     [Fact]
+    public void CSV_invitation_input_sends_one_request_per_unique_email()
+    {
+        const string path = "api/organizations/7/invitations";
+        var invitedEmails = new List<string>();
+        Http.OnGetJson("api/organizations/7/members", Array.Empty<OrganizationMemberDto>());
+        Http.OnGetJson(path, Array.Empty<OrganizationInvitationDto>());
+        Http.On(HttpMethod.Post, path, (_, body) =>
+        {
+            using var document = JsonDocument.Parse(body!);
+            invitedEmails.Add(document.RootElement.GetProperty("email").GetString()!);
+            return new HttpResponseMessage(HttpStatusCode.Created)
+            {
+                Content = System.Net.Http.Json.JsonContent.Create(
+                    new OrganizationInvitationDto(
+                        invitedEmails.Count,
+                        7,
+                        invitedEmails[^1],
+                        "owner",
+                        OrganizationRole.Member,
+                        OrganizationInvitationStatus.Pending,
+                        DateTime.UnixEpoch,
+                        DateTime.UnixEpoch.AddDays(3),
+                        null,
+                        null,
+                        null))
+            };
+        });
+
+        using var cut = Render<OrganizationMembers>(parameters => parameters
+            .Add(p => p.OrganizationId, 7)
+            .Add(p => p.CanManage, true));
+
+        cut.Find("fluent-text-input").Change(
+            "first@example.com, SECOND@example.com; first@example.com\nthird@example.com");
+        cut.Find("fluent-button[data-action='invite']").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(
+                ["first@example.com", "SECOND@example.com", "third@example.com"],
+                invitedEmails);
+            Assert.Contains("Invite email(s)", cut.Markup);
+        });
+    }
+
+    [Fact]
     public void Failed_email_delivery_refreshes_pending_invitations_for_manual_sharing()
     {
         const string path = "api/organizations/7/invitations";

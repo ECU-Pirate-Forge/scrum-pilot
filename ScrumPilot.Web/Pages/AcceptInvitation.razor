@@ -86,7 +86,12 @@ else
                     item => item.OrganizationId == accepted.OrganizationId);
                 if (organization is not null)
                 {
-                    Navigation.NavigateTo(OrganizationRoutes.Page(accepted.OrganizationId, "organization-management"), replace: true);
+                    Navigation.NavigateTo(
+                        OrganizationRoutes.Page(
+                            accepted.OrganizationId,
+                            accepted.DefaultProjectId.HasValue ? "backlog" : "organization-management",
+                            accepted.DefaultProjectId),
+                        replace: true);
                     return;
                 }
             }
@@ -100,11 +105,17 @@ else
             {
             }
 
-            Navigation.NavigateTo(OrganizationRoutes.Page(accepted.OrganizationId, "organization-management"), replace: true);
+            Navigation.NavigateTo(
+                OrganizationRoutes.Page(
+                    accepted.OrganizationId,
+                    accepted.DefaultProjectId.HasValue ? "backlog" : "organization-management",
+                    accepted.DefaultProjectId),
+                replace: true);
             return;
         }
         _severity = Severity.Error;
-        _message = response.StatusCode switch
+        var detail = await ErrorAsync(response);
+        _message = detail ?? response.StatusCode switch
         {
             System.Net.HttpStatusCode.BadRequest => "This invitation is invalid or expired. Ask an owner for a new invitation.",
             System.Net.HttpStatusCode.Forbidden => "This invitation cannot be accepted by the signed-in account.",
@@ -113,4 +124,12 @@ else
             _ => "The invitation could not be accepted. Try again."
         };
     }
+
+    private static async Task<string?> ErrorAsync(HttpResponseMessage response)
+    {
+        try { return (await response.Content.ReadFromJsonAsync<ProblemDetails>())?.Detail; }
+        catch { return null; }
+    }
+
+    private sealed class ProblemDetails { public string? Detail { get; set; } }
 }

@@ -67,6 +67,7 @@ public sealed class OrganizationInvitationControllerTests
         await sender.Received(1).SendAsync(
             "member@example.com",
             Arg.Any<string>(),
+            Arg.Any<string?>(),
             Arg.Any<CancellationToken>());
     }
 
@@ -78,6 +79,7 @@ public sealed class OrganizationInvitationControllerTests
         sender.SendAsync(
                 Arg.Any<string>(),
                 Arg.Any<string>(),
+                Arg.Any<string?>(),
                 Arg.Any<CancellationToken>())
             .Returns<Task>(_ => throw new InvitationDeliveryException("Provider returned 503."));
         var controller = CreateController(CreateService(repository, sender));

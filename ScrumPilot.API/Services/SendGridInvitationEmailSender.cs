@@ -52,6 +52,7 @@ public sealed class SendGridInvitationEmailSender(
     public async Task SendAsync(
         string email,
         string token,
+        string? password = null,
         CancellationToken cancellationToken = default)
     {
         SendGridOptions configuration;
@@ -67,13 +68,19 @@ public sealed class SendGridInvitationEmailSender(
                 exception);
         }
         var url = InvitationLink.Build(new Uri(configuration.InvitationBaseUrl), token);
+        var passwordText = string.IsNullOrWhiteSpace(password)
+            ? string.Empty
+            : $"\nTemporary password: {password}\n";
         var message = new InvitationEmailMessage(
             configuration.FromEmail,
             configuration.FromName,
             email,
             "You are invited to ScrumPilot",
-            $"Accept your ScrumPilot organization invitation: {url}",
-            $"<p>You are invited to join an organization in ScrumPilot.</p><p><a href=\"{WebUtility.HtmlEncode(url)}\">Accept invitation</a></p>");
+            $"Accept your ScrumPilot organization invitation: {url}{passwordText}",
+            $"<p>You are invited to join an organization in ScrumPilot.</p><p><a href=\"{WebUtility.HtmlEncode(url)}\">Accept invitation</a></p>"
+                + (string.IsNullOrWhiteSpace(password)
+                    ? string.Empty
+                    : $"<p>Temporary password: <strong>{WebUtility.HtmlEncode(password)}</strong></p>"));
         HttpStatusCode statusCode;
         try
         {

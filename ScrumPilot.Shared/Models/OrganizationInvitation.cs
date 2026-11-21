@@ -24,6 +24,12 @@ public class OrganizationInvitation
     /// <summary>Role assigned when the invitation is accepted.</summary>
     public required OrganizationRole Role { get; set; }
 
+    /// <summary>Organization selected as the recipient's default after acceptance.</summary>
+    public int? DefaultOrganizationId { get; set; }
+
+    /// <summary>Project selected as the recipient's default after acceptance.</summary>
+    public int? DefaultProjectId { get; set; }
+
     /// <summary>Current invitation lifecycle state.</summary>
     public OrganizationInvitationStatus Status { get; set; }
 

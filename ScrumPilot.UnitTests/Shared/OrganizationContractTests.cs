@@ -93,6 +93,36 @@ public class OrganizationContractTests
     }
 
     [Fact]
+    public void InviteOrganizationMemberRequest_DefaultsRoundTrip()
+    {
+        var request = new InviteOrganizationMemberRequest(
+            "member@example.com",
+            OrganizationRole.Member,
+            7,
+            44,
+            "Temporary!42");
+
+        var json = JsonSerializer.Serialize(request);
+        var result = JsonSerializer.Deserialize<InviteOrganizationMemberRequest>(json);
+
+        Assert.NotNull(result);
+        Assert.Equal(7, result.DefaultOrganizationId);
+        Assert.Equal(44, result.DefaultProjectId);
+        Assert.Equal("Temporary!42", result.Password);
+    }
+
+    [Fact]
+    public void OrganizationInvitationEmailParser_SplitsDeduplicatesAndTrimsEmails()
+    {
+        var result = OrganizationInvitationEmailParser.Parse(
+            " one@example.com, TWO@example.com;\r\none@example.com \n three@example.com ");
+
+        Assert.Equal(
+            ["one@example.com", "TWO@example.com", "three@example.com"],
+            result);
+    }
+
+    [Fact]
     public void UpdateOrganizationMemberRoleRequest_MissingRoleThrowsJsonException()
     {
         Assert.Throws<JsonException>(

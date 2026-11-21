@@ -6,11 +6,21 @@
     @if (CanManage)
     {
         <div class="d-flex gap-2 align-center mb-3">
-            <MudTextField @bind-Value="_email" InputType="InputType.Email" Label="Invite email" />
+            <MudTextField @bind-Value="_email" InputType="InputType.Email"
+                          Label="Invite email(s)" Placeholder="one@example.com, two@example.com" />
+            <MudTextField @bind-Value="_password" InputType="InputType.Password"
+                          Label="Default password" Placeholder="For new accounts" />
             <MudSelect @bind-Value="_inviteRole" Label="Role">
                 <MudSelectItem Value="OrganizationRole.Member">Member</MudSelectItem>
                 <MudSelectItem Value="OrganizationRole.Owner">Owner</MudSelectItem>
             </MudSelect>
+            <MudSelect T="int?" @bind-Value="_defaultProjectId" Label="Default project" Clearable="true">
+                @foreach (var project in _projects)
+                {
+                    <MudSelectItem T="int?" Value="@project.ProjectId">@project.ProjectName</MudSelectItem>
+                }
+            </MudSelect>
+            <MudCheckBox @bind-Value="_setDefaultOrganization" Label="Set as default organization" />
             <MudButton data-action="invite" OnClick="InviteAsync">Invite</MudButton>
         </div>
     }
@@ -70,6 +80,10 @@
     private long _generation;
     private bool _disposed;
     private string _email = "";
+    private string _password = "";
+    private int? _defaultProjectId;
+    private bool _setDefaultOrganization = true;
+    private List<Project> _projects = [];
     private OrganizationRole _inviteRole = OrganizationRole.Member;
     private string? _error;
 
@@ -111,6 +125,23 @@
             _confirmedMembers.Clear();
             foreach (var member in _members) _confirmedMembers[member.UserId] = false;
 
+            try
+            {
+                var projects = key.CanManage
+                    ? await Http.GetFromJsonAsync<List<Project>>(
+                        $"api/organizations/{key.OrganizationId}/projects", token) ?? []
+                    : [];
+                if (!IsCurrent(key, generation)) return;
+                _projects = projects;
+            }
+            catch (Exception ex) when (ex is HttpRequestException
+                                        or System.Text.Json.JsonException
+                                        or NotSupportedException)
+            {
+                if (!IsCurrent(key, generation)) return;
+                _projects = [];
+            }
+
             var invitations = key.CanManage
                 ? await Http.GetFromJsonAsync<List<OrganizationInvitationDto>>(
                     $"api/organizations/{key.OrganizationId}/invitations", token) ?? []
@@ -129,14 +160,48 @@
 
     private async Task InviteAsync()
     {
-        if (string.IsNullOrWhiteSpace(_email)) { _error = "Email is required."; return; }
-        var email = _email.Trim();
+        var emails = OrganizationInvitationEmailParser.Parse(_email);
+        if (emails.Count == 0) { _error = "At least one email is required."; return; }
         var role = _inviteRole;
-        await MutateAsync(
-            organizationId => Http.PostAsJsonAsync($"api/organizations/{organizationId}/invitations",
-                new InviteOrganizationMemberRequest(email, role)),
-            "Unable to send invitation.",
-            () => _email = "");
+        var key = (OrganizationId, CanManage);
+        var generation = _generation;
+        if (!key.CanManage || !IsCurrent(key, generation)) return;
+
+        _error = null;
+        try
+        {
+            for (var i = 0; i < emails.Count; i++)
+            {
+                var response = await Http.PostAsJsonAsync(
+                    $"api/organizations/{key.OrganizationId}/invitations",
+                    new InviteOrganizationMemberRequest(
+                        emails[i],
+                        role,
+                        _setDefaultOrganization ? key.OrganizationId : null,
+                        _defaultProjectId,
+                        string.IsNullOrWhiteSpace(_password) ? null : _password));
+                if (!IsCurrent(key, generation)) return;
+                if (!response.IsSuccessStatusCode)
+                {
+                    var error = await ErrorAsync(response, "Unable to send invitation.");
+                    if (IsCurrent(key, generation))
+                    {
+                        _email = string.Join(", ", emails.Skip(i));
+                        await ReloadAsync(key);
+                        if (IsCurrent(key, _generation)) _error = error;
+                    }
+                    return;
+                }
+            }
+
+            _email = "";
+            _password = "";
+            await ReloadAsync(key);
+        }
+        catch (HttpRequestException)
+        {
+            if (IsCurrent(key, generation)) _error = "Unable to send invitation.";
+        }
     }
 
     private Task ChangeRoleAsync(OrganizationMemberDto member, OrganizationRole role) =>

@@ -2,6 +2,7 @@ using System.Net;
 using Bunit;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
+using ScrumPilot.Client;
 using ScrumPilot.Shared.Models;
 using ScrumPilot.Web.Pages;
 using ScrumPilot.Web.Services;
@@ -31,7 +32,7 @@ public sealed class AcceptInvitationTests : FrontendTestBase
         HttpResponseFactory = request => request.Method == HttpMethod.Post
             ? new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent("""{"organizationId":7}""")
+                Content = new StringContent("""{"organizationId":7,"defaultProjectId":44}""")
             }
             : new HttpResponseMessage(HttpStatusCode.OK)
             {
@@ -46,7 +47,9 @@ public sealed class AcceptInvitationTests : FrontendTestBase
         navigation.NavigateTo("/accept-invitation?token=one-time");
 
         var cut = Render<AcceptInvitation>();
-        cut.WaitForState(() => new Uri(navigation.Uri).AbsolutePath == "/organizations/7/organization-management");
+        cut.WaitForState(() =>
+            new Uri(navigation.Uri).AbsolutePath == "/organizations/7/backlog"
+            && OrganizationRoutes.ProjectId(new Uri(navigation.Uri)) == 44);
 
         Assert.Contains(HttpRequestLog, x => x.Method == HttpMethod.Post && x.Url == "api/organization-invitations/accept");
         Assert.DoesNotContain("token=", navigation.Uri);

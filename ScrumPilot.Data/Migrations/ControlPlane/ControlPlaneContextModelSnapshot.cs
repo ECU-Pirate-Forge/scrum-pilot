@@ -17,7 +17,7 @@ namespace ScrumPilot.Data.Migrations.ControlPlane
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.14")
+                .HasAnnotation("ProductVersion", "10.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -292,7 +292,8 @@ namespace ScrumPilot.Data.Migrations.ControlPlane
 
                     b.HasIndex("OrganizationId", "StorageKey", "ProjectId");
 
-                    b.ToTable("GitHubRepositoryRegistrations");
+                    b.ToTable("GitHubRepositoryRegistrations", (string)null);
+
                     b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
@@ -417,6 +418,12 @@ namespace ScrumPilot.Data.Migrations.ControlPlane
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<int?>("DefaultOrganizationId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DefaultProjectId")
+                        .HasColumnType("int");
+
                     b.Property<string>("DeliveryError")
                         .HasColumnType("nvarchar(max)");
 
@@ -539,7 +546,8 @@ namespace ScrumPilot.Data.Migrations.ControlPlane
 
                     b.HasIndex("RegistrationId", "PullRequestNumber");
 
-                    b.ToTable("PullRequestScopeAttempts");
+                    b.ToTable("PullRequestScopeAttempts", (string)null);
+
                     b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 

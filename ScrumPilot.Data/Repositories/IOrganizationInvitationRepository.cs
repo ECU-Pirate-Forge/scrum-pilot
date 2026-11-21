@@ -38,10 +38,11 @@ public interface IOrganizationInvitationRepository
 
 public readonly record struct InvitationAcceptanceResult(
     InvitationAcceptanceStatus Status,
-    int? OrganizationId = null)
+    int? OrganizationId = null,
+    int? DefaultProjectId = null)
 {
-    public static InvitationAcceptanceResult Succeeded(int organizationId) =>
-        new(InvitationAcceptanceStatus.Success, organizationId);
+    public static InvitationAcceptanceResult Succeeded(int organizationId, int? defaultProjectId) =>
+        new(InvitationAcceptanceStatus.Success, organizationId, defaultProjectId);
 
     public static InvitationAcceptanceResult Invalid =>
         new(InvitationAcceptanceStatus.Invalid);
