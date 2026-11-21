@@ -129,7 +129,7 @@ FROM @Users;
 IF EXISTS (
     SELECT 1
     FROM #UserInput
-    WHERE Email = N'' 
+    WHERE Email = N''
        OR OrganizationRole NOT IN (N'Owner', N'Member')
 )
    THROW 50105, 'Every listed user requires a valid email and Owner or Member role.', 1;
