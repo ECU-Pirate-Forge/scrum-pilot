@@ -36,7 +36,7 @@ public sealed class PlanningErrorFilter(ILogger<PlanningErrorFilter> logger) : I
                 or DbUpdateException { InnerException: Microsoft.Data.SqlClient.SqlException { Number: 1205 or 1222 or 2601 or 2627 or 3960 or 51001 } }
                 => (409, "Planning data is being updated; reload and retry"),
             InvalidOperationException => (409, "Planning operation cannot be completed"),
-            JsonException => (502, "The AI provider returned an invalid planning contract"),
+            JsonException => (400, "The AI provider returned an invalid planning contract"),
             HttpRequestException => (502, "A planning integration is unavailable"),
             TaskCanceledException => (408, "The planning request was cancelled or timed out"),
             _ => (0, "")

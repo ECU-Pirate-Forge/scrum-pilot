@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using ScrumPilot.Data.Tenancy;
 using ScrumPilot.API.Configuration;
+using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.UnitTests.Backend.Configuration;
 
@@ -36,6 +37,31 @@ public sealed class ConfigurationContractTests
         var connection = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(storage.OrganizationConnectionString(key));
         Assert.Equal("scrumpilot_org_" + key, connection.InitialCatalog);
         Assert.NotEqual("untrusted_template_catalog", connection.InitialCatalog);
+    }
+
+    [Theory]
+    [InlineData("Pulse", "scrumpilot_org_pulse")]
+    [InlineData(" Software Architecture - Group 0 ", "scrumpilot_org_software_architecture_group_0")]
+    [InlineData("SENG3000", "scrumpilot_org_seng3000")]
+    [InlineData("A___B", "scrumpilot_org_a_b")]
+    public void OrganizationNamesProduceSafeCatalogNames(string name, string expected) =>
+        Assert.Equal(expected, TenantStorage.CatalogFromName(name));
+
+    [Fact]
+    public void CatalogNamesRejectEmptyAndOverlongSlugs()
+    {
+        Assert.Throws<ArgumentException>(() => TenantStorage.CatalogFromName("\u2603"));
+        Assert.Equal(128, TenantStorage.CatalogFromName(new string('a', 113)).Length);
+        Assert.Throws<ArgumentException>(() => TenantStorage.CatalogFromName(new string('a', 114)));
+    }
+
+    [Fact]
+    public void PersistedCatalogDoesNotChangeWhenDisplayNameChanges()
+    {
+        var storage = new TenantStorage(Configuration());
+        var organization = new Organization { Name = "Renamed", NormalizedName = "RENAMED", CatalogName = "scrumpilot_org_pulse" };
+        var connection = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(storage.OrganizationConnectionString(organization));
+        Assert.Equal("scrumpilot_org_pulse", connection.InitialCatalog);
     }
 
     [Theory]

@@ -1,10 +1,12 @@
 using System.Net;
 using System.Text.Json;
 using Bunit;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.JSInterop;
 using NSubstitute;
 using ScrumPilot.FluentWeb.Components.Organizations;
+using ScrumPilot.FluentWeb.Components.ProjectManagement;
 using ScrumPilot.FluentWeb.Pages;
 using ScrumPilot.FluentWeb.Services;
 using ScrumPilot.FluentWeb.Tests.TestHelpers;
@@ -40,6 +42,35 @@ public class ManagementPageTests : FluentFrontendTestBase
         cut.WaitForAssertion(() => Assert.Contains("Apollo", cut.Markup));
         Assert.Contains("Migration work", cut.Markup);
         Assert.DoesNotContain("mud-", cut.Markup, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Member_can_add_and_edit_sprints()
+    {
+        var sprint = new Sprint
+        {
+            SprintId = 3,
+            ProjectId = 44,
+            SprintTitle = "Sprint 3",
+            SprintGoal = "Improve delivery",
+            IsOpen = true,
+        };
+        var created = (Sprint?)null;
+        using var cut = Render<SprintManagementPanel>(parameters => parameters
+            .Add(p => p.Sprints, new[] { sprint })
+            .Add(p => p.CanManageSprints, true)
+            .Add(p => p.OnCreate, EventCallback.Factory.Create<Sprint>(this, value => created = value)));
+
+        Assert.Contains("Add sprint", cut.Markup);
+        Assert.Contains("Edit", cut.Markup);
+
+        cut.FindAll("fluent-button").First(button => button.TextContent.Contains("Add sprint", StringComparison.OrdinalIgnoreCase)).Click();
+        cut.FindAll("fluent-text-input")[0].Change("Sprint 4");
+        cut.FindAll("fluent-textarea")[0].Change("Prepare release");
+        cut.FindAll("fluent-button").First(button => button.TextContent.Contains("Save sprint", StringComparison.OrdinalIgnoreCase)).Click();
+
+        Assert.NotNull(created);
+        Assert.Equal("Sprint 4", created.SprintTitle);
     }
 
     [Fact]

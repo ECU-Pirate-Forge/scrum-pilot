@@ -130,6 +130,66 @@ public sealed class TenantStorageTests : IDisposable
         Assert.Equal(2, await Control.TenantBackups.CountAsync());
     }
     [Fact]
+    public async Task RenameCatalog_PreservesWorkAndRestoresPreRenameBackup()
+    {
+        var org = await Create("Rename " + Guid.NewGuid().ToString("N"));
+        await Project(org, "Before rename");
+        var backup = await Operations.BackupAsync(org.OrganizationId);
+        var oldCatalog = TenantStorage.Catalog(org.StorageKey);
+        await Operations.RenameCatalogAsync(org.OrganizationId);
+        using var admin = new SqlServerAdministrationContext(Storage);
+        Assert.False(await admin.ExistsAsync(oldCatalog));
+        Assert.Equal(TenantStorage.CatalogFromName(org.Name), org.CatalogName);
+        Assert.False(org.CatalogRenamePending);
+        using (var tenant = Storage.Open(org))
+        {
+            Assert.Equal("Before rename", (await tenant.Projects.SingleAsync()).ProjectName);
+            await tenant.Projects.ExecuteDeleteAsync();
+        }
+        await Operations.RestoreAsync(org.OrganizationId, backup);
+        using var restored = Storage.Open(org);
+        Assert.Equal("Before rename", (await restored.Projects.SingleAsync()).ProjectName);
+    }
+
+    [Fact]
+    public async Task InterruptedCatalogRename_RemainsFencedAndCanResume()
+    {
+        var org = await Create("Retry " + Guid.NewGuid().ToString("N"));
+        var interrupted = new TenantOperations(Control, Storage, [new FailingRenameObserver()]);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => interrupted.RenameCatalogAsync(org.OrganizationId));
+        Assert.True(org.CatalogRenamePending);
+        Assert.Equal("Maintenance", org.StorageState);
+        Assert.Throws<TenantUnavailableException>(() => Storage.Open(org));
+        await Assert.ThrowsAsync<TenantUnavailableException>(() => Operations.UpgradeAsync(org.OrganizationId));
+        await Operations.RenameCatalogAsync(org.OrganizationId);
+        Assert.False(org.CatalogRenamePending);
+        using var tenant = Storage.Open(org);
+        TenantStorage.Verify(tenant, org);
+    }
+
+    [Fact]
+    public async Task CatalogRename_ResumesAfterSqlRenameAlreadyCommitted()
+    {
+        var org = await Create("Committed " + Guid.NewGuid().ToString("N"));
+        var source = TenantStorage.Catalog(org.StorageKey);
+        org.CatalogName = TenantStorage.CatalogFromName(org.Name);
+        org.CatalogRenamePending = true;
+        org.StorageState = "Maintenance";
+        await Control.SaveChangesAsync();
+        using (var admin = new SqlServerAdministrationContext(Storage))
+            await admin.RenameAsync(source, org.CatalogName, default);
+        await Operations.RenameCatalogAsync(org.OrganizationId);
+        Assert.False(org.CatalogRenamePending);
+        using var tenant = Storage.Open(org);
+        TenantStorage.Verify(tenant, org);
+    }
+
+    private sealed class FailingRenameObserver : ITenantLifecycleObserver
+    {
+        public Task OnDrainedAsync(int organizationId, string storageKey, TenantLifecycleOperation operation, CancellationToken ct) =>
+            throw new InvalidOperationException("Simulated interruption.");
+    }
+    [Fact]
     public async Task InterruptedRestore_ThenControlledMigrate_ClearsOldGrantsBeforeReactivation()
     {
         var org = await Create("Recovery"); var project = await Project(org);

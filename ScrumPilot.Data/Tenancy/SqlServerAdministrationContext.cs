@@ -3,6 +3,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using ScrumPilot.Data.Context;
+using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.Data.Tenancy;
 
@@ -58,6 +59,7 @@ public sealed class SqlServerAdministrationContext : DbContext
         return builder.Options;
     }
     public OrganizationContext OpenOrganization(string key) => new(CatalogOptions<OrganizationContext>(TenantStorage.Catalog(key)));
+    public OrganizationContext OpenOrganization(Organization organization) => new(CatalogOptions<OrganizationContext>(TenantStorage.Catalog(organization)));
     public OrganizationContext OpenStaging(string catalog) => new(CatalogOptions<OrganizationContext>(catalog));
     public ControlPlaneContext OpenControl() => new(CatalogOptions<ControlPlaneContext>(ControlCatalog));
     [SuppressMessage("Security", "EF1002", Justification = "Catalog names are allowlisted; configured login names are bracket-escaped and literal-escaped.")]
@@ -90,12 +92,48 @@ public sealed class SqlServerAdministrationContext : DbContext
     public async Task<bool> BackupFileExistsAsync(string serverPath, CancellationToken ct) =>
         await Database.SqlQuery<int>($"SELECT CAST(file_exists AS int) AS [Value] FROM sys.dm_os_file_exists({serverPath})").SingleAsync(ct) == 1;
     [SuppressMessage("Security", "EF1002", Justification = "Staging catalog names are allowlisted; backup, logical-file and server paths are escaped by Literal.")]
-    public async Task RestoreStagingAsync(string original, string staging, string serverPath, CancellationToken ct)
+    public async Task RestoreStagingAsync(string staging, string serverPath, CancellationToken ct)
     {
         var dataPath = await Database.SqlQueryRaw<string>("SELECT CAST(SERVERPROPERTY('InstanceDefaultDataPath') AS nvarchar(4000)) AS [Value]").SingleAsync(ct);
         var logPath = await Database.SqlQueryRaw<string>("SELECT CAST(SERVERPROPERTY('InstanceDefaultLogPath') AS nvarchar(4000)) AS [Value]").SingleAsync(ct);
+        var files = new List<(string Name, string Type)>();
+        await Database.OpenConnectionAsync(ct);
+        try
+        {
+            await using var command = Database.GetDbConnection().CreateCommand();
+            command.CommandText = $"RESTORE FILELISTONLY FROM DISK = {Literal(serverPath)}";
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+                files.Add((reader.GetString(reader.GetOrdinal("LogicalName")), reader.GetString(reader.GetOrdinal("Type"))));
+        }
+        finally { await Database.CloseConnectionAsync(); }
+        if (files.Count == 0 || files.Any(file => file.Type is not ("D" or "L")))
+            throw new InvalidOperationException("The backup contains unsupported or missing database files.");
+        var moves = string.Join(", ", files.Select((file, index) =>
+            $"MOVE {Literal(file.Name)} TO {Literal((file.Type == "L" ? logPath : dataPath) + staging + "_" + index + (file.Type == "L" ? ".ldf" : ".mdf"))}"));
         await Database.ExecuteSqlRawAsync(
-            $"RESTORE DATABASE {Identifier(staging)} FROM DISK = {Literal(serverPath)} WITH CHECKSUM, MOVE {Literal(original)} TO {Literal(dataPath + staging + ".mdf")}, MOVE {Literal(original + "_log")} TO {Literal(logPath + staging + "_log.ldf")}", ct);
+            $"RESTORE DATABASE {Identifier(staging)} FROM DISK = {Literal(serverPath)} WITH CHECKSUM, {moves}", ct);
+    }
+    [SuppressMessage("Security", "EF1002", Justification = "Both catalog identifiers pass the strict Identifier allowlist.")]
+    public async Task RenameAsync(string source, string destination, CancellationToken ct)
+    {
+        await Database.OpenConnectionAsync(ct);
+        try
+        {
+            await Database.ExecuteSqlRawAsync($"ALTER DATABASE {Identifier(source)} SET SINGLE_USER WITH ROLLBACK IMMEDIATE", ct);
+            await Database.ExecuteSqlRawAsync($"ALTER DATABASE {Identifier(source)} MODIFY NAME = {Identifier(destination)}", ct);
+            await Database.ExecuteSqlRawAsync($"ALTER DATABASE {Identifier(destination)} SET MULTI_USER", ct);
+        }
+        finally
+        {
+            var oldExists = await ExistsAsync(source, CancellationToken.None);
+            var newExists = await ExistsAsync(destination, CancellationToken.None);
+            if (oldExists)
+                await Database.ExecuteSqlRawAsync($"ALTER DATABASE {Identifier(source)} SET MULTI_USER", CancellationToken.None);
+            else if (newExists)
+                await Database.ExecuteSqlRawAsync($"ALTER DATABASE {Identifier(destination)} SET MULTI_USER", CancellationToken.None);
+            await Database.CloseConnectionAsync();
+        }
     }
     [SuppressMessage("Security", "EF1002", Justification = "RESTORE uses an allowlisted catalog identifier and a single-quote-escaped Literal path.")]
     public async Task RestoreAsync(string catalog, string serverPath, CancellationToken ct)

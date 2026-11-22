@@ -8,6 +8,13 @@ BEFORE RUNNING:
 
 This script does not open or inspect organization databases.
 */
+-- select * from Organizations;
+-- select * from AspNetUsers where id = 'b18f31fe-3303-406d-96b9-37b3dc2da0d4';
+-- select * from OrganizationMemberships where userId = 'b18f31fe-3303-406d-96b9-37b3dc2da0d4';
+-- select * from Projects
+update dbo.AspNetUsers
+set DefaultOrganizationId = 1002
+where Id = 'b18f31fe-3303-406d-96b9-37b3dc2da0d4';
 
 SET NOCOUNT ON;
 SET ANSI_NULLS ON;
@@ -15,8 +22,8 @@ SET QUOTED_IDENTIFIER ON;
 USE [scrumpilot_control];
 GO
 
-DECLARE @Email nvarchar(256) = NULL;
-DECLARE @OrganizationId int = NULL;
+DECLARE @Email nvarchar(256) = 'dietrickb23@ecu.edu';
+DECLARE @OrganizationId int = 1002;
 
 DECLARE @NormalizedEmail nvarchar(256);
 IF @Email IS NULL

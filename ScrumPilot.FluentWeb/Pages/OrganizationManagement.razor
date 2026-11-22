@@ -1,5 +1,6 @@
 @page "/organization-management"
 @page "/organizations/{OrganizationId:int}/organization-management"
+@attribute [Authorize]
 @implements IDisposable
 @using System.Security.Claims
 @using ScrumPilot.FluentWeb.Components.Organizations
@@ -160,11 +161,15 @@
         var token = cancellation.Token;
         try
         {
-            var organizations = await Http.GetFromJsonAsync<List<OrganizationSummaryDto>>("api/organizations", token) ?? [];
+            var organizations = await GetJsonWithRetryAsync<List<OrganizationSummaryDto>>("api/organizations", token) ?? [];
             if (_disposed || cancellation != _cancellation) return;
             _organizations = organizations.Where(x => !x.IsDeleted).ToList();
             _selected = organizations.FirstOrDefault(x => x.OrganizationId == OrganizationId && !x.IsDeleted);
-            _projects = _selected is null ? [] : await Http.GetFromJsonAsync<List<Project>>($"api/organizations/{_selected.OrganizationId}/projects", token) ?? [];
+            _projects = _selected is null
+                ? []
+                : await GetJsonWithRetryAsync<List<Project>>(
+                    $"api/organizations/{_selected.OrganizationId}/projects",
+                    token) ?? [];
             if (_disposed || cancellation != _cancellation) return;
             if (_isAdmin && OrganizationId == 0)
             {
@@ -182,7 +187,9 @@
                 }
                 _operations = operations;
             }
-            _deletedOrganizations = await Http.GetFromJsonAsync<List<OrganizationSummaryDto>>("api/organizations/deleted", token) ?? [];
+            _deletedOrganizations = await GetJsonWithRetryAsync<List<OrganizationSummaryDto>>(
+                "api/organizations/deleted",
+                token) ?? [];
             if (_disposed || cancellation != _cancellation) return;
             _error = null;
         }
@@ -194,6 +201,46 @@
             _error = "Unable to load organization management.";
             Notifications.ShowError(_error);
         }
+    }
+
+    private async Task<T?> GetJsonWithRetryAsync<T>(
+        string requestUri,
+        CancellationToken cancellationToken)
+    {
+        for (var attempt = 1; attempt <= 3; attempt++)
+        {
+            try
+            {
+                using var response = await Http.GetAsync(requestUri, cancellationToken);
+                if (response.IsSuccessStatusCode)
+                    return await response.Content.ReadFromJsonAsync<T>(cancellationToken);
+
+                if (response.StatusCode is not (
+                    System.Net.HttpStatusCode.RequestTimeout
+                    or System.Net.HttpStatusCode.BadGateway
+                    or System.Net.HttpStatusCode.ServiceUnavailable
+                    or System.Net.HttpStatusCode.GatewayTimeout)
+                    || attempt == 3)
+                {
+                    throw new HttpRequestException(
+                        $"Request failed with HTTP status {(int)response.StatusCode}.",
+                        null,
+                        response.StatusCode);
+                }
+            }
+            catch (HttpRequestException exception)
+                when (attempt < 3
+                      && exception.StatusCode is
+                          System.Net.HttpStatusCode.RequestTimeout
+                          or System.Net.HttpStatusCode.BadGateway
+                          or System.Net.HttpStatusCode.ServiceUnavailable
+                          or System.Net.HttpStatusCode.GatewayTimeout)
+            {
+            }
+
+            await Task.Delay(attempt * 250, cancellationToken);
+        }
+        throw new HttpRequestException("Request remained unavailable after retries.");
     }
 
     private async Task RetryProvisioningAsync(int organizationId)

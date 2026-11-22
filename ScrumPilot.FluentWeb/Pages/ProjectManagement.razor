@@ -41,6 +41,7 @@
 
             <ProjectDetailsPanel Project="_selectedProject"
                                  IsOwner="IsOwner"
+                                 CanManageSprints="CanManageSprints"
                                  IsSaving="_saving"
                                  Sprints="_sprints"
                                  Epics="_epics"
@@ -74,6 +75,7 @@
     private bool _disposed;
 
     private bool IsOwner => OrganizationState.SelectedOrganization?.Role == OrganizationRole.Owner;
+    private bool CanManageSprints => OrganizationState.SelectedOrganization?.Role is OrganizationRole.Owner or OrganizationRole.Member;
 
     protected override async Task OnInitializedAsync()
     {

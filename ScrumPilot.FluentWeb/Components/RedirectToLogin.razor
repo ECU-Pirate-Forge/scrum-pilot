@@ -3,6 +3,9 @@
 @code {
     protected override void OnInitialized()
     {
-        Navigation.NavigateTo("login", forceLoad: true);
+        var returnUrl = new Uri(Navigation.Uri).PathAndQuery;
+        Navigation.NavigateTo(
+            $"login?returnUrl={Uri.EscapeDataString(returnUrl)}",
+            forceLoad: true);
     }
 }

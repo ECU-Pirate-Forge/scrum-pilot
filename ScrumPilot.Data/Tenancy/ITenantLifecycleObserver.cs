@@ -1,6 +1,6 @@
 namespace ScrumPilot.Data.Tenancy;
 
-public enum TenantLifecycleOperation { Upgrade, Restore, Delete, Purge }
+public enum TenantLifecycleOperation { Upgrade, Restore, Delete, Purge, RenameCatalog }
 
 public interface ITenantLifecycleObserver
 {

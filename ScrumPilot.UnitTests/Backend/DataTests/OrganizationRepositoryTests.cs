@@ -82,6 +82,25 @@ public sealed class OrganizationRepositoryTests
     }
 
     [Fact]
+    public async Task CreateAsync_RejectsCatalogSlugReservedByLegacyOrganization()
+    {
+        using var database = new SqlTestDatabase();
+        var context = database.Control;
+        var suffix = Guid.NewGuid().ToString("N");
+        context.Users.Add(User("owner"));
+        context.Organizations.Add(new Organization
+        {
+            Name = "Group - " + suffix,
+            NormalizedName = "GROUP - " + suffix.ToUpperInvariant()
+        });
+        await context.SaveChangesAsync();
+        var repository = new OrganizationRepository(context);
+        var name = "Group " + suffix;
+        await Assert.ThrowsAsync<OrganizationRepositoryConflictException>(() =>
+            repository.CreateAsync(name, name.ToUpperInvariant(), "owner", DateTime.UtcNow));
+    }
+
+    [Fact]
     public async Task CreateAsync_UnrelatedForeignKeyFailure_PropagatesDbUpdateException()
     {
         using var database = new SqlTestDatabase();

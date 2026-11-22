@@ -21,6 +21,9 @@ public sealed partial class ControlPlaneContext(DbContextOptions<ControlPlaneCon
         // DefaultProjectId is a reference, not a cross-database foreign key.
         model.Entity<Organization>().HasIndex(x => x.StorageKey).IsUnique();
         model.Entity<Organization>().Property(x => x.StorageKey).HasMaxLength(32).IsRequired();
+        model.Entity<Organization>().Property(x => x.CatalogName).HasMaxLength(128);
+        model.Entity<Organization>().HasIndex(x => x.CatalogName).IsUnique()
+            .HasFilter("[CatalogName] IS NOT NULL");
         model.Entity<Organization>().Property(x => x.StorageState).HasMaxLength(32);
         model.Entity<Organization>().Property(x => x.StorageState).IsRequired();
         model.Entity<OrganizationMembership>().Property(x => x.MembershipInstanceId).IsRequired();

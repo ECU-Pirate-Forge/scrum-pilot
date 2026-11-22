@@ -133,10 +133,30 @@ public sealed class OrganizationRepository(ControlPlaneContext context,
         {
             Name = name,
             NormalizedName = normalizedName,
+            CatalogName = TenantStorage.CatalogFromName(name),
             CreatedAt = utcNow
         };
         try
         {
+            var reserved = await context.Organizations.AsNoTracking()
+                .Select(x => new { x.Name, x.CatalogName }).ToListAsync(cancellationToken);
+            foreach (var existing in reserved)
+            {
+                string? catalog = existing.CatalogName;
+                if (catalog is null)
+                {
+                    try { catalog = TenantStorage.CatalogFromName(existing.Name); }
+                    catch (ArgumentException) { continue; }
+                }
+                if (string.Equals(catalog, organization.CatalogName, StringComparison.OrdinalIgnoreCase))
+                    throw new OrganizationRepositoryConflictException("The organization database name is reserved.", new InvalidOperationException());
+            }
+            if (Storage is not null)
+            {
+                using var admin = new SqlServerAdministrationContext(Storage);
+                if (await admin.ExistsAsync(organization.CatalogName, cancellationToken))
+                    throw new OrganizationRepositoryConflictException("The organization database name already exists.", new InvalidOperationException());
+            }
             context.Organizations.Add(organization);
             await context.SaveChangesAsync(cancellationToken);
             context.OrganizationMemberships.Add(new OrganizationMembership
@@ -149,7 +169,8 @@ public sealed class OrganizationRepository(ControlPlaneContext context,
             await context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
-        catch (DbUpdateException exception) when (IsNormalizedNameUniqueViolation(exception))
+        catch (DbUpdateException exception) when (IsNormalizedNameUniqueViolation(exception)
+            || IsCatalogNameUniqueViolation(exception))
         {
             throw new OrganizationRepositoryConflictException(
                 "The organization could not be created because its name is reserved.",
@@ -232,7 +253,7 @@ public sealed class OrganizationRepository(ControlPlaneContext context,
             if (organization.DeletedAt!.Value.AddDays(30) <= Clock.GetUtcNow().UtcDateTime)
                 return OrganizationMutationResult.NotFound;
             using var lease = Storage.Acquire(organizationId);
-            using var tenant = Storage.OpenFile(organization.StorageKey);
+            using var tenant = Storage.OpenFile(organization);
             ScrumPilot.Data.Tenancy.TenantStorage.Verify(tenant, organization);
         }
         organization.DeletedAt = null;
@@ -379,4 +400,8 @@ public sealed class OrganizationRepository(ControlPlaneContext context,
                 && sqlException.Message.Contains("IX_Organizations_NormalizedName", StringComparison.Ordinal),
             _ => false
         };
+
+    private static bool IsCatalogNameUniqueViolation(DbUpdateException exception) =>
+        exception.InnerException is SqlException { Number: 2601 or 2627 } sqlException
+        && sqlException.Message.Contains("IX_Organizations_CatalogName", StringComparison.Ordinal);
 }

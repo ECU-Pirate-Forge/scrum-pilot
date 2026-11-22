@@ -16,6 +16,29 @@ public sealed class LoginTests : FluentFrontendTestBase
     private readonly RecordingAuthService _auth = new(false);
 
     [Fact]
+    public async Task Successful_login_without_return_url_navigates_home()
+    {
+        var auth = new RecordingAuthService(true);
+        using var context = new BunitContext();
+        context.Services.AddFluentUIComponents();
+        context.Services.AddLogging();
+        context.Services.AddScoped<IAuthService>(_ => auth);
+        context.Renderer.SetRendererInfo(new RendererInfo("WebAssembly", true));
+        context.JSInterop.Mode = JSRuntimeMode.Loose;
+        var navigation = context.Services.GetRequiredService<NavigationManager>();
+
+        using var cut = context.Render<Login>();
+        cut.Find("#username").Change("captain");
+        cut.Find("#password").Change("Secure!Password42");
+        await cut.Find("form").SubmitAsync();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("/", new Uri(navigation.Uri).AbsolutePath);
+        });
+    }
+
+    [Fact]
     public async Task Failed_login_shows_error()
     {
         using var context = new BunitContext();

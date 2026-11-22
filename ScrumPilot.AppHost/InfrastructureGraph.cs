@@ -1,4 +1,6 @@
+using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Dotnet;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -130,8 +132,13 @@ public static class InfrastructureGraph
         var initialize = builder.Configuration.GetValue<bool>("Infrastructure:Initialize");
         var gitHubIntegration = builder.Configuration.GetValue<bool>("Features:GitHubIntegration");
         var gitHubIntegrationValue = gitHubIntegration.ToString().ToLowerInvariant();
+
+        var migration = builder.AddDotnetProject("database-init", "../ScrumPilot.API/ScrumPilot.API.csproj", configure =>
+        {
+            configure.ExcludeLaunchProfile = true;
+        })
         // Command-only execution must not reserve the API launch profile's listening ports.
-        var migration = builder.AddProject<Projects.ScrumPilot_API>("database-init", launchProfileName: null)
+        // var migration = builder.AddProject<Projects.ScrumPilot_API>("database-init", launchProfileName: null)
             .WithArgs(initialize ? "--initialize" : "--migrate")
             .WithEnvironment("Features__GitHubIntegration", gitHubIntegrationValue)
             .WithReference(control, "control")
@@ -149,7 +156,7 @@ public static class InfrastructureGraph
                     Parameter(builder, "bootstrap-password", "BootstrapAdmin:Password", secret: true));
         }
 
-        var api = builder.AddProject<Projects.ScrumPilot_API>("webapi")
+        var api = builder.AddDotnetProject("webapi", "../ScrumPilot.API/ScrumPilot.API.csproj")
             .WithEnvironment("Features__GitHubIntegration", gitHubIntegrationValue)
             .WithReference(control, "control")
             .WithReference(runtime, "tenant-server")
@@ -199,17 +206,20 @@ public static class InfrastructureGraph
         // A local HTTP upstream redirects outside the gateway to the API's HTTPS
         // origin, causing browsers to discard Authorization on the redirected hop.
         var apiScheme = builder.ExecutionContext.IsPublishMode ? "http" : "https";
-        var web = builder.AddBlazorWasmProject<Projects.ScrumPilot_Web>("web").WithReference(api.GetEndpoint(apiScheme));
-        var fluent = builder.AddBlazorWasmProject<Projects.ScrumPilot_FluentWeb>("fluentweb").WithReference(api.GetEndpoint(apiScheme));
-        web.WithEnvironment("Features__GitHubIntegration", gitHubIntegrationValue);
+        // var web = builder.AddBlazorWasmProject<Projects.ScrumPilot_Web>("web").WithReference(api.GetEndpoint(apiScheme));
+        var fluent = builder.AddBlazorWasmApp("fluentweb", "../ScrumPilot.FluentWeb/ScrumPilot.FluentWeb.csproj")
+            .WithReference(api.GetEndpoint(apiScheme));
+            
+        // web.WithEnvironment("Features__GitHubIntegration", gitHubIntegrationValue);
         fluent.WithEnvironment("Features__GitHubIntegration", gitHubIntegrationValue);
-        var webGateway = builder.AddDotnetProjectBlazorGateway("web-gateway")
-            .WithBlazorClientApp(web, proxyTelemetry: true).WithExternalHttpEndpoints()
-            .WithEnvironment("Logging__LogLevel__Microsoft.AspNetCore", "Warning")
-            .WithEnvironment("Logging__LogLevel__Yarp.ReverseProxy", "Warning")
-            .WithHttpHealthCheck("/web/_blazor/_configuration");
+        // var webGateway = builder.AddBlazorGateway("web-gateway")
+        //     .WithBlazorClientApp(web, proxyTelemetry: true).WithExternalHttpEndpoints()
+        //     .WithEnvironment("Logging__LogLevel__Microsoft.AspNetCore", "Warning")
+        //     .WithEnvironment("Logging__LogLevel__Yarp.ReverseProxy", "Warning")
+        //     .WithHttpHealthCheck("/web/_blazor/_configuration");
         var fluentGateway = builder.AddDotnetProjectBlazorGateway("fluentweb-gateway")
-            .WithBlazorClientApp(fluent, proxyTelemetry: true).WithExternalHttpEndpoints()
+            .WithBlazorClientApp(fluent, proxyTelemetry: true)
+            .WithExternalHttpEndpoints()
             .WithEnvironment("Logging__LogLevel__Microsoft.AspNetCore", "Warning")
             .WithEnvironment("Logging__LogLevel__Yarp.ReverseProxy", "Warning")
             .WithHttpHealthCheck("/fluentweb/_blazor/_configuration");
@@ -240,31 +250,31 @@ public static class InfrastructureGraph
                     EnvironmentVariableTarget.Process);
             }
             // Gateway environment callbacks build clients sharing the same obj outputs.
-            fluentGateway.WaitFor(webGateway);
+            // fluentGateway.WaitFor(webGateway);
         }
         if (builder.ExecutionContext.IsPublishMode)
         {
             // TLS terminates at the operator's ingress, not at an unconfigured container.
-            foreach (var resource in new IResource[] { api.Resource, webGateway.Resource, fluentGateway.Resource })
+            foreach (var resource in new IResource[] { api.Resource, /*webGateway.Resource,*/ fluentGateway.Resource })
             {
                 foreach (var annotation in resource.Annotations.OfType<EndpointAnnotation>()
                     .Where(e => e.UriScheme == "https").ToArray())
                     resource.Annotations.Remove(annotation);
             }
-            var webOrigin = Parameter(builder, "web-public-origin", "Public:WebOrigin");
+            // var webOrigin = Parameter(builder, "web-public-origin", "Public:WebOrigin");
             var fluentOrigin = Parameter(builder, "fluentweb-public-origin", "Public:FluentWebOrigin");
-            api.WithEnvironment("Cors__AllowedOrigins__0", webOrigin)
-                .WithEnvironment("Cors__AllowedOrigins__1", fluentOrigin)
+            // api.WithEnvironment("Cors__AllowedOrigins__0", /*webOrigin*/)
+            api.WithEnvironment("Cors__AllowedOrigins__1", fluentOrigin)
                 .WithEnvironment("SendGrid__InvitationBaseUrl", Parameter(builder, "invitation-url", "SendGrid:InvitationBaseUrl"));
-            ConfigurePublishedTelemetry(webGateway, "web", dashboardKey!, webOrigin, gitHubIntegration);
+            // ConfigurePublishedTelemetry(webGateway, "web", dashboardKey!, webOrigin, gitHubIntegration);
             ConfigurePublishedTelemetry(fluentGateway, "fluentweb", dashboardKey!, fluentOrigin, gitHubIntegration);
         }
         else
         {
-            var invitationEndpoint = ConfigureDevTunnel(builder, api, webGateway, fluentGateway);
-            api.WithEnvironment("Cors__AllowedOrigins__0", webGateway.GetEndpoint("https"))
-                .WithEnvironment("Cors__AllowedOrigins__1", fluentGateway.GetEndpoint("https"))
-                .WithEnvironment("Cors__AllowedOrigins__2", webGateway.GetEndpoint("http"))
+            var invitationEndpoint = ConfigureDevTunnel(builder, api, /*webGateway,*/ fluentGateway);
+            // api.WithEnvironment("Cors__AllowedOrigins__0", /*webGateway.GetEndpoint("https")*/)
+                api.WithEnvironment("Cors__AllowedOrigins__1", fluentGateway.GetEndpoint("https"))
+                // .WithEnvironment("Cors__AllowedOrigins__2", /*webGateway.GetEndpoint("http")*/)
                 .WithEnvironment("Cors__AllowedOrigins__3", fluentGateway.GetEndpoint("http"))
                 .WithEnvironment("SendGrid__InvitationBaseUrl",
                     ReferenceExpression.Create($"{invitationEndpoint}/fluentweb/accept-invitation"));
@@ -274,16 +284,16 @@ public static class InfrastructureGraph
     // Local-only public URLs. Browsers reach the API through each gateway's
     // same-origin /{client}/_api/webapi proxy, so CORS needs no tunnel origins.
     private static EndpointReference ConfigureDevTunnel(IDistributedApplicationBuilder builder,
-        IResourceBuilder<ProjectResource> api,
-        IResourceBuilder<Aspire.Hosting.Dotnet.DotnetProjectResource> webGateway,
-        IResourceBuilder<Aspire.Hosting.Dotnet.DotnetProjectResource> fluentGateway)
+        IResourceBuilder<DotnetProjectResource> api,
+        // IResourceBuilder<ProjectResource> webGateway,
+        IResourceBuilder<DotnetProjectResource> fluentGateway)
     {
         var fluentHttps = fluentGateway.GetEndpoint("https");
         var settings = builder.Configuration.GetSection("DevTunnels");
         if (!settings.GetValue<bool>("Enabled"))
             return fluentHttps;
         if (!settings.GetValue("WebApi", true) &&
-            !settings.GetValue("Web", true) &&
+            // !settings.GetValue("Web", true) &&
             !settings.GetValue("FluentWeb", true))
             return fluentHttps;
         var tunnelId = settings["TunnelId"];
@@ -296,9 +306,12 @@ public static class InfrastructureGraph
             });
         // HTTPS targets avoid the API's HTTP-to-localhost redirect.
         if (settings.GetValue("WebApi", true))
-            tunnel.WithReference(api.GetEndpoint("https"));
-        if (settings.GetValue("Web", true))
-            tunnel.WithReference(webGateway.GetEndpoint("https"));
+        {
+            tunnel.WithReference(api.GetEndpoint("https"));   
+        }
+            
+        // if (settings.GetValue("Web", true))
+            // tunnel.WithReference(webGateway.GetEndpoint("https"));
         if (settings.GetValue("FluentWeb", true))
         {
             tunnel.WithReference(fluentHttps);
@@ -314,7 +327,7 @@ public static class InfrastructureGraph
     // The preview Blazor publisher omits its HTTP-OTLP argument in publish mode.
     // Complete its generated YARP/configuration model without exposing dashboard headers.
     private static void ConfigurePublishedTelemetry(
-        IResourceBuilder<Aspire.Hosting.Dotnet.DotnetProjectResource> gateway, string client,
+        IResourceBuilder<DotnetProjectResource> gateway, string client,
         IResourceBuilder<ParameterResource> dashboardKey, IResourceBuilder<ParameterResource> publicOrigin,
         bool gitHubIntegration)
     {

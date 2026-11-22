@@ -10,7 +10,7 @@ public static class TenancyCommands
 {
     public static bool IsOperatorCommand(string[] args) => args.Any(a => a is "--initialize" or "--migrate"
         or "--create-user" or "--backup-control" or "--backup-organization" or "--restore-organization"
-        or "--retry-organization" or "--upgrade-organization" or "--renew-membership-instances" or "--bootstrap-admin");
+        or "--retry-organization" or "--upgrade-organization" or "--rename-organization-catalog" or "--renew-membership-instances" or "--bootstrap-admin");
     public static async Task<bool> ExecuteAsync(string[] args, IServiceProvider services, IConfiguration configuration)
     {
         var storage = services.GetRequiredService<TenantStorage>();
@@ -119,7 +119,7 @@ public static class TenancyCommands
             Console.WriteLine(id);
             return true;
         }
-        foreach (var command in new[] { "--backup-organization", "--restore-organization", "--retry-organization", "--upgrade-organization" })
+        foreach (var command in new[] { "--backup-organization", "--restore-organization", "--retry-organization", "--upgrade-organization", "--rename-organization-catalog" })
         {
             var index = Array.IndexOf(args, command);
             if (index < 0) continue;
@@ -134,6 +134,7 @@ public static class TenancyCommands
                 Console.WriteLine("Organization restored; explicit Member project grants cleared.");
             }
             else if (command == "--retry-organization") await operations.ProvisionAsync(id);
+            else if (command == "--rename-organization-catalog") await operations.RenameCatalogAsync(id);
             else await operations.UpgradeAsync(id);
             return true;
         }

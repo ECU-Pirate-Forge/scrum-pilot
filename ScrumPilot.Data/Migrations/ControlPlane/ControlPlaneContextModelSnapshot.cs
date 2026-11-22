@@ -17,7 +17,7 @@ namespace ScrumPilot.Data.Migrations.ControlPlane
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.15")
+                .HasAnnotation("ProductVersion", "10.0.13")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -352,6 +352,13 @@ namespace ScrumPilot.Data.Migrations.ControlPlane
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("OrganizationId"));
 
+                    b.Property<string>("CatalogName")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<bool>("CatalogRenamePending")
+                        .HasColumnType("bit");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -394,6 +401,10 @@ namespace ScrumPilot.Data.Migrations.ControlPlane
                         .HasColumnType("nvarchar(32)");
 
                     b.HasKey("OrganizationId");
+
+                    b.HasIndex("CatalogName")
+                        .IsUnique()
+                        .HasFilter("[CatalogName] IS NOT NULL");
 
                     b.HasIndex("NormalizedName")
                         .IsUnique();

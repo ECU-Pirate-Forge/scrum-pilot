@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -48,8 +49,40 @@ public sealed class TenantStorage
         if (!Guid.TryParseExact(key, "N", out _)) throw new TenantUnavailableException();
         return "scrumpilot_org_" + key.ToLowerInvariant();
     }
+    public static string CatalogFromName(string name)
+    {
+        const string prefix = "scrumpilot_org_";
+        var slug = new StringBuilder();
+        var separator = false;
+        foreach (var character in name)
+        {
+            if (char.IsAsciiLetterOrDigit(character))
+            {
+                if (separator && slug.Length > 0) slug.Append('_');
+                slug.Append(char.ToLowerInvariant(character));
+                separator = false;
+            }
+            else separator = true;
+        }
+        if (slug.Length == 0 || prefix.Length + slug.Length > 128)
+            throw new ArgumentException("Organization name cannot be converted to a valid database name.", nameof(name));
+        return prefix + slug;
+    }
+
+    public static string Catalog(Organization organization)
+    {
+        _ = Catalog(organization.StorageKey);
+        var catalog = organization.CatalogName ?? Catalog(organization.StorageKey);
+        if (catalog.Length > 128 || !catalog.StartsWith("scrumpilot_org_", StringComparison.Ordinal)
+            || catalog.Length == 15 || catalog.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '_'))
+            throw new TenantUnavailableException();
+        return catalog;
+    }
+
     public string OrganizationConnectionString(string key) =>
         new SqlConnectionStringBuilder(Options.RuntimeConnectionString) { InitialCatalog = Catalog(key) }.ConnectionString;
+    public string OrganizationConnectionString(Organization organization) =>
+        new SqlConnectionStringBuilder(Options.RuntimeConnectionString) { InitialCatalog = Catalog(organization) }.ConnectionString;
 
     public string BackupPath(string key, string backupId)
     {
@@ -145,7 +178,7 @@ public sealed class TenantStorage
     }
     public OrganizationContext Open(Organization organization)
     {
-        if (organization.DeletedAt != null || organization.StorageState != "Active" || organization.RestorePending)
+        if (organization.DeletedAt != null || organization.StorageState != "Active" || organization.RestorePending || organization.CatalogRenamePending)
             throw new TenantUnavailableException();
         IDisposable lease = gates.GetOrAdd(organization.OrganizationId, _ => new()).Enter(exclusive: false);
         try
@@ -158,9 +191,9 @@ public sealed class TenantStorage
                 .UseSqlServer(Options.ControlConnectionString, sql => sql.UseCompatibilityLevel(170)).Options);
             var current = directory.Organizations.AsNoTracking().SingleOrDefault(x => x.OrganizationId == organization.OrganizationId);
             if (current == null || current.StorageKey != organization.StorageKey
-                || current.DeletedAt != null || current.StorageState != "Active" || current.RestorePending)
+                || current.DeletedAt != null || current.StorageState != "Active" || current.RestorePending || current.CatalogRenamePending)
                 throw new TenantUnavailableException();
-            var context = OpenFile(organization.StorageKey);
+            var context = OpenFile(current);
             try
             {
                 Verify(context, organization);
@@ -171,10 +204,12 @@ public sealed class TenantStorage
         }
         catch { lease.Dispose(); throw new TenantUnavailableException(); }
     }
-    public OrganizationContext OpenFile(string key)
+    public OrganizationContext OpenFile(string key) => OpenConnection(OrganizationConnectionString(key));
+    public OrganizationContext OpenFile(Organization organization) => OpenConnection(OrganizationConnectionString(organization));
+    private OrganizationContext OpenConnection(string connectionString)
     {
         var options = new DbContextOptionsBuilder<OrganizationContext>()
-            .UseSqlServer(OrganizationConnectionString(key), sql => sql.UseCompatibilityLevel(SqlServerOptions.CompatibilityLevel));
+            .UseSqlServer(connectionString, sql => sql.UseCompatibilityLevel(SqlServerOptions.CompatibilityLevel));
         if (loggerFactory != null) options.UseLoggerFactory(loggerFactory);
         var context = new OrganizationContext(options.Options);
         try

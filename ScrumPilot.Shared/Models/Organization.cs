@@ -4,6 +4,8 @@ namespace ScrumPilot.Shared.Models;
 public class Organization
 {
     public string StorageKey { get; set; } = Guid.NewGuid().ToString("N");
+    public string? CatalogName { get; set; }
+    public bool CatalogRenamePending { get; set; }
     public string StorageState { get; set; } = "Provisioning";
     public Guid OperationId { get; set; } = Guid.NewGuid();
     public string? OperationError { get; set; }

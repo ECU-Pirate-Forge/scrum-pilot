@@ -48,10 +48,19 @@ internal sealed class SqlTestDatabase : IDisposable
         using var admin = new SqlServerAdministrationContext(Storage);
         if (admin.ExistsAsync(Catalog).GetAwaiter().GetResult())
         {
-            foreach (var key in Control.Organizations.AsNoTracking().Select(x => x.StorageKey).ToList())
+            foreach (var organization in Control.Organizations.AsNoTracking().ToList())
             {
-                admin.DropAsync(TenantStorage.Catalog(key), default).GetAwaiter().GetResult();
-                foreach (var file in Directory.EnumerateFiles(Storage.Options.BackupApplicationPath, key + "_*.bak"))
+                var legacy = TenantStorage.Catalog(organization.StorageKey);
+                admin.DropAsync(legacy, default).GetAwaiter().GetResult();
+                if (organization.CatalogName is { } catalog && catalog != legacy
+                    && admin.ExistsAsync(catalog).GetAwaiter().GetResult())
+                {
+                    using var tenant = admin.OpenOrganization(organization);
+                    TenantStorage.Verify(tenant, organization, allowPendingSchema: true);
+                    tenant.Dispose();
+                    admin.DropAsync(catalog, default).GetAwaiter().GetResult();
+                }
+                foreach (var file in Directory.EnumerateFiles(Storage.Options.BackupApplicationPath, organization.StorageKey + "_*.bak"))
                     File.Delete(Storage.Checked(file));
             }
             Control.Dispose();

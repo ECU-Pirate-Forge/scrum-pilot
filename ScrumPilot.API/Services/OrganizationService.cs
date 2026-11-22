@@ -1,5 +1,6 @@
 using ScrumPilot.API.Authorization;
 using ScrumPilot.Data.Repositories;
+using ScrumPilot.Data.Tenancy;
 using ScrumPilot.Shared.Models;
 
 namespace ScrumPilot.API.Services;
@@ -49,6 +50,11 @@ public sealed class OrganizationService(
         }
 
         var (name, normalizedName) = ValidateName(request.Name);
+        try { _ = TenantStorage.CatalogFromName(name); }
+        catch (ArgumentException)
+        {
+            throw new OrganizationValidationException("Organization name must produce a nonempty database name of at most 128 characters.");
+        }
         if (string.IsNullOrWhiteSpace(request.InitialOwnerUserId)
             || !await repository.UserExistsAsync(request.InitialOwnerUserId, cancellationToken))
         {

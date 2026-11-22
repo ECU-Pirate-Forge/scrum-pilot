@@ -35,6 +35,28 @@ public sealed class MountedShellTests : BunitContext
     }
 
     [Theory]
+    [InlineData("")]
+    [InlineData("organization-management")]
+    [InlineData("organizations/3/organization-management")]
+    public void Signed_out_central_route_opens_login_and_preserves_return_url(string route)
+    {
+        var navigation = new MountedNavigation(route);
+        RegisterRouterSession(navigation, new SessionHandler(), authenticated: false);
+
+        using var cut = Render<CascadingAuthenticationState>(
+            p => p.AddChildContent<ScrumPilot.FluentWeb.App>());
+
+        cut.WaitForAssertion(() =>
+        {
+            var login = Assert.Single(cut.FindComponents<Login>());
+            var expected = string.IsNullOrEmpty(route)
+                ? "/fluentweb/"
+                : $"/fluentweb/{route}";
+            Assert.Equal(expected, login.Instance.ReturnUrl);
+        });
+    }
+
+    [Theory]
     [InlineData("backlog")]
     [InlineData("project-management")]
     [InlineData("scrum-board")]
@@ -146,7 +168,7 @@ public sealed class MountedShellTests : BunitContext
     }
 
     [Fact]
-    public async Task Default_project_redirect_waits_for_a_work_scope_before_mounting_the_backlog()
+    public async Task Landing_page_stays_on_home_and_hydrates_default_workspace()
     {
         var navigation = new MountedNavigation("", deferLocationChanged: true);
         var handler = new SessionHandler(hasProject: true, useDefaultProject: true);
@@ -174,16 +196,17 @@ public sealed class MountedShellTests : BunitContext
             }
         }));
 
-        Assert.EndsWith("/organizations/3/backlog?projectId=1", navigation.Uri);
-        Assert.Empty(cut.FindComponents<ScrumPilot.FluentWeb.Pages.Backlog>());
+        Assert.EndsWith("/fluentweb/", navigation.Uri);
+        Assert.Contains("Central landing page", cut.Markup);
         Assert.DoesNotContain("Something went wrong", cut.Markup);
         await cut.InvokeAsync(navigation.DispatchLocationChanged);
         cut.WaitForAssertion(() =>
         {
-            Assert.EndsWith("/organizations/3/backlog?projectId=1", navigation.Uri);
-            Assert.Single(cut.FindComponents<ScrumPilot.FluentWeb.Pages.Backlog>());
+            Assert.EndsWith("/fluentweb/", navigation.Uri);
+            Assert.Contains("Central landing page", cut.Markup);
             Assert.DoesNotContain("Something went wrong", cut.Markup);
-            Assert.DoesNotContain("Work requires an organization route boundary", cut.Markup);
+            Assert.Equal(3, Services.GetRequiredService<OrganizationStateService>().SelectedOrganizationId);
+            Assert.Equal(1, Services.GetRequiredService<ProjectStateService>().SelectedProjectId);
         });
     }
 

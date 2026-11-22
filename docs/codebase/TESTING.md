@@ -23,6 +23,8 @@ Cover two organizations with equal local project/PBI IDs, different memberships,
 nonmember Admin denial, permission removal/rejoin, last-owner and invitation
 concurrency, missing/wrong catalogs, explicit maintenance, and interrupted recovery.
 Never delete catalogs by broad prefix searches: track exactly what a fixture owns.
+Name-derived catalog tests must use unique organization names across fixtures;
+cleanup must verify the tenant identity before dropping a mapped catalog.
 
 Start the SQL-only Aspire graph once and import its restricted fixture settings in
 the current PowerShell process before running database tests:

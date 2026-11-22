@@ -10,7 +10,7 @@
     @if (Organization.Role == OrganizationRole.Owner && !Organization.IsDeleted)
     {
         <div class="inline-editor">
-            <label>Organization name <FluentTextInput Value="_name" ValueChanged="OnNameChanged" /></label>
+            <label>Organization name <FluentTextInput Value="@_name" ValueChanged="OnNameChanged" /></label>
             <FluentButton data-action="rename" Appearance="ButtonAppearance.Primary" OnClick="RenameAsync" Disabled="@_busy">Rename</FluentButton>
         </div>
     }

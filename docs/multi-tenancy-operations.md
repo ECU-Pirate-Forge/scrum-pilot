@@ -143,10 +143,34 @@ Verify actual permissions using separate identities before production. A
 successful local administrator test does not prove runtime least privilege.
 Revoke access explicitly when decommissioning an installation.
 
-Tenant catalogs use immutable trusted keys, not organization names. Normal opens
-verify registered organization/key metadata and fail closed for absent, wrong
-or incompatible storage. Never repair an unavailable organization by changing a
-connection to another catalog or manually clearing registry/fence fields.
+New tenant catalogs use `scrumpilot_org_<slug>`, where the slug lowercases ASCII
+letters and digits, replaces runs of other characters with `_`, and trims
+leading/trailing separators. Empty slugs, names exceeding SQL Server's
+128-character catalog limit, and reserved or existing catalog names are rejected.
+The registry persists the catalog name: changing an organization's display name
+does not rename its database. The separate immutable GUID storage key still
+identifies tenant metadata, locks and backup artifacts. Normal opens verify that
+identity and fail closed for absent, wrong or incompatible storage.
+
+Existing organizations continue using their GUID-named catalogs until explicitly
+converted. Before conversion, confirm the exact SQL instance, control database,
+organization IDs, source and destination catalog names, backups, and backup
+mount. Run the control migration first; stop normal traffic and keep the API
+process stopped while using the operator command for each active organization:
+
+```powershell
+dotnet run --project .\ScrumPilot.API\ScrumPilot.API.csproj -- --rename-organization-catalog <organization-id>
+```
+
+Provide the same private connection and backup configuration used by the
+installation. The command reserves the destination, fences work, verifies
+identity, takes a backup, renames the database, and activates the mapping. It
+refuses collisions and does not drop another database. On interruption, leave
+the durable fence in place, inspect the operation error and retry the same
+command; do not clear registry or recovery fields manually. If both catalogs
+exist or neither exists, operator investigation is required. Deleted or
+otherwise unavailable organizations require their normal lifecycle recovery
+before conversion. Existing backups retain their GUID-keyed artifact names.
 
 ## Organization lifecycle and authorization
 

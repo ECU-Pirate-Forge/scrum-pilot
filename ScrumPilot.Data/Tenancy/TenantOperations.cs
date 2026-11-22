@@ -22,14 +22,14 @@ public sealed class TenantOperations(ControlPlaneContext control, TenantStorage 
     {
         using var operation = await storage.AcquireOperationAsync(organizationId, ct);
         var org = await control.Organizations.SingleAsync(x => x.OrganizationId == organizationId, ct);
-        if (org.DeletedAt != null || org.StorageState is "Purged" or "Purging" or "Maintenance")
+        if (org.CatalogRenamePending || org.DeletedAt != null || org.StorageState is "Purged" or "Purging" or "Maintenance")
             throw new TenantUnavailableException();
         using var admin = new SqlServerAdministrationContext(storage);
         if (org.StorageState == "Active")
         {
-            using var existing = admin.OpenOrganization(org.StorageKey);
+            using var existing = admin.OpenOrganization(org);
             TenantStorage.Verify(existing, org);
-            await admin.GrantRuntimeAccessAsync(TenantStorage.Catalog(org.StorageKey), storage.Options.RuntimeConnectionString, ct);
+            await admin.GrantRuntimeAccessAsync(TenantStorage.Catalog(org), storage.Options.RuntimeConnectionString, ct);
             await ActivateAsync(org, existing, ct);
             return;
         }
@@ -39,8 +39,11 @@ public sealed class TenantOperations(ControlPlaneContext control, TenantStorage 
         using var sqlLease = storage.AcquireExclusiveSqlLease(org.StorageKey);
         try
         {
-            await admin.CreateAsync(TenantStorage.Catalog(org.StorageKey), ct: ct);
-            using var tenant = admin.OpenOrganization(org.StorageKey);
+            var catalog = TenantStorage.Catalog(org);
+            var exists = await admin.ExistsAsync(catalog, ct);
+            if (!exists) await admin.CreateAsync(catalog, requireAbsent: true, ct: ct);
+            using var tenant = admin.OpenOrganization(org);
+            if (exists) TenantStorage.Verify(tenant, org, allowPendingSchema: true);
             await tenant.Database.MigrateAsync(ct);
             var metadata = await tenant.TenantMetadata.SingleOrDefaultAsync(ct);
             if (metadata is null)
@@ -50,7 +53,7 @@ public sealed class TenantOperations(ControlPlaneContext control, TenantStorage 
                 await tenant.SaveChangesAsync(ct);
             }
             TenantStorage.Verify(tenant, org);
-            await admin.GrantRuntimeAccessAsync(TenantStorage.Catalog(org.StorageKey), storage.Options.RuntimeConnectionString, ct);
+            await admin.GrantRuntimeAccessAsync(TenantStorage.Catalog(org), storage.Options.RuntimeConnectionString, ct);
             await ActivateAsync(org, tenant, ct);
         }
         catch
@@ -77,7 +80,7 @@ public sealed class TenantOperations(ControlPlaneContext control, TenantStorage 
         var path = storage.BackupPath(org.StorageKey, id);
         Directory.CreateDirectory(storage.Options.BackupApplicationPath);
         using var admin = new SqlServerAdministrationContext(storage);
-        await admin.BackupAsync(TenantStorage.Catalog(org.StorageKey), storage.BackupServerPath(org.StorageKey, id), ct);
+        await admin.BackupAsync(tenant.Database.GetDbConnection().Database, storage.BackupServerPath(org.StorageKey, id), ct);
         var hash = await HashAsync(path, ct);
         control.TenantBackups.Add(new()
         {
@@ -103,7 +106,7 @@ public sealed class TenantOperations(ControlPlaneContext control, TenantStorage 
     {
         using var operation = await storage.AcquireOperationAsync(organizationId, ct);
         var org = await control.Organizations.SingleAsync(x => x.OrganizationId == organizationId, ct);
-        if (org.DeletedAt != null || org.StorageState is not ("Active" or "Maintenance"))
+        if (org.CatalogRenamePending || org.DeletedAt != null || org.StorageState is not ("Active" or "Maintenance"))
             throw new TenantUnavailableException();
         var path = storage.BackupPath(org.StorageKey, backupId);
         var registered = await control.TenantBackups.AsNoTracking().SingleOrDefaultAsync(x =>
@@ -122,7 +125,7 @@ public sealed class TenantOperations(ControlPlaneContext control, TenantStorage 
         var staging = "scrumpilot_restore_" + org.StorageKey + "_" + Guid.NewGuid().ToString("N");
         try
         {
-            await admin.RestoreStagingAsync(TenantStorage.Catalog(org.StorageKey), staging,
+            await admin.RestoreStagingAsync(staging,
                 storage.BackupServerPath(org.StorageKey, backupId), ct);
             using var verification = admin.OpenStaging(staging);
             TenantStorage.Verify(verification, org, allowPendingSchema: true);
@@ -139,22 +142,22 @@ public sealed class TenantOperations(ControlPlaneContext control, TenantStorage 
         try
         {
             await NotifyDrainedAsync(org, TenantLifecycleOperation.Restore, ct);
-            if (await admin.ExistsAsync(TenantStorage.Catalog(org.StorageKey), ct))
+            if (await admin.ExistsAsync(TenantStorage.Catalog(org), ct))
             {
-                using var live = storage.OpenFile(org.StorageKey);
+                using var live = storage.OpenFile(org);
                 TenantStorage.Verify(live, org, allowPendingSchema: true);
                 rollback = await BackupCoreAsync(org, live, ct);
             }
             org.OperationError = rollback == null ? "Original catalog missing." : $"Rollback backup: {rollback}";
             await control.SaveChangesAsync(ct);
-            await admin.RestoreAsync(TenantStorage.Catalog(org.StorageKey), storage.BackupServerPath(org.StorageKey, backupId), ct);
-            using var restored = admin.OpenOrganization(org.StorageKey);
+            await admin.RestoreAsync(TenantStorage.Catalog(org), storage.BackupServerPath(org.StorageKey, backupId), ct);
+            using var restored = admin.OpenOrganization(org);
             TenantStorage.Verify(restored, org, allowPendingSchema: true);
             if (!JsonSerializer.Deserialize<string[]>(registered.MigrationsJson)!.SequenceEqual(await restored.Database.GetAppliedMigrationsAsync(ct)))
                 throw new TenantUnavailableException();
             await restored.Database.MigrateAsync(ct);
             TenantStorage.Verify(restored, org);
-            await admin.GrantRuntimeAccessAsync(TenantStorage.Catalog(org.StorageKey), storage.Options.RuntimeConnectionString, ct);
+            await admin.GrantRuntimeAccessAsync(TenantStorage.Catalog(org), storage.Options.RuntimeConnectionString, ct);
             await ActivateAsync(org, restored, ct);
         }
         catch
@@ -168,7 +171,7 @@ public sealed class TenantOperations(ControlPlaneContext control, TenantStorage 
             {
                 try
                 {
-                    await admin.RestoreAsync(TenantStorage.Catalog(org.StorageKey), storage.BackupServerPath(org.StorageKey, rollback), CancellationToken.None);
+                    await admin.RestoreAsync(TenantStorage.Catalog(org), storage.BackupServerPath(org.StorageKey, rollback), CancellationToken.None);
                     rolledBack = true;
                 }
                 catch { /* Durable fence remains even if SQL recovery itself fails. */ }
@@ -184,7 +187,7 @@ public sealed class TenantOperations(ControlPlaneContext control, TenantStorage 
     {
         using var operation = await storage.AcquireOperationAsync(organizationId, ct);
         var org = await control.Organizations.SingleAsync(x => x.OrganizationId == organizationId, ct);
-        if (org.DeletedAt != null || org.StorageState is not ("Active" or "Maintenance")) throw new TenantUnavailableException();
+        if (org.CatalogRenamePending || org.DeletedAt != null || org.StorageState is not ("Active" or "Maintenance")) throw new TenantUnavailableException();
         var restorePending = org.RestorePending;
         org.StorageState = "Maintenance"; org.OperationId = Guid.NewGuid();
         await control.SaveChangesAsync(ct);
@@ -195,19 +198,101 @@ public sealed class TenantOperations(ControlPlaneContext control, TenantStorage 
         {
             await NotifyDrainedAsync(org, TenantLifecycleOperation.Upgrade, ct);
             using var admin = new SqlServerAdministrationContext(storage);
-            using var tenant = admin.OpenOrganization(org.StorageKey);
+            using var tenant = admin.OpenOrganization(org);
             TenantStorage.Verify(tenant, org, allowPendingSchema: true);
             var rollback = await BackupCoreAsync(org, tenant, ct);
             org.OperationError = $"Rollback backup: {rollback}"; await control.SaveChangesAsync(ct);
             await tenant.Database.MigrateAsync(ct);
             TenantStorage.Verify(tenant, org);
-            await admin.GrantRuntimeAccessAsync(TenantStorage.Catalog(org.StorageKey), storage.Options.RuntimeConnectionString, ct);
+            await admin.GrantRuntimeAccessAsync(TenantStorage.Catalog(org), storage.Options.RuntimeConnectionString, ct);
             await ActivateAsync(org, tenant, ct);
         }
         catch
         {
             await FenceAsync(org, restorePending, "Schema upgrade failed; maintenance remains active.");
             throw new TenantUnavailableException();
+        }
+    }
+
+    public async Task RenameCatalogAsync(int organizationId, CancellationToken ct = default)
+    {
+        using var operation = await storage.AcquireOperationAsync(organizationId, ct);
+        var org = await control.Organizations.SingleAsync(x => x.OrganizationId == organizationId, ct);
+        if (org.RestorePending || (!org.CatalogRenamePending && (org.DeletedAt != null || org.StorageState != "Active")))
+            throw new TenantUnavailableException();
+        if (!org.CatalogRenamePending && org.CatalogName is not null) return;
+
+        var source = TenantStorage.Catalog(org.StorageKey);
+        var destination = org.CatalogRenamePending
+            ? TenantStorage.Catalog(org) : TenantStorage.CatalogFromName(org.Name);
+        using var admin = new SqlServerAdministrationContext(storage);
+        if (!org.CatalogRenamePending)
+        {
+            var others = await control.Organizations.AsNoTracking()
+                .Where(x => x.OrganizationId != organizationId)
+                .Select(x => new { x.Name, x.CatalogName }).ToListAsync(ct);
+            foreach (var other in others)
+            {
+                var name = other.CatalogName;
+                if (name is null)
+                {
+                    try { name = TenantStorage.CatalogFromName(other.Name); }
+                    catch (ArgumentException) { continue; }
+                }
+                if (string.Equals(name, destination, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("The target organization database name is reserved.");
+            }
+            if (source != destination && await admin.ExistsAsync(destination, ct))
+                throw new InvalidOperationException("The target organization database already exists.");
+            org.CatalogName = destination;
+            org.CatalogRenamePending = true;
+            org.StorageState = "Maintenance";
+            org.OperationId = Guid.NewGuid();
+            org.OperationError = "Catalog rename pending.";
+            await control.SaveChangesAsync(ct);
+        }
+
+        using var lease = storage.Acquire(organizationId);
+        using var sqlLease = storage.AcquireExclusiveSqlLease(org.StorageKey);
+        try
+        {
+            await NotifyDrainedAsync(org, TenantLifecycleOperation.RenameCatalog, ct);
+            var oldExists = await admin.ExistsAsync(source, ct);
+            var newExists = source == destination ? oldExists : await admin.ExistsAsync(destination, ct);
+            if (source != destination && oldExists && newExists || !oldExists && !newExists)
+                throw new InvalidOperationException("Catalog rename requires exactly one verified source or target database.");
+            var current = oldExists ? source : destination;
+            using (var tenant = admin.OpenStaging(current))
+            {
+                TenantStorage.Verify(tenant, org);
+                if (oldExists)
+                    await BackupCoreAsync(org, tenant, ct);
+            }
+            if (source != destination && oldExists)
+                await admin.RenameAsync(source, destination, ct);
+            using var renamed = admin.OpenOrganization(org);
+            TenantStorage.Verify(renamed, org);
+            await admin.GrantRuntimeAccessAsync(destination, storage.Options.RuntimeConnectionString, ct);
+            org.CatalogRenamePending = false;
+            org.OperationError = null;
+            await ActivateAsync(org, renamed, ct);
+        }
+        catch
+        {
+            var options = new DbContextOptionsBuilder<ControlPlaneContext>()
+                .UseSqlServer(storage.Options.ControlConnectionString,
+                    sql => sql.UseCompatibilityLevel(SqlServerOptions.CompatibilityLevel));
+            using var recovery = new ControlPlaneContext(options.Options);
+            var changed = await recovery.Organizations
+                .Where(x => x.OrganizationId == organizationId && x.StorageKey == org.StorageKey)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(x => x.CatalogName, destination)
+                    .SetProperty(x => x.CatalogRenamePending, true)
+                    .SetProperty(x => x.StorageState, "Maintenance")
+                    .SetProperty(x => x.OperationError, "Catalog rename failed; retry required."), CancellationToken.None);
+            if (changed != 1) throw new TenantUnavailableException();
+            await control.Entry(org).ReloadAsync(CancellationToken.None);
+            throw;
         }
     }
 
@@ -256,6 +341,7 @@ public sealed class TenantOperations(ControlPlaneContext control, TenantStorage 
     {
         using var operation = await storage.AcquireOperationAsync(organizationId, ct);
         var org = await control.Organizations.SingleAsync(x => x.OrganizationId == organizationId, ct);
+        if (org.CatalogRenamePending) throw new TenantUnavailableException();
         if (org.StorageState == "Purged") return true;
         if (org.DeletedAt is null || utcNow < org.DeletedAt.Value.AddDays(30)) return false;
         org.StorageState = "Purging"; org.OperationId = Guid.NewGuid(); await control.SaveChangesAsync(ct);
@@ -267,7 +353,7 @@ public sealed class TenantOperations(ControlPlaneContext control, TenantStorage 
             await control.Users.Where(x => x.DefaultOrganizationId == organizationId).ExecuteUpdateAsync(s =>
                 s.SetProperty(x => x.DefaultOrganizationId, (int?)null).SetProperty(x => x.DefaultProjectId, (int?)null), ct);
             using var admin = new SqlServerAdministrationContext(storage);
-            await admin.DropAsync(TenantStorage.Catalog(org.StorageKey), ct);
+            await admin.DropAsync(TenantStorage.Catalog(org), ct);
             // Enumerate the managed namespace too: includes an artifact created before registry commit.
             foreach (var file in Directory.EnumerateFiles(storage.Options.BackupApplicationPath, org.StorageKey + "_*.bak"))
             {

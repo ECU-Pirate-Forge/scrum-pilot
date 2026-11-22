@@ -19,16 +19,16 @@ SET QUOTED_IDENTIFIER ON;
 USE [scrumpilot_control];
 GO
 
-DECLARE @Email nvarchar(256) = N'user@example.com';
-DECLARE @DryRun bit = 1;
+DECLARE @Email nvarchar(256) = N'dietrickb23@ecu.edu';
+DECLARE @DryRun bit = 0;
 
-DECLARE @RepairNormalizedIdentity bit = 0;
-DECLARE @RepairSecurityStamp bit = 0;
-DECLARE @ConfirmEmail bit = 0;
-DECLARE @ClearLockout bit = 0;
+DECLARE @RepairNormalizedIdentity bit = 1;
+DECLARE @RepairSecurityStamp bit = 1;
+DECLARE @ConfirmEmail bit = 1;
+DECLARE @ClearLockout bit = 1;
 DECLARE @ReplacePasswordHash bit = 0;
 DECLARE @PasswordHash nvarchar(max) = NULL;
-DECLARE @RepairDefaultOrganization bit = 0;
+DECLARE @RepairDefaultOrganization bit = 1;
 
 IF @Email IS NULL OR LTRIM(RTRIM(@Email)) = N''
    THROW 50020, 'Email is required.', 1;
@@ -46,7 +46,7 @@ IF @ReplacePasswordHash = 1
 
 SET @Email = LTRIM(RTRIM(@Email));
 DECLARE @NormalizedEmail nvarchar(256) = UPPER(@Email);
-DECLARE @NewSecurityStamp nvarchar(max) = CONVERT(nvarchar(36), NEWID());
+DECLARE @NewSecurityStamp nvarchar(max) = REPLACE(CONVERT(nvarchar(36), NEWID()), '-', '');
 DECLARE @NewConcurrencyStamp nvarchar(max) = CONVERT(nvarchar(36), NEWID());
 
 SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;

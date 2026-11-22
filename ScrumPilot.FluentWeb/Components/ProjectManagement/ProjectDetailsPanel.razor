@@ -16,7 +16,7 @@
         </div>
         <FluentTabs>
             <FluentTab Header="Sprints" IconStart="@(new Icons.Regular.Size20.CalendarLtr())">
-                <SprintManagementPanel Sprints="Sprints" IsOwner="IsOwner" IsSaving="IsSaving" OnCreate="OnCreateSprint" OnUpdate="OnUpdateSprint" OnDelete="OnDeleteSprint" />
+                <SprintManagementPanel Sprints="Sprints" IsOwner="IsOwner" CanManageSprints="CanManageSprints" IsSaving="IsSaving" OnCreate="OnCreateSprint" OnUpdate="OnUpdateSprint" OnDelete="OnDeleteSprint" />
             </FluentTab>
             <FluentTab Header="Epics" IconStart="@(new Icons.Regular.Size20.Flag())">
                 <EpicManagementPanel Epics="Epics" IsOwner="IsOwner" IsSaving="IsSaving" OnCreate="OnCreateEpic" OnUpdate="OnUpdateEpic" OnDelete="OnDeleteEpic" />
@@ -34,6 +34,7 @@
 @code {
     [Parameter] public Project? Project { get; set; }
     [Parameter] public bool IsOwner { get; set; }
+    [Parameter] public bool CanManageSprints { get; set; }
     [Parameter] public bool IsSaving { get; set; }
     [Parameter] public IReadOnlyList<Sprint> Sprints { get; set; } = [];
     [Parameter] public IReadOnlyList<Epic> Epics { get; set; } = [];

@@ -32,7 +32,8 @@ public sealed class TenancyCommandTests
         var adminUser = await database.Control.Users.SingleAsync(x => x.NormalizedEmail == "OPERATOR@EXAMPLE.INVALID");
         var repository = new ScrumPilot.Data.Repositories.OrganizationRepository(database.Control)
         { Operations = database.Operations, Storage = database.Storage };
-        var created = await repository.CreateAsync("CLI", "CLI", adminUser.Id, DateTime.UtcNow);
+        var name = "CLI " + Guid.NewGuid().ToString("N");
+        var created = await repository.CreateAsync(name, name.ToUpperInvariant(), adminUser.Id, DateTime.UtcNow);
         var org = await database.Control.Organizations.SingleAsync(x => x.OrganizationId == created.OrganizationId);
         using (var tenant = database.Storage.Open(org))
         {

@@ -145,24 +145,54 @@ public partial class MainLayout
         var organizationId = OrganizationRoutes.OrganizationId(uri);
         var projectId = OrganizationRoutes.ProjectId(uri);
         var isLanding = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', 2)[0].Length == 0;
-        var redirecting = false;
         try
         {
-            var organizations = await Http.GetFromJsonAsync<List<OrganizationSummaryDto>>("api/organizations", cancellation.Token) ?? [];
+            var organizations = await GetJsonWithRetryAsync<List<OrganizationSummaryDto>>(
+                "api/organizations",
+                cancellation.Token) ?? [];
             if (!IsCurrent(generation)) return;
             _organizations = organizations.Where(o => !o.IsDeleted).ToList();
-            if (_settings is null || (isLanding && string.IsNullOrEmpty(uri.Query)))
+            if (_settings is null || isLanding)
             {
-                var settings = await Http.GetFromJsonAsync<UserSettingsDto>("api/user/settings", cancellation.Token);
-                if (!IsCurrent(generation)) return;
-                _settings = settings;
-                if (settings is not null) await Theme.ApplyAsync(settings.UiPreference);
-                if (!IsCurrent(generation)) return;
+                try
+                {
+                    var settings = await GetJsonWithRetryAsync<UserSettingsDto>(
+                        "api/user/settings",
+                        cancellation.Token);
+                    if (!IsCurrent(generation)) return;
+                    _settings = settings;
+                    if (settings is not null) await Theme.ApplyAsync(settings.UiPreference);
+                    if (!IsCurrent(generation)) return;
+                }
+                catch (HttpRequestException) when (IsCurrent(generation))
+                {
+                    _settings = null;
+                }
             }
             if (isLanding && string.IsNullOrEmpty(uri.Query) && _settings?.DefaultOrganizationId is int defaultId)
             {
-                Navigation.NavigateTo(OrganizationRoutes.Page(defaultId, "backlog", _settings.DefaultProjectId), replace: true);
-                redirecting = true;
+                var defaultOrganization = _organizations.FirstOrDefault(o => o.OrganizationId == defaultId);
+                if (defaultOrganization is not null)
+                {
+                    Project? defaultProject = null;
+                    if (_settings.DefaultProjectId is int defaultProjectId)
+                    {
+                        var defaultProjects = await GetJsonWithRetryAsync<List<Project>>(
+                            OrganizationRoutes.Api(defaultId, "projects"),
+                            cancellation.Token) ?? [];
+                        if (!IsCurrent(generation)) return;
+                        defaultProject = defaultProjects.FirstOrDefault(p => p.ProjectId == defaultProjectId);
+                        _appBarProjects = defaultProjects;
+                    }
+                    _applyingRoute = true;
+                    OrganizationState.SetOrganization(defaultOrganization);
+                    ProjectState.SetProject(defaultProject);
+                    _applyingRoute = false;
+                    _work = new WorkScope(Http, defaultId, defaultProject?.ProjectId);
+                }
+                _resolvedUri = uri.AbsoluteUri;
+                _routeLoading = false;
+                StateHasChanged();
                 return;
             }
             if (organizationId is null)
@@ -177,7 +207,9 @@ public partial class MainLayout
                 return;
             }
             // Admin directory visibility never substitutes for work membership.
-            var projects = await Http.GetFromJsonAsync<List<Project>>(OrganizationRoutes.Api(organizationId.Value, "projects"), cancellation.Token) ?? [];
+            var projects = await GetJsonWithRetryAsync<List<Project>>(
+                OrganizationRoutes.Api(organizationId.Value, "projects"),
+                cancellation.Token) ?? [];
             if (!IsCurrent(generation)) return;
             var selected = projects.FirstOrDefault(p => p.ProjectId == projectId);
             if (projectId.HasValue && selected is null)
@@ -200,7 +232,7 @@ public partial class MainLayout
         }
         finally
         {
-            if (IsCurrent(generation) && !redirecting)
+            if (IsCurrent(generation))
             {
                 // The router can replace Body before our LocationChanged handler runs.
                 _resolvedUri = uri.AbsoluteUri;
@@ -208,6 +240,46 @@ public partial class MainLayout
                 StateHasChanged();
             }
         }
+    }
+
+    private async Task<T?> GetJsonWithRetryAsync<T>(
+        string requestUri,
+        CancellationToken cancellationToken)
+    {
+        for (var attempt = 1; attempt <= 3; attempt++)
+        {
+            try
+            {
+                using var response = await Http.GetAsync(requestUri, cancellationToken);
+                if (response.IsSuccessStatusCode)
+                    return await response.Content.ReadFromJsonAsync<T>(cancellationToken);
+
+                if (response.StatusCode is not (
+                    System.Net.HttpStatusCode.RequestTimeout
+                    or System.Net.HttpStatusCode.BadGateway
+                    or System.Net.HttpStatusCode.ServiceUnavailable
+                    or System.Net.HttpStatusCode.GatewayTimeout)
+                    || attempt == 3)
+                {
+                    throw new HttpRequestException(
+                        $"Request failed with HTTP status {(int)response.StatusCode}.",
+                        null,
+                        response.StatusCode);
+                }
+            }
+            catch (HttpRequestException exception)
+                when (attempt < 3
+                      && exception.StatusCode is
+                          System.Net.HttpStatusCode.RequestTimeout
+                          or System.Net.HttpStatusCode.BadGateway
+                          or System.Net.HttpStatusCode.ServiceUnavailable
+                          or System.Net.HttpStatusCode.GatewayTimeout)
+            {
+            }
+
+            await Task.Delay(attempt * 250, cancellationToken);
+        }
+        throw new HttpRequestException("Request remained unavailable after retries.");
     }
 
     private Task SelectOrganizationAsync(OrganizationSummaryDto organization)
