@@ -48,6 +48,28 @@ public sealed class StoryServiceTests
     [Fact]
     public async Task Generation_HandlesFencedStructuredArray() =>
         Assert.Single(await Generator("```json\n" + Valid + "\n```").GenerateAsync(["Task"]));
+    [Fact]
+    public async Task Generation_RetriesOnceForMalformedJson()
+    {
+        var responses = new Queue<string>(["not json", Valid]);
+        chat.GetResponseAsync(Arg.Any<IEnumerable<ChatMessage>>(), Arg.Any<ChatOptions>(), Arg.Any<CancellationToken>())
+            .Returns(_ => new ChatResponse(new ChatMessage(ChatRole.Assistant, responses.Dequeue())));
+
+        var stories = await new StoryGenerationService(chat, new AiOptions()).GenerateAsync(["Task"]);
+
+        Assert.Single(stories);
+        await chat.Received(2).GetResponseAsync(Arg.Any<IEnumerable<ChatMessage>>(),
+            Arg.Is<ChatOptions>(o => o.ResponseFormat == ChatResponseFormat.Json),
+            Arg.Any<CancellationToken>());
+    }
+    [Fact]
+    public async Task Generation_RejectsMalformedJsonAfterOneRetry()
+    {
+        var generator = Generator("not json");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => generator.GenerateAsync(["Task"]));
+        await chat.Received(2).GetResponseAsync(Arg.Any<IEnumerable<ChatMessage>>(),
+            Arg.Any<ChatOptions>(), Arg.Any<CancellationToken>());
+    }
     [Theory]
     [InlineData(0, 1)]
     [InlineData(11, 1)]
