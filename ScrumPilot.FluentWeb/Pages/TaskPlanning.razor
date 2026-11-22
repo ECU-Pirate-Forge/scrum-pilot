@@ -7,6 +7,7 @@
 @using ScrumPilot.FluentWeb.Components.Pbi
 @inject OrganizationStateService OrganizationState
 @inject ILogger<TaskPlanning> Logger
+@inject IJSRuntime JS
 
 <PageTitle>Task Planning</PageTitle>
 <AppPageHeader Title="Task Planning" Subtitle="Review repository context, decompose stories, and approve bounded implementation specifications." />
@@ -18,6 +19,7 @@ else
 {
     <ProjectRepositorySettings @key="(Scope.OrganizationId, ProjectId.Value)" CapturedWork="Scope" ProjectId="ProjectId.Value" IsOwner="IsOwner" />
     @if (_error.Length > 0) { <p role="alert">@_error</p> }
+    @if (_notice.Length > 0) { <p role="status">@_notice</p> }
     <FluentButton OnClick="LoadAsync">Refresh work and snapshots</FluentButton>
     <section aria-label="Generate tasks from stories">
         <h2>Generate tasks</h2>
@@ -48,6 +50,7 @@ else
             {
                 <label><input type="checkbox" @bind="proposal.Selected" /> Accept @proposal.Key</label>
                 <textarea rows="20" @bind="proposal.Json" spellcheck="false" aria-label="@($"Proposal {proposal.Key}")"></textarea>
+                <FluentButton OnClick="@(() => CopyAsync(proposal.Json))">Copy @proposal.Key</FluentButton>
             }
             <label><input type="checkbox" @bind="_asDraft" /> Save as draft work</label>
             <FluentButton OnClick="AcceptAsync" Disabled="_busy">Save selected task proposals</FluentButton>
@@ -79,7 +82,7 @@ else
     private readonly HashSet<int> _selectedStories = [];
     private readonly List<ProposalEditor> _proposals = [];
     private TaskGenerationPreviewDto? _preview;
-    private string _branch = "main", _sourcePaths = "", _error = "";
+    private string _branch = "main", _sourcePaths = "", _error = "", _notice = "";
     private int _snapshotId, _taskId;
     private bool _busy, _asDraft;
     private long _loadGeneration;
@@ -130,6 +133,25 @@ else
         if (!response.IsSuccessStatusCode) { _error = await Http.ReadAsStringAsync(response.Content); return; }
         _preview = null; _proposals.Clear(); await LoadAsync();
     });
+    private async Task CopyAsync(string text)
+    {
+        if (!Scope.IsCurrent) return;
+        _error = "";
+        _notice = "";
+        try
+        {
+            var copied = await JS.InvokeAsync<bool>("mermaidHelper.copyText", text);
+            if (!Scope.IsCurrent) return;
+            if (copied) _notice = "Copied to clipboard.";
+            else _error = "Could not copy to the clipboard.";
+        }
+        catch (JSException ex)
+        {
+            if (!Scope.IsCurrent) return;
+            Logger.LogWarning(ex, "Task proposal clipboard copy failed");
+            _error = "Could not copy to the clipboard.";
+        }
+    }
     private async Task ExecuteAsync(Func<Task> action)
     {
         if (!Scope.IsCurrent || _busy || !ProjectId.HasValue) return;

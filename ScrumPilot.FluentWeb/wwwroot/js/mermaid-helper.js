@@ -103,6 +103,15 @@ window.mermaidHelper = {
         if (handler) window.removeEventListener('focus', handler);
         window.mermaidHelper.focusObservers.delete(id);
     },
+    copyText: async function (text) {
+        if (!navigator.clipboard?.writeText) return false;
+        try {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } catch {
+            return false;
+        }
+    },
     downloadText: function (filename, text) {
         const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
         const link = document.createElement('a');

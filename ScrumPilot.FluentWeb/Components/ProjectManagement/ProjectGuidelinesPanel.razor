@@ -3,6 +3,8 @@
 @using System.Text
 @using ScrumPilot.Shared.Models
 @inherits PlanningComponentBase
+@inject IJSRuntime JS
+@inject ILogger<ProjectGuidelinesPanel> Logger
 
 <section aria-label="Project guidelines">
     <h3>Project guidelines</h3>
@@ -11,6 +13,10 @@
     {
         <p role="alert">@_error</p>
     }
+    @if (!string.IsNullOrEmpty(_notice))
+    {
+        <p role="status">@_notice</p>
+    }
     @if (_loaded)
     {
         <p>Current revision: @(_current?.Revision.ToString() ?? "Not saved")</p>
@@ -18,6 +24,7 @@
         {
             <label for="@_editorId">Markdown guidelines (maximum 128 KiB UTF-8)</label>
             <textarea id="@_editorId" rows="18" style="width:100%" @bind="_content" disabled="@_busy"></textarea>
+            <FluentButton OnClick="@(() => CopyAsync(_content))" Disabled="_busy">Copy guidelines</FluentButton>
             <p>@Encoding.UTF8.GetByteCount(_content) / 131072 bytes</p>
             <FluentButton OnClick="SaveAsync" Disabled="@(_busy || string.IsNullOrWhiteSpace(_content))">Save guidelines</FluentButton>
             <FluentButton OnClick="UseTemplateAsync" Disabled="@(_busy || _content.Length > 0)">Use full 40-section template</FluentButton>
@@ -28,6 +35,7 @@
         }
         <h4>Safe text preview</h4>
         <pre style="white-space:pre-wrap;overflow-wrap:anywhere">@_content</pre>
+        <FluentButton OnClick="@(() => CopyAsync(_content))" Disabled="_busy">Copy preview</FluentButton>
         <FluentButton OnClick="ReloadAsync" Disabled="_busy">Reload saved revision</FluentButton>
         <h4>Revision history</h4>
         @foreach (var revision in _history)
@@ -35,6 +43,7 @@
             <details>
                 <summary>Revision @revision.Revision — @revision.CreatedAt.ToUniversalTime().ToString("u")</summary>
                 <pre style="white-space:pre-wrap;overflow-wrap:anywhere">@revision.Content</pre>
+                <FluentButton OnClick="@(() => CopyAsync(revision.Content))" Disabled="_busy">Copy revision @revision.Revision</FluentButton>
                 @if (IsOwner)
                 {
                     <FluentButton OnClick="@(() => RestoreAsync(revision.ProjectGuidelinesRevisionId))" Disabled="_busy">Restore as new revision</FluentButton>
@@ -51,7 +60,7 @@
     private readonly string _editorId = "guidelines-" + Guid.NewGuid().ToString("N");
     private ProjectGuidelinesRevision? _current;
     private List<ProjectGuidelinesRevision> _history = [];
-    private string _content = "", _error = "";
+    private string _content = "", _error = "", _notice = "";
     private int _loadedProject;
     private bool _busy, _loaded;
     private string Endpoint => $"api/projects/{ProjectId}/guidelines";
@@ -70,6 +79,7 @@
     {
         _busy = true;
         _error = "";
+        _notice = "";
         try
         {
             using var response = await Http.GetAsync(Endpoint);
@@ -111,6 +121,28 @@
         }
         await WriteAsync(() => Http.PutAsJsonAsync(Endpoint,
             new SaveProjectGuidelinesRequest(_content, _current?.ProjectGuidelinesRevisionId)));
+    }
+
+    private async Task CopyAsync(string text)
+    {
+        if (!Scope.IsCurrent) return;
+        _error = "";
+        _notice = "";
+        try
+        {
+            var copied = await JS.InvokeAsync<bool>("mermaidHelper.copyText", text);
+            if (!Scope.IsCurrent) return;
+            if (copied) _notice = "Copied to clipboard.";
+            else _error = "Could not copy to the clipboard.";
+        }
+        catch (JSException ex)
+        {
+            if (Scope.IsCurrent)
+            {
+                Logger.LogWarning(ex, "Clipboard copy failed");
+                _error = "Could not copy to the clipboard.";
+            }
+        }
     }
 
     private Task RestoreAsync(int id) => WriteAsync(() => Http.PostAsJsonAsync($"{Endpoint}/{id}/restore",

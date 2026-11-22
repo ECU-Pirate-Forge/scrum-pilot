@@ -32,6 +32,19 @@ public sealed class LocalPlanningAiTests
     }
 
     [Fact]
+    public async Task ProjectGuidelinesAreAppendedToSystemMessageOnly()
+    {
+        var handler = new StubHandler();
+        await Service(handler).GenerateAsync<Answer>("Return JSON.",
+            new { story = "A", Guidelines = "Use exact tests and documentation." }, default);
+
+        Assert.Contains("Project Guidelines:", handler.SystemMessage);
+        Assert.Contains("Use exact tests and documentation.", handler.SystemMessage);
+        Assert.DoesNotContain("Use exact tests and documentation.", handler.UserMessage);
+        Assert.DoesNotContain("\"Guidelines\"", handler.UserMessage);
+    }
+
+    [Fact]
     public async Task OversizedContextIsRejectedRatherThanTruncated()
     {
         var handler = new StubHandler();
@@ -50,6 +63,8 @@ public sealed class LocalPlanningAiTests
     {
         public int RequestCount { get; private set; }
         public bool Fail { get; set; }
+        public string SystemMessage { get; private set; } = "";
+        public string UserMessage { get; private set; } = "";
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null,
             CancellationToken cancellationToken = default)
         {
@@ -57,6 +72,8 @@ public sealed class LocalPlanningAiTests
             Assert.Equal("local-model", options!.ModelId);
             Assert.Equal(ChatRole.System, messages.First().Role);
             Assert.Equal(ChatRole.User, messages.Last().Role);
+            SystemMessage = messages.First().Text;
+            UserMessage = messages.Last().Text;
             if (Fail) throw new HttpRequestException("Synthetic local provider outage.");
             return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, """{"text":"generated"}""")));
         }
