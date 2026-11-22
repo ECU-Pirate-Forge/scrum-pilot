@@ -211,6 +211,28 @@ public sealed class ProjectGenerationUiTests : FluentFrontendTestBase
     }
 
     [Fact]
+    public async Task ProjectGuidelinesCopyPassesCurrentAndPreviewTextToClipboard()
+    {
+        Http.OnGetJson("api/projects/17/guidelines", new ProjectGuidelinesRevision
+        { ProjectGuidelinesRevisionId = 3, ProjectId = 17, Revision = 1, ActorId = "owner", Content = "Saved guidance" });
+        Http.OnGetJson("api/projects/17/guidelines/history", new[]
+        {
+            new ProjectGuidelinesRevision
+            { ProjectGuidelinesRevisionId = 2, ProjectId = 17, Revision = 1, ActorId = "owner", Content = "Historical guidance" }
+        });
+        using var cut = Render<ProjectGuidelinesPanel>(p => p.Add(c => c.ProjectId, 17).Add(c => c.IsOwner, true));
+        cut.WaitForAssertion(() => Assert.Contains("Saved guidance", cut.Markup));
+
+        await cut.FindAll("fluent-button").Single(b => b.TextContent.Trim() == "Copy guidelines").ClickAsync(new());
+        var copy = Assert.Single(JSInterop.Invocations, x => x.Identifier == "mermaidHelper.copyText");
+        Assert.Equal("Saved guidance", copy.Arguments[0]);
+
+        await cut.FindAll("fluent-button").Single(b => b.TextContent.Trim() == "Copy revision 1").ClickAsync(new());
+        var revisionCopy = JSInterop.Invocations.Where(x => x.Identifier == "mermaidHelper.copyText").Last();
+        Assert.Equal("Historical guidance", revisionCopy.Arguments[0]);
+    }
+
+    [Fact]
     public void LinkedStoryCardLoadsCurrencyWithoutChangingContent()
     {
         Http.OnGetJson("api/projects/17/story-generation/stories/101/currency",

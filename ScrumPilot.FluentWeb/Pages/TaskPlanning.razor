@@ -21,6 +21,7 @@
 else
 {
     @if (_error.Length > 0) { <p role="alert">@_error</p> }
+    @if (_notice.Length > 0) { <p role="status">@_notice</p> }
     <FluentButton OnClick="LoadAsync">Refresh work</FluentButton>
     <section aria-label="Create tasks from existing work">
         <h2>Create tasks from a story or bug</h2>
@@ -61,6 +62,7 @@ else
                     {
                         <label><input type="checkbox" @bind="proposal.Selected" /> Accept @proposal.Key</label>
                         <textarea rows="16" @bind="proposal.Json" spellcheck="false" aria-label="@($"Proposal {proposal.Key}")"></textarea>
+                        <FluentButton OnClick="@(() => CopyAsync(proposal.Json))">Copy @proposal.Key</FluentButton>
                     }
                     <label><input type="checkbox" @bind="_asDraft" /> Save accepted work as drafts</label>
                     <FluentButton OnClick="AcceptCreatedTasksAsync" Disabled="_busy">Save selected task proposals</FluentButton>
@@ -77,6 +79,7 @@ else
                             <label>Copyable implementation spec
                                 <textarea rows="16" readonly>@task.Description</textarea>
                             </label>
+                            <FluentButton OnClick="@(() => CopyAsync(task.Description))">Copy task @task.PbiId</FluentButton>
                         }
                         else
                         {
@@ -132,6 +135,7 @@ else
                 {
                     <label><input type="checkbox" @bind="proposal.Selected" /> Accept @proposal.Key</label>
                     <textarea rows="20" @bind="proposal.Json" spellcheck="false" aria-label="@($"Proposal {proposal.Key}")"></textarea>
+                    <FluentButton OnClick="@(() => CopyAsync(proposal.Json))">Copy @proposal.Key</FluentButton>
                 }
                 <label><input type="checkbox" @bind="_asDraft" /> Save as draft work</label>
                 <FluentButton OnClick="AcceptAsync" Disabled="_busy">Save selected repository-bound task proposals</FluentButton>
@@ -155,7 +159,7 @@ else
     private readonly List<TaskCreationProposalEditor> _creationProposals = [];
     private TaskGenerationPreviewDto? _githubPreview;
     private TaskCreationPreviewDto? _creationPreview;
-    private string _branch = "main", _sourcePaths = "", _error = "";
+    private string _branch = "main", _sourcePaths = "", _error = "", _notice = "";
     private bool _busy, _asDraft = true, _githubEnabled;
     private long _loadGeneration;
     private IEnumerable<ProductBacklogItem> EligibleSources => _items.Where(item =>
@@ -309,7 +313,25 @@ else
         _githubProposals.Clear();
         await LoadAsync();
     });
-
+    private async Task CopyAsync(string text)
+    {
+        if (!Scope.IsCurrent) return;
+        _error = "";
+        _notice = "";
+        try
+        {
+            var copied = await JS.InvokeAsync<bool>("mermaidHelper.copyText", text);
+            if (!Scope.IsCurrent) return;
+            if (copied) _notice = "Copied to clipboard.";
+            else _error = "Could not copy to the clipboard.";
+        }
+        catch (JSException ex)
+        {
+            if (!Scope.IsCurrent) return;
+            Logger.LogWarning(ex, "Task proposal clipboard copy failed");
+            _error = "Could not copy to the clipboard.";
+        }
+    }
     private async Task ExecuteAsync(Func<Task> action)
     {
         if (!Scope.IsCurrent || _busy || !ProjectId.HasValue) return;

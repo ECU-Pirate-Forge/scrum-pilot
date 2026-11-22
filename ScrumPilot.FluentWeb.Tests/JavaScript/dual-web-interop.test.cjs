@@ -24,6 +24,7 @@ function mermaidFixture(site) {
         }
     };
     const window = { mermaid, addEventListener(name, handler) { focusHandlers.push(handler); }, removeEventListener() {} };
+    const navigator = { clipboard: null };
     const document = {
         getElementById: () => container, importNode: node => node,
         createElement() { return { click() { downloads.push(this.download); } }; }
@@ -59,7 +60,7 @@ function mermaidFixture(site) {
     vm.runInNewContext(
         fs.readFileSync(path.resolve(__dirname, '..', '..', site, 'wwwroot/js/mermaid-helper.js'), 'utf8'),
         {
-            window, mermaid, document, Date, DOMParser, console, Blob,
+            window, navigator, mermaid, document, Date, DOMParser, console, Blob,
             URL: { createObjectURL() { return 'blob:export'; }, revokeObjectURL() {} },
             XMLSerializer: class { serializeToString(graph) { return graph.raw; } },
             setTimeout(callback) { callback(); }
@@ -67,6 +68,7 @@ function mermaidFixture(site) {
     );
     return {
         helper: window.mermaidHelper, pending, parsedGraphs, downloads, focusHandlers,
+        navigator,
         get container() { return container; },
         replaceContainer() {
             container = element('replacement');
@@ -402,4 +404,24 @@ test('Fluent retired focus observers cannot reconcile a replacement tenant subsc
     fixture.helper.unobserveFocus('subscription');
     fixture.focusHandlers[1]();
     assert.deepEqual(calls, [['ReconcileOnFocus', 2]]);
+});
+
+test('Fluent clipboard copy succeeds with exact text and rejects unavailable or failed APIs', async () => {
+    const fixture = mermaidFixture('ScrumPilot.FluentWeb');
+    fixture.navigator.clipboard = {
+        async writeText(text) {
+            assert.equal(text, 'exact clipboard  text\n');
+        }
+    };
+    assert.equal(await fixture.helper.copyText('exact clipboard  text\n'), true);
+
+    fixture.navigator.clipboard = {
+        async writeText() {
+            throw new Error('permission denied');
+        }
+    };
+    assert.equal(await fixture.helper.copyText('denied'), false);
+
+    fixture.navigator.clipboard = null;
+    assert.equal(await fixture.helper.copyText('missing'), false);
 });

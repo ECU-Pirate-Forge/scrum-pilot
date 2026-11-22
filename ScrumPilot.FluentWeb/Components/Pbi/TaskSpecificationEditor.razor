@@ -7,6 +7,7 @@
 <section aria-label="Task specification">
     <h2>Task #@TaskId specification</h2>
     @if (_error.Length > 0) { <p role="alert">@_error</p> }
+    @if (_notice.Length > 0) { <p role="status">@_notice</p> }
     <p>Scope status: @(_status?.IsCurrent == true ? "Approved and current" : "Not implementation-approved")</p>
     @foreach (var reason in _status?.ReviewReasons ?? []) { <p>@reason</p> }
     <p>Revision @_revision. Edits create a new draft; only an Owner may approve exact file scope. Include test files and appropriate documentation changes.</p>
@@ -19,13 +20,17 @@
     <label>Structured implementation specification (JSON)
         <textarea rows="22" @bind="_content" spellcheck="false"></textarea>
     </label>
+    <FluentButton OnClick="@(() => CopyAsync(_content))">Copy specification JSON</FluentButton>
     <label>Exact file operations (JSON array; category Source/Test/Documentation/Configuration, operation Add/Modify/Delete/Rename)
         <textarea rows="10" @bind="_files" spellcheck="false"></textarea>
     </label>
+    <FluentButton OnClick="@(() => CopyAsync(_files))">Copy file operations JSON</FluentButton>
     <FluentButton OnClick="SaveAsync">Save new draft revision</FluentButton>
     @if (IsOwner) { <FluentButton OnClick="ApproveAsync">Approve this saved revision</FluentButton> }
     <FluentButton OnClick="ExportAsync">Export Markdown handoff</FluentButton>
+    <FluentButton OnClick="@(() => CopyExportAsync("specification"))">Copy Markdown handoff</FluentButton>
     <FluentButton OnClick="ExportManifestAsync">Export scope manifest</FluentButton>
+    <FluentButton OnClick="@(() => CopyExportAsync("manifest"))">Copy scope manifest</FluentButton>
     <details>
         <summary>Revision history</summary>
         @foreach (var revision in _history)
@@ -54,7 +59,7 @@
     private TaskSpecificationStatusDto? _status;
     private TaskSpecificationRevision[] _history = [];
     private int _loadedTask, _revision, _snapshotId, _prNumber;
-    private string _content = "", _files = "[]", _error = "", _checkResult = "";
+    private string _content = "", _files = "[]", _error = "", _notice = "", _checkResult = "";
     private string Url => $"api/projects/{ProjectId}/tasks/{TaskId}";
 
     protected override async Task OnParametersSetAsync()
@@ -124,5 +129,46 @@
         catch (OperationCanceledException) when (!Scope.IsCurrent) { }
         catch (Exception ex) when (ex is HttpRequestException or JSException)
         { if (!Scope.IsCurrent) return; Logger.LogWarning(ex, "Task scope manifest export failed"); _error = "Unable to export the task scope manifest."; }
+    }
+
+    private async Task CopyAsync(string text)
+    {
+        if (!Scope.IsCurrent) return;
+        _error = "";
+        _notice = "";
+        try
+        {
+            var copied = await JS.InvokeAsync<bool>("mermaidHelper.copyText", text);
+            if (!Scope.IsCurrent) return;
+            if (copied) _notice = "Copied to clipboard.";
+            else _error = "Could not copy to the clipboard.";
+        }
+        catch (JSException ex)
+        {
+            if (!Scope.IsCurrent) return;
+            Logger.LogWarning(ex, "Task specification clipboard copy failed");
+            _error = "Could not copy to the clipboard.";
+        }
+    }
+
+    private async Task CopyExportAsync(string exportType)
+    {
+        if (!Scope.IsCurrent) return;
+        _error = "";
+        _notice = "";
+        try
+        {
+            var text = exportType == "manifest"
+                ? await Http.GetStringAsync(Url + "/specifications/manifest")
+                : await Http.GetStringAsync(Url + "/specifications/export");
+            await CopyAsync(text);
+        }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
+        catch (Exception ex) when (ex is HttpRequestException or JSException)
+        {
+            if (!Scope.IsCurrent) return;
+            Logger.LogWarning(ex, "Task {ExportType} copy failed", exportType);
+            _error = $"Unable to copy the task {exportType}.";
+        }
     }
 }

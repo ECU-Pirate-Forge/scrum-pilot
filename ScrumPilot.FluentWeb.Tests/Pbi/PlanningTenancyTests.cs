@@ -282,9 +282,14 @@ public sealed class PlanningTenancyTests : FluentFrontendTestBase
         var invocation = Assert.Single(JSInterop.Invocations, x => x.Identifier == "mermaidHelper.downloadText");
         Assert.Equal("task-5-specification.md", invocation.Arguments[0]);
         Assert.Equal("Scoped handoff", invocation.Arguments[1]);
+        await cut.FindAll("fluent-button").Single(x => x.TextContent.Trim() == "Copy specification JSON").ClickAsync(new());
+        var copyInvocation = Assert.Single(JSInterop.Invocations, x => x.Identifier == "mermaidHelper.copyText");
+        Assert.IsType<string>(copyInvocation.Arguments[0]);
         scope.Dispose();
         await cut.FindAll("fluent-button").Single(x => x.TextContent.Trim() == "Export Markdown handoff").ClickAsync(new());
+        await cut.FindAll("fluent-button").Single(x => x.TextContent.Trim() == "Copy specification JSON").ClickAsync(new());
         Assert.Single(JSInterop.Invocations, x => x.Identifier == "mermaidHelper.downloadText");
+        Assert.Single(JSInterop.Invocations, x => x.Identifier == "mermaidHelper.copyText");
         Assert.All(Http.Requests, request => Assert.StartsWith(root, request.Path));
     }
 
