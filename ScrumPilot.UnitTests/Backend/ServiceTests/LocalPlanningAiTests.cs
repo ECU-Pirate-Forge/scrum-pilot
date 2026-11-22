@@ -169,6 +169,7 @@ public sealed class LocalPlanningAiTests
         Assert.Equal(0, handler.RequestCount);
     }
 
+
     private static LocalPlanningAi Service(StubHandler handler) =>
         new(handler, new AiOptions { Model = "local-model" });
 
@@ -211,10 +212,11 @@ public sealed class LocalPlanningAiTests
         public string Output { get; set; } = """{"text":"generated"}""";
         public string SystemMessage { get; private set; } = "";
         public string UserMessage { get; private set; } = "";
+        public string[]? Outputs { get; set; }
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null,
             CancellationToken cancellationToken = default)
         {
-            RequestCount++;
+            var index = RequestCount++;
             ResponseFormat = options?.ResponseFormat;
             Assert.Equal("local-model", options!.ModelId);
             Assert.Equal(ChatRole.System, messages.First().Role);
@@ -222,7 +224,8 @@ public sealed class LocalPlanningAiTests
             SystemMessage = messages.First().Text;
             UserMessage = messages.Last().Text;
             if (Fail) throw new HttpRequestException("Synthetic local provider outage.");
-            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, Output)));
+            var output = Outputs is not null ? Outputs[index] : Output;
+            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, output)));
         }
         public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
