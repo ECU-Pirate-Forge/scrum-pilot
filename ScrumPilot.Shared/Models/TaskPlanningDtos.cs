@@ -6,7 +6,7 @@ public sealed record TaskProposalDto(string Key, int ParentStoryId, string Title
     TaskSpecificationContent Content, TaskFileProposal[] Files, string[] DependsOnKeys, int[] ExistingPrerequisites);
 public sealed record TaskGenerationOutput(TaskProposalDto[] Tasks);
 public sealed record GenerateTaskPreviewRequest(int[] StoryIds, int RepositorySnapshotId, string[] SourcePaths, string IdempotencyKey);
-public sealed record TaskGenerationPreviewDto(int GenerationRunId, int RepositorySnapshotId, int? GuidelinesRevisionId,
+public sealed record TaskGenerationPreviewDto(int GenerationRunId, int RepositorySnapshotId, /*int? GuidelinesRevisionId,*/
     TaskProposalDto[] Tasks);
 public sealed record AcceptTaskProposalsRequest(int GenerationRunId, TaskProposalDto[] Tasks, bool AsDraft);
 public sealed record SaveTaskSpecificationRequest(TaskSpecificationContent Content, TaskFileProposal[] Files,

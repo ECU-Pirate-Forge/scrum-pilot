@@ -39,7 +39,7 @@
                 {
                     <p class="comment-item__body">@comment.Body</p>
                     <div class="comment-item__meta">
-                        <small class="sp-muted">@comment.UserId · @comment.CreatedDate.ToLocalTime().ToString("MMM d, yyyy h:mm tt")</small>
+                        <small class="sp-muted">@comment.AuthorUserName · @comment.CreatedDate.ToLocalTime().ToString("MMM d, yyyy h:mm tt")</small>
                         @if (CanEdit(comment))
                         {
                             <span class="pbi-actions">

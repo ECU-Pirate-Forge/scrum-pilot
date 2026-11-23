@@ -25,12 +25,12 @@ public sealed class PbiService(IStoryGenerationService generator, IPbiRepository
     public async Task<ProductBacklogItem> ImprovePbiAsync(ProductBacklogItem pbi, CancellationToken cancellationToken = default)
     {
         RequireInferenceSession();
-        var guidance = tenant is not null && pbi.ProjectId > 0
-            ? await new ProjectGuidelinesService(tenant).CurrentAsync(pbi.ProjectId, cancellationToken) : null;
+        // var guidance = tenant is not null && pbi.ProjectId > 0
+        //     ? await new ProjectGuidelinesService(tenant).CurrentAsync(pbi.ProjectId, cancellationToken) : null;
         var sourceVersion = pbi.Version;
         async Task<ProductBacklogItem> Improve()
         {
-            if (guidance is null) return await generator.ImproveAsync(pbi, cancellationToken);
+            // if (guidance is null) return await generator.ImproveAsync(pbi, cancellationToken);
             if (localAi is null) throw new InvalidOperationException("Local planning AI is required for saved project guidance.");
             var output = await localAi.GenerateAsync<ProjectStoryAiOutput>("""
                 Improve this backlog item's title and description using the project guidelines.
@@ -38,7 +38,7 @@ public sealed class PbiService(IStoryGenerationService generator, IPbiRepository
                 Return exactly one story in {"stories":[{"title":"improved title","description":"user story and observable acceptance criteria","priority":"Medium","storyPoints":"Zero"}]}.
                 Priority is None, Low, Medium or High. StoryPoints is Zero, One, Two, Three, Five, Eight, Thirteen or TwentyOne.
                 Do not output identifiers or additional properties.
-                """, new { pbi.Title, pbi.Description, pbi.Type, pbi.Priority, pbi.StoryPoints, Guidelines = guidance.Content }, cancellationToken);
+                """, new { pbi.Title, pbi.Description, pbi.Type, pbi.Priority, pbi.StoryPoints }, cancellationToken);
             if (output.Stories is null || output.Stories.Count != 1)
                 throw new InvalidOperationException("AI improvement must return exactly one item.");
             var improved = output.Stories[0];
@@ -58,10 +58,10 @@ public sealed class PbiService(IStoryGenerationService generator, IPbiRepository
         {
             var current = await tenant.Stories.AsNoTracking().SingleOrDefaultAsync(x =>
                 x.PbiId == pbi.PbiId && x.ProjectId == pbi.ProjectId, cancellationToken);
-            var currentGuidance = await new ProjectGuidelinesService(tenant).CurrentAsync(pbi.ProjectId, cancellationToken);
-            if (current is null || current.Version != sourceVersion ||
-                currentGuidance?.ProjectGuidelinesRevisionId != guidance?.ProjectGuidelinesRevisionId)
-                throw new InvalidOperationException("The work item or project guidance changed during inference; reload and retry.");
+            // var currentGuidance = await new ProjectGuidelinesService(tenant).CurrentAsync(pbi.ProjectId, cancellationToken);
+            // if (current is null || current.Version != sourceVersion ||
+            //     currentGuidance?.ProjectGuidelinesRevisionId != guidance?.ProjectGuidelinesRevisionId)
+            //     throw new InvalidOperationException("The work item or project guidance changed during inference; reload and retry.");
         }
         return result; // Identity and immutable planning provenance remain server-loaded.
     }

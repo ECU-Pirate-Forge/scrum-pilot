@@ -37,7 +37,7 @@ public sealed class PlanningTenancyTests : FluentFrontendTestBase
             new ProductBacklogItem { PbiId = 5, ProjectId = 17, Title = "Scoped story", Type = PbiType.Story }
         });
         Http.On(HttpMethod.Post, "api/organizations/2/projects/17/task-creation/preview", (_, _) =>
-            MockHttpHandler.Json(new TaskCreationPreviewDto(7, null,
+            MockHttpHandler.Json(new TaskCreationPreviewDto(7, 
                 [new("task-1", 5, "Draft task", "Implement it", [], [], 1, "story")])));
         Http.On(HttpMethod.Post, "api/organizations/2/projects/17/task-creation/accept", (_, _) =>
             MockHttpHandler.Json(Array.Empty<ProductBacklogItem>()));

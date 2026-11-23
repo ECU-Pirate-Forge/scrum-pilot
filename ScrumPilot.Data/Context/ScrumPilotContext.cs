@@ -145,7 +145,7 @@ namespace ScrumPilot.Data.Context
                 entity.Property(e => e.EpicId).IsRequired(false);
                 entity.Property(e => e.SprintId).IsRequired(false);
                 entity.Property(e => e.Title).IsRequired().HasMaxLength(200);
-                entity.Property(e => e.Description).HasMaxLength(2000);
+                entity.Property(e => e.Description).HasColumnType("nvarchar(max)");
                 entity.Property(e => e.Type).HasConversion<string>();
                 entity.Property(e => e.Status).HasConversion<string>();
                 entity.Property(e => e.Priority).HasConversion<string>();

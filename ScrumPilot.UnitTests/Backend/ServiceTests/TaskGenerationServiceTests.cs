@@ -236,7 +236,7 @@ public sealed class TaskGenerationServiceTests
             GenerationRunId = run.GenerationRunId,
             RepositorySnapshotId = f.Snapshot.RepositorySnapshotId,
             SnapshotJson = JsonSerializer.Serialize(new TaskGenerationPreviewDto(run.GenerationRunId,
-                f.Snapshot.RepositorySnapshotId, f.Project.CurrentGuidelinesRevisionId, [proposal]))
+                f.Snapshot.RepositorySnapshotId, /*f.Project.CurrentGuidelinesRevisionId,*/ [proposal]))
         });
         await f.Db.SaveChangesAsync();
         using var http = new HttpClient(new PlanningAiHandler());

@@ -60,8 +60,8 @@ public sealed class TaskCreationService(
             throw new InvalidOperationException("There are no generated tasks to replace for the selected source.");
 
         var project = await db.Projects.SingleAsync(item => item.ProjectId == projectId, ct);
-        var guidance = await db.ProjectGuidelinesRevisions.AsNoTracking().SingleOrDefaultAsync(item =>
-            item.ProjectId == projectId && item.ProjectGuidelinesRevisionId == project.CurrentGuidelinesRevisionId, ct);
+        // var guidance = await db.ProjectGuidelinesRevisions.AsNoTracking().SingleOrDefaultAsync(item =>
+        //     item.ProjectId == projectId && item.ProjectGuidelinesRevisionId == project.CurrentGuidelinesRevisionId, ct);
         var graphRevision = await db.ProjectGraphStates.AsNoTracking().Where(item => item.ProjectId == projectId)
             .Select(item => item.Revision).SingleOrDefaultAsync(ct);
         var run = new GenerationRun
@@ -77,12 +77,15 @@ public sealed class TaskCreationService(
         db.GenerationRuns.Add(run);
         await db.SaveChangesAsync(ct);
 
-        const string prompt = """
+        var prompt = $$"""
             Return only a JSON object with a "tasks" array. Decompose each selected Story or Bug into small, independently actionable ScrumPilot tasks.
             Adhere to the supplied current project guidelines. Use only the selected source work items and project context; do not assume repository or file access.
             Every task must have exactly: key (unique short string), parentPbiId (one of the input PBI IDs), title, description,
             dependsOnKeys (other proposed task keys), and existingPrerequisites (existing task PBI IDs or []).
             Give each task a clear outcome and enough detail to implement it without inventing requirements. Propose only real dependencies.
+            {{(request.ReplaceGeneratedTasks
+                ? "This is a replacement run. ExistingPrerequisites must not reference any generated task that is being replaced; use only persisted manual tasks."
+                : "")}}
             The final copy/pastable implementation spec is assembled by the server and always includes the required project-guideline and agent-handoff instructions.
             Do not output identifiers other than parentPbiId and task dependency keys. Do not execute code.
             """;
@@ -90,7 +93,13 @@ public sealed class TaskCreationService(
             item.ProjectId == projectId && item.Type == PbiType.Task
             && item.ParentStoryId.HasValue && request.ParentPbiIds.Contains(item.ParentStoryId.Value))
             .Select(item => new { item.PbiId, item.Title, item.ParentStoryId, item.Status }).ToArrayAsync(ct);
-        var existingTaskIds = existingTasks.Select(task => task.PbiId).ToHashSet();
+        var replacedGeneratedIds = request.ReplaceGeneratedTasks
+            ? existingGenerated.Select(task => task.PbiId).ToHashSet()
+            : new HashSet<int>();
+        var existingTaskIds = existingTasks
+            .Select(task => task.PbiId)
+            .Where(id => !replacedGeneratedIds.Contains(id))
+            .ToHashSet();
         var context = new
         {
             PromptVersion = 1,
@@ -104,8 +113,8 @@ public sealed class TaskCreationService(
                 source.Version,
                 SourceSnapshot = SourceText(source)
             }).ToArray(),
-            GuidelinesRevisionId = guidance?.ProjectGuidelinesRevisionId,
-            Guidelines = guidance?.Content,
+            // GuidelinesRevisionId = guidance?.ProjectGuidelinesRevisionId,
+            // Guidelines = guidance?.Content,
             ExistingTasks = existingTasks,
             Dependencies = await db.PbiDependencies.AsNoTracking().Where(item => item.ProjectId == projectId
                     && existingTaskIds.Contains(item.DependentPbiId) && existingTaskIds.Contains(item.PrerequisitePbiId))
@@ -115,7 +124,7 @@ public sealed class TaskCreationService(
         try
         {
             var output = await inference.RunAsync(projectId,
-                () => ai.GenerateStructuredAsync<TaskCreationAiOutput>(prompt, context, ct), ct);
+                () => ai.GenerateAsync<TaskCreationAiOutput>(prompt, context, ct), ct);
             db.Attach(run);
             await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
             await db.AcquirePlanningPolicyLockAsync(projectId, ct);
@@ -127,8 +136,9 @@ public sealed class TaskCreationService(
                 && item.ParentStoryId.HasValue && request.ParentPbiIds.Contains(item.ParentStoryId.Value), ct);
             var currentGraphRevision = await db.ProjectGraphStates.AsNoTracking().Where(item => item.ProjectId == projectId)
                 .Select(item => item.Revision).SingleOrDefaultAsync(ct);
-            if (currentProject.CurrentGuidelinesRevisionId != guidance?.ProjectGuidelinesRevisionId
-                || currentGraphRevision != graphRevision || currentSources.Count != sources.Count
+            if (//currentProject.CurrentGuidelinesRevisionId != guidance?.ProjectGuidelinesRevisionId
+                // || 
+                currentGraphRevision != graphRevision || currentSources.Count != sources.Count
                 || currentSources.Any(current => current.Version != sources.Single(source => source.PbiId == current.PbiId).Version
                     || current.Type is not (PbiType.Story or PbiType.Bug) || current.IsDraft || current.Status == PbiStatus.Done)
                 || request.ReplaceGeneratedTasks != (currentGeneratedCount > 0))
@@ -142,26 +152,52 @@ public sealed class TaskCreationService(
             {
                 var source = sources.SingleOrDefault(item => item.PbiId == task.ParentPbiId)
                     ?? throw new ArgumentException("AI proposed an unknown parent work item.");
-                if (string.IsNullOrWhiteSpace(task.Key) || task.Key.Length > 100
-                    || string.IsNullOrWhiteSpace(task.Title) || task.Title.Length > 200
-                    || string.IsNullOrWhiteSpace(task.Description) || task.Description.Length > 10000
-                    || task.DependsOnKeys is null || task.ExistingPrerequisites is null
-                    || task.DependsOnKeys.Distinct(StringComparer.Ordinal).Count() != task.DependsOnKeys.Length
-                    || task.DependsOnKeys.Any(key => !keys.Contains(key) || key == task.Key)
-                    || task.ExistingPrerequisites.Any(id => !existingTaskIds.Contains(id))
-                    || request.ReplaceGeneratedTasks && task.ExistingPrerequisites.Any(id =>
-                        existingGenerated.Any(existing => existing.PbiId == id)))
-                    throw new ArgumentException("AI proposed invalid task content, identities, or prerequisites.");
+                if (string.IsNullOrWhiteSpace(task.Key) )
+                    throw new ArgumentException("AI proposed a task with an empty key.");
+                if (task.Key.Length > 100)
+                    throw new ArgumentException("AI proposed a task with a key longer than 100 characters.");
+
+                if( string.IsNullOrWhiteSpace(task.Title) )
+                    throw new ArgumentException("AI proposed a task with an empty title.");
+                
+                if( task.Title.Length > 200)
+                    throw new ArgumentException("AI proposed a task with a title longer than 200 characters.");
+
+                if(string.IsNullOrWhiteSpace(task.Description))
+                    throw new ArgumentException("AI proposed a task with an empty description.");
+                
+                if( task.Description.Length > 10000)
+                    throw new ArgumentException("AI proposed a task with a description longer than 10000 characters.");
+
+                if(task.DependsOnKeys is null)
+                    throw new ArgumentException("AI proposed a task with null DependsOnKeys.");
+                
+                if( task.ExistingPrerequisites is null)
+                    throw new ArgumentException("AI proposed a task with null ExistingPrerequisites.");
+
+                if(task.DependsOnKeys.Distinct(StringComparer.Ordinal).Count() != task.DependsOnKeys.Length)
+                    throw new ArgumentException("AI proposed a task with duplicate DependsOnKeys.");
+
+                if(task.DependsOnKeys.Any(key => !keys.Contains(key) || key == task.Key))
+                    throw new ArgumentException("AI proposed a task with invalid DependsOnKeys.");
+
+                if(task.ExistingPrerequisites.Any(id => !existingTaskIds.Contains(id)))
+                    throw new ArgumentException("AI proposed a task with invalid ExistingPrerequisites.");
+
+                // if (request.ReplaceGeneratedTasks && task.ExistingPrerequisites.Any(id =>
+                //         existingGenerated.Any(existing => existing.PbiId == id)))
+                //     throw new ArgumentException("AI proposed a task with ExistingPrerequisites that are already generated.");
+                
                 return new TaskCreationProposalDto(task.Key, source.PbiId, task.Title, task.Description,
                     task.DependsOnKeys, task.ExistingPrerequisites, source.Version, SourceText(source));
             }).ToArray();
 
-            var preview = new TaskCreationPreviewDto(run.GenerationRunId, guidance?.ProjectGuidelinesRevisionId, proposals);
+            var preview = new TaskCreationPreviewDto(run.GenerationRunId, /*guidance?.ProjectGuidelinesRevisionId,*/ proposals);
             db.GenerationInputs.Add(new()
             {
                 ProjectId = projectId,
                 GenerationRunId = run.GenerationRunId,
-                ProjectGuidelinesRevisionId = guidance?.ProjectGuidelinesRevisionId,
+                // ProjectGuidelinesRevisionId = guidance?.ProjectGuidelinesRevisionId,
                 SnapshotJson = JsonSerializer.Serialize(new { Request = request, Prompt = prompt, Context = context, Preview = preview })
             });
             run.State = GenerationState.Succeeded;
@@ -182,7 +218,7 @@ public sealed class TaskCreationService(
                 {
                     ProjectId = projectId,
                     GenerationRunId = run.GenerationRunId,
-                    ProjectGuidelinesRevisionId = guidance?.ProjectGuidelinesRevisionId,
+                    // ProjectGuidelinesRevisionId = guidance?.ProjectGuidelinesRevisionId,
                     SnapshotJson = JsonSerializer.Serialize(new { Request = request, Prompt = prompt, Context = context, run.ErrorCode })
                 });
             await db.SaveChangesAsync(CancellationToken.None);
@@ -215,8 +251,8 @@ public sealed class TaskCreationService(
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
         await db.AcquirePlanningPolicyLockAsync(projectId, ct);
         var project = await db.Projects.SingleAsync(item => item.ProjectId == projectId, ct);
-        if (preview.GuidelinesRevisionId != project.CurrentGuidelinesRevisionId)
-            throw new InvalidOperationException("Project guidelines changed. Regenerate task proposals against the current guidelines.");
+        // if (preview.GuidelinesRevisionId != project.CurrentGuidelinesRevisionId)
+        //     throw new InvalidOperationException("Project guidelines changed. Regenerate task proposals against the current guidelines.");
         foreach (var task in request.Tasks)
         {
             if (!originals.TryGetValue(task.Key, out var original) || original.ParentPbiId != task.ParentPbiId)
@@ -247,6 +283,19 @@ public sealed class TaskCreationService(
             throw new InvalidOperationException("Generated child tasks changed since preview; reload and regenerate.");
         if (alreadyAccepted.Count > 0 && existingGenerated.Count > 0)
             throw new InvalidOperationException("Other generated child tasks changed after partial acceptance; regenerate the complete source task set.");
+        var replacedGeneratedIds = sourceRequest.ReplaceGeneratedTasks
+            ? existingGenerated.Select(item => item.PbiId).ToHashSet()
+            : new HashSet<int>();
+        foreach (var task in request.Tasks)
+        {
+            foreach (var id in task.ExistingPrerequisites.Distinct())
+            {
+                if (replacedGeneratedIds.Contains(id)
+                    || !await db.Stories.AnyAsync(existing => existing.ProjectId == projectId
+                        && existing.PbiId == id && existing.Type == PbiType.Task, ct))
+                    throw new ArgumentException("Existing prerequisites must be tasks in this project that are not being replaced.");
+            }
+        }
         if (sourceRequest.ReplaceGeneratedTasks && alreadyAccepted.Count == 0)
             await dependencies.DeleteGeneratedChildTasksAsync(projectId, sourceRequest.ParentPbiIds, ct);
 

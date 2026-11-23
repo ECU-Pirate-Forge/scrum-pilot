@@ -27,7 +27,7 @@ public sealed record TaskCreationProposalDto(
 
 public sealed record TaskCreationPreviewDto(
     int GenerationRunId,
-    int? GuidelinesRevisionId,
+    // int? GuidelinesRevisionId,
     TaskCreationProposalDto[] Tasks);
 
 public sealed record AcceptTaskCreationProposalsRequest(

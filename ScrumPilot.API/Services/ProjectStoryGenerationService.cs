@@ -95,9 +95,9 @@ public sealed class ProjectStoryGenerationService(OrganizationContext db, LocalP
                     { ErrorMessage = FailureMessage("source_archived") });
                 continue;
             }
-            var guidelines = await new ProjectGuidelinesService(db).CurrentAsync(projectId, ct);
+            // var guidelines = await new ProjectGuidelinesService(db).CurrentAsync(projectId, ct);
             var snapshot = new ProjectStoryInputSnapshot(source.ProblemStatementId, source.Version, source.Title,
-                source.Text, guidelines?.ProjectGuidelinesRevisionId, guidelines?.Content);
+                source.Text, /*guidelines?.ProjectGuidelinesRevisionId, guidelines?.Content*/ null, null);
             var run = new GenerationRun
             {
                 ProjectId = projectId,
@@ -124,8 +124,10 @@ public sealed class ProjectStoryGenerationService(OrganizationContext db, LocalP
             }
             try
             {
+                var guidelines = await new ProjectGuidelinesService(db).CurrentAsync(projectId, ct);
+                var guidedInstructions = $"{Instructions}\n{guidelines?.Content}";
                 var output = await inference.RunAsync(projectId,
-                    () => ai.GenerateStoryAsync<ProjectStoryAiOutput>(Instructions, snapshot, ct), ct);
+                    () => ai.GenerateAsync<ProjectStoryAiOutput>(guidedInstructions, snapshot, ct), ct);
                 db.Attach(run);
                 await using var resultTransaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
                 await db.AcquirePlanningPolicyLockAsync(projectId, ct);
@@ -197,9 +199,9 @@ public sealed class ProjectStoryGenerationService(OrganizationContext db, LocalP
     {
         var source = await db.ProblemStatements.AsNoTracking().SingleOrDefaultAsync(p =>
             p.ProjectId == projectId && p.ProblemStatementId == snapshot.ProblemStatementId, ct);
-        var guidelines = await new ProjectGuidelinesService(db).CurrentAsync(projectId, ct);
-        if (source is null || source.IsArchived || source.Version != snapshot.ProblemVersion ||
-            guidelines?.ProjectGuidelinesRevisionId != snapshot.GuidelinesRevisionId)
+        // var guidelines = await new ProjectGuidelinesService(db).CurrentAsync(projectId, ct);
+        if (source is null || source.IsArchived || source.Version != snapshot.ProblemVersion)
+            // guidelines?.ProjectGuidelinesRevisionId != snapshot.GuidelinesRevisionId)
             throw new InputChangedException();
     }
 
@@ -386,7 +388,7 @@ public sealed class ProjectStoryGenerationService(OrganizationContext db, LocalP
         ProjectId = run.ProjectId,
         GenerationRunId = run.GenerationRunId,
         ProblemStatementId = source.ProblemStatementId,
-        ProjectGuidelinesRevisionId = source.GuidelinesRevisionId,
+        // ProjectGuidelinesRevisionId = source.GuidelinesRevisionId,
         SnapshotJson = JsonSerializer.Serialize(new StoredStorySnapshot(source, proposals, FailureCategory: failureCategory), SnapshotJsonOptions)
     };
 

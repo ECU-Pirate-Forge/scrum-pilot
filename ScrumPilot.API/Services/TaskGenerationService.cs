@@ -37,8 +37,8 @@ public sealed class TaskGenerationService(OrganizationContext db, LocalPlanningA
         var snapshot = await db.RepositorySnapshots.SingleOrDefaultAsync(item => item.ProjectId == projectId
             && item.RepositorySnapshotId == request.RepositorySnapshotId, ct) ?? throw new KeyNotFoundException();
         var project = await db.Projects.SingleAsync(item => item.ProjectId == projectId, ct);
-        var guidance = await db.ProjectGuidelinesRevisions.AsNoTracking().SingleOrDefaultAsync(item =>
-            item.ProjectId == projectId && item.ProjectGuidelinesRevisionId == project.CurrentGuidelinesRevisionId, ct);
+        // var guidance = await db.ProjectGuidelinesRevisions.AsNoTracking().SingleOrDefaultAsync(item =>
+        //     item.ProjectId == projectId && item.ProjectGuidelinesRevisionId == project.CurrentGuidelinesRevisionId, ct);
         if (request.SourcePaths is null || request.SourcePaths.Length == 0) throw new ArgumentException("Select relevant verified source files before generating an implementation specification.");
         var source = await repositories.SourceAsync(projectId, snapshot.RepositorySnapshotId, request.SourcePaths, ct);
         var run = new GenerationRun
@@ -82,7 +82,7 @@ public sealed class TaskGenerationService(OrganizationContext db, LocalPlanningA
             SourceCurrency = (await ProjectStoryCurrency.ReadManyAsync(db, projectId, request.StoryIds, ct))
                 .ToDictionary(item => item.Key, item => item.Value.CurrentFingerprint),
             Stories = stories.Select(story => new { story.PbiId, story.Title, story.Description }),
-            Guidelines = guidance?.Content,
+            // Guidelines = guidance?.Content,
             snapshot.CommitSha,
             Tree = RepositoryContextService.ReadTree(snapshot).Entries,
             Source = source,
@@ -94,7 +94,7 @@ public sealed class TaskGenerationService(OrganizationContext db, LocalPlanningA
         try
         {
             var output = await inference.RunAsync(projectId,
-                () => ai.GenerateStructuredAsync<TaskGenerationOutput>(instructions, context, ct), ct);
+                () => ai.GenerateAsync<TaskGenerationOutput>(instructions, context, ct), ct);
             db.Attach(run);
             await using var resultTransaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
             await db.AcquirePlanningPolicyLockAsync(projectId, ct);
@@ -107,8 +107,9 @@ public sealed class TaskGenerationService(OrganizationContext db, LocalPlanningA
             var currentCurrency = await ProjectStoryCurrency.ReadManyAsync(db, projectId, request.StoryIds, ct);
             var currentGraphRevision = await db.ProjectGraphStates.AsNoTracking().Where(item => item.ProjectId == projectId)
                 .Select(item => item.Revision).SingleOrDefaultAsync(ct);
-            if (currentProject.CurrentGuidelinesRevisionId != guidance?.ProjectGuidelinesRevisionId
-                || currentGraphRevision != context.GraphRevision
+            if (// currentProject.CurrentGuidelinesRevisionId != guidance?.ProjectGuidelinesRevisionId
+                // || 
+                currentGraphRevision != context.GraphRevision
                 || context.SourceCurrency.Any(item => !currentCurrency.TryGetValue(item.Key, out var currency)
                     || currency.CurrentFingerprint != item.Value)
                 || currentStories.Count != stories.Count || currentStories.Any(current =>
@@ -142,18 +143,18 @@ public sealed class TaskGenerationService(OrganizationContext db, LocalPlanningA
                     }
                 };
             }).ToArray();
-            var preview = new TaskGenerationPreviewDto(run.GenerationRunId, snapshot.RepositorySnapshotId, guidance?.ProjectGuidelinesRevisionId, tasks);
+            var preview = new TaskGenerationPreviewDto(run.GenerationRunId, snapshot.RepositorySnapshotId,/* guidance?.ProjectGuidelinesRevisionId,*/ tasks);
             db.GenerationInputs.Add(new()
             {
                 ProjectId = projectId,
                 GenerationRunId = run.GenerationRunId,
-                ProjectGuidelinesRevisionId = guidance?.ProjectGuidelinesRevisionId,
+                // ProjectGuidelinesRevisionId = guidance?.ProjectGuidelinesRevisionId,
                 RepositorySnapshotId = snapshot.RepositorySnapshotId,
                 SnapshotJson = JsonSerializer.Serialize(new
                 {
                     preview.GenerationRunId,
                     preview.RepositorySnapshotId,
-                    preview.GuidelinesRevisionId,
+                    // preview.GuidelinesRevisionId,
                     preview.Tasks,
                     Request = request,
                     Prompt = instructions,
@@ -177,7 +178,7 @@ public sealed class TaskGenerationService(OrganizationContext db, LocalPlanningA
                 {
                     ProjectId = projectId,
                     GenerationRunId = run.GenerationRunId,
-                    ProjectGuidelinesRevisionId = guidance?.ProjectGuidelinesRevisionId,
+                    // ProjectGuidelinesRevisionId = guidance?.ProjectGuidelinesRevisionId,
                     RepositorySnapshotId = snapshot.RepositorySnapshotId,
                     SnapshotJson = JsonSerializer.Serialize(new { Request = request, Prompt = instructions, Context = context, run.ErrorCode })
                 });
@@ -202,8 +203,8 @@ public sealed class TaskGenerationService(OrganizationContext db, LocalPlanningA
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
         await db.AcquirePlanningPolicyLockAsync(projectId, ct);
         var project = await db.Projects.SingleAsync(item => item.ProjectId == projectId, ct);
-        if (preview.GuidelinesRevisionId != project.CurrentGuidelinesRevisionId)
-            throw new InvalidOperationException("Guidelines changed. Regenerate or explicitly review a new task proposal.");
+        // if (preview.GuidelinesRevisionId != project.CurrentGuidelinesRevisionId)
+        //     throw new InvalidOperationException("Guidelines changed. Regenerate or explicitly review a new task proposal.");
         var originals = preview.Tasks.ToDictionary(task => task.Key, StringComparer.Ordinal);
         using var savedInput = JsonDocument.Parse(input.SnapshotJson);
         var savedCurrency = savedInput.RootElement.TryGetProperty("Context", out var savedContext)

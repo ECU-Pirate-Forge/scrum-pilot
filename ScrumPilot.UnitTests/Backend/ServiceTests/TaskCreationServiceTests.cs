@@ -134,6 +134,26 @@ public sealed class TaskCreationServiceTests
     }
 
     [Fact]
+    public async Task Accept_PersistsGeneratedSpecificationOverTwoThousandCharacters()
+    {
+        await using var f = await TaskPlanningFixture.CreateAsync();
+        var description = new string('x', 3000);
+        var handler = new TaskCreationAiHandler();
+        handler.SetOutput(new TaskCreationAiTask("long", f.Story.PbiId,
+            "Implement detailed task", description, [], []));
+        using var http = new HttpClient(handler);
+
+        var preview = await Service(f, http).PreviewAsync(f.ProjectId,
+            new([f.Story.PbiId], "long-task-specification"), "owner", default);
+        var created = await Service(f, http).AcceptAsync(f.ProjectId,
+            new(preview.GenerationRunId, preview.Tasks), "owner", default);
+
+        var task = Assert.Single(created);
+        Assert.True(task.Description.Length > 2000);
+        Assert.Contains(description, task.Description);
+    }
+
+    [Fact]
     public async Task RegenerationReplacesGeneratedTasksPreservesManualTasksAndDeletionCleansHistory()
     {
         await using var f = await TaskPlanningFixture.CreateAsync();
@@ -198,6 +218,30 @@ public sealed class TaskCreationServiceTests
         await f.Db.SaveChangesAsync();
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             service.CreateManualAsync(f.ProjectId, new(bug.PbiId, "Another task", "Should be rejected."), default));
+    }
+
+    [Fact]
+    public async Task PreviewRegenerationRejectsReplacedGeneratedTaskAsExistingPrerequisite()
+    {
+        await using var f = await TaskPlanningFixture.CreateAsync();
+        var handler = new TaskCreationAiHandler();
+        handler.SetOutput(new TaskCreationAiTask("initial", f.Story.PbiId,
+            "Initial task", "Implement initial behavior.", [], []));
+        using var http = new HttpClient(handler);
+        var service = Service(f, http);
+
+        var initialPreview = await service.PreviewAsync(f.ProjectId,
+            new([f.Story.PbiId], "initial-task-set"), "owner", default);
+        var initialTask = Assert.Single(await service.AcceptAsync(f.ProjectId,
+            new(initialPreview.GenerationRunId, initialPreview.Tasks), "owner", default));
+
+        handler.SetOutput(new TaskCreationAiTask("replacement", f.Story.PbiId,
+            "Replacement task", "Implement replacement behavior.", [], [initialTask.PbiId]));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.PreviewAsync(f.ProjectId,
+            new([f.Story.PbiId], "replacement-task-set", ReplaceGeneratedTasks: true), "owner", default));
+
+        Assert.Contains(await f.Db.GenerationRuns.ToArrayAsync(),
+            run => run.IdempotencyKey == "replacement-task-set" && run.State == GenerationState.Failed);
     }
 
     private static TaskCreationService Service(TaskPlanningFixture f, HttpClient http) =>

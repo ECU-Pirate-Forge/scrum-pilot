@@ -43,7 +43,7 @@ public sealed class LocalPlanningAiTests
         using var client = new OllamaApiClient(http);
         var service = new LocalPlanningAi(client, new AiOptions { Model = "local-model" });
 
-        var result = await service.GenerateStoryAsync<ProjectStoryAiOutput>("Return stories.", new { }, default);
+        var result = await service.GenerateAsync<ProjectStoryAiOutput>("Return stories.", new { }, default);
 
         Assert.Equal("Generated story", Assert.Single(result.Stories).Title);
         Assert.Equal(1, handler.RequestCount);
@@ -72,7 +72,7 @@ public sealed class LocalPlanningAiTests
     {
         var handler = new StubHandler { Output = output };
         var error = await Assert.ThrowsAnyAsync<JsonException>(() =>
-            Service(handler).GenerateStoryAsync<Answer>("Return JSON.", new { privateSource = "private" }, default));
+            Service(handler).GenerateAsync<Answer>("Return JSON.", new { privateSource = "private" }, default));
         Assert.Equal(expectedMessage, error.Message);
         Assert.DoesNotContain("private-content", error.Message);
     }
@@ -86,7 +86,7 @@ public sealed class LocalPlanningAiTests
     public async Task StoryJsonReportsKnownInvalidFieldsWithoutTheirValues(string output, string expectedMessage)
     {
         var error = await Assert.ThrowsAnyAsync<JsonException>(() => Service(new StubHandler { Output = output })
-            .GenerateStoryAsync<ProjectStoryAiOutput>("Return JSON.", new { }, default));
+            .GenerateAsync<ProjectStoryAiOutput>("Return JSON.", new { }, default));
         Assert.Equal(expectedMessage, error.Message);
         Assert.DoesNotContain("private-content", error.Message);
     }
@@ -102,7 +102,7 @@ public sealed class LocalPlanningAiTests
     public async Task TaskGenerationRequestsItsJsonSchemaFromTheProvider()
     {
         var handler = new StubHandler { Output = """{"tasks":[]}""" };
-        await Service(handler).GenerateStructuredAsync<TaskGenerationOutput>("Return task proposals.", new { story = "A" }, default);
+        await Service(handler).GenerateAsync<TaskGenerationOutput>("Return task proposals.", new { story = "A" }, default);
 
         var format = Assert.IsType<ChatResponseFormatJson>(handler.ResponseFormat);
         Assert.True(format.Schema.HasValue);
@@ -165,7 +165,7 @@ public sealed class LocalPlanningAiTests
     {
         var handler = new StubHandler();
         await Assert.ThrowsAsync<LocalPlanningAi.InputTooLargeException>(() =>
-            Service(handler).GenerateStoryAsync<Answer>("Return JSON.", new { text = new string('a', 200 * 1024) }, default));
+            Service(handler).GenerateAsync<Answer>("Return JSON.", new { text = new string('a', 200 * 1024) }, default));
         Assert.Equal(0, handler.RequestCount);
     }
 

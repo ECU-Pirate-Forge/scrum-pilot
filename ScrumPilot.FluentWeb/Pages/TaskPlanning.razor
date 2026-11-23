@@ -22,7 +22,7 @@ else
 {
     @if (_error.Length > 0) { <p role="alert">@_error</p> }
     @if (_notice.Length > 0) { <p role="status">@_notice</p> }
-    <FluentButton OnClick="LoadAsync">Refresh work</FluentButton>
+    @* <FluentButton OnClick="LoadAsync">Refresh work</FluentButton> *@
     <section aria-label="Create tasks from existing work">
         <h2>Create tasks from a story or bug</h2>
         <p>Tasks are created as drafts and inherit the selected source's sprint. AI task specs include current project guidelines and a copyable implementation handoff.</p>
