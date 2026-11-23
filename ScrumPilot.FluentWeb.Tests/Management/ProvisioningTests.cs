@@ -20,6 +20,9 @@ public sealed class ProvisioningTests : FluentFrontendTestBase
         Http.OnStatus(HttpMethod.Post, "api/organizations/7/operations/retry", HttpStatusCode.Accepted);
         using var cut = Render<OrganizationManagement>();
         cut.WaitForAssertion(() => Assert.Contains($"Storage status: {state}", cut.Markup));
+        Assert.Contains("organization-directory-layout", cut.Markup);
+        Assert.Contains("organization-directory-list", cut.Markup);
+        Assert.Contains("org-create-card", cut.Markup);
         cut.Find("[data-action='retry-provisioning-7']").Click();
         cut.WaitForAssertion(() =>
         {

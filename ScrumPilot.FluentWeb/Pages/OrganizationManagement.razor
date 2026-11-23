@@ -17,61 +17,78 @@
     <AppPageHeader Title="@(_selected?.Name ?? "Organization Management")" Subtitle="Manage organization details, members, project access and lifecycle." />
     @if (OrganizationId == 0)
     {
-        <h2>Organization directory</h2>
-        @foreach (var organization in _organizations)
-        {
-            <FluentCard>
-                <h3>@organization.Name</h3>
-                <FluentAnchorButton Href="@OrganizationRoutes.Page(organization.OrganizationId, "backlog")">Open work</FluentAnchorButton>
-                <FluentAnchorButton Href="@OrganizationRoutes.Page(organization.OrganizationId, "organization-management")">Manage organization</FluentAnchorButton>
-                @if (_operations.TryGetValue(organization.OrganizationId, out var operation))
-                {
-                    <p>Storage status: @operation.State</p>
-                    @if (operation.Error is not null)
-                    {
-                        <FluentMessageBar Intent="MessageBarIntent.Warning">Organization storage is unavailable. An administrator can retry provisioning.</FluentMessageBar>
-                    }
-                    @if (_isAdmin && operation.State is "Failed" or "Provisioning")
-                    {
-                        <FluentButton data-action="@($"retry-provisioning-{organization.OrganizationId}")" OnClick="@(() => RetryProvisioningAsync(organization.OrganizationId))">Retry provisioning</FluentButton>
-                    }
-                }
-            </FluentCard>
-        }
-    }
-
-    @if (_isAdmin)
-    {
-        <FluentCard Class="org-create-card">
-            <FluentText Tag="TextTag.H2" Size="TextSize.Size500" Weight="TextWeight.Semibold">Create organization</FluentText>
-            <label>Organization name <FluentTextInput @bind-Value="_newName" Required="true" /></label>
-            <FluentCheckbox @bind-Value="_useCurrentUser" Label="Make me the initial owner" />
-            @if (!_useCurrentUser)
-            {
-                <div class="owner-search">
-                    <label>Search initial owner by username or email <FluentTextInput @bind-Value="_ownerQuery" /></label>
-                    <FluentButton Appearance="ButtonAppearance.Outline" OnClick="SearchOwnersAsync">Search users</FluentButton>
+        <div class="organization-directory-layout">
+            <section class="sp-panel organization-directory-list" aria-label="Organization directory">
+                <div class="organization-management-heading">
+                    <span class="organization-management-step">1</span>
+                    <div>
+                        <h2>Organization directory</h2>
+                        <p>Open work or manage organization membership and access.</p>
+                    </div>
                 </div>
-                @if (!string.IsNullOrWhiteSpace(_searchFeedback))
+                @foreach (var organization in _organizations)
                 {
-                    <FluentMessageBar Intent="MessageBarIntent.Info">@_searchFeedback</FluentMessageBar>
-                }
-                <label>Initial owner user ID
-                    <select @bind="_initialOwnerId">
-                        <option value="">Select a user</option>
-                        @foreach (var user in _ownerResults)
+                    <FluentCard>
+                        <h3>@organization.Name</h3>
+                        <div class="organization-directory-actions">
+                            <FluentAnchorButton Href="@OrganizationRoutes.Page(organization.OrganizationId, "backlog")">Open work</FluentAnchorButton>
+                            <FluentAnchorButton Href="@OrganizationRoutes.Page(organization.OrganizationId, "organization-management")">Manage organization</FluentAnchorButton>
+                        </div>
+                        @if (_operations.TryGetValue(organization.OrganizationId, out var operation))
                         {
-                            <option value="@user.Id">@user.UserName (@user.Email)</option>
+                            <p>Storage status: @operation.State</p>
+                            @if (operation.Error is not null)
+                            {
+                                <FluentMessageBar Intent="MessageBarIntent.Warning">Organization storage is unavailable. An administrator can retry provisioning.</FluentMessageBar>
+                            }
+                            @if (_isAdmin && operation.State is "Failed" or "Provisioning")
+                            {
+                                <FluentButton data-action="@($"retry-provisioning-{organization.OrganizationId}")" OnClick="@(() => RetryProvisioningAsync(organization.OrganizationId))">Retry provisioning</FluentButton>
+                            }
                         }
-                    </select>
-                </label>
-            }
-            else
+                    </FluentCard>
+                }
+            </section>
+            @if (_isAdmin)
             {
-                <p class="sp-muted">Initial owner user ID: your authenticated account</p>
+                <aside class="sp-panel org-create-card">
+                    <div class="organization-management-heading">
+                        <span class="organization-management-step">2</span>
+                        <div>
+                            <h2>Create organization</h2>
+                            <p>Provision a new organization and assign its initial owner.</p>
+                        </div>
+                    </div>
+                    <label>Organization name <FluentTextInput @bind-Value="_newName" Required="true" /></label>
+                    <FluentCheckbox @bind-Value="_useCurrentUser" Label="Make me the initial owner" />
+                    @if (!_useCurrentUser)
+                    {
+                        <div class="owner-search">
+                            <label>Search initial owner by username or email <FluentTextInput @bind-Value="_ownerQuery" /></label>
+                            <FluentButton Appearance="ButtonAppearance.Outline" OnClick="SearchOwnersAsync">Search users</FluentButton>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(_searchFeedback))
+                        {
+                            <FluentMessageBar Intent="MessageBarIntent.Info">@_searchFeedback</FluentMessageBar>
+                        }
+                        <label>Initial owner user ID
+                            <select @bind="_initialOwnerId">
+                                <option value="">Select a user</option>
+                                @foreach (var user in _ownerResults)
+                                {
+                                    <option value="@user.Id">@user.UserName (@user.Email)</option>
+                                }
+                            </select>
+                        </label>
+                    }
+                    else
+                    {
+                        <p class="sp-muted">Initial owner user ID: your authenticated account</p>
+                    }
+                    <FluentButton Appearance="ButtonAppearance.Primary" OnClick="CreateAsync">Create organization</FluentButton>
+                </aside>
             }
-            <FluentButton Appearance="ButtonAppearance.Primary" OnClick="CreateAsync">Create organization</FluentButton>
-        </FluentCard>
+        </div>
     }
 
     @if (!string.IsNullOrWhiteSpace(_error))
@@ -84,17 +101,39 @@
     }
     else if (_selected is not null)
     {
-        <OrganizationDetails Organization="_selected" OrganizationChanged="UpdateSelected" />
-        <OrganizationMembers OrganizationId="_selected.OrganizationId" CanManage="@(_selected.Role == OrganizationRole.Owner)" />
-        <FluentMessageBar Intent="MessageBarIntent.Info">Members need explicit project grants. After backup recovery, member grants must be reviewed and reissued before work access is restored.</FluentMessageBar>
-        @foreach (var project in _projects)
-        {
-            <FluentCard Class="project-access-card">
-                <FluentText Tag="TextTag.H2" Size="TextSize.Size500" Weight="TextWeight.Semibold">@project.ProjectName access</FluentText>
-                <ProjectAccessEditor ProjectId="project.ProjectId" CanManage="@(_selected.Role == OrganizationRole.Owner)" />
-            </FluentCard>
-        }
-        <OrganizationDangerZone Organization="_selected" Changed="ReloadAsync" />
+        <div class="organization-management-workspace">
+            <div class="organization-management-primary">
+                <div class="organization-management-heading">
+                    <span class="organization-management-step">1</span>
+                    <div>
+                        <h2>Organization and members</h2>
+                        <p>Review organization details and manage membership.</p>
+                    </div>
+                </div>
+                <OrganizationDetails Organization="_selected" OrganizationChanged="UpdateSelected" />
+                <OrganizationMembers OrganizationId="_selected.OrganizationId" CanManage="@(_selected.Role == OrganizationRole.Owner)" />
+            </div>
+            <aside class="organization-management-sidebar">
+                <div class="organization-management-heading">
+                    <span class="organization-management-step">2</span>
+                    <div>
+                        <h2>Project access and lifecycle</h2>
+                        <p>Review grants and organization-level lifecycle actions.</p>
+                    </div>
+                </div>
+                <FluentMessageBar Intent="MessageBarIntent.Info">Members need explicit project grants. After backup recovery, member grants must be reviewed and reissued before work access is restored.</FluentMessageBar>
+                @foreach (var project in _projects)
+                {
+                    <FluentCard Class="project-access-card">
+                        <FluentText Tag="TextTag.H2" Size="TextSize.Size500" Weight="TextWeight.Semibold">@project.ProjectName access</FluentText>
+                        <ProjectAccessEditor ProjectId="project.ProjectId" CanManage="@(_selected.Role == OrganizationRole.Owner)" />
+                    </FluentCard>
+                }
+                <div class="organization-management-danger-zone">
+                    <OrganizationDangerZone Organization="_selected" Changed="ReloadAsync" />
+                </div>
+            </aside>
+        </div>
     }
 
     @if (_deletedOrganizations.Count > 0)
