@@ -35,4 +35,8 @@ public sealed record AcceptTaskCreationProposalsRequest(
     TaskCreationProposalDto[] Tasks,
     bool AsDraft = true);
 
-public sealed record CreateManualChildTaskRequest(int ParentPbiId, string Title, string Description);
+public sealed record CreateManualChildTaskRequest(
+    int ParentPbiId,
+    string Title,
+    string Description,
+    int[]? ExistingPrerequisiteIds = null);

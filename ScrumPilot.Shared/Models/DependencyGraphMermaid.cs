@@ -23,6 +23,17 @@ public static class DependencyGraphMermaid
             { "Ready" => "ready", "Done" => "done", "Active" => "active", "Needs review" => "review", _ => "blocked" };
             text.AppendLine($"class PBI{item.PbiId} {style}");
         }
+        foreach (var problem in nodes
+                     .Where(node => node.Item.ProblemStatementId.HasValue
+                         && node.Item.Type is PbiType.Story or PbiType.Bug)
+                     .GroupBy(node => node.Item.ProblemStatementId!.Value)
+                     .OrderBy(group => group.Key))
+        {
+            text.AppendLine($"subgraph PROBLEM{problem.Key}[\"Problem #{problem.Key}\"]");
+            foreach (var node in problem.OrderBy(node => node.Item.PbiId))
+                text.AppendLine($"PBI{node.Item.PbiId}");
+            text.AppendLine("end");
+        }
         foreach (var group in nodes.Where(node => node.Item.ParentStoryId.HasValue)
                      .GroupBy(node => node.Item.ParentStoryId!.Value).OrderBy(group => group.Key))
         {

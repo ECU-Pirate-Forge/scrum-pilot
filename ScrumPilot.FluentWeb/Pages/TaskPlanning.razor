@@ -34,7 +34,7 @@ else
                 </div>
             </div>
             <label>Source story or bug
-                <select @bind="_sourcePbiId">
+                        <select value="@_sourcePbiId" @onchange="OnSourcePbiChanged">
                     <option value="0">Select a committed story or bug</option>
                     @foreach (var source in EligibleSources)
                     {
@@ -48,6 +48,21 @@ else
                 <h3>Add a task manually</h3>
                 <label>Task title <input @bind="_manualTitle" /></label>
                 <label>Task description <textarea rows="4" @bind="_manualDescription"></textarea></label>
+                @if (ChildTasks(_sourcePbiId).Any())
+                {
+                    <fieldset aria-label="Prerequisites">
+                        <legend>Prerequisites</legend>
+                        @foreach (var task in ChildTasks(_sourcePbiId))
+                        {
+                            <label>
+                                <input type="checkbox"
+                                       checked="@_manualPrerequisiteIds.Contains(task.PbiId)"
+                                       @onchange="args => ToggleManualPrerequisite(task.PbiId, args)" />
+                                #@task.PbiId @task.Title
+                            </label>
+                        }
+                    </fieldset>
+                }
                 <FluentButton OnClick="CreateManualAsync" Disabled="_busy">Add draft task</FluentButton>
             </section>
         }
@@ -180,6 +195,7 @@ else
     private RepositorySnapshot[] _snapshots = [];
     private int _sourcePbiId, _taskId, _snapshotId;
     private string _manualTitle = "", _manualDescription = "";
+    private int[] _manualPrerequisiteIds = [];
     private readonly HashSet<int> _selectedStories = [];
     private readonly List<ProposalEditor> _githubProposals = [];
     private readonly List<TaskCreationProposalEditor> _creationProposals = [];
@@ -229,7 +245,10 @@ else
                 _items = items;
                 _snapshots = snapshots;
                 if (SelectedPbiId.HasValue && EligibleSources.Any(item => item.PbiId == SelectedPbiId.Value))
+                {
                     _sourcePbiId = SelectedPbiId.Value;
+                    PreselectManualPrerequisite(_sourcePbiId);
+                }
                 else if (!EligibleSources.Any(item => item.PbiId == _sourcePbiId))
                     _sourcePbiId = 0;
             }
@@ -255,14 +274,49 @@ else
         else _selectedStories.Remove(id);
     }
 
+    private void OnSourcePbiChanged(ChangeEventArgs args)
+    {
+        if (int.TryParse(args.Value?.ToString(), out var pbiId))
+        {
+            _sourcePbiId = pbiId;
+            PreselectManualPrerequisite(pbiId);
+        }
+    }
+
+    private void PreselectManualPrerequisite(int parentPbiId)
+    {
+        var tasks = ChildTasks(parentPbiId).ToArray();
+        _manualPrerequisiteIds = tasks.Length == 0
+            ? []
+            : [tasks[^1].PbiId];
+    }
+
+    private void ToggleManualPrerequisite(int taskId, ChangeEventArgs args)
+    {
+        var isChecked = args.Value switch
+        {
+            bool checkedValue => checkedValue,
+            string text => bool.TryParse(text, out var parsed) && parsed,
+            _ => false
+        };
+        _manualPrerequisiteIds = isChecked
+            ? _manualPrerequisiteIds.Append(taskId).Distinct().ToArray()
+            : _manualPrerequisiteIds.Where(id => id != taskId).ToArray();
+    }
+
     private async Task CreateManualAsync() => await ExecuteAsync(async () =>
     {
         using var response = await Http.PostAsJsonAsync(
             $"api/projects/{ProjectId}/task-creation",
-            new CreateManualChildTaskRequest(_sourcePbiId, _manualTitle, _manualDescription));
+            new CreateManualChildTaskRequest(
+                _sourcePbiId,
+                _manualTitle,
+                _manualDescription,
+                _manualPrerequisiteIds));
         if (!response.IsSuccessStatusCode) { _error = await Http.ReadAsStringAsync(response.Content); return; }
         _manualTitle = "";
         _manualDescription = "";
+        PreselectManualPrerequisite(_sourcePbiId);
         await LoadAsync();
     });
 

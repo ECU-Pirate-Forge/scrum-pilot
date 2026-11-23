@@ -23,7 +23,7 @@ public sealed class TaskCreationController(
 
     [HttpPost]
     public async Task<IActionResult> CreateManual(int projectId, CreateManualChildTaskRequest request, CancellationToken ct) =>
-        !await CanRead(projectId, ct) ? NotFound() : Ok(await tasks.CreateManualAsync(projectId, request, ct));
+        !await CanRead(projectId, ct) ? NotFound() : Ok(await tasks.CreateManualAsync(projectId, request, Actor, ct));
 
     [HttpDelete("{taskId:int}")]
     public async Task<IActionResult> Delete(int projectId, int taskId, CancellationToken ct)

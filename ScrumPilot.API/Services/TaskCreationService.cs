@@ -377,8 +377,14 @@ public sealed class TaskCreationService(
         return request.Tasks.Select(task => added[task.Key]).ToArray();
     }
 
+    public Task<ProductBacklogItem> CreateManualAsync(
+        int projectId,
+        CreateManualChildTaskRequest request,
+        CancellationToken ct) =>
+        CreateManualAsync(projectId, request, string.Empty, ct);
+
     public async Task<ProductBacklogItem> CreateManualAsync(int projectId,
-        CreateManualChildTaskRequest request, CancellationToken ct)
+        CreateManualChildTaskRequest request, string actor, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Length > 200
             || request.Description is null || request.Description.Length > 10000)
@@ -389,6 +395,16 @@ public sealed class TaskCreationService(
             ?? throw new KeyNotFoundException("The committed source story or bug was not found.");
         if (source.Status == PbiStatus.Done)
             throw new InvalidOperationException("Reopen completed source work before adding child tasks.");
+        var prerequisiteIds = request.ExistingPrerequisiteIds ?? [];
+        if (prerequisiteIds.Distinct().Count() != prerequisiteIds.Length)
+            throw new ArgumentException("Existing prerequisites must be distinct.");
+        foreach (var prerequisiteId in prerequisiteIds)
+        {
+            if (!await db.Stories.AnyAsync(existing => existing.ProjectId == projectId
+                && existing.PbiId == prerequisiteId
+                && existing.Type == PbiType.Task, ct))
+                throw new ArgumentException("Existing prerequisites must be tasks in this project.");
+        }
         var task = new ProductBacklogItem
         {
             ProjectId = projectId,
@@ -403,6 +419,22 @@ public sealed class TaskCreationService(
         };
         db.Stories.Add(task);
         await dependencies.SaveAsync(ct);
+        foreach (var prerequisiteId in prerequisiteIds)
+        {
+            db.PbiDependencies.Add(new PbiDependency
+            {
+                ProjectId = projectId,
+                DependentPbiId = task.PbiId,
+                PrerequisitePbiId = prerequisiteId,
+                ActorId = actor
+            });
+        }
+        await db.SaveChangesAsync(ct);
+        var allItems = await db.Stories.Where(item => item.ProjectId == projectId).ToListAsync(ct);
+        var allEdges = await db.PbiDependencies.Where(item => item.ProjectId == projectId).ToListAsync(ct);
+        if (DependencyGraphEvaluator.Evaluate(allItems,
+                allEdges.Select(item => new DependencyLink(item.DependentPbiId, item.PrerequisitePbiId))).HasCycle)
+            throw new ArgumentException("The selected prerequisite creates an execution cycle.");
         return task;
     }
 

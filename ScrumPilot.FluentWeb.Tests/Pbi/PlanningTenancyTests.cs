@@ -61,6 +61,35 @@ public sealed class PlanningTenancyTests : FluentFrontendTestBase
     }
 
     [Fact]
+    public async Task Manual_task_creation_preselects_latest_child_prerequisite()
+    {
+        Http.OnGetJson("api/features", new { GitHubIntegrationEnabled = false });
+        Http.OnGetJson("api/organizations/2/Pbi/getAllPbis", new[]
+        {
+            new ProductBacklogItem { PbiId = 5, ProjectId = 17, Title = "Scoped story", Type = PbiType.Story },
+            new ProductBacklogItem { PbiId = 9, ProjectId = 17, Title = "Existing task", Type = PbiType.Task, ParentStoryId = 5 }
+        });
+        Http.On(HttpMethod.Post, "api/organizations/2/projects/17/task-creation", (_, _) =>
+            MockHttpHandler.Json(new ProductBacklogItem { Title = "Dependent task" }));
+
+        using var scope = new WorkScope(Http.CreateClient(), 2, 17);
+        using var page = Render<TaskPlanning>(p => p.Add(x => x.CapturedWork, scope));
+        page.Find("select").Change("5");
+        page.WaitForAssertion(() => Assert.Contains("Existing task", page.Markup));
+        var prerequisite = page.Find("fieldset[aria-label='Prerequisites'] input[type='checkbox']");
+        Assert.True(prerequisite.HasAttribute("checked"));
+
+        page.Find("section[aria-label='Add a task manually'] input").Change("Dependent task");
+        page.Find("section[aria-label='Add a task manually'] textarea").Change("Use the existing task.");
+        await page.FindAll("fluent-button").Single(x => x.TextContent.Contains("Add draft task")).ClickAsync(new());
+
+        var request = Assert.Single(Http.Requests, item =>
+            item.Method == HttpMethod.Post &&
+            item.Path == "api/organizations/2/projects/17/task-creation");
+        Assert.Contains("\"existingPrerequisiteIds\":[9]", request.Body);
+    }
+
+    [Fact]
     public async Task Disabled_github_allows_manual_task_creation_for_a_bug()
     {
         Http.OnGetJson("api/features", new { GitHubIntegrationEnabled = false });

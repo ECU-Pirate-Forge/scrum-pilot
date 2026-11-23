@@ -89,6 +89,29 @@ public sealed class DependencyGraphEvaluatorTests
         Assert.False(result.HasCycle);
     }
 
+    [Fact]
+    public void MermaidGroupsProblemStoriesAndChildTasks()
+    {
+        var story = Item(1);
+        story.Type = PbiType.Story;
+        story.ProblemStatementId = 10;
+        var task = Item(2);
+        task.Type = PbiType.Task;
+        task.ParentStoryId = 1;
+
+        var result = DependencyGraphMermaid.Write(
+            [
+                new(story, "Ready", false, true, false, false, [], []),
+                new(task, "Ready", false, true, false, false, [], [])
+            ],
+            [],
+            7);
+
+        Assert.Contains("subgraph PROBLEM10", result);
+        Assert.Contains("subgraph STORY1", result);
+        Assert.Contains("PBI2", result);
+    }
+
     private static ProductBacklogItem Item(int id, PbiStatus status = PbiStatus.ToDo) =>
         new() { PbiId = id, ProjectId = 1, Title = $"Item {id}", Type = PbiType.Task, Status = status };
 }
