@@ -102,6 +102,18 @@ public sealed class WorkLifetimeTests : FluentFrontendTestBase
     }
 
     [Fact]
+    public void Pbi_generation_renders_guided_workspace_layout()
+    {
+        using var work = new WorkScope(new HttpClient { BaseAddress = new Uri("https://localhost/") }, 1, 7);
+        using var cut = Render<PbiGeneration>(p => p.Add(x => x.CapturedWork, work));
+        cut.Find("input[type=checkbox]").Change(true);
+
+        Assert.Contains("pbi-generation-workspace", cut.Markup);
+        Assert.Contains("pbi-generation-summary", cut.Markup);
+        Assert.Contains("Generate and review", cut.Markup);
+    }
+
+    [Fact]
     public async Task Generation_uses_explicit_project_and_discards_cancellation_ignoring_response()
     {
         var delayed = new TaskCompletionSource<HttpResponseMessage>();

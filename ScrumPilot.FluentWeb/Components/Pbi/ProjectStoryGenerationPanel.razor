@@ -3,45 +3,100 @@
 @inherits PlanningComponentBase
 
 <section aria-label="Project story generation">
-    <h2>Saved problem statements</h2>
-    <p>Generation uses this project's saved guidelines and local AI only. Previews do not add backlog items or drafts. Only accepted proposals create work.</p>
+    <div class="project-generation-heading">
+        <div>
+            <h2>Saved problem statements</h2>
+            <p>Generation uses this project's saved guidelines and local AI only.</p>
+        </div>
+        <span class="project-generation-local">Local AI</span>
+    </div>
     @if (_error.Length > 0) { <p role="alert">@_error</p> }
     @if (_notice.Length > 0) { <p role="status">@_notice</p> }
-    <fieldset disabled="@_busy">
-        <legend>Add a problem statement</legend>
-        <label>Title <input @bind="_title" maxlength="200" /></label>
-        <label>Problem <textarea @bind="_text" rows="4"></textarea></label>
-        <FluentButton OnClick="CreateAsync" Disabled="@(_busy || string.IsNullOrWhiteSpace(_title) || string.IsNullOrWhiteSpace(_text))">Save problem statement</FluentButton>
-    </fieldset>
-    @foreach (var source in _sources)
-    {
-        <fieldset disabled="@_busy" @key="source.ProblemStatementId">
-            <legend>Problem #@source.ProblemStatementId @(source.IsArchived ? "(archived)" : "")</legend>
-            @if (!source.IsArchived)
-            {
-                <label><input type="checkbox" checked="@_selected.Contains(source.ProblemStatementId)" @onchange="@(() => Toggle(source.ProblemStatementId))" /> Generate stories for this problem</label>
-            }
-            <label>Title <input @bind="source.Title" maxlength="200" /></label>
-            <label>Problem text <textarea @bind="source.Text" rows="3"></textarea></label>
-            <FluentButton OnClick="@(() => SaveSourceAsync(source, source.IsArchived))" Disabled="_busy">Save edits</FluentButton>
-            <FluentButton OnClick="@(() => SaveSourceAsync(source, !source.IsArchived))" Disabled="_busy">@(source.IsArchived ? "Unarchive" : "Archive")</FluentButton>
-        </fieldset>
-    }
-    <FluentButton OnClick="GenerateAsync" Disabled="@(_busy || _selected.Count == 0)">Generate selected stories (local)</FluentButton>
-    <FluentButton OnClick="ReloadAsync" Disabled="_busy">Reload statements and runs</FluentButton>
-    @if (_busy) { <p role="status">Working…</p> }
-    <h3>Generation runs</h3>
-    @foreach (var run in _runs)
-    {
-        <div>
-            Problem #@run.ProblemStatementId · Run #@run.GenerationRunId · @run.State
-            @if (run.ErrorCode is not null) { <span> — @run.ErrorCode. Retry generation with a new run.</span> }
-            @if (run.Proposals.Count > 0)
-            {
-                <FluentButton OnClick="@(() => Review(run.Proposals))" Disabled="_busy">Review run #@run.GenerationRunId</FluentButton>
-            }
-        </div>
-    }
+    <div class="project-generation-layout">
+        <section class="sp-panel project-generation-sources" aria-label="Problem source management">
+            <fieldset class="project-generation-add" disabled="@_busy">
+                <legend>Add a problem statement</legend>
+                <div class="project-generation-fields">
+                    <label>Title <input @bind="_title" maxlength="200" /></label>
+                    <label>Problem <textarea @bind="_text" rows="4"></textarea></label>
+                </div>
+                <FluentButton Appearance="ButtonAppearance.Primary" OnClick="CreateAsync" Disabled="@(_busy || string.IsNullOrWhiteSpace(_title) || string.IsNullOrWhiteSpace(_text))">Save problem statement</FluentButton>
+            </fieldset>
+
+            <div class="project-generation-source-list" aria-live="polite">
+                @if (_sources.Count == 0)
+                {
+                    <p class="project-generation-empty">No saved problem statements yet.</p>
+                }
+                @foreach (var source in _sources)
+                {
+                    <fieldset class="project-generation-source" disabled="@_busy" @key="source.ProblemStatementId">
+                        <legend>Problem #@source.ProblemStatementId @(source.IsArchived ? "(archived)" : "")</legend>
+                        @if (!source.IsArchived)
+                        {
+                            <label class="project-generation-select">
+                                <input type="checkbox" checked="@_selected.Contains(source.ProblemStatementId)" @onchange="@(() => Toggle(source.ProblemStatementId))" />
+                                Generate stories for this problem
+                            </label>
+                        }
+                        <div class="project-generation-fields">
+                            <label>Title <input @bind="source.Title" maxlength="200" /></label>
+                            <label>Problem text <textarea @bind="source.Text" rows="3"></textarea></label>
+                        </div>
+                        <div class="project-generation-source-actions">
+                            <FluentButton Appearance="ButtonAppearance.Outline" OnClick="@(() => SaveSourceAsync(source, source.IsArchived))" Disabled="_busy">Save edits</FluentButton>
+                            <FluentButton Appearance="ButtonAppearance.Subtle" OnClick="@(() => SaveSourceAsync(source, !source.IsArchived))" Disabled="_busy">@(source.IsArchived ? "Unarchive" : "Archive")</FluentButton>
+                        </div>
+                    </fieldset>
+                }
+            </div>
+        </section>
+
+        <aside class="project-generation-sidebar">
+            <section class="sp-panel project-generation-controls" aria-labelledby="generate-stories-heading">
+                <div class="project-generation-step">
+                    <span>2</span>
+                    <div>
+                        <h3 id="generate-stories-heading">Generate and review</h3>
+                        <p>@_selected.Count source@(_selected.Count == 1 ? "" : "s") selected</p>
+                    </div>
+                </div>
+                <p class="project-generation-note">Previews do not add backlog items or drafts. Only accepted proposals create work.</p>
+                <div class="project-generation-actions">
+                    <FluentButton Appearance="ButtonAppearance.Primary" OnClick="GenerateAsync" Disabled="@(_busy || _selected.Count == 0)">
+                        Generate selected stories
+                    </FluentButton>
+                    <FluentButton Appearance="ButtonAppearance.Subtle" OnClick="ReloadAsync" Disabled="_busy">Reload</FluentButton>
+                </div>
+                @if (_busy) { <p role="status">Working…</p> }
+            </section>
+
+            <section class="sp-panel project-generation-runs" aria-labelledby="generation-runs-heading">
+                <div class="project-generation-runs-heading">
+                    <h3 id="generation-runs-heading">Recent runs</h3>
+                    <span>@_runs.Count</span>
+                </div>
+                @if (_runs.Count == 0)
+                {
+                    <p class="project-generation-empty">No generation runs yet.</p>
+                }
+                @foreach (var run in _runs)
+                {
+                    <article class="project-generation-run">
+                        <div>
+                            <strong>Problem #@run.ProblemStatementId</strong>
+                            <span>Run #@run.GenerationRunId · @run.State</span>
+                            @if (run.ErrorCode is not null) { <small>@run.ErrorCode. Retry with a new run.</small> }
+                        </div>
+                        @if (run.Proposals.Count > 0)
+                        {
+                            <FluentButton Appearance="ButtonAppearance.Outline" OnClick="@(() => Review(run.Proposals))" Disabled="_busy">Review</FluentButton>
+                        }
+                    </article>
+                }
+            </section>
+        </aside>
+    </div>
     <GeneratedPbiDialog PBIs="_previewPbis" Proposals="_previewProposals" ProjectId="ProjectId" CapturedWork="Scope"
                         @bind-Open="_previewOpen" OnClosed="RefreshRunsSafelyAsync" />
 </section>
