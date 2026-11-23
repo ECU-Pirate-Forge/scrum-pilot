@@ -26,47 +26,54 @@
     else
     {
     <p>Select a project to use saved problem statements and private project guidance. Generation below uses only your input and remains unlinked.</p>
-    <section class="sp-panel pbi-generation-form" aria-labelledby="problem-statements-heading">
-        <h2 id="problem-statements-heading">Problem statements</h2>
-        <div class="pbi-generation-input-row">
-            <label class="pbi-generation-field sp-grow">
-                <span>Problem statement</span>
-                <InputText class="pbi-generation-input" @bind-Value="_message" @onkeydown="HandleInputKeyDownAsync" disabled="@_isLoading" placeholder="Enter problem statement" />
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <FluentMessageBar Intent="MessageBarIntent.Error">@_errorMessage</FluentMessageBar>
+    }
+    <div class="pbi-generation-workspace">
+        <section class="sp-panel pbi-generation-form" aria-labelledby="problem-statements-heading">
+            <h2 id="problem-statements-heading">1. Problem statements</h2>
+            <div class="pbi-generation-input-row">
+                <label class="pbi-generation-field sp-grow">
+                    <span>Problem statement</span>
+                    <InputText class="pbi-generation-input" @bind-Value="_message" @onkeydown="HandleInputKeyDownAsync" disabled="@_isLoading" placeholder="Enter problem statement" />
+                </label>
+                <FluentButton Appearance="ButtonAppearance.Primary" OnClick="AddProblemStatement" Disabled="@(_isLoading || string.IsNullOrWhiteSpace(_message))" IconStart="@(new Icons.Regular.Size20.Add())">Add</FluentButton>
+            </div>
+
+            <label class="pbi-generation-upload">
+                <AppIcon Value="@(new Icons.Regular.Size24.ArrowUpload())" Label="" />
+                <span>Import CSV (one problem statement per line, no header)</span>
+                <InputFile OnChange="HandleCsvUploadAsync" accept=".csv" disabled="@_isLoading" />
             </label>
-            <FluentButton Appearance="ButtonAppearance.Primary" OnClick="AddProblemStatement" Disabled="@(_isLoading || string.IsNullOrWhiteSpace(_message))" IconStart="@(new Icons.Regular.Size20.Add())">Add</FluentButton>
-        </div>
 
-        <label class="pbi-generation-upload">
-            <AppIcon Value="@(new Icons.Regular.Size24.ArrowUpload())" Label="" />
-            <span>Import CSV (one problem statement per line, no header)</span>
-            <InputFile OnChange="HandleCsvUploadAsync" accept=".csv" disabled="@_isLoading" />
-        </label>
+            @if (_problemStatements.Count > 0)
+            {
+                <ol class="pbi-generation-list">
+                    @for (var i = 0; i < _problemStatements.Count; i++)
+                    {
+                        var index = i;
+                        <li>
+                            <span>@_problemStatements[index]</span>
+                            <FluentButton Appearance="ButtonAppearance.Subtle" IconOnly="true" Title="Remove problem statement" OnClick="@(() => RemoveProblemStatement(index))" Disabled="_isLoading">
+                                <AppIcon Value="@(new Icons.Regular.Size20.Delete())" Label="Remove" />
+                            </FluentButton>
+                        </li>
+                    }
+                </ol>
+            }
+        </section>
 
-        @if (!string.IsNullOrWhiteSpace(_errorMessage))
-        {
-            <FluentMessageBar Intent="MessageBarIntent.Error">@_errorMessage</FluentMessageBar>
-        }
-
-        @if (_problemStatements.Count > 0)
-        {
-            <ol class="pbi-generation-list">
-                @for (var i = 0; i < _problemStatements.Count; i++)
-                {
-                    var index = i;
-                    <li>
-                        <span>@_problemStatements[index]</span>
-                        <FluentButton Appearance="ButtonAppearance.Subtle" IconOnly="true" Title="Remove problem statement" OnClick="@(() => RemoveProblemStatement(index))" Disabled="_isLoading">
-                            <AppIcon Value="@(new Icons.Regular.Size20.Delete())" Label="Remove" />
-                        </FluentButton>
-                    </li>
-                }
-            </ol>
-
-            <FluentButton Appearance="ButtonAppearance.Primary" OnClick="GenerateAsync" Loading="_isLoading" Disabled="_isLoading">
+        <aside class="sp-panel pbi-generation-summary" aria-labelledby="generate-pbis-heading">
+            <span class="pbi-generation-step">2</span>
+            <h2 id="generate-pbis-heading">Generate and review</h2>
+            <p>@(_problemStatements.Count == 0 ? "Add at least one problem statement." : $"{_problemStatements.Count} problem statement{(_problemStatements.Count == 1 ? "" : "s")} ready.")</p>
+            <p class="pbi-generation-summary-note">Generation uses your input and remains unlinked to saved project guidance.</p>
+            <FluentButton Appearance="ButtonAppearance.Primary" OnClick="GenerateAsync" Loading="_isLoading" Disabled="@(_isLoading || _problemStatements.Count == 0)">
                 Generate PBIs (@_problemStatements.Count)
             </FluentButton>
-        }
-    </section>
+        </aside>
+    </div>
 
     @if (_isLoading)
     {
