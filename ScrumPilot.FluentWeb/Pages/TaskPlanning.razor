@@ -10,63 +10,92 @@
 
 <PageTitle>Task Planning</PageTitle>
 <AppPageHeader Title="Task Planning" Subtitle="Review repository context, decompose stories, and approve bounded implementation specifications." />
-@if (!ProjectId.HasValue)
-{
-    <p>Select a project before planning tasks.</p>
-}
-else
-{
-    <ProjectRepositorySettings @key="(Scope.OrganizationId, ProjectId.Value)" CapturedWork="Scope" ProjectId="ProjectId.Value" IsOwner="IsOwner" />
-    @if (_error.Length > 0) { <p role="alert">@_error</p> }
-    <FluentButton OnClick="LoadAsync">Refresh work and snapshots</FluentButton>
-    <section aria-label="Generate tasks from stories">
-        <h2>Generate tasks</h2>
-        <p>Private repository context is processed on local Ollama. Task proposals are not saved until accepted. Child tasks inherit the source story's sprint.</p>
-        @foreach (var story in _items.Where(item => item.Type == PbiType.Story && !item.IsDraft))
-        {
-            <label><input type="checkbox" checked="@_selectedStories.Contains(story.PbiId)" @onchange="args => Select(story.PbiId, args.Value is true)" />
-                #@story.PbiId @story.Title
+<div class="task-planning-page">
+    @if (!ProjectId.HasValue)
+    {
+        <p>Select a project before planning tasks.</p>
+    }
+    else
+    {
+        @if (_error.Length > 0) { <p role="alert">@_error</p> }
+        <section class="task-planning-workspace" aria-label="Generate tasks from stories">
+            <div class="sp-panel task-planning-source-column">
+                <div class="task-planning-heading">
+                    <span class="task-planning-step">1</span>
+                    <div>
+                        <h2>Choose context</h2>
+                        <p>Select repository settings, a story, snapshot, and source paths.</p>
+                    </div>
+                </div>
+                <ProjectRepositorySettings @key="(Scope.OrganizationId, ProjectId.Value)" CapturedWork="Scope" ProjectId="ProjectId.Value" IsOwner="IsOwner" />
+                <div class="task-planning-refresh">
+                    <FluentButton OnClick="LoadAsync">Refresh work and snapshots</FluentButton>
+                </div>
+                <fieldset class="task-planning-story-list">
+                    <legend>Committed stories</legend>
+                    @foreach (var story in _items.Where(item => item.Type == PbiType.Story && !item.IsDraft))
+                    {
+                        <label><input type="checkbox" checked="@_selectedStories.Contains(story.PbiId)" @onchange="args => Select(story.PbiId, args.Value is true)" />
+                            #@story.PbiId @story.Title
+                        </label>
+                    }
+                    @if (!_items.Any(item => item.Type == PbiType.Story && !item.IsDraft))
+                    {
+                        <p>No committed stories are available.</p>
+                    }
+                </fieldset>
+                <label>Branch for a new immutable snapshot <input @bind="_branch" /></label>
+                <FluentButton OnClick="CreateSnapshotAsync" Disabled="_busy">Verify branch snapshot</FluentButton>
+                <label>Repository snapshot
+                    <select @bind="_snapshotId">
+                        <option value="0">Select a verified snapshot</option>
+                        @foreach (var snapshot in _snapshots) { <option value="@snapshot.RepositorySnapshotId">@snapshot.CommitSha</option> }
+                    </select>
+                </label>
+                <label>Relevant source paths (one per line, exact repository-relative paths)
+                    <textarea rows="5" @bind="_sourcePaths"></textarea>
+                </label>
+            </div>
+
+            <aside class="sp-panel task-planning-sidebar">
+                <div class="task-planning-heading">
+                    <span class="task-planning-step">2</span>
+                    <div>
+                        <h2>Plan and review</h2>
+                        <p>@(_preview is null ? "Generate a preview without changing backlog work." : "Review and edit proposals before saving.")</p>
+                    </div>
+                </div>
+                <p>Private repository context is processed on local Ollama. Child tasks inherit the source story's sprint.</p>
+                <FluentButton Appearance="ButtonAppearance.Primary" OnClick="GenerateAsync" Disabled="_busy" Loading="_busy">Generate task preview</FluentButton>
+                @if (_preview is not null)
+                {
+                    <h3>Review task proposals</h3>
+                    <p>Edit the structured proposal JSON, including exact files, commands, documentation, and dependencies. Dependencies on unaccepted task keys are rejected.</p>
+                    @foreach (var proposal in _proposals)
+                    {
+                        <label><input type="checkbox" @bind="proposal.Selected" /> Accept @proposal.Key</label>
+                        <textarea rows="20" @bind="proposal.Json" spellcheck="false" aria-label="@($"Proposal {proposal.Key}")"></textarea>
+                    }
+                    <label><input type="checkbox" @bind="_asDraft" /> Save as draft work</label>
+                    <FluentButton OnClick="AcceptAsync" Disabled="_busy">Save selected task proposals</FluentButton>
+                }
+            </aside>
+        </section>
+        <section class="sp-panel task-planning-specifications" aria-label="Task specifications">
+            <h2>Manual and generated task specifications</h2>
+            <p>Create manual Task PBIs in the backlog, then select them here to use the same specification and file-scope approval format.</p>
+            <label>Task
+                <select @bind="_taskId">
+                    <option value="0">Select a task</option>
+                    @foreach (var task in _items.Where(item => item.Type == PbiType.Task))
+                    { <option value="@task.PbiId">#@task.PbiId @task.Title</option> }
+                </select>
             </label>
-        }
-        <label>Branch for a new immutable snapshot <input @bind="_branch" /></label>
-        <FluentButton OnClick="CreateSnapshotAsync" Disabled="_busy">Verify branch snapshot</FluentButton>
-        <label>Repository snapshot
-            <select @bind="_snapshotId">
-                <option value="0">Select a verified snapshot</option>
-                @foreach (var snapshot in _snapshots) { <option value="@snapshot.RepositorySnapshotId">@snapshot.CommitSha</option> }
-            </select>
-        </label>
-        <label>Relevant source paths (one per line, exact repository-relative paths)
-            <textarea rows="5" @bind="_sourcePaths"></textarea>
-        </label>
-        <FluentButton OnClick="GenerateAsync" Disabled="_busy" Loading="_busy">Generate task preview</FluentButton>
-        @if (_preview is not null)
-        {
-            <h3>Review task proposals</h3>
-            <p>Edit the structured proposal JSON, including exact files, commands, documentation, and dependencies. Dependencies on unaccepted task keys are rejected.</p>
-            @foreach (var proposal in _proposals)
-            {
-                <label><input type="checkbox" @bind="proposal.Selected" /> Accept @proposal.Key</label>
-                <textarea rows="20" @bind="proposal.Json" spellcheck="false" aria-label="@($"Proposal {proposal.Key}")"></textarea>
-            }
-            <label><input type="checkbox" @bind="_asDraft" /> Save as draft work</label>
-            <FluentButton OnClick="AcceptAsync" Disabled="_busy">Save selected task proposals</FluentButton>
-        }
-    </section>
-    <section aria-label="Task specifications">
-        <h2>Manual and generated task specifications</h2>
-        <p>Create manual Task PBIs in the backlog, then select them here to use the same specification and file-scope approval format.</p>
-        <label>Task
-            <select @bind="_taskId">
-                <option value="0">Select a task</option>
-                @foreach (var task in _items.Where(item => item.Type == PbiType.Task))
-                { <option value="@task.PbiId">#@task.PbiId @task.Title</option> }
-            </select>
-        </label>
-        @if (_taskId > 0)
-        { <TaskSpecificationEditor @key="(Scope.OrganizationId, ProjectId.Value, _taskId)" CapturedWork="Scope" ProjectId="ProjectId.Value" TaskId="_taskId" IsOwner="IsOwner" Snapshots="_snapshots" /> }
-    </section>
-}
+            @if (_taskId > 0)
+            { <TaskSpecificationEditor @key="(Scope.OrganizationId, ProjectId.Value, _taskId)" CapturedWork="Scope" ProjectId="ProjectId.Value" TaskId="_taskId" IsOwner="IsOwner" Snapshots="_snapshots" /> }
+        </section>
+    }
+</div>
 
 @code {
     private static readonly JsonSerializerOptions EditorJson = new(JsonSerializerDefaults.Web)

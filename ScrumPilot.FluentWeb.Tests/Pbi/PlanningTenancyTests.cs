@@ -32,6 +32,9 @@ public sealed class PlanningTenancyTests : FluentFrontendTestBase
         Http.OnGetJson("api/organizations/2/projects/17/repository", new ProjectRepositoryStatus(null, false, "Not configured"));
         using var cut = Render<TaskPlanning>(p => p.Add(x => x.CapturedWork, scope));
         cut.WaitForAssertion(() => Assert.Contains("Scoped story", cut.Markup));
+        Assert.Contains("task-planning-workspace", cut.Markup);
+        Assert.Contains("task-planning-source-column", cut.Markup);
+        Assert.Contains("task-planning-sidebar", cut.Markup);
         Assert.All(Http.Requests, request => Assert.StartsWith("api/organizations/2/", request.Path));
         Assert.Contains(Http.Requests, request => request.Path.EndsWith("/pbi/getallpbis") && request.Query == "?projectId=17");
         Assert.True(cut.FindAll("fluent-button").Single(x => x.TextContent.Contains("Verify and save repository")).HasAttribute("disabled"));
