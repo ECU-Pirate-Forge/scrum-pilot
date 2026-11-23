@@ -148,6 +148,35 @@ public class PbiController(
         return Ok(await pbiService.UpdatePbiAsync(existing, cancellationToken));
     }
 
+    [HttpPut("{id:int}/status")]
+    public async Task<ActionResult<ProductBacklogItem>> UpdatePbiStatus(
+        int id,
+        [FromBody] PbiStatusUpdateRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var existing = await AuthorizedPbi(id, cancellationToken);
+        if (existing is null) return NotFound();
+        if (existing.Type != PbiType.Task || !existing.ParentStoryId.HasValue)
+            return BadRequest("Only child PBI tasks can use the task status operation.");
+        if (existing.Version != request.ExpectedVersion)
+            return Conflict("The task changed. Reload the board and try again.");
+
+        existing.Status = request.Status;
+        if (request.Status == PbiStatus.Done)
+        {
+            existing.IsDraft = false;
+        }
+
+        try
+        {
+            return Ok(await pbiService.UpdatePbiAsync(existing, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
     [HttpDelete("{id:int}")]
     public async Task<ActionResult> DeletePbi(int id, CancellationToken cancellationToken = default)
     {

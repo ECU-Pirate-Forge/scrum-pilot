@@ -42,6 +42,7 @@ public class ScrumBoardPageTests : FluentFrontendTestBase
             Assert.Contains("In Review", cut.Markup);
             Assert.Contains("Done", cut.Markup);
             Assert.Contains("Implement board", cut.Markup);
+            Assert.Contains("Generate tasks", cut.Markup);
             Assert.Contains("Review API", cut.Markup);
             Assert.Contains("5 SP", cut.Markup);
             Assert.Contains("Flagged", cut.Markup);
@@ -110,14 +111,21 @@ public class ScrumBoardPageTests : FluentFrontendTestBase
             Type = PbiType.Task,
             Title = "Write board tests",
             Status = PbiStatus.ToDo,
+            IsDraft = true,
             Priority = PbiPriority.Medium,
             DateCreated = DateTime.UtcNow,
             LastUpdated = DateTime.UtcNow
         });
         RegisterBoardData(items);
-        Http.On(HttpMethod.Put, "api/Pbi", (_, body) =>
+        Http.On(HttpMethod.Put, "api/Pbi/3/status", (_, body) =>
         {
-            var updated = JsonContentToPbi(body!);
+            var request = JsonSerializer.Deserialize<PbiStatusUpdateRequest>(
+                body!,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+            Assert.Equal(PbiStatus.Done, request.Status);
+            var updated = items.Single(item => item.PbiId == 3);
+            updated.Status = request.Status;
+            updated.IsDraft = false;
             return MockHttpHandler.Json(updated);
         });
 
@@ -127,9 +135,10 @@ public class ScrumBoardPageTests : FluentFrontendTestBase
         cut.Find("input[aria-label='Write board tests completed']").Change(true);
         cut.WaitForAssertion(() =>
         {
-            var request = Assert.Single(Http.RequestsTo(HttpMethod.Put, "api/Pbi"));
-            var sent = JsonContentToPbi(request.Body!);
-            Assert.Equal(3, sent.PbiId);
+            var request = Assert.Single(Http.RequestsTo(HttpMethod.Put, "api/Pbi/3/status"));
+            var sent = JsonSerializer.Deserialize<PbiStatusUpdateRequest>(
+                request.Body!,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
             Assert.Equal(PbiStatus.Done, sent.Status);
         });
 
@@ -137,7 +146,9 @@ public class ScrumBoardPageTests : FluentFrontendTestBase
         cut.WaitForAssertion(() =>
         {
             Assert.NotNull(cut.FindComponent<PbiDetailsDialog>());
-            Assert.Contains("PBI details", cut.Markup);
+            Assert.Contains("Edit task", cut.Markup);
+            Assert.Contains("Task specification", cut.Markup);
+            Assert.Contains("Copy task specification", cut.Markup);
         });
     }
 

@@ -72,6 +72,7 @@
                            MoveStatuses="MoveTargets(lane.Status)"
                            OnOpen="OpenPbiDetails"
                            OnOpenTask="OpenPbiDetails"
+                           OnGenerateTasks="OpenTaskPlanning"
                            OnMoveRequested="MoveItemAsync"
                            OnDragStarted="StartDragging"
                            OnDropRequested="DropDraggedItemAsync"
@@ -295,8 +296,7 @@
 
             _tasks = (items ?? [])
                 .Where(item => item.Type == PbiType.Task
-                    && item.ParentStoryId.HasValue
-                    && !item.IsDraft)
+                    && item.ParentStoryId.HasValue)
                 .OrderBy(item => item.PbiId)
                 .ToList();
         }
@@ -398,10 +398,14 @@
 
         try
         {
-            var response = await Http.PutAsJsonAsync("api/Pbi", task);
+            var response = await Http.PutAsJsonAsync(
+                $"api/Pbi/{task.PbiId}/status",
+                new PbiStatusUpdateRequest(newStatus, task.Version));
             if (!response.IsSuccessStatusCode)
             {
-                throw new HttpRequestException($"Update failed with HTTP {(int)response.StatusCode}.");
+                var details = await Http.ReadAsStringAsync(response.Content);
+                throw new HttpRequestException(
+                    $"Update failed with HTTP {(int)response.StatusCode}: {details}");
             }
 
             var updated = await response.Content.ReadFromJsonAsync<ProductBacklogItem>();
@@ -428,6 +432,12 @@
     }
 
     private void OpenPbiDetails(ProductBacklogItem pbi) => SelectedPbi = pbi;
+
+    private void OpenTaskPlanning(ProductBacklogItem pbi)
+    {
+        var path = OrganizationRoutes.Page(Scope.OrganizationId, "task-planning", Scope.ProjectId);
+        Nav.NavigateTo($"{path}{(path.Contains('?') ? "&" : "?")}pbiId={pbi.PbiId}");
+    }
 
     private Task ClosePbiDetails()
     {

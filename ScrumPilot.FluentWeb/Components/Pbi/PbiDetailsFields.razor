@@ -1,5 +1,6 @@
 @using ScrumPilot.Shared.Models
 @namespace ScrumPilot.FluentWeb.Components.Pbi
+@inject IJSRuntime JS
 
 <div class="pbi-fields">
     <label class="pbi-field">
@@ -8,8 +9,15 @@
     </label>
 
     <label class="pbi-field pbi-field--wide">
-        <span>Description</span>
+        <span>@(IsTask ? "Task specification" : "Description")</span>
         <InputTextArea class="pbi-input pbi-textarea" @bind-Value="Draft.Description" />
+        @if (IsTask)
+        {
+            <FluentButton Appearance="ButtonAppearance.Outline"
+                          OnClick="CopyTaskSpecificationAsync">
+                Copy task specification
+            </FluentButton>
+        }
     </label>
 
     <label class="pbi-field">
@@ -60,4 +68,10 @@
 
 @code {
     [Parameter, EditorRequired] public ProductBacklogItem Draft { get; set; } = default!;
+    [Parameter] public bool IsTask { get; set; }
+
+    private async Task CopyTaskSpecificationAsync()
+    {
+        await JS.InvokeVoidAsync("mermaidHelper.copyText", Draft.Description);
+    }
 }

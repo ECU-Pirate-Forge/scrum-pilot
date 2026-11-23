@@ -30,6 +30,7 @@
                            MoveStatuses="MoveStatuses"
                            OnOpen="OnOpen"
                            OnOpenTask="OnOpenTask"
+                           OnGenerateTasks="OnGenerateTasks"
                            OnMoveRequested="OnMoveRequested"
                            OnDragStarted="OnDragStarted"
                            OnTaskStatusChanged="OnTaskStatusChanged" />
@@ -46,6 +47,7 @@
     [Parameter] public IReadOnlyList<PbiStatus> MoveStatuses { get; set; } = [];
     [Parameter] public EventCallback<ProductBacklogItem> OnOpen { get; set; }
     [Parameter] public EventCallback<ProductBacklogItem> OnOpenTask { get; set; }
+    [Parameter] public EventCallback<ProductBacklogItem> OnGenerateTasks { get; set; }
     [Parameter] public EventCallback<(ProductBacklogItem Item, PbiStatus NewStatus)> OnMoveRequested { get; set; }
     [Parameter] public EventCallback<ProductBacklogItem> OnDragStarted { get; set; }
     [Parameter] public EventCallback<PbiStatus> OnDropRequested { get; set; }

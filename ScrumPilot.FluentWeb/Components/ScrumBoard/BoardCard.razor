@@ -66,6 +66,15 @@
                 }
             </section>
         }
+        else if (Item.Type is PbiType.Story or PbiType.Bug)
+        {
+            <div class="board-card__tasks" data-testid="generate-tasks-action" @onclick:stopPropagation="true">
+                <FluentButton Appearance="ButtonAppearance.Outline"
+                              OnClick="GenerateTasksAsync">
+                    Generate tasks
+                </FluentButton>
+            </div>
+        }
 
         <footer class="board-card__footer">
             <FluentBadge Appearance="BadgeAppearance.Tint" Color="@PriorityColor">@Item.Priority</FluentBadge>
@@ -81,12 +90,14 @@
     [Parameter] public IReadOnlyList<PbiStatus> MoveStatuses { get; set; } = [];
     [Parameter] public EventCallback<ProductBacklogItem> OnOpen { get; set; }
     [Parameter] public EventCallback<ProductBacklogItem> OnOpenTask { get; set; }
+    [Parameter] public EventCallback<ProductBacklogItem> OnGenerateTasks { get; set; }
     [Parameter] public EventCallback<(ProductBacklogItem Item, PbiStatus NewStatus)> OnMoveRequested { get; set; }
     [Parameter] public EventCallback<ProductBacklogItem> OnDragStarted { get; set; }
     [Parameter] public EventCallback<(ProductBacklogItem Task, PbiStatus NewStatus)> OnTaskStatusChanged { get; set; }
 
     private Task OpenAsync() => OnOpen.InvokeAsync(Item);
     private Task OpenTaskAsync(ProductBacklogItem task) => OnOpenTask.InvokeAsync(task);
+    private Task GenerateTasksAsync() => OnGenerateTasks.InvokeAsync(Item);
     private Task ToggleTaskAsync(ProductBacklogItem task, ChangeEventArgs args)
     {
         var isChecked = args.Value switch

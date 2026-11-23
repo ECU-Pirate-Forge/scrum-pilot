@@ -14,8 +14,8 @@
         <section class="pbi-dialog" role="dialog" aria-modal="true" aria-labelledby="pbi-details-title" @onclick:stopPropagation="true">
             <header class="pbi-dialog__header">
                 <div>
-                    <p class="sp-small sp-muted">PBI #@(Pbi.PbiId == 0 ? "new" : Pbi.PbiId)</p>
-                    <h2 id="pbi-details-title">@(Pbi.PbiId == 0 ? "Create PBI" : "PBI details")</h2>
+                    <p class="sp-small sp-muted">@(Pbi.Type == PbiType.Task ? "Task" : "PBI") #@(Pbi.PbiId == 0 ? "new" : Pbi.PbiId)</p>
+                    <h2 id="pbi-details-title">@(Pbi.PbiId == 0 ? "Create PBI" : Pbi.Type == PbiType.Task ? "Edit task" : "PBI details")</h2>
                 </div>
                 <FluentButton Appearance="ButtonAppearance.Transparent" IconOnly="true" Title="Close" OnClick="CancelAsync">
                     <AppIcon Value="@(new Icons.Regular.Size20.Dismiss())" Label="Close" />
@@ -39,7 +39,7 @@
             {
                 <EditForm Model="_draft" OnSubmit="SaveAsync">
                     <div class="pbi-dialog__body">
-                        <PbiDetailsFields Draft="_draft" />
+                        <PbiDetailsFields Draft="_draft" IsTask="@(Pbi.Type == PbiType.Task)" />
                         @if (_titleRequired)
                         {
                             <p class="pbi-error" role="alert">Title is required.</p>

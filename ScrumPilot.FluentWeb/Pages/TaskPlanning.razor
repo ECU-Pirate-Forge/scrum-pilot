@@ -168,6 +168,9 @@ else
 </div>
 
 @code {
+    [SupplyParameterFromQuery(Name = "pbiId")]
+    public int? SelectedPbiId { get; set; }
+
     private static readonly JsonSerializerOptions EditorJson = new(JsonSerializerDefaults.Web)
         { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };
     private int? ProjectId => Scope.ProjectId;
@@ -225,7 +228,10 @@ else
                 _githubEnabled = githubEnabled;
                 _items = items;
                 _snapshots = snapshots;
-                if (!EligibleSources.Any(item => item.PbiId == _sourcePbiId)) _sourcePbiId = 0;
+                if (SelectedPbiId.HasValue && EligibleSources.Any(item => item.PbiId == SelectedPbiId.Value))
+                    _sourcePbiId = SelectedPbiId.Value;
+                else if (!EligibleSources.Any(item => item.PbiId == _sourcePbiId))
+                    _sourcePbiId = 0;
             }
         }
         catch (OperationCanceledException) when (!Scope.IsCurrent) { }

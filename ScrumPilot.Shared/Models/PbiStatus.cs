@@ -14,4 +14,6 @@
         /// <summary>Work is complete and accepted.</summary>
         Done
     }
+
+    public sealed record PbiStatusUpdateRequest(PbiStatus Status, long ExpectedVersion);
 }
