@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using ScrumPilot.FluentWeb.Components.DependencyChart;
+using ScrumPilot.FluentWeb.Components.Pbi;
 using ScrumPilot.FluentWeb.Components.ScrumBoard;
 using ScrumPilot.FluentWeb.Pages;
 using ScrumPilot.FluentWeb.Services;
@@ -97,6 +98,49 @@ public class ScrumBoardPageTests : FluentFrontendTestBase
         });
     }
 
+    [Fact]
+    public void Task_checkbox_marks_task_done_and_task_title_opens_editor()
+    {
+        var items = SampleItems();
+        items.Add(new ProductBacklogItem
+        {
+            PbiId = 3,
+            ProjectId = 42,
+            ParentStoryId = 1,
+            Type = PbiType.Task,
+            Title = "Write board tests",
+            Status = PbiStatus.ToDo,
+            Priority = PbiPriority.Medium,
+            DateCreated = DateTime.UtcNow,
+            LastUpdated = DateTime.UtcNow
+        });
+        RegisterBoardData(items);
+        Http.On(HttpMethod.Put, "api/Pbi", (_, body) =>
+        {
+            var updated = JsonContentToPbi(body!);
+            return MockHttpHandler.Json(updated);
+        });
+
+        using var cut = Render<ScrumPilot.FluentWeb.Pages.ScrumBoard>();
+        cut.WaitForAssertion(() => Assert.Contains("Write board tests", cut.Markup));
+
+        cut.Find("input[aria-label='Write board tests completed']").Change(true);
+        cut.WaitForAssertion(() =>
+        {
+            var request = Assert.Single(Http.RequestsTo(HttpMethod.Put, "api/Pbi"));
+            var sent = JsonContentToPbi(request.Body!);
+            Assert.Equal(3, sent.PbiId);
+            Assert.Equal(PbiStatus.Done, sent.Status);
+        });
+
+        cut.Find("button.board-card__task-title").Click();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.NotNull(cut.FindComponent<PbiDetailsDialog>());
+            Assert.Contains("PBI details", cut.Markup);
+        });
+    }
+
     private void RegisterBoardData(List<ProductBacklogItem> items)
     {
         Http.OnGetJson("api/Sprint", new[]
@@ -114,6 +158,7 @@ public class ScrumBoardPageTests : FluentFrontendTestBase
         Http.OnGetJson("api/Epic", new[] { new Epic { EpicId = 3, ProjectId = 42, Name = "UI" } });
         Http.OnGetJson("api/user/all", new[] { new UserSummaryDto { Id = "u1", UserName = "Ada Lovelace" } });
         Http.OnGetJson("api/Pbi/getNonDraftPbis", items);
+        Http.OnGetJson("api/Pbi/getAllPbis", items);
     }
 
     private static ProductBacklogItem JsonContentToPbi(string body) =>

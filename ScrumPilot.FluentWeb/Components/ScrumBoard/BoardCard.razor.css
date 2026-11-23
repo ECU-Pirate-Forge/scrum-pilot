@@ -79,3 +79,46 @@
     font-weight: 700;
 }
 
+.board-card__tasks {
+    display: grid;
+    gap: var(--spacingVerticalXS);
+    padding-block-start: var(--spacingVerticalXS);
+    border-block-start: 1px solid var(--colorNeutralStroke2);
+}
+
+.board-card__task {
+    display: grid;
+    grid-template-columns: 1.25rem minmax(0, 1fr);
+    align-items: start;
+    gap: var(--spacingHorizontalS);
+}
+
+.board-card__task input {
+    inline-size: 1.05rem;
+    block-size: 1.05rem;
+    margin-block-start: 0.15rem;
+    cursor: pointer;
+}
+
+.board-card__task-title {
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--colorNeutralForeground1);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.board-card__task-title:hover,
+.board-card__task-title:focus-visible {
+    color: var(--colorBrandForegroundLink);
+    text-decoration: underline;
+}
+
+.board-card__task-title--done {
+    color: var(--colorNeutralForeground3);
+    text-decoration: line-through;
+}
+

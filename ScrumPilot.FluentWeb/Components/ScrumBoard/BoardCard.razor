@@ -45,6 +45,28 @@
         <h3>@Item.Title</h3>
         <p class="board-card__id">PBI #@Item.PbiId</p>
 
+        @if (Tasks.Count > 0)
+        {
+            <section class="board-card__tasks" aria-label="PBI tasks">
+                @foreach (var task in Tasks)
+                {
+                    <div class="board-card__task">
+                        <input type="checkbox"
+                               checked="@(@task.Status == PbiStatus.Done)"
+                               @onchange="args => ToggleTaskAsync(task, args)"
+                               @onclick:stopPropagation="true"
+                               aria-label="@($"{task.Title} completed")" />
+                        <button type="button"
+                                class="board-card__task-title @(task.Status == PbiStatus.Done ? "board-card__task-title--done" : null)"
+                                @onclick="() => OpenTaskAsync(task)"
+                                @onclick:stopPropagation="true">
+                            @task.Title
+                        </button>
+                    </div>
+                }
+            </section>
+        }
+
         <footer class="board-card__footer">
             <FluentBadge Appearance="BadgeAppearance.Tint" Color="@PriorityColor">@Item.Priority</FluentBadge>
             <span class="board-card__assignee" title="@AssigneeLabel">@AssigneeInitials</span>
@@ -55,12 +77,31 @@
 @code {
     [Parameter, EditorRequired] public ProductBacklogItem Item { get; set; } = default!;
     [Parameter] public IReadOnlyList<UserSummaryDto> Users { get; set; } = [];
+    [Parameter] public IReadOnlyList<ProductBacklogItem> Tasks { get; set; } = [];
     [Parameter] public IReadOnlyList<PbiStatus> MoveStatuses { get; set; } = [];
     [Parameter] public EventCallback<ProductBacklogItem> OnOpen { get; set; }
+    [Parameter] public EventCallback<ProductBacklogItem> OnOpenTask { get; set; }
     [Parameter] public EventCallback<(ProductBacklogItem Item, PbiStatus NewStatus)> OnMoveRequested { get; set; }
     [Parameter] public EventCallback<ProductBacklogItem> OnDragStarted { get; set; }
+    [Parameter] public EventCallback<(ProductBacklogItem Task, PbiStatus NewStatus)> OnTaskStatusChanged { get; set; }
 
     private Task OpenAsync() => OnOpen.InvokeAsync(Item);
+    private Task OpenTaskAsync(ProductBacklogItem task) => OnOpenTask.InvokeAsync(task);
+    private Task ToggleTaskAsync(ProductBacklogItem task, ChangeEventArgs args)
+    {
+        var isChecked = args.Value switch
+        {
+            bool checkedValue => checkedValue,
+            string text => bool.TryParse(text, out var parsed) && parsed,
+            _ => false
+        };
+        var newStatus = isChecked ? PbiStatus.Done : PbiStatus.ToDo;
+        if (task.Status == newStatus)
+        {
+            return Task.CompletedTask;
+        }
+        return OnTaskStatusChanged.InvokeAsync((task, newStatus));
+    }
 
     public Task RequestMoveAsync(PbiStatus status) => MoveAsync(status);
 

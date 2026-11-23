@@ -68,11 +68,14 @@
                 <BoardLane Lane="lane"
                            Items="laneItems"
                            Users="_users"
+                           Tasks="_tasks"
                            MoveStatuses="MoveTargets(lane.Status)"
                            OnOpen="OpenPbiDetails"
+                           OnOpenTask="OpenPbiDetails"
                            OnMoveRequested="MoveItemAsync"
                            OnDragStarted="StartDragging"
-                           OnDropRequested="DropDraggedItemAsync" />
+                           OnDropRequested="DropDraggedItemAsync"
+                           OnTaskStatusChanged="ChangeTaskStatusAsync" />
             }
         </section>
     }
@@ -120,6 +123,7 @@
     private List<Sprint> _sprints = [];
     private List<Epic> _epics = [];
     private List<UserSummaryDto> _users = [];
+    private List<ProductBacklogItem> _tasks = [];
     private int? _selectedProjectId;
     private int? _selectedSprintId;
     private int? _selectedEpicId;
@@ -196,6 +200,7 @@
         _selectedSprintId = null;
         _selectedEpicId = null;
         _items = [];
+        _tasks = [];
         await LoadDropdownsAsync();
         ApplyDefaultSprintFilter();
         await LoadItemsAsync(showLoading: false);
@@ -237,7 +242,11 @@
         {
             _errorMessage = string.Empty;
             var items = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(BuildItemUrl());
-            _items = (items ?? []).OrderBy(i => i.PbiId).ToList();
+            _items = (items ?? [])
+                .Where(item => !item.ParentStoryId.HasValue)
+                .OrderBy(i => i.PbiId)
+                .ToList();
+            await LoadTasksAsync();
         }
         catch (OperationCanceledException) when (!Scope.IsCurrent) { }
         catch (Exception ex)
@@ -265,6 +274,39 @@
             query.Add($"epicId={_selectedEpicId.Value}");
         }
         return $"api/Pbi/getNonDraftPbis?{string.Join("&", query)}";
+    }
+
+    private async Task LoadTasksAsync()
+    {
+        if (!Scope.IsCurrent || !_selectedProjectId.HasValue)
+        {
+            _tasks = [];
+            return;
+        }
+
+        try
+        {
+            var items = await Http.GetFromJsonAsync<List<ProductBacklogItem>>(
+                $"api/Pbi/getAllPbis?projectId={_selectedProjectId.Value}");
+            if (!Scope.IsCurrent)
+            {
+                return;
+            }
+
+            _tasks = (items ?? [])
+                .Where(item => item.Type == PbiType.Task
+                    && item.ParentStoryId.HasValue
+                    && !item.IsDraft)
+                .OrderBy(item => item.PbiId)
+                .ToList();
+        }
+        catch (OperationCanceledException) when (!Scope.IsCurrent) { }
+        catch (Exception ex)
+        {
+            if (!Scope.IsCurrent) return;
+            Logger.LogWarning(ex, "Failed to load PBI tasks for project {ProjectId}", _selectedProjectId);
+            _tasks = [];
+        }
     }
 
     private async Task OnSprintChanged(int? value)
@@ -336,6 +378,52 @@
             item.LastUpdated = originalLastUpdated;
             _errorMessage = "Could not save the status change. The card was returned to its previous column.";
             Notifications.ShowError(_errorMessage, "Move failed");
+        }
+    }
+
+    private async Task ChangeTaskStatusAsync((ProductBacklogItem Task, PbiStatus NewStatus) change)
+    {
+        var task = change.Task;
+        var newStatus = change.NewStatus;
+        if (task.Status == newStatus)
+        {
+            return;
+        }
+
+        var originalStatus = task.Status;
+        var originalLastUpdated = task.LastUpdated;
+        task.Status = newStatus;
+        task.LastUpdated = DateTime.UtcNow;
+        StateHasChanged();
+
+        try
+        {
+            var response = await Http.PutAsJsonAsync("api/Pbi", task);
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new HttpRequestException($"Update failed with HTTP {(int)response.StatusCode}.");
+            }
+
+            var updated = await response.Content.ReadFromJsonAsync<ProductBacklogItem>();
+            if (updated is not null)
+            {
+                var taskIndex = _tasks.FindIndex(item => item.PbiId == updated.PbiId);
+                if (taskIndex >= 0)
+                {
+                    _tasks[taskIndex] = updated;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            if (!Scope.IsCurrent) return;
+            Logger.LogError(ex, "Failed to change task {TaskId} status from {OriginalStatus} to {NewStatus}",
+                task.PbiId, originalStatus, newStatus);
+            task.Status = originalStatus;
+            task.LastUpdated = originalLastUpdated;
+            _errorMessage = "Could not save the task completion change.";
+            Notifications.ShowError(_errorMessage, "Task update failed");
+            StateHasChanged();
         }
     }
 

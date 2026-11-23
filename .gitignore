@@ -510,3 +510,6 @@ ScrumPilot.FluentWeb/wwwroot/appsettings.Development.json
 .playwright-mcp/
 # Generated Aspire publish helpers
 .aspire/scripts/
+
+# Visual brainstorming companion artifacts
+.superpowers/

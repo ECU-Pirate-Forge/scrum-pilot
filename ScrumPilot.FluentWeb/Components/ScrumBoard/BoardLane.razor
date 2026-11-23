@@ -26,10 +26,13 @@
             {
                 <BoardCard Item="item"
                            Users="Users"
+                           Tasks="Tasks.Where(task => task.ParentStoryId == item.PbiId && task.Type == PbiType.Task).OrderBy(task => task.PbiId).ToList()"
                            MoveStatuses="MoveStatuses"
                            OnOpen="OnOpen"
+                           OnOpenTask="OnOpenTask"
                            OnMoveRequested="OnMoveRequested"
-                           OnDragStarted="OnDragStarted" />
+                           OnDragStarted="OnDragStarted"
+                           OnTaskStatusChanged="OnTaskStatusChanged" />
             }
         }
     </div>
@@ -39,11 +42,14 @@
     [Parameter, EditorRequired] public BoardLaneDefinition Lane { get; set; } = default!;
     [Parameter, EditorRequired] public IReadOnlyList<ProductBacklogItem> Items { get; set; } = [];
     [Parameter] public IReadOnlyList<UserSummaryDto> Users { get; set; } = [];
+    [Parameter] public IReadOnlyList<ProductBacklogItem> Tasks { get; set; } = [];
     [Parameter] public IReadOnlyList<PbiStatus> MoveStatuses { get; set; } = [];
     [Parameter] public EventCallback<ProductBacklogItem> OnOpen { get; set; }
+    [Parameter] public EventCallback<ProductBacklogItem> OnOpenTask { get; set; }
     [Parameter] public EventCallback<(ProductBacklogItem Item, PbiStatus NewStatus)> OnMoveRequested { get; set; }
     [Parameter] public EventCallback<ProductBacklogItem> OnDragStarted { get; set; }
     [Parameter] public EventCallback<PbiStatus> OnDropRequested { get; set; }
+    [Parameter] public EventCallback<(ProductBacklogItem Task, PbiStatus NewStatus)> OnTaskStatusChanged { get; set; }
 
     private void OnDragOver()
     {
