@@ -220,6 +220,7 @@ public sealed class MountedShellTests : BunitContext
         Services.AddScoped<ProjectStateService>();
         JSInterop.Mode = JSRuntimeMode.Loose;
         using var cut = Render<NavMenu>();
+        Assert.Equal("", cut.FindComponents<FluentNavItem>().First().Instance.Href);
         foreach (var page in new[] { "backlog", "metrics", "planning-poker", "dependency-chart", "draft-stories", "project-management", "scrum-board", "pbigeneration" })
             Assert.Contains($"organizations/3/{page}", cut.FindComponents<FluentNavItem>().Select(item => item.Instance.Href));
 

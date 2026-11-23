@@ -2,7 +2,7 @@
 @using Microsoft.AspNetCore.Components.Routing
 @implements IDisposable
 <FluentNav Id="main-menu" Width="240px" UseIcons="true">
-    <FluentNavItem Href="" Match="NavLinkMatch.All" IconRest="@(new Icons.Regular.Size20.Home())" IconActive="@(new Icons.Filled.Size20.Home())">Home</FluentNavItem>
+    <FluentNavItem Href="@WorkLink("home")" Match="NavLinkMatch.All" IconRest="@(new Icons.Regular.Size20.Home())" IconActive="@(new Icons.Filled.Size20.Home())">Home</FluentNavItem>
     <FluentNavItem Href="@WorkLink("project-management")" IconRest="@(new Icons.Regular.Size20.BoardSplit())" IconActive="@(new Icons.Filled.Size20.BoardSplit())">Manage Project</FluentNavItem>
     <FluentNavItem Href="@WorkLink("organization-management")" IconRest="@(new Icons.Regular.Size20.BuildingMultiple())" IconActive="@(new Icons.Filled.Size20.BuildingMultiple())">Manage Organization</FluentNavItem>
     <FluentNavItem Href="@WorkLink("pbigeneration")" IconRest="@(new Icons.Regular.Size20.Lightbulb())" IconActive="@(new Icons.Filled.Size20.Lightbulb())">Generate</FluentNavItem>
@@ -22,6 +22,9 @@
 
     private string WorkLink(string page)
     {
+        if (string.Equals(page, "home", StringComparison.OrdinalIgnoreCase))
+            return "";
+
         var uri = new Uri(Navigation.Uri);
         return OrganizationRoutes.OrganizationId(uri) is int id
             ? OrganizationRoutes.Page(id, page, OrganizationRoutes.ProjectId(uri))
