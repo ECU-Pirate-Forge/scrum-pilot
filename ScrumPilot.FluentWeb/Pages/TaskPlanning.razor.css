@@ -1,4 +1,25 @@
-section { margin-block: 1.5rem; padding: 1rem; border: 1px solid var(--colorNeutralStroke1); border-radius: var(--borderRadiusMedium); }
-label { display: block; margin-block: .75rem; }
-textarea { display: block; width: 100%; max-width: 75rem; font-family: monospace; }
-input:not([type=checkbox]), select { margin-inline: .5rem; max-width: 100%; }
+.task-planning-page { display: grid; gap: var(--spacingVerticalL); }
+.task-planning-workspace { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(18rem, 0.75fr); gap: var(--spacingHorizontalL); align-items: start; margin: 0; padding: 0; border: 0; }
+.task-planning-source-column, .task-planning-sidebar { display: grid; gap: var(--spacingVerticalM); }
+.task-planning-heading { display: flex; align-items: center; gap: var(--spacingHorizontalM); }
+.task-planning-heading h2, .task-planning-heading p { margin: 0; }
+.task-planning-heading p { margin-top: 0.15rem; color: var(--colorNeutralForeground2); }
+.task-planning-step { display: grid; place-items: center; flex-shrink: 0; width: 2rem; height: 2rem; border-radius: 50%; background: var(--colorBrandBackground); color: var(--colorNeutralForegroundOnBrand); font-weight: 800; }
+.task-planning-refresh { display: flex; justify-content: flex-start; }
+.task-planning-story-list { display: grid; gap: var(--spacingVerticalXS); margin: 0; padding: var(--spacingVerticalM); border: 1px solid var(--colorNeutralStroke1); border-radius: var(--borderRadiusLarge); }
+.task-planning-story-list label { display: flex; align-items: flex-start; gap: var(--spacingHorizontalS); margin: 0; }
+.task-planning-story-list p { margin: 0; color: var(--colorNeutralForeground2); }
+.task-planning-sidebar { position: sticky; top: var(--spacingVerticalL); }
+.task-planning-sidebar section { margin: 0; padding: 0; border: 0; }
+.task-planning-sidebar > p { margin: 0; color: var(--colorNeutralForeground2); line-height: 1.5; }
+.task-planning-sidebar h3 { margin-bottom: 0; }
+.task-planning-github-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacingHorizontalL); }
+.task-planning-specifications { display: grid; gap: var(--spacingVerticalM); }
+.task-planning-specifications h2, .task-planning-specifications p { margin: 0; }
+.task-planning-page label { display: block; margin-block: 0; }
+.task-planning-page textarea { display: block; width: 100%; max-width: 75rem; box-sizing: border-box; font-family: monospace; }
+.task-planning-page input:not([type=checkbox]), .task-planning-page select { max-width: 100%; }
+@media (max-width: 980px) {
+    .task-planning-workspace, .task-planning-github-grid { grid-template-columns: 1fr; }
+    .task-planning-sidebar { position: static; }
+}

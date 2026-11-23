@@ -46,6 +46,9 @@ public sealed class PlanningTenancyTests : FluentFrontendTestBase
         using var page = Render<TaskPlanning>(p => p.Add(x => x.CapturedWork, scope));
         page.WaitForAssertion(() => Assert.Contains("Scoped story", page.Markup));
         page.Find("select").Change("5");
+        Assert.Contains("task-planning-workspace", page.Markup);
+        Assert.Contains("task-planning-source-column", page.Markup);
+        Assert.Contains("task-planning-sidebar", page.Markup);
         await page.FindAll("fluent-button").Single(x => x.TextContent.Contains("Generate task preview")).ClickAsync(new());
         page.WaitForAssertion(() => Assert.Contains("Review and edit proposals", page.Markup));
         page.Find("input[type=checkbox]").Change(true);

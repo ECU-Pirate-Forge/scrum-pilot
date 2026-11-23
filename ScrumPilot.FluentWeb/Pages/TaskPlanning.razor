@@ -14,6 +14,7 @@
 
 <PageTitle>Task Planning</PageTitle>
 <AppPageHeader Title="Task Planning" Subtitle="Create and regenerate tasks from existing stories and bugs." />
+<div class="task-planning-page">
 @if (!ProjectId.HasValue)
 {
     <p>Select a project before planning tasks.</p>
@@ -23,19 +24,25 @@ else
     @if (_error.Length > 0) { <p role="alert">@_error</p> }
     @if (_notice.Length > 0) { <p role="status">@_notice</p> }
     @* <FluentButton OnClick="LoadAsync">Refresh work</FluentButton> *@
-    <section aria-label="Create tasks from existing work">
-        <h2>Create tasks from a story or bug</h2>
-        <p>Tasks are created as drafts and inherit the selected source's sprint. AI task specs include current project guidelines and a copyable implementation handoff.</p>
-        <label>Source story or bug
-            <select @bind="_sourcePbiId">
-                <option value="0">Select a committed story or bug</option>
-                @foreach (var source in EligibleSources)
-                {
-                    <option value="@source.PbiId">#@source.PbiId @source.Type: @source.Title</option>
-                }
-            </select>
-        </label>
-        @if (SelectedSource is { } sourcePbi)
+    <section class="task-planning-workspace" aria-label="Create tasks from existing work">
+        <div class="sp-panel task-planning-source-column">
+            <div class="task-planning-heading">
+                <span class="task-planning-step">1</span>
+                <div>
+                    <h2>Choose work</h2>
+                    <p>Create and manage tasks from one committed story or bug.</p>
+                </div>
+            </div>
+            <label>Source story or bug
+                <select @bind="_sourcePbiId">
+                    <option value="0">Select a committed story or bug</option>
+                    @foreach (var source in EligibleSources)
+                    {
+                        <option value="@source.PbiId">#@source.PbiId @source.Type: @source.Title</option>
+                    }
+                </select>
+            </label>
+        @if (SelectedSource is not null)
         {
             <section aria-label="Add a task manually">
                 <h3>Add a task manually</h3>
@@ -43,6 +50,18 @@ else
                 <label>Task description <textarea rows="4" @bind="_manualDescription"></textarea></label>
                 <FluentButton OnClick="CreateManualAsync" Disabled="_busy">Add draft task</FluentButton>
             </section>
+        }
+        </div>
+        @if (SelectedSource is { } sourcePbi)
+        {
+        <aside class="sp-panel task-planning-sidebar">
+            <div class="task-planning-heading">
+                <span class="task-planning-step">2</span>
+                <div>
+                    <h2>Plan and review</h2>
+                    <p>@(_creationPreview is null ? "Generate a preview before saving draft tasks." : "Review and edit proposals before saving.")</p>
+                </div>
+            </div>
             <section aria-label="Generate tasks with AI">
                 <h3>Generate tasks with AI</h3>
                 <p>Generation uses this work item's content and current project guidelines; no GitHub repository or file snapshot is needed.</p>
@@ -90,13 +109,15 @@ else
                 }
                 @if (!ChildTasks(sourcePbi.PbiId).Any()) { <p>No child tasks yet.</p> }
             </section>
+        </aside>
         }
     </section>
 
     @if (_githubEnabled)
     {
-        <ProjectRepositorySettings @key="(Scope.OrganizationId, ProjectId.Value)" CapturedWork="Scope" ProjectId="ProjectId.Value" IsOwner="IsOwner" />
-        <section aria-label="GitHub-backed task implementation planning">
+        <div class="task-planning-github-grid">
+        <section class="sp-panel" aria-label="Repository-backed task implementation planning">
+            <ProjectRepositorySettings @key="(Scope.OrganizationId, ProjectId.Value)" CapturedWork="Scope" ProjectId="ProjectId.Value" IsOwner="IsOwner" />
             <h2>Repository-backed task specification and PR enforcement</h2>
             <label>Task
                 <select @bind="_taskId">
@@ -108,7 +129,7 @@ else
             @if (_taskId > 0)
             { <TaskSpecificationEditor @key="(Scope.OrganizationId, ProjectId.Value, _taskId)" CapturedWork="Scope" ProjectId="ProjectId.Value" TaskId="_taskId" IsOwner="IsOwner" Snapshots="_snapshots" /> }
         </section>
-        <section aria-label="Legacy repository-backed task generation">
+        <section class="sp-panel" aria-label="Legacy repository-backed task generation">
             <h2>Generate tasks with repository context</h2>
             @foreach (var story in _items.Where(item => item.Type == PbiType.Story && !item.IsDraft))
             {
@@ -141,8 +162,10 @@ else
                 <FluentButton OnClick="AcceptAsync" Disabled="_busy">Save selected repository-bound task proposals</FluentButton>
             }
         </section>
+        </div>
     }
 }
+</div>
 
 @code {
     private static readonly JsonSerializerOptions EditorJson = new(JsonSerializerDefaults.Web)
