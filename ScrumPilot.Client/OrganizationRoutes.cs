@@ -5,7 +5,7 @@ public static class OrganizationRoutes
 {
     private static readonly HashSet<string> WorkPages = new(StringComparer.OrdinalIgnoreCase)
     {
-        "backlog", "scrum-board", "project-management", "draft-stories", "pbigeneration",
+        "home","backlog", "scrum-board", "project-management", "draft-stories", "pbigeneration",
         "metrics", "dependency-chart", "planning-poker", "organization-management", "task-planning", "pbi-generation"
     };
 

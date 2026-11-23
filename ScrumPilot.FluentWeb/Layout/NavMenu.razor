@@ -22,8 +22,6 @@
 
     private string WorkLink(string page)
     {
-        if (string.Equals(page, "home", StringComparison.OrdinalIgnoreCase))
-            return "";
 
         var uri = new Uri(Navigation.Uri);
         return OrganizationRoutes.OrganizationId(uri) is int id
