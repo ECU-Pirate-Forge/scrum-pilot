@@ -1,5 +1,6 @@
 @page "/"
 @page "/home"
+@page "/organizations/{OrganizationId:int}/home"
 @attribute [Authorize]
 @inject OrganizationStateService Organizations
 @inject ProjectStateService Projects
@@ -24,6 +25,7 @@
 </div>
 
 @code {
+    [Parameter] public int OrganizationId { get; set; }
     private string WorkLink(string page) => Organizations.SelectedOrganizationId is int id
         ? OrganizationRoutes.Page(id, page, Projects.SelectedProjectId) : page;
     private string _userName = "there";
